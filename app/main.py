@@ -388,6 +388,23 @@ async def word_audio_choice(
     return {"ok": True, "word": word.word, "accent": accent, "audio_url": audio_url}
 
 
+@app.post("/words/{word_id}/english-definition")
+def update_english_definition(
+    word_id: int,
+    english_definition: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+    word.english_definition = english_definition.strip() or None
+    word.english_definition_locked = True
+    word.enrichment_error = None
+    db.add(word)
+    db.commit()
+    return RedirectResponse(url=f"/words/{word_id}", status_code=303)
+
+
 @app.get("/words/{word_id}", response_class=HTMLResponse)
 def word_detail(word_id: int, request: Request, db: Session = Depends(get_db)):
     word = db.get(Word, word_id)
@@ -523,7 +540,7 @@ def ensure_schema_columns() -> None:
     boolean_type = "TINYINT(1)" if dialect == "mysql" else "BOOLEAN"
     missing_columns = [
         column
-        for column in ("image_locked", "american_audio_locked", "british_audio_locked")
+        for column in ("image_locked", "american_audio_locked", "british_audio_locked", "english_definition_locked")
         if column not in word_columns
     ]
     if not missing_columns:

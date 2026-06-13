@@ -62,7 +62,17 @@
 
     <dl class="definition-list">
       <dt>英文定义</dt>
-      <dd>{{ word.english_definition or "暂无" }}</dd>
+      <dd>
+        <form action="/words/{{ word.id }}/english-definition" method="post" class="definition-edit-form">
+          <textarea name="english_definition" rows="4">{{ word.english_definition or "" }}</textarea>
+          <div class="definition-edit-actions">
+            <button type="submit">保存英文定义</button>
+            {% if word.english_definition_locked %}
+              <span class="lock-badge">已锁定，重新补全不会覆盖</span>
+            {% endif %}
+          </div>
+        </form>
+      </dd>
       <dt>中文定义</dt>
       <dd>{{ word.chinese_definition or "暂无" }}</dd>
       <dt>英文例句</dt>

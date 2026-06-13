@@ -18,6 +18,7 @@ class Word(Base):
     british_audio_url: Mapped[str | None] = mapped_column(String(1000))
     british_audio_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     english_definition: Mapped[str | None] = mapped_column(Text)
+    english_definition_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     chinese_definition: Mapped[str | None] = mapped_column(Text)
     english_example: Mapped[str | None] = mapped_column(Text)
     image_url: Mapped[str | None] = mapped_column(String(1000))

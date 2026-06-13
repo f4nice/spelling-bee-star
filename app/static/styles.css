@@ -720,6 +720,30 @@ dd {
   line-height: 1.7;
 }
 
+.definition-edit-form {
+  display: grid;
+  gap: 10px;
+}
+
+.definition-edit-form textarea {
+  width: 100%;
+  min-height: 104px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.6;
+}
+
+.definition-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .error-box {
   margin-top: 24px;
   padding: 12px 14px;
