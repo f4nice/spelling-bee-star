@@ -61,10 +61,10 @@ class FreeDictionaryClient:
     source_name = "Free Dictionary API"
 
     async def lookup(self, word: str) -> DictionaryEntry:
-        payload = await _fetch_free_dictionary_payload(word)
+        payload = await _fetch_free_dictionary_payload(word, allow_missing=True)
         entry = next((item for item in payload if isinstance(item, dict)), None)
         if not entry:
-            raise RuntimeError("No free dictionary entry found")
+            raise RuntimeError("开放词典暂未收录这个词，可以手动编辑定义、例句和音频。")
 
         phonetic = _first_free_phonetic(entry)
         american_audio, british_audio = _free_audio_urls(payload)

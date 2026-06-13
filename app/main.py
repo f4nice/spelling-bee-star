@@ -488,6 +488,12 @@ def word_detail(
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
+    cleaned_error = friendly_enrichment_error(word.enrichment_error)
+    if cleaned_error != word.enrichment_error:
+        word.enrichment_error = cleaned_error
+        db.add(word)
+        db.commit()
+        db.refresh(word)
     encoded_word = quote_plus(word.word)
     audio_sources = {
         "us": word.american_audio_url if is_local_audio_url(word.american_audio_url) else f"/tts?word={encoded_word}&accent=us&v=2",
@@ -617,6 +623,17 @@ def page_context(request: Request, db: Session, extra: dict | None = None) -> di
 def require_word_write_access(edit_token: str) -> None:
     if edit_token != "1":
         raise HTTPException(status_code=403, detail="当前入口为只读模式，请从我的单词表进入后编辑")
+
+
+def friendly_enrichment_error(error: str | None) -> str | None:
+    if not error:
+        return None
+    lower_error = error.lower()
+    if "api.dictionaryapi.dev" in lower_error and "404" in lower_error:
+        return "开放词典暂未收录这个词，可以手动编辑定义、例句和音频。"
+    if "client error" in lower_error and "404" in lower_error:
+        return "词典暂未收录这个词，可以手动编辑定义、例句和音频。"
+    return error
 
 
 def ensure_schema_columns() -> None:
