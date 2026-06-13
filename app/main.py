@@ -23,10 +23,15 @@ from app.services.excel_importer import parse_preview_from_excel, parse_words_fr
 
 BASE_DIR = Path(__file__).resolve().parent
 PREVIEW_DIR = BASE_DIR.parent / "uploads" / "previews"
+MEDIA_DIR = BASE_DIR.parent / "uploads"
+IMAGE_DIR = MEDIA_DIR / "images"
 settings = get_settings()
 
+MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title=settings.app_name)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
@@ -34,6 +39,7 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+    IMAGE_DIR.mkdir(parents=True, exist_ok=True)
     with SessionLocal() as db:
         seed_daily_quotes(db)
         ensure_default_word_list(db)

@@ -1,10 +1,16 @@
+from pathlib import Path
+
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models import Word
 from app.services.dictionary import FreeDictionaryAudioClient, FreeDictionaryClient, MerriamWebsterClient
+from app.services.image_storage import is_local_media_url, store_word_image
 from app.services.images import ImageClient
 from app.services.translation import TranslationClient
+
+
+IMAGE_DIR = Path(__file__).resolve().parents[2] / "uploads" / "images"
 
 
 async def enrich_word(db: Session, word: Word) -> Word:
@@ -41,9 +47,16 @@ async def enrich_word(db: Session, word: Word) -> Word:
                 word.chinese_definition = await translator.translate_definition(entry.english_definition)
             except Exception as exc:
                 optional_errors.append(f"中文翻译暂不可用: {exc}")
+        if word.image_url and not is_local_media_url(word.image_url):
+            try:
+                word.image_url = await store_word_image(word.word, word.image_url, IMAGE_DIR)
+            except Exception as exc:
+                optional_errors.append(f"图片本地化暂不可用: {exc}")
         if not word.image_url:
             try:
-                word.image_url = await images.find_image(word.word)
+                remote_image_url = await images.find_image(word.word)
+                if remote_image_url:
+                    word.image_url = await store_word_image(word.word, remote_image_url, IMAGE_DIR)
             except Exception as exc:
                 optional_errors.append(f"图片搜索暂不可用: {exc}")
 
