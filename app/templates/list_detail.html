@@ -12,14 +12,6 @@
   </div>
   <div class="list-actions">
     <a class="ghost-button" href="/upload">继续导入</a>
-    <button
-      class="secondary-button sync-image-button"
-      type="button"
-      data-sync-images
-      {% if not pending_image_words %}disabled{% endif %}
-    >
-      同步图片
-    </button>
     <form action="/lists/{{ word_list.id }}/delete" method="post" class="delete-list-form" data-delete-list-form>
       <input type="password" name="password" placeholder="删除密码" required>
       <button type="submit" class="danger-button">删除</button>
@@ -36,26 +28,36 @@
   data-sync-panel
   data-words='{{ pending_image_words|tojson }}'
 >
-  <div class="sync-heading">
-    <strong data-sync-title>
+  <div class="sync-summary">
+    <div class="sync-heading">
+      <strong data-sync-title>
+        {% if pending_image_words %}
+          待同步 {{ pending_image_words|length }} 张图片
+        {% else %}
+          图片已同步完成
+        {% endif %}
+      </strong>
+      <span data-sync-count>0 / {{ pending_image_words|length }}</span>
+    </div>
+    <p data-sync-message>
       {% if pending_image_words %}
-        待同步 {{ pending_image_words|length }} 张图片
+        会查找缺失图片，下载并压缩到服务器图片库。
       {% else %}
-        图片已同步完成
+        当前单词表没有缺失图片。
       {% endif %}
-    </strong>
-    <span data-sync-count>0 / {{ pending_image_words|length }}</span>
+    </p>
   </div>
   <div class="sync-progress" aria-hidden="true">
     <span data-sync-progress></span>
   </div>
-  <p data-sync-message>
-    {% if pending_image_words %}
-      点击同步图片后，会从网上查找缺失图片，下载到服务器图片库并压缩。
-    {% else %}
-      当前单词表没有缺失图片。
-    {% endif %}
-  </p>
+  <button
+    class="secondary-button sync-image-button"
+    type="button"
+    data-sync-images
+    {% if not pending_image_words %}disabled{% endif %}
+  >
+    同步图片
+  </button>
 </section>
 
 <section class="word-grid">

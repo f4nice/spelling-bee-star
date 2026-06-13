@@ -966,31 +966,44 @@ dd {
 
 .image-sync-panel {
   display: grid;
-  gap: 10px;
-  padding: 16px 18px;
-  margin: -8px 0 24px;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 320px) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  margin: -8px 0 18px;
   background: #fbfcfa;
+}
+
+.sync-summary {
+  display: grid;
+  gap: 3px;
 }
 
 .sync-heading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  justify-content: flex-start;
+  gap: 12px;
 }
 
 .sync-heading strong {
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .sync-heading span {
   color: var(--muted);
+  font-size: 13px;
   font-weight: 800;
+}
+
+.sync-summary p {
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .sync-progress {
   overflow: hidden;
-  height: 10px;
+  height: 8px;
   border-radius: 999px;
   background: #e5eae4;
 }
@@ -1204,6 +1217,10 @@ select {
   }
 
   .audio-option {
+    grid-template-columns: 1fr;
+  }
+
+  .image-sync-panel {
     grid-template-columns: 1fr;
   }
 }
