@@ -577,6 +577,12 @@ button:hover {
   background: #fbfcfa;
 }
 
+.challenge-complete-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .detail-media {
   overflow: hidden;
   border: 1px solid var(--line);
