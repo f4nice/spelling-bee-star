@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel challenge-panel">
+  <div class="challenge-top">
+    <div>
+      <h1>{{ word_list.name }}</h1>
+      <p>挑战进度 {{ challenge.completed }} / {{ challenge.total }}</p>
+    </div>
+    <a class="ghost-button" href="/lists/{{ word_list.id }}">返回单词表</a>
+  </div>
+
+  <div class="challenge-large-progress">
+    <span style="width: {{ challenge.percent }}%"></span>
+  </div>
+
+  {% if current_word %}
+    <div class="challenge-card">
+      <div class="challenge-word-media">
+        {% if current_word.image_url %}
+          <img src="{{ current_word.image_url }}" alt="{{ current_word.word }}">
+        {% else %}
+          <div class="image-fallback large">{{ current_word.word[:1]|upper }}</div>
+        {% endif %}
+      </div>
+      <div class="challenge-word-body">
+        <p class="challenge-count">第 {{ progress.current_index + 1 }} 个 / 共 {{ challenge.total }} 个</p>
+        <h2>{{ current_word.word }}</h2>
+        {% if current_word.phonetic %}<p class="phonetic">/{{ current_word.phonetic }}/</p>{% endif %}
+        <dl class="definition-list compact">
+          <dt>英文定义</dt>
+          <dd>{{ current_word.english_definition or "暂无" }}</dd>
+          <dt>中文定义</dt>
+          <dd>{{ current_word.chinese_definition or "暂无" }}</dd>
+        </dl>
+        <div class="challenge-actions">
+          <form action="/challenge/{{ word_list.id }}/answer" method="post">
+            <input type="hidden" name="action" value="skip">
+            <button type="submit" class="secondary-button">跳过</button>
+          </form>
+          <form action="/challenge/{{ word_list.id }}/answer" method="post">
+            <input type="hidden" name="action" value="known">
+            <button type="submit">记住了，下一个</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="challenge-complete">
+      <h2>这一组挑战完成了</h2>
+      <p>可以回到单词表复习，也可以重新开始这一组。</p>
+      <form action="/challenge/{{ word_list.id }}/answer" method="post">
+        <input type="hidden" name="action" value="reset">
+        <button type="submit">重新挑战</button>
+      </form>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -11,28 +11,43 @@
 
 <section class="word-grid">
   {% for card in cards %}
-    <a class="word-card list-card" href="/lists/{{ card.list.id }}">
-      {% if card.cover_word and card.cover_word.image_url %}
-        <img src="{{ card.cover_word.image_url }}" alt="{{ card.list.name }}">
-      {% elif card.cover_word %}
-        <div class="image-fallback">{{ card.cover_word.word[:1]|upper }}</div>
-      {% else %}
-        <div class="image-fallback">+</div>
-      {% endif %}
-      <div class="word-card-body">
-        <div class="word-card-title">
-          <strong>{{ card.list.name }}</strong>
-          <span class="status">{{ card.count }} 词</span>
+    <article class="word-card list-card">
+      <a class="list-card-link" href="/lists/{{ card.list.id }}">
+        {% if card.cover_word and card.cover_word.image_url %}
+          <img src="{{ card.cover_word.image_url }}" alt="{{ card.list.name }}">
+        {% elif card.cover_word %}
+          <div class="image-fallback">{{ card.cover_word.word[:1]|upper }}</div>
+        {% else %}
+          <div class="image-fallback">+</div>
+        {% endif %}
+        <div class="word-card-body">
+          <div class="word-card-title">
+            <strong>{{ card.list.name }}</strong>
+            <span class="status">{{ card.count }} 词</span>
+          </div>
+          <p>
+            {% for word in card.preview_words %}
+              {{ word.word }}{% if not loop.last %} · {% endif %}
+            {% else %}
+              暂无单词
+            {% endfor %}
+          </p>
         </div>
-        <p>
-          {% for word in card.preview_words %}
-            {{ word.word }}{% if not loop.last %} · {% endif %}
+      </a>
+      <div class="challenge-card-actions">
+        <div class="mini-progress">
+          <span>{{ card.challenge.completed }} / {{ card.challenge.total }}</span>
+          <div><i style="width: {{ card.challenge.percent }}%"></i></div>
+        </div>
+        <a class="challenge-button" href="/challenge/{{ card.list.id }}">
+          {% if card.challenge.completed %}
+            继续挑战
           {% else %}
-            暂无单词
-          {% endfor %}
-        </p>
+            开始挑战
+          {% endif %}
+        </a>
       </div>
-    </a>
+    </article>
   {% else %}
     <div class="empty-state">还没有单词表。先新增一个单词表吧。</div>
   {% endfor %}

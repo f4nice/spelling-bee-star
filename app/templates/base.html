@@ -28,6 +28,19 @@
           <a class="{% if request.url.path == '/' %}active{% endif %}" href="/">首页</a>
           <a class="{% if request.url.path == '/upload' %}active{% endif %}" href="/upload">新增单词表</a>
           <a class="{% if request.url.path.startswith('/lists') %}active{% endif %}" href="/">我的单词表</a>
+
+          <div class="challenge-sidebar">
+            <div class="challenge-sidebar-title">挑战进度</div>
+            {% for item in sidebar_challenges %}
+              <a class="challenge-progress-link" href="/challenge/{{ item.list.id }}">
+                <strong>{{ item.list.name }}</strong>
+                <span>{{ item.challenge.completed }} / {{ item.challenge.total }}</span>
+                <div class="sidebar-progress"><i style="width: {{ item.challenge.percent }}%"></i></div>
+              </a>
+            {% else %}
+              <p>还没有可挑战的单词表。</p>
+            {% endfor %}
+          </div>
         </nav>
       </aside>
       <main class="shell">

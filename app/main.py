@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine, get_db
-from app.models import DailyQuote, Word, WordList, WordListItem
+from app.models import ChallengeProgress, DailyQuote, Word, WordList, WordListItem
 from app.services.enrichment import enrich_word
 from app.services.excel_importer import parse_preview_from_excel, parse_words_from_preview
 from app.services.image_storage import is_local_media_url, remove_local_image, store_uploaded_word_image, store_word_image
@@ -92,6 +92,67 @@ def list_detail(word_list_id: int, request: Request, db: Session = Depends(get_d
             },
         ),
     )
+
+
+@app.get("/challenge/{word_list_id}", response_class=HTMLResponse)
+def challenge_page(word_list_id: int, request: Request, db: Session = Depends(get_db)):
+    word_list = db.get(WordList, word_list_id)
+    if not word_list:
+        raise HTTPException(status_code=404, detail="Word list not found")
+
+    words = get_words_for_list(db, word_list_id)
+    progress = get_or_create_challenge_progress(db, word_list_id)
+    total = len(words)
+    progress.completed_count = min(progress.completed_count, total)
+    progress.current_index = min(progress.current_index, max(total - 1, 0))
+    db.add(progress)
+    db.commit()
+
+    current_word = None if progress.completed_count >= total or not words else words[progress.current_index]
+    state = challenge_state(db, word_list)
+    return templates.TemplateResponse(
+        "challenge.html",
+        page_context(
+            request,
+            db,
+            {
+                "word_list": word_list,
+                "current_word": current_word,
+                "progress": progress,
+                "challenge": state,
+            },
+        ),
+    )
+
+
+@app.post("/challenge/{word_list_id}/answer")
+def challenge_answer(
+    word_list_id: int,
+    action: str = Form(default="known"),
+    db: Session = Depends(get_db),
+):
+    word_list = db.get(WordList, word_list_id)
+    if not word_list:
+        raise HTTPException(status_code=404, detail="Word list not found")
+
+    words = get_words_for_list(db, word_list_id)
+    progress = get_or_create_challenge_progress(db, word_list_id)
+    total = len(words)
+
+    if action == "reset":
+        progress.current_index = 0
+        progress.completed_count = 0
+    elif total:
+        if action == "known":
+            progress.completed_count = min(progress.completed_count + 1, total)
+        if progress.completed_count < total:
+            progress.current_index = (progress.current_index + 1) % total
+        else:
+            progress.current_index = max(total - 1, 0)
+
+    db.add(progress)
+    db.commit()
+    return RedirectResponse(url=f"/challenge/{word_list_id}", status_code=303)
 
 
 @app.post("/lists/{word_list_id}/rename")
@@ -295,6 +356,7 @@ def page_context(request: Request, db: Session, extra: dict | None = None) -> di
         "request": request,
         "app_name": settings.app_name,
         "daily_quote": get_daily_quote(db),
+        "sidebar_challenges": sidebar_challenge_progress(db),
     }
     if extra:
         context.update(extra)
@@ -385,12 +447,7 @@ def ensure_default_word_list(db: Session) -> None:
 
 
 def word_list_card(db: Session, word_list: WordList) -> dict:
-    words = db.scalars(
-        select(Word)
-        .join(WordListItem, WordListItem.word_id == Word.id)
-        .where(WordListItem.word_list_id == word_list.id)
-        .order_by(Word.created_at.desc())
-    ).all()
+    words = get_words_for_list(db, word_list.id, order_by_created=True)
     image_words = [word for word in words if word.image_url]
     cover_word = random.choice(image_words) if image_words else (words[0] if words else None)
     return {
@@ -398,7 +455,49 @@ def word_list_card(db: Session, word_list: WordList) -> dict:
         "count": len(words),
         "cover_word": cover_word,
         "preview_words": words[:6],
+        "challenge": challenge_state(db, word_list),
     }
+
+
+def get_words_for_list(db: Session, word_list_id: int, order_by_created: bool = False) -> list[Word]:
+    order_column = Word.created_at.desc() if order_by_created else Word.word.asc()
+    return db.scalars(
+        select(Word)
+        .join(WordListItem, WordListItem.word_id == Word.id)
+        .where(WordListItem.word_list_id == word_list_id)
+        .order_by(order_column)
+    ).all()
+
+
+def get_or_create_challenge_progress(db: Session, word_list_id: int) -> ChallengeProgress:
+    progress = db.scalar(select(ChallengeProgress).where(ChallengeProgress.word_list_id == word_list_id))
+    if progress:
+        return progress
+    progress = ChallengeProgress(word_list_id=word_list_id)
+    db.add(progress)
+    db.commit()
+    db.refresh(progress)
+    return progress
+
+
+def challenge_state(db: Session, word_list: WordList) -> dict:
+    total = db.scalar(
+        select(func.count(WordListItem.id)).where(WordListItem.word_list_id == word_list.id)
+    ) or 0
+    progress = db.scalar(select(ChallengeProgress).where(ChallengeProgress.word_list_id == word_list.id))
+    completed = min(progress.completed_count if progress else 0, total)
+    percent = round((completed / total) * 100) if total else 0
+    return {
+        "completed": completed,
+        "total": total,
+        "percent": percent,
+        "is_complete": bool(total and completed >= total),
+    }
+
+
+def sidebar_challenge_progress(db: Session) -> list[dict]:
+    word_lists = db.scalars(select(WordList).order_by(WordList.created_at.desc())).all()
+    return [{"list": word_list, "challenge": challenge_state(db, word_list)} for word_list in word_lists]
 
 
 async def enrich_word_ids(word_ids: list[int]) -> None:

@@ -54,3 +54,15 @@ class DailyQuote(Base):
     content: Mapped[str] = mapped_column(String(500), nullable=False)
     author: Mapped[str | None] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class ChallengeProgress(Base):
+    __tablename__ = "challenge_progress"
+    __table_args__ = (UniqueConstraint("word_list_id", name="uq_challenge_progress_word_list"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    word_list_id: Mapped[int] = mapped_column(ForeignKey("word_lists.id", ondelete="CASCADE"), nullable=False, index=True)
+    current_index: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    completed_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
