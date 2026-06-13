@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel upload-panel">
+  <div>
+    <h1>我的生词本</h1>
+    <p>挑战里点“错了”的单词会自动收进这里，方便集中复习。</p>
+  </div>
+  <a class="primary-link" href="/">返回首页</a>
+</section>
+
+<section class="word-grid">
+  {% for wrong_word, word in wrong_words %}
+    <a class="word-card" href="/words/{{ word.id }}">
+      <span class="word-index-badge">错 {{ wrong_word.wrong_count }}</span>
+      {% if word.image_url %}
+        <img src="{{ word.image_url }}" alt="{{ word.word }}">
+      {% else %}
+        <div class="image-fallback">{{ word.word[:1]|upper }}</div>
+      {% endif %}
+      <div class="word-card-body">
+        <div class="word-card-title">
+          <strong>{{ word.word }}</strong>
+          <span class="status failed">生词</span>
+        </div>
+        <p>{{ word.chinese_definition or word.english_definition or "等待补全" }}</p>
+      </div>
+    </a>
+  {% else %}
+    <div class="empty-state">生词本还是空的。挑战时点“错了”会自动加入这里。</div>
+  {% endfor %}
+</section>
+{% endblock %}

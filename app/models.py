@@ -68,3 +68,14 @@ class ChallengeProgress(Base):
     completed_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class WrongWord(Base):
+    __tablename__ = "wrong_words"
+    __table_args__ = (UniqueConstraint("word_id", name="uq_wrong_words_word"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    word_id: Mapped[int] = mapped_column(ForeignKey("words.id", ondelete="CASCADE"), nullable=False, index=True)
+    wrong_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

@@ -134,6 +134,23 @@ body {
   box-shadow: 0 10px 22px rgba(31, 122, 90, 0.18);
 }
 
+.nav-count {
+  float: right;
+  min-width: 24px;
+  border-radius: 999px;
+  padding: 2px 7px;
+  text-align: center;
+  color: var(--accent-dark);
+  background: #e4f6ee;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.side-nav a.active .nav-count {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.22);
+}
+
 .challenge-sidebar {
   display: grid;
   gap: 10px;
@@ -256,6 +273,14 @@ button {
 
 button:hover {
   background: var(--accent-dark);
+}
+
+.danger-button {
+  background: var(--error);
+}
+
+.danger-button:hover {
+  background: #8f1d14;
 }
 
 .primary-link {

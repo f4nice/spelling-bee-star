@@ -28,6 +28,9 @@
           <a class="{% if request.url.path == '/' %}active{% endif %}" href="/">首页</a>
           <a class="{% if request.url.path == '/upload' %}active{% endif %}" href="/upload">新增单词表</a>
           <a class="{% if request.url.path.startswith('/lists') %}active{% endif %}" href="/">我的单词表</a>
+          <a class="{% if request.url.path == '/wrong-words' %}active{% endif %}" href="/wrong-words">
+            我的生词本 <span class="nav-count">{{ wrong_word_count }}</span>
+          </a>
 
           <div class="challenge-sidebar">
             <div class="challenge-sidebar-title">挑战进度</div>

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine, get_db
-from app.models import ChallengeProgress, DailyQuote, Word, WordList, WordListItem
+from app.models import ChallengeProgress, DailyQuote, Word, WordList, WordListItem, WrongWord
 from app.services.enrichment import enrich_word
 from app.services.excel_importer import parse_preview_from_excel, parse_words_from_preview
 from app.services.audio_storage import audio_candidates_with_dictionary, is_local_audio_url, store_audio_candidate
@@ -155,6 +155,19 @@ def challenge_page(
     )
 
 
+@app.get("/wrong-words", response_class=HTMLResponse)
+def wrong_words_page(request: Request, db: Session = Depends(get_db)):
+    wrong_words = db.execute(
+        select(WrongWord, Word)
+        .join(Word, Word.id == WrongWord.word_id)
+        .order_by(WrongWord.updated_at.desc(), WrongWord.id.desc())
+    ).all()
+    return templates.TemplateResponse(
+        "wrong_words.html",
+        page_context(request, db, {"wrong_words": wrong_words}),
+    )
+
+
 @app.post("/challenge/{word_list_id}/answer")
 def challenge_answer(
     word_list_id: int,
@@ -175,6 +188,9 @@ def challenge_answer(
         progress.current_index = 0
         progress.completed_count = 0
     elif total:
+        current_word = words[progress.current_index] if 0 <= progress.current_index < total else None
+        if action == "wrong" and current_word:
+            record_wrong_word(db, current_word.id)
         if action == "known":
             progress.completed_count = min(progress.completed_count + 1, total)
         if progress.completed_count < total:
@@ -453,6 +469,7 @@ def page_context(request: Request, db: Session, extra: dict | None = None) -> di
         "app_name": settings.app_name,
         "daily_quote": get_daily_quote(db),
         "sidebar_challenges": sidebar_challenge_progress(db),
+        "wrong_word_count": wrong_word_count(db),
     }
     if extra:
         context.update(extra)
@@ -576,6 +593,20 @@ def get_or_create_challenge_progress(db: Session, word_list_id: int) -> Challeng
     db.commit()
     db.refresh(progress)
     return progress
+
+
+def record_wrong_word(db: Session, word_id: int) -> None:
+    wrong_word = db.scalar(select(WrongWord).where(WrongWord.word_id == word_id))
+    if wrong_word:
+        wrong_word.wrong_count += 1
+    else:
+        wrong_word = WrongWord(word_id=word_id)
+    db.add(wrong_word)
+    db.flush()
+
+
+def wrong_word_count(db: Session) -> int:
+    return db.scalar(select(func.count(WrongWord.id))) or 0
 
 
 def challenge_state(db: Session, word_list: WordList) -> dict:
