@@ -104,10 +104,10 @@ body {
 }
 
 .side-nav {
-  display: grid;
-  gap: 4px;
-  padding: 24px 18px;
-  min-height: calc(100vh - 112px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 14px;
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -128,12 +128,10 @@ body {
   color: var(--accent-dark);
 }
 
-.side-section {
-  margin: 18px 4px 6px;
-  padding-top: 16px;
-  border-top: 1px solid #edf0ed;
-  color: var(--muted);
-  font-weight: 800;
+.side-nav a.active {
+  color: #fff;
+  background: var(--accent);
+  box-shadow: 0 10px 22px rgba(31, 122, 90, 0.18);
 }
 
 .shell {

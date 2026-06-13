@@ -17,7 +17,7 @@
         {% if daily_quote %}
           {{ daily_quote.content }}{% if daily_quote.author %}<span> - {{ daily_quote.author }}</span>{% endif %}
         {% else %}
-          每天记住一个词，就是给未来多开一扇窗。
+          Every word is a new window.
         {% endif %}
       </div>
     </header>
@@ -25,10 +25,9 @@
     <div class="app-layout" data-app-layout>
       <aside class="sidebar">
         <nav class="side-nav">
-          <a href="/">首页</a>
-          <a href="/upload">新增单词表</a>
-          <div class="side-section">学习</div>
-          <a href="/">我的单词表</a>
+          <a class="{% if request.url.path == '/' %}active{% endif %}" href="/">首页</a>
+          <a class="{% if request.url.path == '/upload' %}active{% endif %}" href="/upload">新增单词表</a>
+          <a class="{% if request.url.path.startswith('/lists') %}active{% endif %}" href="/">我的单词表</a>
         </nav>
       </aside>
       <main class="shell">
