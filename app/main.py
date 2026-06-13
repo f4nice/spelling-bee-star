@@ -1,4 +1,5 @@
 import asyncio
+from datetime import date
 import json
 from pathlib import Path
 import random
@@ -15,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine, get_db
-from app.models import Word, WordList, WordListItem
+from app.models import DailyQuote, Word, WordList, WordListItem
 from app.services.enrichment import enrich_word
 from app.services.excel_importer import parse_preview_from_excel, parse_words_from_preview
 
@@ -34,6 +35,7 @@ def startup() -> None:
     Base.metadata.create_all(bind=engine)
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
     with SessionLocal() as db:
+        seed_daily_quotes(db)
         ensure_default_word_list(db)
 
 
@@ -41,13 +43,16 @@ def startup() -> None:
 def index(request: Request, db: Session = Depends(get_db)):
     word_lists = db.scalars(select(WordList).order_by(WordList.created_at.desc())).all()
     cards = [word_list_card(db, word_list) for word_list in word_lists]
-    return templates.TemplateResponse("index.html", {"request": request, "cards": cards, "app_name": settings.app_name})
+    return templates.TemplateResponse(
+        "index.html",
+        page_context(request, db, {"cards": cards}),
+    )
 
 
 @app.get("/upload", response_class=HTMLResponse)
 def upload_page(request: Request, db: Session = Depends(get_db)):
     word_lists = db.scalars(select(WordList).order_by(WordList.created_at.desc())).all()
-    return templates.TemplateResponse("upload.html", {"request": request, "word_lists": word_lists, "app_name": settings.app_name})
+    return templates.TemplateResponse("upload.html", page_context(request, db, {"word_lists": word_lists}))
 
 
 @app.get("/lists/{word_list_id}", response_class=HTMLResponse)
@@ -63,7 +68,7 @@ def list_detail(word_list_id: int, request: Request, db: Session = Depends(get_d
     ).all()
     return templates.TemplateResponse(
         "list_detail.html",
-        {"request": request, "word_list": word_list, "words": words, "app_name": settings.app_name},
+        page_context(request, db, {"word_list": word_list, "words": words}),
     )
 
 
@@ -83,7 +88,7 @@ def word_detail(word_id: int, request: Request, db: Session = Depends(get_db)):
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
-    return templates.TemplateResponse("detail.html", {"request": request, "word": word, "app_name": settings.app_name})
+    return templates.TemplateResponse("detail.html", page_context(request, db, {"word": word}))
 
 
 @app.post("/upload")
@@ -92,6 +97,7 @@ async def upload_excel(
     file: UploadFile = File(...),
     word_list_id: str = Form(default=""),
     word_list_name: str = Form(default=""),
+    db: Session = Depends(get_db),
 ):
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in {".xlsx", ".xlsm", ".xltx", ".xltm"}:
@@ -106,12 +112,7 @@ async def upload_excel(
 
     return templates.TemplateResponse(
         "preview.html",
-        {
-            "request": request,
-            "preview_id": preview_id,
-            "preview": preview,
-            "app_name": settings.app_name,
-        },
+        page_context(request, db, {"preview_id": preview_id, "preview": preview}),
     )
 
 
@@ -190,6 +191,40 @@ def start_enrichment_thread(word_ids: list[int]) -> None:
 def clean_list_name(name: str) -> str:
     text = " ".join((name or "").split())
     return text[:255] or "新单词表"
+
+
+def page_context(request: Request, db: Session, extra: dict | None = None) -> dict:
+    context = {
+        "request": request,
+        "app_name": settings.app_name,
+        "daily_quote": get_daily_quote(db),
+    }
+    if extra:
+        context.update(extra)
+    return context
+
+
+def seed_daily_quotes(db: Session) -> None:
+    if db.scalar(select(func.count(DailyQuote.id))) > 0:
+        return
+    quotes = [
+        "不急于证明自己，只专注做好决策。",
+        "每天记住一个词，就是给未来多开一扇窗。",
+        "稳稳地学，慢慢地赢。",
+        "看见一个陌生词，就是靠近一个新世界。",
+        "今天的小进步，会在某天突然发光。",
+    ]
+    for quote in quotes:
+        db.add(DailyQuote(content=quote))
+    db.commit()
+
+
+def get_daily_quote(db: Session) -> DailyQuote | None:
+    quotes = db.scalars(select(DailyQuote).order_by(DailyQuote.id.asc())).all()
+    if not quotes:
+        return None
+    index = date.today().toordinal() % len(quotes)
+    return quotes[index]
 
 
 def get_or_create_word_list(db: Session, word_list_id: str, name: str) -> WordList:

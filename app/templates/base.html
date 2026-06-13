@@ -7,12 +7,44 @@
     <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
   </head>
   <body>
-    <header class="topbar">
-      <a class="brand" href="/">{{ app_name }}</a>
-      <span class="tagline">Excel 单词导入与韦氏词典补全</span>
+    <header class="app-topbar">
+      <a class="app-brand" href="/">
+        <span class="brand-mark">拼</span>
+        <span>{{ app_name }}</span>
+      </a>
+      <button class="menu-toggle" type="button" aria-label="缩放页面" data-toggle-shell>☰</button>
+      <div class="daily-quote">
+        {% if daily_quote %}
+          {{ daily_quote.content }}{% if daily_quote.author %}<span> - {{ daily_quote.author }}</span>{% endif %}
+        {% else %}
+          每天记住一个词，就是给未来多开一扇窗。
+        {% endif %}
+      </div>
     </header>
-    <main class="shell">
-      {% block content %}{% endblock %}
-    </main>
+
+    <div class="app-layout" data-app-layout>
+      <aside class="sidebar">
+        <nav class="side-nav">
+          <a href="/">首页</a>
+          <a href="/upload">新增单词表</a>
+          <div class="side-section">学习</div>
+          <a href="/">我的单词表</a>
+          <a href="/upload">Excel 导入</a>
+          <div class="side-section">工具</div>
+          <a href="/upload">上传预览</a>
+        </nav>
+      </aside>
+      <main class="shell">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+
+    <script>
+      const layout = document.querySelector('[data-app-layout]');
+      const toggle = document.querySelector('[data-toggle-shell]');
+      toggle.addEventListener('click', () => {
+        layout.classList.toggle('sidebar-collapsed');
+      });
+    </script>
   </body>
 </html>
