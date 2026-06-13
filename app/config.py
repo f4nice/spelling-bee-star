@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     libretranslate_url: str = ""
     libretranslate_api_key: str = ""
     image_provider: str = "wikimedia"
-    list_delete_password: str = "123456"
+    list_delete_password: str = "841108"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
