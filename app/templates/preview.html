@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel preview-panel">
+  <div class="preview-heading">
+    <div>
+      <h1>导入预览</h1>
+      <p>{{ preview.filename }} · {{ preview.rows|length }} 行 · {{ preview.columns|length }} 列</p>
+    </div>
+    <a class="ghost-button" href="/">重新选择文件</a>
+  </div>
+
+  <form action="/import-preview" method="post" class="preview-form" data-preview-form>
+    <input type="hidden" name="preview_id" value="{{ preview_id }}">
+
+    <div class="import-toolbar">
+      <label>
+        英文单词列
+        <select name="word_column" required>
+          {% for column in preview.columns %}
+            <option value="{{ column }}" {% if column == preview.inferred_word_column %}selected{% endif %}>{{ column }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="button" class="secondary-button" data-action="check-all-rows">全选行</button>
+      <button type="button" class="secondary-button" data-action="uncheck-all-rows">取消行</button>
+      <button type="button" class="secondary-button" data-action="check-all-columns">全选列</button>
+      <button type="button" class="secondary-button" data-action="uncheck-all-columns">取消列</button>
+      <button type="submit" data-submit-import>确认导入</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="preview-table">
+        <thead>
+          <tr>
+            <th class="sticky-cell">导入</th>
+            <th>Excel 行</th>
+            {% for column in preview.columns %}
+              <th>
+                <label class="check-label">
+                  <input type="checkbox" name="selected_columns" value="{{ column }}" checked data-column-check>
+                  <span>{{ column }}</span>
+                </label>
+              </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in preview.rows %}
+            <tr>
+              <td class="sticky-cell">
+                <input type="checkbox" name="selected_rows" value="{{ row.index }}" checked data-row-check>
+              </td>
+              <td>{{ row.excel_row }}</td>
+              {% for column in preview.columns %}
+                <td>{{ row["values"].get(column, "") }}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </form>
+</section>
+
+<script>
+  const setChecked = (selector, checked) => {
+    document.querySelectorAll(selector).forEach((item) => { item.checked = checked; });
+  };
+  document.querySelector('[data-action="check-all-rows"]').addEventListener('click', () => setChecked('[data-row-check]', true));
+  document.querySelector('[data-action="uncheck-all-rows"]').addEventListener('click', () => setChecked('[data-row-check]', false));
+  document.querySelector('[data-action="check-all-columns"]').addEventListener('click', () => setChecked('[data-column-check]', true));
+  document.querySelector('[data-action="uncheck-all-columns"]').addEventListener('click', () => setChecked('[data-column-check]', false));
+  document.querySelector('[data-preview-form]').addEventListener('submit', () => {
+    const button = document.querySelector('[data-submit-import]');
+    button.disabled = true;
+    button.textContent = '正在导入...';
+  });
+</script>
+{% endblock %}

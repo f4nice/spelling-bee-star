@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel upload-panel">
+  <div>
+    <h1>单词库</h1>
+    <p>上传 Excel 后先浏览表格，再选择要导入的行和列。</p>
+  </div>
+  <form action="/upload" method="post" enctype="multipart/form-data" class="upload-form">
+    <input type="file" name="file" accept=".xlsx,.xlsm,.xltx,.xltm" required>
+    <button type="submit">上传并预览</button>
+  </form>
+</section>
+
+<section class="word-grid">
+  {% for word in words %}
+    <a class="word-card" href="/words/{{ word.id }}">
+      {% if word.image_url %}
+        <img src="{{ word.image_url }}" alt="{{ word.word }}">
+      {% else %}
+        <div class="image-fallback">{{ word.word[:1]|upper }}</div>
+      {% endif %}
+      <div class="word-card-body">
+        <div class="word-card-title">
+          <strong>{{ word.word }}</strong>
+          <span class="status {{ word.enrichment_status }}">{{ word.enrichment_status }}</span>
+        </div>
+        <p>{{ word.chinese_definition or word.english_definition or "等待补全" }}</p>
+      </div>
+    </a>
+  {% else %}
+    <div class="empty-state">还没有导入单词。先上传一个 Excel 表格吧。</div>
+  {% endfor %}
+</section>
+{% endblock %}

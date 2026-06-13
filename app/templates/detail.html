@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="detail-layout">
+  <div class="detail-media">
+    {% if word.image_url %}
+      <img src="{{ word.image_url }}" alt="{{ word.word }}">
+    {% else %}
+      <div class="image-fallback large">{{ word.word[:1]|upper }}</div>
+    {% endif %}
+  </div>
+
+  <article class="panel detail-panel">
+    <div class="detail-heading">
+      <div>
+        <h1>{{ word.word }}</h1>
+        {% if word.phonetic %}<p class="phonetic">/{{ word.phonetic }}/</p>{% endif %}
+      </div>
+      <form action="/words/{{ word.id }}/refresh" method="post">
+        <button type="submit">重新补全</button>
+      </form>
+    </div>
+
+    <div class="audio-row">
+      <label>
+        美式发音
+        <div class="audio-actions">
+          <button type="button" class="secondary-button" data-play-audio="audio-us">朗读美式</button>
+          <audio id="audio-us" controls preload="none" src="/tts?word={{ word.word|urlencode }}&accent=us"></audio>
+        </div>
+      </label>
+      <label>
+        英式发音
+        <div class="audio-actions">
+          <button type="button" class="secondary-button" data-play-audio="audio-gb">朗读英式</button>
+          <audio id="audio-gb" controls preload="none" src="/tts?word={{ word.word|urlencode }}&accent=gb"></audio>
+        </div>
+      </label>
+    </div>
+
+    <dl class="definition-list">
+      <dt>英文定义</dt>
+      <dd>{{ word.english_definition or "暂无" }}</dd>
+      <dt>中文定义</dt>
+      <dd>{{ word.chinese_definition or "暂无" }}</dd>
+      <dt>英文例句</dt>
+      <dd>{{ word.english_example or "暂无" }}</dd>
+      <dt>来源</dt>
+      <dd>{{ word.source or "暂无" }}</dd>
+    </dl>
+
+    {% if word.enrichment_error %}
+      <div class="error-box">{{ word.enrichment_error }}</div>
+    {% endif %}
+  </article>
+</section>
+
+<script>
+  document.querySelectorAll('[data-play-audio]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const audio = document.getElementById(button.dataset.playAudio);
+      if (!audio) {
+        return;
+      }
+      audio.currentTime = 0;
+      audio.play().catch(() => {
+        audio.controls = true;
+      });
+    });
+  });
+</script>
+{% endblock %}

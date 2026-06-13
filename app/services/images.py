@@ -1,0 +1,29 @@
+import httpx
+
+
+class ImageClient:
+    async def find_image(self, word: str) -> str | None:
+        params = {
+            "action": "query",
+            "generator": "search",
+            "gsrsearch": word,
+            "gsrlimit": 1,
+            "prop": "pageimages",
+            "piprop": "thumbnail",
+            "pithumbsize": 800,
+            "format": "json",
+            "origin": "*",
+        }
+        headers = {
+            "User-Agent": "SpellingBeeStar/1.0 (local learning app; contact: local@example.com)"
+        }
+        async with httpx.AsyncClient(timeout=20, headers=headers) as client:
+            response = await client.get("https://commons.wikimedia.org/w/api.php", params=params)
+            response.raise_for_status()
+            data = response.json()
+        pages = (data.get("query") or {}).get("pages") or {}
+        for page in pages.values():
+            thumbnail = page.get("thumbnail") or {}
+            if thumbnail.get("source"):
+                return thumbnail["source"]
+        return None
