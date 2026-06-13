@@ -36,15 +36,19 @@
               美式发音
               <div class="challenge-audio-actions">
                 <button type="button" class="secondary-button" data-play-audio="challenge-audio-us">朗读美式</button>
-                <audio id="challenge-audio-us" controls preload="none" src="{{ challenge_audio_sources.us }}"></audio>
+                <audio id="challenge-audio-us" controls controlsList="nodownload" preload="none" src="{{ challenge_audio_sources.us }}"></audio>
+                <button type="button" class="secondary-button" data-fetch-audio="us">重新获取</button>
               </div>
+              <div class="audio-options" data-audio-options="us"></div>
             </label>
             <label>
               英式发音
               <div class="challenge-audio-actions">
                 <button type="button" class="secondary-button" data-play-audio="challenge-audio-gb">朗读英式</button>
-                <audio id="challenge-audio-gb" controls preload="none" src="{{ challenge_audio_sources.gb }}"></audio>
+                <audio id="challenge-audio-gb" controls controlsList="nodownload" preload="none" src="{{ challenge_audio_sources.gb }}"></audio>
+                <button type="button" class="secondary-button" data-fetch-audio="gb">重新获取</button>
               </div>
+              <div class="audio-options" data-audio-options="gb"></div>
             </label>
           </div>
         {% endif %}
@@ -124,6 +128,8 @@
 </section>
 
 <script>
+  const challengeWordId = {% if current_word %}{{ current_word.id }}{% else %}null{% endif %};
+
   document.querySelectorAll('[data-play-audio]').forEach((button) => {
     button.addEventListener('click', () => {
       const audio = document.getElementById(button.dataset.playAudio);
@@ -143,6 +149,61 @@
       const withoutDigits = input.value.replace(/[0-9]/g, '');
       if (input.value !== withoutDigits) {
         input.value = withoutDigits;
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-fetch-audio]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      if (!challengeWordId) {
+        return;
+      }
+      const accent = button.dataset.fetchAudio;
+      const panel = document.querySelector(`[data-audio-options="${accent}"]`);
+      panel.innerHTML = '<p>正在重新获取音频源...</p>';
+      button.disabled = true;
+
+      const form = new FormData();
+      form.append('accent', accent);
+      form.append('edit_token', '1');
+      try {
+        const response = await fetch(`/words/${challengeWordId}/audio-options`, { method: 'POST', body: form });
+        const result = await response.json();
+        if (!response.ok || !result.ok) {
+          panel.innerHTML = `<p class="audio-option-error">${result.error || '没有找到可用音频'}</p>`;
+          return;
+        }
+        panel.innerHTML = '';
+        result.options.forEach((option, index) => {
+          const row = document.createElement('div');
+          row.className = 'audio-option';
+          row.innerHTML = `
+            <strong>${index + 1}. ${option.label}</strong>
+            <audio controls controlsList="nodownload" preload="none" src="${option.url}?v=${Date.now()}"></audio>
+            <button type="button" class="secondary-button">选这个</button>
+          `;
+          row.querySelector('button').addEventListener('click', async () => {
+            const saveForm = new FormData();
+            saveForm.append('accent', accent);
+            saveForm.append('audio_url', option.url);
+            saveForm.append('edit_token', '1');
+            const saveResponse = await fetch(`/words/${challengeWordId}/audio-choice`, { method: 'POST', body: saveForm });
+            const saveResult = await saveResponse.json();
+            if (!saveResponse.ok || !saveResult.ok) {
+              panel.insertAdjacentHTML('afterbegin', '<p class="audio-option-error">保存失败，请再试一次。</p>');
+              return;
+            }
+            const audio = document.getElementById(accent === 'gb' ? 'challenge-audio-gb' : 'challenge-audio-us');
+            audio.src = `${saveResult.audio_url}?v=${Date.now()}`;
+            audio.load();
+            panel.innerHTML = '<p class="audio-option-success">已保存这个音频。</p>';
+          });
+          panel.appendChild(row);
+        });
+      } catch (error) {
+        panel.innerHTML = '<p class="audio-option-error">获取失败，请稍后重试。</p>';
+      } finally {
+        button.disabled = false;
       }
     });
   });

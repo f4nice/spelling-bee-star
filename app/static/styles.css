@@ -573,7 +573,7 @@ button:hover {
 
 .challenge-audio-actions {
   display: grid;
-  grid-template-columns: auto minmax(180px, 1fr);
+  grid-template-columns: auto minmax(180px, 1fr) auto;
   gap: 10px;
   align-items: center;
 }
