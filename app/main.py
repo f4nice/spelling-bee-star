@@ -160,26 +160,36 @@ async def refresh_word(word_id: int, db: Session = Depends(get_db)):
 
 @app.get("/tts")
 async def tts_audio(word: str = Query(..., min_length=1, max_length=80), accent: str = "us"):
-    lang = "en-GB" if accent == "gb" else "en-US"
-    params = {
-        "ie": "UTF-8",
-        "client": "tw-ob",
-        "q": word,
-        "tl": lang,
-    }
     headers = {"User-Agent": "Mozilla/5.0"}
-    try:
-        async with httpx.AsyncClient(timeout=20, headers=headers) as client:
-            response = await client.get("https://translate.google.com/translate_tts", params=params)
-            response.raise_for_status()
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"朗读音频暂不可用: {exc}") from exc
+    youdao_type = "1" if accent == "gb" else "2"
+    google_lang = "en-GB" if accent == "gb" else "en-US"
+    candidates = [
+        (
+            "https://dict.youdao.com/dictvoice",
+            {"audio": word, "type": youdao_type},
+        ),
+        (
+            "https://translate.google.com/translate_tts",
+            {"ie": "UTF-8", "client": "tw-ob", "q": word, "tl": google_lang},
+        ),
+    ]
 
-    return Response(
-        content=response.content,
-        media_type=response.headers.get("content-type", "audio/mpeg"),
-        headers={"Cache-Control": "public, max-age=86400"},
-    )
+    last_error = None
+    async with httpx.AsyncClient(timeout=20, headers=headers) as client:
+        for url, params in candidates:
+            try:
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+                if response.content:
+                    return Response(
+                        content=response.content,
+                        media_type=response.headers.get("content-type", "audio/mpeg"),
+                        headers={"Cache-Control": "public, max-age=86400"},
+                    )
+            except Exception as exc:
+                last_error = exc
+
+    raise HTTPException(status_code=502, detail=f"朗读音频暂不可用: {last_error}")
 
 
 def preview_path(preview_id: str) -> Path:
