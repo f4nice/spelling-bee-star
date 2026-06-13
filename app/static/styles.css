@@ -718,6 +718,10 @@ button:hover {
   gap: 10px;
 }
 
+.audio-actions.read-only {
+  grid-template-columns: auto minmax(220px, 1fr);
+}
+
 audio {
   width: 100%;
 }

@@ -10,16 +10,19 @@
         <div class="image-fallback large">{{ word.word[:1]|upper }}</div>
       {% endif %}
     </div>
-    <form action="/words/{{ word.id }}/image" method="post" enctype="multipart/form-data" class="image-replace-form">
-      <label>
-        替换图片
-        <input type="file" name="file" accept="image/*" required>
-      </label>
-      <button type="submit">上传替换</button>
-      {% if word.image_locked %}
-        <span class="lock-badge">已锁定，重新补全不会覆盖</span>
-      {% endif %}
-    </form>
+    {% if can_edit %}
+      <form action="/words/{{ word.id }}/image" method="post" enctype="multipart/form-data" class="image-replace-form">
+        <input type="hidden" name="edit_token" value="1">
+        <label>
+          替换图片
+          <input type="file" name="file" accept="image/*" required>
+        </label>
+        <button type="submit">上传替换</button>
+        {% if word.image_locked %}
+          <span class="lock-badge">已锁定，重新补全不会覆盖</span>
+        {% endif %}
+      </form>
+    {% endif %}
   </div>
 
   <article class="panel detail-panel">
@@ -28,18 +31,23 @@
         <h1>{{ word.word }}</h1>
         {% if word.phonetic %}<p class="phonetic">/{{ word.phonetic }}/</p>{% endif %}
       </div>
-      <form action="/words/{{ word.id }}/refresh" method="post">
-        <button type="submit">重新补全</button>
-      </form>
+      {% if can_edit %}
+        <form action="/words/{{ word.id }}/refresh" method="post">
+          <input type="hidden" name="edit_token" value="1">
+          <button type="submit">重新补全</button>
+        </form>
+      {% endif %}
     </div>
 
     <div class="audio-row">
       <label>
         美式发音
-        <div class="audio-actions">
+        <div class="audio-actions {% if not can_edit %}read-only{% endif %}">
           <button type="button" class="secondary-button" data-play-audio="audio-us">朗读美式</button>
           <audio id="audio-us" controls preload="none" src="{{ audio_sources.us }}"></audio>
-          <button type="button" class="secondary-button" data-fetch-audio="us">重新获取音频</button>
+          {% if can_edit %}
+            <button type="button" class="secondary-button" data-fetch-audio="us">重新获取音频</button>
+          {% endif %}
         </div>
         {% if word.american_audio_locked %}
           <span class="lock-badge">已选择并锁定</span>
@@ -48,10 +56,12 @@
       </label>
       <label>
         英式发音
-        <div class="audio-actions">
+        <div class="audio-actions {% if not can_edit %}read-only{% endif %}">
           <button type="button" class="secondary-button" data-play-audio="audio-gb">朗读英式</button>
           <audio id="audio-gb" controls preload="none" src="{{ audio_sources.gb }}"></audio>
-          <button type="button" class="secondary-button" data-fetch-audio="gb">重新获取音频</button>
+          {% if can_edit %}
+            <button type="button" class="secondary-button" data-fetch-audio="gb">重新获取音频</button>
+          {% endif %}
         </div>
         {% if word.british_audio_locked %}
           <span class="lock-badge">已选择并锁定</span>
@@ -63,39 +73,54 @@
     <dl class="definition-list">
       <dt>英文定义</dt>
       <dd>
-        <form action="/words/{{ word.id }}/english-definition" method="post" class="definition-edit-form">
-          <textarea name="english_definition" rows="4">{{ word.english_definition or "" }}</textarea>
-          <div class="definition-edit-actions">
-            <button type="submit">保存英文定义</button>
-            {% if word.english_definition_locked %}
-              <span class="lock-badge">已锁定，重新补全不会覆盖</span>
-            {% endif %}
-          </div>
-        </form>
+        {% if can_edit %}
+          <form action="/words/{{ word.id }}/english-definition" method="post" class="definition-edit-form">
+            <input type="hidden" name="edit_token" value="1">
+            <textarea name="english_definition" rows="4">{{ word.english_definition or "" }}</textarea>
+            <div class="definition-edit-actions">
+              <button type="submit">保存英文定义</button>
+              {% if word.english_definition_locked %}
+                <span class="lock-badge">已锁定，重新补全不会覆盖</span>
+              {% endif %}
+            </div>
+          </form>
+        {% else %}
+          {{ word.english_definition or "暂无" }}
+        {% endif %}
       </dd>
       <dt>中文定义</dt>
       <dd>
-        <form action="/words/{{ word.id }}/chinese-definition" method="post" class="definition-edit-form">
-          <textarea name="chinese_definition" rows="3">{{ word.chinese_definition or "" }}</textarea>
-          <div class="definition-edit-actions">
-            <button type="submit">保存中文定义</button>
-            {% if word.chinese_definition_locked %}
-              <span class="lock-badge">已锁定，重新补全不会覆盖</span>
-            {% endif %}
-          </div>
-        </form>
+        {% if can_edit %}
+          <form action="/words/{{ word.id }}/chinese-definition" method="post" class="definition-edit-form">
+            <input type="hidden" name="edit_token" value="1">
+            <textarea name="chinese_definition" rows="3">{{ word.chinese_definition or "" }}</textarea>
+            <div class="definition-edit-actions">
+              <button type="submit">保存中文定义</button>
+              {% if word.chinese_definition_locked %}
+                <span class="lock-badge">已锁定，重新补全不会覆盖</span>
+              {% endif %}
+            </div>
+          </form>
+        {% else %}
+          {{ word.chinese_definition or "暂无" }}
+        {% endif %}
       </dd>
       <dt>英文例句</dt>
       <dd>
-        <form action="/words/{{ word.id }}/english-example" method="post" class="definition-edit-form">
-          <textarea name="english_example" rows="3">{{ word.english_example or "" }}</textarea>
-          <div class="definition-edit-actions">
-            <button type="submit">保存英文例句</button>
-            {% if word.english_example_locked %}
-              <span class="lock-badge">已锁定，重新补全不会覆盖</span>
-            {% endif %}
-          </div>
-        </form>
+        {% if can_edit %}
+          <form action="/words/{{ word.id }}/english-example" method="post" class="definition-edit-form">
+            <input type="hidden" name="edit_token" value="1">
+            <textarea name="english_example" rows="3">{{ word.english_example or "" }}</textarea>
+            <div class="definition-edit-actions">
+              <button type="submit">保存英文例句</button>
+              {% if word.english_example_locked %}
+                <span class="lock-badge">已锁定，重新补全不会覆盖</span>
+              {% endif %}
+            </div>
+          </form>
+        {% else %}
+          {{ word.english_example or "暂无" }}
+        {% endif %}
       </dd>
       <dt>来源</dt>
       <dd>{{ word.source or "暂无" }}</dd>
@@ -133,6 +158,7 @@
 
       const form = new FormData();
       form.append('accent', accent);
+      form.append('edit_token', '1');
       try {
         const response = await fetch(`/words/${wordId}/audio-options`, { method: 'POST', body: form });
         const result = await response.json();
@@ -153,6 +179,7 @@
             const saveForm = new FormData();
             saveForm.append('accent', accent);
             saveForm.append('audio_url', option.url);
+            saveForm.append('edit_token', '1');
             const saveResponse = await fetch(`/words/${wordId}/audio-choice`, { method: 'POST', body: saveForm });
             const saveResult = await saveResponse.json();
             if (!saveResponse.ok || !saveResult.ok) {

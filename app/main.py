@@ -282,8 +282,10 @@ def delete_word_list(
 async def replace_word_image(
     word_id: int,
     file: UploadFile = File(...),
+    edit_token: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
+    require_word_write_access(edit_token)
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
@@ -308,7 +310,7 @@ async def replace_word_image(
     db.add(word)
     db.commit()
     remove_local_image(previous_url, IMAGE_DIR)
-    return RedirectResponse(url=f"/words/{word_id}", status_code=303)
+    return RedirectResponse(url=f"/words/{word_id}?edit=1", status_code=303)
 
 
 @app.post("/words/{word_id}/sync-image")
@@ -365,8 +367,10 @@ def word_image_view(word_id: int, db: Session = Depends(get_db)):
 async def word_audio_options(
     word_id: int,
     accent: str = Form(...),
+    edit_token: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
+    require_word_write_access(edit_token)
     if accent not in {"us", "gb"}:
         raise HTTPException(status_code=400, detail="Invalid accent")
     word = db.get(Word, word_id)
@@ -392,8 +396,10 @@ async def word_audio_choice(
     word_id: int,
     accent: str = Form(...),
     audio_url: str = Form(...),
+    edit_token: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
+    require_word_write_access(edit_token)
     if accent not in {"us", "gb"}:
         raise HTTPException(status_code=400, detail="Invalid accent")
     if not is_local_audio_url(audio_url):
@@ -419,8 +425,10 @@ async def word_audio_choice(
 def update_english_definition(
     word_id: int,
     english_definition: str = Form(default=""),
+    edit_token: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
+    require_word_write_access(edit_token)
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
@@ -429,15 +437,17 @@ def update_english_definition(
     word.enrichment_error = None
     db.add(word)
     db.commit()
-    return RedirectResponse(url=f"/words/{word_id}", status_code=303)
+    return RedirectResponse(url=f"/words/{word_id}?edit=1", status_code=303)
 
 
 @app.post("/words/{word_id}/chinese-definition")
 def update_chinese_definition(
     word_id: int,
     chinese_definition: str = Form(default=""),
+    edit_token: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
+    require_word_write_access(edit_token)
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
@@ -446,15 +456,17 @@ def update_chinese_definition(
     word.enrichment_error = None
     db.add(word)
     db.commit()
-    return RedirectResponse(url=f"/words/{word_id}", status_code=303)
+    return RedirectResponse(url=f"/words/{word_id}?edit=1", status_code=303)
 
 
 @app.post("/words/{word_id}/english-example")
 def update_english_example(
     word_id: int,
     english_example: str = Form(default=""),
+    edit_token: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
+    require_word_write_access(edit_token)
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
@@ -463,11 +475,16 @@ def update_english_example(
     word.enrichment_error = None
     db.add(word)
     db.commit()
-    return RedirectResponse(url=f"/words/{word_id}", status_code=303)
+    return RedirectResponse(url=f"/words/{word_id}?edit=1", status_code=303)
 
 
 @app.get("/words/{word_id}", response_class=HTMLResponse)
-def word_detail(word_id: int, request: Request, db: Session = Depends(get_db)):
+def word_detail(
+    word_id: int,
+    request: Request,
+    edit: int = Query(default=0),
+    db: Session = Depends(get_db),
+):
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
@@ -476,7 +493,10 @@ def word_detail(word_id: int, request: Request, db: Session = Depends(get_db)):
         "us": word.american_audio_url if is_local_audio_url(word.american_audio_url) else f"/tts?word={encoded_word}&accent=us&v=2",
         "gb": word.british_audio_url if is_local_audio_url(word.british_audio_url) else f"/tts?word={encoded_word}&accent=gb&v=2",
     }
-    return templates.TemplateResponse("detail.html", page_context(request, db, {"word": word, "audio_sources": audio_sources}))
+    return templates.TemplateResponse(
+        "detail.html",
+        page_context(request, db, {"word": word, "audio_sources": audio_sources, "can_edit": edit == 1}),
+    )
 
 
 @app.post("/upload")
@@ -592,6 +612,11 @@ def page_context(request: Request, db: Session, extra: dict | None = None) -> di
     if extra:
         context.update(extra)
     return context
+
+
+def require_word_write_access(edit_token: str) -> None:
+    if edit_token != "1":
+        raise HTTPException(status_code=403, detail="当前入口为只读模式，请从我的单词表进入后编辑")
 
 
 def ensure_schema_columns() -> None:
@@ -766,12 +791,17 @@ async def enrich_word_ids(word_ids: list[int]) -> None:
 
 
 @app.post("/words/{word_id}/refresh")
-async def refresh_word(word_id: int, db: Session = Depends(get_db)):
+async def refresh_word(
+    word_id: int,
+    edit_token: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    require_word_write_access(edit_token)
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
     await enrich_word(db, word)
-    return RedirectResponse(url=f"/words/{word_id}", status_code=303)
+    return RedirectResponse(url=f"/words/{word_id}?edit=1", status_code=303)
 
 
 @app.get("/tts")

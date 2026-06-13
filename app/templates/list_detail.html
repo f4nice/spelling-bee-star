@@ -60,7 +60,7 @@
 
 <section class="word-grid">
   {% for word in words %}
-    <a class="word-card" href="/words/{{ word.id }}" data-word-card="{{ word.id }}">
+    <a class="word-card" href="/words/{{ word.id }}?edit=1" data-word-card="{{ word.id }}">
       <span class="word-index-badge">#{{ loop.index }}</span>
       {% if word.image_url %}
         <img src="{{ word.image_url }}" alt="{{ word.word }}">
