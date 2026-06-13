@@ -85,14 +85,6 @@
           <button type="submit">提交</button>
         </form>
 
-        <div class="challenge-actions">
-          <form action="/challenge/{{ word_list.id }}/answer" method="post">
-            <input type="hidden" name="action" value="skip">
-            <input type="hidden" name="daily_count" value="{{ today_challenge.daily_count }}">
-            <input type="hidden" name="start_count" value="{{ today_challenge.start_count }}">
-            <button type="submit" class="secondary-button">跳过</button>
-          </form>
-        </div>
       </div>
     </div>
   {% else %}
