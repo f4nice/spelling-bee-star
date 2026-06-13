@@ -180,6 +180,7 @@ def challenge_answer(
     action: str = Form(default="known"),
     daily_count: int = Form(default=20),
     start_count: int = Form(default=0),
+    spelling: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
     word_list = db.get(WordList, word_list_id)
@@ -195,6 +196,10 @@ def challenge_answer(
         progress.completed_count = 0
     elif total:
         current_word = words[progress.current_index] if 0 <= progress.current_index < total else None
+        if action == "spell" and current_word:
+            typed = " ".join(spelling.strip().lower().split())
+            expected = " ".join(current_word.word.strip().lower().split())
+            action = "known" if typed == expected else "wrong"
         if action == "wrong" and current_word:
             record_wrong_word(db, current_word.id)
         if action == "known":

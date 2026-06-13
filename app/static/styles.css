@@ -553,6 +553,40 @@ button:hover {
   letter-spacing: 0;
 }
 
+.spelling-prompt {
+  color: var(--accent-dark);
+}
+
+.spelling-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.spelling-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.spelling-form input[type="text"] {
+  width: 100%;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 12px;
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 800;
+}
+
 .challenge-count {
   font-weight: 800;
 }
@@ -1028,6 +1062,10 @@ select {
   .challenge-top {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .spelling-form {
+    grid-template-columns: 1fr;
   }
 
   .definition-list {
