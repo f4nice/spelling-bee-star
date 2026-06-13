@@ -809,6 +809,56 @@ dd {
   flex-wrap: wrap;
 }
 
+.inline-edit {
+  display: grid;
+  gap: 6px;
+}
+
+.inline-edit-text {
+  min-height: 40px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 6px;
+  white-space: pre-wrap;
+  cursor: text;
+}
+
+.inline-edit-text:hover {
+  border-color: var(--line);
+  background: #fbfcfa;
+}
+
+.inline-edit textarea {
+  display: none;
+  width: 100%;
+  min-height: 104px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.6;
+}
+
+.inline-edit.is-editing .inline-edit-text {
+  display: none;
+}
+
+.inline-edit.is-editing textarea {
+  display: block;
+}
+
+.inline-edit-status {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: var(--muted);
+  background: #eef2f6;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .error-box {
   margin-top: 24px;
   padding: 12px 14px;
