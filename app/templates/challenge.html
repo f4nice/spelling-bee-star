@@ -87,12 +87,6 @@
 
         <div class="challenge-actions">
           <form action="/challenge/{{ word_list.id }}/answer" method="post">
-            <input type="hidden" name="action" value="wrong">
-            <input type="hidden" name="daily_count" value="{{ today_challenge.daily_count }}">
-            <input type="hidden" name="start_count" value="{{ today_challenge.start_count }}">
-            <button type="submit" class="danger-button">不会，加入生词本</button>
-          </form>
-          <form action="/challenge/{{ word_list.id }}/answer" method="post">
             <input type="hidden" name="action" value="skip">
             <input type="hidden" name="daily_count" value="{{ today_challenge.daily_count }}">
             <input type="hidden" name="start_count" value="{{ today_challenge.start_count }}">
