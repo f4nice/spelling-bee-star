@@ -22,6 +22,7 @@ class Word(Base):
     chinese_definition: Mapped[str | None] = mapped_column(Text)
     chinese_definition_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     english_example: Mapped[str | None] = mapped_column(Text)
+    english_example_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(1000))
     image_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     source: Mapped[str | None] = mapped_column(String(255))

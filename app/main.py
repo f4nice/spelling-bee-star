@@ -422,6 +422,23 @@ def update_chinese_definition(
     return RedirectResponse(url=f"/words/{word_id}", status_code=303)
 
 
+@app.post("/words/{word_id}/english-example")
+def update_english_example(
+    word_id: int,
+    english_example: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+    word.english_example = english_example.strip() or None
+    word.english_example_locked = True
+    word.enrichment_error = None
+    db.add(word)
+    db.commit()
+    return RedirectResponse(url=f"/words/{word_id}", status_code=303)
+
+
 @app.get("/words/{word_id}", response_class=HTMLResponse)
 def word_detail(word_id: int, request: Request, db: Session = Depends(get_db)):
     word = db.get(Word, word_id)
@@ -563,6 +580,7 @@ def ensure_schema_columns() -> None:
             "british_audio_locked",
             "english_definition_locked",
             "chinese_definition_locked",
+            "english_example_locked",
         )
         if column not in word_columns
     ]

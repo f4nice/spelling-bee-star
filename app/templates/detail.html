@@ -86,7 +86,17 @@
         </form>
       </dd>
       <dt>英文例句</dt>
-      <dd>{{ word.english_example or "暂无" }}</dd>
+      <dd>
+        <form action="/words/{{ word.id }}/english-example" method="post" class="definition-edit-form">
+          <textarea name="english_example" rows="3">{{ word.english_example or "" }}</textarea>
+          <div class="definition-edit-actions">
+            <button type="submit">保存英文例句</button>
+            {% if word.english_example_locked %}
+              <span class="lock-badge">已锁定，重新补全不会覆盖</span>
+            {% endif %}
+          </div>
+        </form>
+      </dd>
       <dt>来源</dt>
       <dd>{{ word.source or "暂无" }}</dd>
     </dl>

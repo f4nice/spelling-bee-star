@@ -40,7 +40,8 @@ async def enrich_word(db: Session, word: Word) -> Word:
             word.british_audio_url = entry.british_audio_url
         if not word.english_definition_locked:
             word.english_definition = entry.english_definition
-        word.english_example = entry.english_example
+        if not word.english_example_locked:
+            word.english_example = entry.english_example
         word.source = entry.source
 
         american_audio, british_audio = await audio_client.lookup_audio(word.word)
