@@ -39,13 +39,26 @@
           <span>{{ card.challenge.completed }} / {{ card.challenge.total }}</span>
           <div><i style="width: {{ card.challenge.percent }}%"></i></div>
         </div>
-        <a class="challenge-button" href="/challenge/{{ card.list.id }}">
-          {% if card.challenge.completed %}
-            继续挑战
-          {% else %}
-            开始挑战
-          {% endif %}
-        </a>
+        <form class="challenge-start-form" action="/challenge/{{ card.list.id }}" method="get">
+          <label>
+            今日挑战数量
+            <input
+              type="number"
+              name="daily_count"
+              min="1"
+              max="{{ card.challenge.total or 1 }}"
+              value="{{ 20 if card.challenge.total >= 20 else card.challenge.total or 1 }}"
+            >
+          </label>
+          <input type="hidden" name="start_count" value="{{ card.challenge.completed }}">
+          <button type="submit" class="challenge-button">
+            {% if card.challenge.completed %}
+              继续挑战
+            {% else %}
+              开始挑战
+            {% endif %}
+          </button>
+        </form>
       </div>
     </article>
   {% else %}

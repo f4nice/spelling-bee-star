@@ -5,13 +5,16 @@
   <div class="challenge-top">
     <div>
       <h1>{{ word_list.name }}</h1>
-      <p>挑战进度 {{ challenge.completed }} / {{ challenge.total }}</p>
+      <p>
+        总进度 {{ challenge.completed }} / {{ challenge.total }}
+        · 今日目标 {{ today_challenge.done }} / {{ today_challenge.total }}
+      </p>
     </div>
     <a class="ghost-button" href="/lists/{{ word_list.id }}">返回单词表</a>
   </div>
 
   <div class="challenge-large-progress">
-    <span style="width: {{ challenge.percent }}%"></span>
+    <span style="width: {{ today_challenge.percent }}%"></span>
   </div>
 
   {% if current_word %}
@@ -36,10 +39,14 @@
         <div class="challenge-actions">
           <form action="/challenge/{{ word_list.id }}/answer" method="post">
             <input type="hidden" name="action" value="skip">
+            <input type="hidden" name="daily_count" value="{{ today_challenge.daily_count }}">
+            <input type="hidden" name="start_count" value="{{ today_challenge.start_count }}">
             <button type="submit" class="secondary-button">跳过</button>
           </form>
           <form action="/challenge/{{ word_list.id }}/answer" method="post">
             <input type="hidden" name="action" value="known">
+            <input type="hidden" name="daily_count" value="{{ today_challenge.daily_count }}">
+            <input type="hidden" name="start_count" value="{{ today_challenge.start_count }}">
             <button type="submit">记住了，下一个</button>
           </form>
         </div>
@@ -47,10 +54,17 @@
     </div>
   {% else %}
     <div class="challenge-complete">
-      <h2>这一组挑战完成了</h2>
-      <p>可以回到单词表复习，也可以重新开始这一组。</p>
+      {% if today_challenge.all_complete %}
+        <h2>这一组挑战完成了</h2>
+        <p>可以回到单词表复习，也可以重新开始这一组。</p>
+      {% else %}
+        <h2>今日挑战完成了</h2>
+        <p>今天设定的 {{ today_challenge.total }} 个单词已经完成，可以明天继续，或者回首页重新设置数量。</p>
+      {% endif %}
       <form action="/challenge/{{ word_list.id }}/answer" method="post">
         <input type="hidden" name="action" value="reset">
+        <input type="hidden" name="daily_count" value="{{ today_challenge.daily_count }}">
+        <input type="hidden" name="start_count" value="0">
         <button type="submit">重新挑战</button>
       </form>
     </div>

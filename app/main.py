@@ -100,7 +100,13 @@ def list_detail(word_list_id: int, request: Request, db: Session = Depends(get_d
 
 
 @app.get("/challenge/{word_list_id}", response_class=HTMLResponse)
-def challenge_page(word_list_id: int, request: Request, db: Session = Depends(get_db)):
+def challenge_page(
+    word_list_id: int,
+    request: Request,
+    daily_count: int = Query(default=20, ge=1, le=500),
+    start_count: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
     word_list = db.get(WordList, word_list_id)
     if not word_list:
         raise HTTPException(status_code=404, detail="Word list not found")
@@ -113,8 +119,26 @@ def challenge_page(word_list_id: int, request: Request, db: Session = Depends(ge
     db.add(progress)
     db.commit()
 
-    current_word = None if progress.completed_count >= total or not words else words[progress.current_index]
+    start_count = progress.completed_count if start_count is None else start_count
+    start_count = min(max(start_count, 0), total)
+    daily_count = min(max(daily_count, 1), max(total, 1))
+    daily_target = min(total, start_count + daily_count)
+    daily_done = max(0, min(progress.completed_count, daily_target) - start_count)
+    daily_total = max(0, daily_target - start_count)
+    is_daily_complete = bool(total and progress.completed_count >= daily_target)
+
+    current_word = None if is_daily_complete or progress.completed_count >= total or not words else words[progress.current_index]
     state = challenge_state(db, word_list)
+    today_challenge = {
+        "daily_count": daily_count,
+        "start_count": start_count,
+        "target": daily_target,
+        "done": daily_done,
+        "total": daily_total,
+        "percent": round((daily_done / daily_total) * 100) if daily_total else 100,
+        "is_complete": is_daily_complete,
+        "all_complete": bool(total and progress.completed_count >= total),
+    }
     return templates.TemplateResponse(
         "challenge.html",
         page_context(
@@ -125,6 +149,7 @@ def challenge_page(word_list_id: int, request: Request, db: Session = Depends(ge
                 "current_word": current_word,
                 "progress": progress,
                 "challenge": state,
+                "today_challenge": today_challenge,
             },
         ),
     )
@@ -134,6 +159,8 @@ def challenge_page(word_list_id: int, request: Request, db: Session = Depends(ge
 def challenge_answer(
     word_list_id: int,
     action: str = Form(default="known"),
+    daily_count: int = Form(default=20),
+    start_count: int = Form(default=0),
     db: Session = Depends(get_db),
 ):
     word_list = db.get(WordList, word_list_id)
@@ -157,7 +184,12 @@ def challenge_answer(
 
     db.add(progress)
     db.commit()
-    return RedirectResponse(url=f"/challenge/{word_list_id}", status_code=303)
+    daily_count = min(max(daily_count, 1), 500)
+    start_count = max(start_count, 0)
+    return RedirectResponse(
+        url=f"/challenge/{word_list_id}?daily_count={daily_count}&start_count={start_count}",
+        status_code=303,
+    )
 
 
 @app.post("/lists/{word_list_id}/rename")
