@@ -34,11 +34,17 @@
           <div class="challenge-audio-row">
             <label>
               美式发音
-              <audio controls preload="none" src="{{ challenge_audio_sources.us }}"></audio>
+              <div class="challenge-audio-actions">
+                <button type="button" class="secondary-button" data-play-audio="challenge-audio-us">朗读美式</button>
+                <audio id="challenge-audio-us" controls preload="none" src="{{ challenge_audio_sources.us }}"></audio>
+              </div>
             </label>
             <label>
               英式发音
-              <audio controls preload="none" src="{{ challenge_audio_sources.gb }}"></audio>
+              <div class="challenge-audio-actions">
+                <button type="button" class="secondary-button" data-play-audio="challenge-audio-gb">朗读英式</button>
+                <audio id="challenge-audio-gb" controls preload="none" src="{{ challenge_audio_sources.gb }}"></audio>
+              </div>
             </label>
           </div>
         {% endif %}
@@ -105,4 +111,20 @@
     </div>
   {% endif %}
 </section>
+
+<script>
+  document.querySelectorAll('[data-play-audio]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const audio = document.getElementById(button.dataset.playAudio);
+      if (!audio) {
+        return;
+      }
+      audio.load();
+      audio.currentTime = 0;
+      audio.play().catch(() => {
+        audio.controls = true;
+      });
+    });
+  });
+</script>
 {% endblock %}
