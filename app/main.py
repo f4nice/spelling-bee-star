@@ -162,11 +162,16 @@ async def refresh_word(word_id: int, db: Session = Depends(get_db)):
 async def tts_audio(word: str = Query(..., min_length=1, max_length=80), accent: str = "us"):
     headers = {"User-Agent": "Mozilla/5.0"}
     youdao_type = "1" if accent == "gb" else "2"
+    fallback_youdao_type = "2" if youdao_type == "1" else "1"
     google_lang = "en-GB" if accent == "gb" else "en-US"
     candidates = [
         (
             "https://dict.youdao.com/dictvoice",
             {"audio": word, "type": youdao_type},
+        ),
+        (
+            "https://dict.youdao.com/dictvoice",
+            {"audio": word, "type": fallback_youdao_type},
         ),
         (
             "https://translate.google.com/translate_tts",
