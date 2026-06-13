@@ -88,6 +88,15 @@ input[type="file"] {
   max-width: 280px;
 }
 
+input[type="text"] {
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: #fff;
+}
+
 button {
   border: 0;
   border-radius: 6px;
@@ -99,6 +108,23 @@ button {
 }
 
 button:hover {
+  background: var(--accent-dark);
+}
+
+.primary-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border-radius: 6px;
+  padding: 10px 16px;
+  color: #fff;
+  background: var(--accent);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.primary-link:hover {
   background: var(--accent-dark);
 }
 
@@ -138,6 +164,10 @@ button:hover {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.list-card {
+  min-height: 292px;
 }
 
 .word-card img,
@@ -287,6 +317,28 @@ dd {
   background: #fff1f0;
   border: 1px solid #ffd8d3;
   border-radius: 6px;
+}
+
+.stacked-panel {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.wide-form {
+  align-items: end;
+}
+
+.wide-form label,
+.rename-form {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.rename-form {
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  align-items: end;
 }
 
 .preview-panel {

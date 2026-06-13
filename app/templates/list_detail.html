@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel upload-panel">
+  <div>
+    <h1>{{ word_list.name }}</h1>
+    <p>{{ words|length }} 个单词</p>
+  </div>
+  <form action="/lists/{{ word_list.id }}/rename" method="post" class="rename-form">
+    <input type="text" name="name" value="{{ word_list.name }}" required>
+    <button type="submit">保存名称</button>
+    <a class="ghost-button" href="/upload">继续导入</a>
+  </form>
+</section>
+
+<section class="word-grid">
+  {% for word in words %}
+    <a class="word-card" href="/words/{{ word.id }}">
+      {% if word.image_url %}
+        <img src="{{ word.image_url }}" alt="{{ word.word }}">
+      {% else %}
+        <div class="image-fallback">{{ word.word[:1]|upper }}</div>
+      {% endif %}
+      <div class="word-card-body">
+        <div class="word-card-title">
+          <strong>{{ word.word }}</strong>
+          <span class="status {{ word.enrichment_status }}">{{ word.enrichment_status }}</span>
+        </div>
+        <p>{{ word.chinese_definition or word.english_definition or "等待补全" }}</p>
+      </div>
+    </a>
+  {% else %}
+    <div class="empty-state">这个单词表还没有导入单词。</div>
+  {% endfor %}
+</section>
+{% endblock %}

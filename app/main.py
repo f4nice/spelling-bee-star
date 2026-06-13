@@ -1,6 +1,7 @@
 import asyncio
 import json
 from pathlib import Path
+import random
 from threading import Thread
 from uuid import uuid4
 
@@ -9,12 +10,12 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request,
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine, get_db
-from app.models import Word
+from app.models import Word, WordList, WordListItem
 from app.services.enrichment import enrich_word
 from app.services.excel_importer import parse_preview_from_excel, parse_words_from_preview
 
@@ -32,12 +33,49 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+    with SessionLocal() as db:
+        ensure_default_word_list(db)
 
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, db: Session = Depends(get_db)):
-    words = db.scalars(select(Word).order_by(Word.created_at.desc()).limit(200)).all()
-    return templates.TemplateResponse("index.html", {"request": request, "words": words, "app_name": settings.app_name})
+    word_lists = db.scalars(select(WordList).order_by(WordList.created_at.desc())).all()
+    cards = [word_list_card(db, word_list) for word_list in word_lists]
+    return templates.TemplateResponse("index.html", {"request": request, "cards": cards, "app_name": settings.app_name})
+
+
+@app.get("/upload", response_class=HTMLResponse)
+def upload_page(request: Request, db: Session = Depends(get_db)):
+    word_lists = db.scalars(select(WordList).order_by(WordList.created_at.desc())).all()
+    return templates.TemplateResponse("upload.html", {"request": request, "word_lists": word_lists, "app_name": settings.app_name})
+
+
+@app.get("/lists/{word_list_id}", response_class=HTMLResponse)
+def list_detail(word_list_id: int, request: Request, db: Session = Depends(get_db)):
+    word_list = db.get(WordList, word_list_id)
+    if not word_list:
+        raise HTTPException(status_code=404, detail="Word list not found")
+    words = db.scalars(
+        select(Word)
+        .join(WordListItem, WordListItem.word_id == Word.id)
+        .where(WordListItem.word_list_id == word_list_id)
+        .order_by(Word.word.asc())
+    ).all()
+    return templates.TemplateResponse(
+        "list_detail.html",
+        {"request": request, "word_list": word_list, "words": words, "app_name": settings.app_name},
+    )
+
+
+@app.post("/lists/{word_list_id}/rename")
+def rename_word_list(word_list_id: int, name: str = Form(...), db: Session = Depends(get_db)):
+    word_list = db.get(WordList, word_list_id)
+    if not word_list:
+        raise HTTPException(status_code=404, detail="Word list not found")
+    word_list.name = clean_list_name(name)
+    db.add(word_list)
+    db.commit()
+    return RedirectResponse(url=f"/lists/{word_list_id}", status_code=303)
 
 
 @app.get("/words/{word_id}", response_class=HTMLResponse)
@@ -49,7 +87,12 @@ def word_detail(word_id: int, request: Request, db: Session = Depends(get_db)):
 
 
 @app.post("/upload")
-async def upload_excel(request: Request, file: UploadFile = File(...)):
+async def upload_excel(
+    request: Request,
+    file: UploadFile = File(...),
+    word_list_id: str = Form(default=""),
+    word_list_name: str = Form(default=""),
+):
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in {".xlsx", ".xlsm", ".xltx", ".xltm"}:
         raise HTTPException(status_code=400, detail="请上传 .xlsx 格式的 Excel 文件")
@@ -57,6 +100,8 @@ async def upload_excel(request: Request, file: UploadFile = File(...)):
     preview = parse_preview_from_excel(await file.read())
     preview_id = uuid4().hex
     preview["filename"] = file.filename
+    preview["word_list_id"] = word_list_id
+    preview["word_list_name"] = clean_list_name(word_list_name or Path(file.filename or "新单词表").stem)
     preview_path(preview_id).write_text(json.dumps(preview, ensure_ascii=False), encoding="utf-8")
 
     return templates.TemplateResponse(
@@ -73,6 +118,8 @@ async def upload_excel(request: Request, file: UploadFile = File(...)):
 @app.post("/import-preview")
 async def import_preview(
     preview_id: str = Form(...),
+    word_list_id: str = Form(default=""),
+    word_list_name: str = Form(...),
     word_column: str = Form(...),
     selected_rows: list[int] = Form(default=[]),
     selected_columns: list[str] = Form(default=[]),
@@ -83,20 +130,21 @@ async def import_preview(
         raise HTTPException(status_code=404, detail="预览已过期，请重新上传 Excel")
 
     preview = json.loads(path.read_text(encoding="utf-8"))
+    target_list = get_or_create_word_list(db, word_list_id, word_list_name)
     rows = parse_words_from_preview(
         preview=preview,
         selected_row_indexes=set(selected_rows),
         selected_columns=set(selected_columns),
         word_column=word_column,
     )
-    word_ids = import_rows(rows, db)
+    word_ids = import_rows(rows, db, target_list)
     if word_ids:
         start_enrichment_thread(word_ids)
     path.unlink(missing_ok=True)
     return RedirectResponse(url="/", status_code=303)
 
 
-def import_rows(rows: list[dict], db: Session) -> list[int]:
+def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]:
     created = updated = skipped = 0
     errors: list[str] = []
     word_ids: list[int] = []
@@ -124,6 +172,7 @@ def import_rows(rows: list[dict], db: Session) -> list[int]:
         try:
             db.commit()
             db.refresh(word)
+            link_word_to_list(db, word_list.id, word.id)
             word_ids.append(word.id)
         except Exception as exc:
             db.rollback()
@@ -136,6 +185,72 @@ def import_rows(rows: list[dict], db: Session) -> list[int]:
 def start_enrichment_thread(word_ids: list[int]) -> None:
     worker = Thread(target=lambda: asyncio.run(enrich_word_ids(word_ids)), daemon=True)
     worker.start()
+
+
+def clean_list_name(name: str) -> str:
+    text = " ".join((name or "").split())
+    return text[:255] or "新单词表"
+
+
+def get_or_create_word_list(db: Session, word_list_id: str, name: str) -> WordList:
+    word_list = db.get(WordList, int(word_list_id)) if word_list_id.isdigit() else None
+    if word_list:
+        word_list.name = clean_list_name(name)
+    else:
+        word_list = WordList(name=clean_list_name(name))
+        db.add(word_list)
+    db.commit()
+    db.refresh(word_list)
+    return word_list
+
+
+def link_word_to_list(db: Session, word_list_id: int, word_id: int) -> None:
+    existing = db.scalar(
+        select(WordListItem).where(
+            WordListItem.word_list_id == word_list_id,
+            WordListItem.word_id == word_id,
+        )
+    )
+    if not existing:
+        db.add(WordListItem(word_list_id=word_list_id, word_id=word_id))
+        db.commit()
+
+
+def ensure_default_word_list(db: Session) -> None:
+    if db.scalar(select(func.count(WordList.id))) == 0:
+        default_list = WordList(name="默认单词表")
+        db.add(default_list)
+        db.commit()
+        db.refresh(default_list)
+    else:
+        default_list = db.scalars(select(WordList).order_by(WordList.created_at.asc()).limit(1)).first()
+
+    orphan_words = db.scalars(
+        select(Word).where(
+            ~select(WordListItem.id).where(WordListItem.word_id == Word.id).exists()
+        )
+    ).all()
+    for word in orphan_words:
+        db.add(WordListItem(word_list_id=default_list.id, word_id=word.id))
+    if orphan_words:
+        db.commit()
+
+
+def word_list_card(db: Session, word_list: WordList) -> dict:
+    words = db.scalars(
+        select(Word)
+        .join(WordListItem, WordListItem.word_id == Word.id)
+        .where(WordListItem.word_list_id == word_list.id)
+        .order_by(Word.created_at.desc())
+    ).all()
+    image_words = [word for word in words if word.image_url]
+    cover_word = random.choice(image_words) if image_words else (words[0] if words else None)
+    return {
+        "list": word_list,
+        "count": len(words),
+        "cover_word": cover_word,
+        "preview_words": words[:6],
+    }
 
 
 async def enrich_word_ids(word_ids: list[int]) -> None:

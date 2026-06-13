@@ -7,13 +7,18 @@
       <h1>导入预览</h1>
       <p>{{ preview.filename }} · {{ preview.rows|length }} 行 · {{ preview.columns|length }} 列</p>
     </div>
-    <a class="ghost-button" href="/">重新选择文件</a>
+    <a class="ghost-button" href="/upload">重新选择文件</a>
   </div>
 
   <form action="/import-preview" method="post" class="preview-form" data-preview-form>
     <input type="hidden" name="preview_id" value="{{ preview_id }}">
+    <input type="hidden" name="word_list_id" value="{{ preview.word_list_id }}">
 
     <div class="import-toolbar">
+      <label>
+        单词表名称
+        <input type="text" name="word_list_name" value="{{ preview.word_list_name }}" required>
+      </label>
       <label>
         英文单词列
         <select name="word_column" required>

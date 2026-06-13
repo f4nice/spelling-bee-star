@@ -3,33 +3,38 @@
 {% block content %}
 <section class="panel upload-panel">
   <div>
-    <h1>单词库</h1>
-    <p>上传 Excel 后先浏览表格，再选择要导入的行和列。</p>
+    <h1>单词表</h1>
+    <p>按表管理导入的单词，每个单词表会自动使用表内单词图片做封面。</p>
   </div>
-  <form action="/upload" method="post" enctype="multipart/form-data" class="upload-form">
-    <input type="file" name="file" accept=".xlsx,.xlsm,.xltx,.xltm" required>
-    <button type="submit">上传并预览</button>
-  </form>
+  <a class="primary-link" href="/upload">新增单词表</a>
 </section>
 
 <section class="word-grid">
-  {% for word in words %}
-    <a class="word-card" href="/words/{{ word.id }}">
-      {% if word.image_url %}
-        <img src="{{ word.image_url }}" alt="{{ word.word }}">
+  {% for card in cards %}
+    <a class="word-card list-card" href="/lists/{{ card.list.id }}">
+      {% if card.cover_word and card.cover_word.image_url %}
+        <img src="{{ card.cover_word.image_url }}" alt="{{ card.list.name }}">
+      {% elif card.cover_word %}
+        <div class="image-fallback">{{ card.cover_word.word[:1]|upper }}</div>
       {% else %}
-        <div class="image-fallback">{{ word.word[:1]|upper }}</div>
+        <div class="image-fallback">+</div>
       {% endif %}
       <div class="word-card-body">
         <div class="word-card-title">
-          <strong>{{ word.word }}</strong>
-          <span class="status {{ word.enrichment_status }}">{{ word.enrichment_status }}</span>
+          <strong>{{ card.list.name }}</strong>
+          <span class="status">{{ card.count }} 词</span>
         </div>
-        <p>{{ word.chinese_definition or word.english_definition or "等待补全" }}</p>
+        <p>
+          {% for word in card.preview_words %}
+            {{ word.word }}{% if not loop.last %} · {% endif %}
+          {% else %}
+            暂无单词
+          {% endfor %}
+        </p>
       </div>
     </a>
   {% else %}
-    <div class="empty-state">还没有导入单词。先上传一个 Excel 表格吧。</div>
+    <div class="empty-state">还没有单词表。先新增一个单词表吧。</div>
   {% endfor %}
 </section>
 {% endblock %}
