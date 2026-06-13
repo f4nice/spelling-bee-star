@@ -3,6 +3,7 @@ from datetime import date
 import json
 from pathlib import Path
 import random
+import re
 from threading import Thread
 from urllib.parse import quote_plus
 from uuid import uuid4
@@ -134,6 +135,18 @@ def challenge_page(
     is_daily_complete = bool(total and progress.completed_count >= daily_target)
 
     current_word = None if is_daily_complete or progress.completed_count >= total or not words else words[progress.current_index]
+    challenge_audio_sources = None
+    masked_example = None
+    if current_word:
+        challenge_audio_sources = {
+            "us": current_word.american_audio_url
+            if is_local_audio_url(current_word.american_audio_url)
+            else f"/words/{current_word.id}/tts?accent=us&v=2",
+            "gb": current_word.british_audio_url
+            if is_local_audio_url(current_word.british_audio_url)
+            else f"/words/{current_word.id}/tts?accent=gb&v=2",
+        }
+        masked_example = mask_word_in_text(current_word.english_example, current_word.word)
     state = challenge_state(db, word_list)
     today_challenge = {
         "daily_count": daily_count,
@@ -156,6 +169,8 @@ def challenge_page(
                 "progress": progress,
                 "challenge": state,
                 "today_challenge": today_challenge,
+                "challenge_audio_sources": challenge_audio_sources,
+                "masked_example": masked_example,
             },
         ),
     )
@@ -799,6 +814,24 @@ async def tts_audio(word: str = Query(..., min_length=1, max_length=80), accent:
             )
 
     raise HTTPException(status_code=502, detail=f"朗读音频暂不可用: {last_error}")
+
+
+@app.get("/words/{word_id}/tts")
+async def word_id_tts_audio(word_id: int, accent: str = "us", db: Session = Depends(get_db)):
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+    return await tts_audio(word.word, accent)
+
+
+def mask_word_in_text(text_value: str | None, word_value: str | None) -> str | None:
+    text_value = (text_value or "").strip()
+    word_value = (word_value or "").strip()
+    if not text_value:
+        return None
+    if not word_value:
+        return text_value
+    return re.sub(re.escape(word_value), "***", text_value, flags=re.IGNORECASE)
 
 
 def preview_path(preview_id: str) -> Path:

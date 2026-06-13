@@ -30,11 +30,27 @@
         <p class="challenge-count">第 {{ progress.current_index + 1 }} 个 / 共 {{ challenge.total }} 个</p>
         <h2 class="spelling-prompt">请拼写这个单词</h2>
         {% if current_word.phonetic %}<p class="phonetic">/{{ current_word.phonetic }}/</p>{% endif %}
+        {% if challenge_audio_sources %}
+          <div class="challenge-audio-row">
+            <label>
+              美式发音
+              <audio controls preload="none" src="{{ challenge_audio_sources.us }}"></audio>
+            </label>
+            <label>
+              英式发音
+              <audio controls preload="none" src="{{ challenge_audio_sources.gb }}"></audio>
+            </label>
+          </div>
+        {% endif %}
         <dl class="definition-list compact">
           <dt>英文定义</dt>
           <dd>{{ current_word.english_definition or "暂无" }}</dd>
           <dt>中文定义</dt>
           <dd>{{ current_word.chinese_definition or "暂无" }}</dd>
+          {% if masked_example %}
+            <dt>英文例句</dt>
+            <dd>{{ masked_example }}</dd>
+          {% endif %}
         </dl>
 
         <form action="/challenge/{{ word_list.id }}/answer" method="post" class="spelling-form">
