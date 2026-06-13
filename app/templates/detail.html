@@ -133,8 +133,6 @@
 </section>
 
 <script>
-  const wordId = {{ word.id }};
-
   document.querySelectorAll('[data-play-audio]').forEach((button) => {
     button.addEventListener('click', () => {
       const audio = document.getElementById(button.dataset.playAudio);
@@ -148,6 +146,9 @@
       });
     });
   });
+
+  {% if can_edit %}
+  const wordId = {{ word.id }};
 
   document.querySelectorAll('[data-fetch-audio]').forEach((button) => {
     button.addEventListener('click', async () => {
@@ -200,5 +201,6 @@
       }
     });
   });
+  {% endif %}
 </script>
 {% endblock %}
