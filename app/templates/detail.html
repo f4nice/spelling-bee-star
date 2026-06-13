@@ -2,12 +2,24 @@
 
 {% block content %}
 <section class="detail-layout">
-  <div class="detail-media">
-    {% if word.image_url %}
-      <img src="{{ word.image_url }}" alt="{{ word.word }}">
-    {% else %}
-      <div class="image-fallback large">{{ word.word[:1]|upper }}</div>
-    {% endif %}
+  <div class="detail-media-panel">
+    <div class="detail-media">
+      {% if word.image_url %}
+        <img src="{{ word.image_url }}" alt="{{ word.word }}">
+      {% else %}
+        <div class="image-fallback large">{{ word.word[:1]|upper }}</div>
+      {% endif %}
+    </div>
+    <form action="/words/{{ word.id }}/image" method="post" enctype="multipart/form-data" class="image-replace-form">
+      <label>
+        替换图片
+        <input type="file" name="file" accept="image/*" required>
+      </label>
+      <button type="submit">上传替换</button>
+      {% if word.image_locked %}
+        <span class="lock-badge">已锁定，重新补全不会覆盖</span>
+      {% endif %}
+    </form>
   </div>
 
   <article class="panel detail-panel">

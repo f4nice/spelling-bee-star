@@ -1,6 +1,7 @@
 from io import BytesIO
 import re
 from pathlib import Path
+from uuid import uuid4
 
 import httpx
 from PIL import Image, ImageOps
@@ -40,3 +41,35 @@ async def store_word_image(word: str, image_url: str, image_dir: Path) -> str | 
         image.save(target, format="WEBP", quality=76, method=6)
 
     return f"/media/images/{target.name}"
+
+
+def store_uploaded_word_image(word: str, content: bytes, image_dir: Path) -> str:
+    image_dir.mkdir(parents=True, exist_ok=True)
+    safe_word = re.sub(r"[^a-zA-Z0-9_-]+", "-", word.lower()).strip("-") or "word"
+    target = image_dir / f"{safe_word}-manual-{uuid4().hex[:8]}.webp"
+
+    with Image.open(BytesIO(content)) as image:
+        image = ImageOps.exif_transpose(image)
+        image.thumbnail((800, 800), Image.Resampling.LANCZOS)
+        if image.mode in {"RGBA", "LA"}:
+            background = Image.new("RGB", image.size, (255, 255, 255))
+            background.paste(image, mask=image.getchannel("A"))
+            image = background
+        else:
+            image = image.convert("RGB")
+        image.save(target, format="WEBP", quality=76, method=6)
+
+    return f"/media/images/{target.name}"
+
+
+def remove_local_image(url: str | None, image_dir: Path) -> None:
+    if not is_local_media_url(url):
+        return
+    filename = Path(url).name
+    if not filename:
+        return
+    target = (image_dir / filename).resolve()
+    image_root = image_dir.resolve()
+    if image_root not in target.parents:
+        return
+    target.unlink(missing_ok=True)

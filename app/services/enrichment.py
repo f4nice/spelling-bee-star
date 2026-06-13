@@ -47,12 +47,12 @@ async def enrich_word(db: Session, word: Word) -> Word:
                 word.chinese_definition = await translator.translate_definition(entry.english_definition)
             except Exception as exc:
                 optional_errors.append(f"中文翻译暂不可用: {exc}")
-        if word.image_url and not is_local_media_url(word.image_url):
+        if word.image_url and not word.image_locked and not is_local_media_url(word.image_url):
             try:
                 word.image_url = await store_word_image(word.word, word.image_url, IMAGE_DIR)
             except Exception as exc:
                 optional_errors.append(f"图片本地化暂不可用: {exc}")
-        if not word.image_url:
+        if not word.image_url and not word.image_locked:
             try:
                 remote_image_url = await images.find_image(word.word)
                 if remote_image_url:

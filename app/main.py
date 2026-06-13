@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request,
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, select
+from sqlalchemy import func, inspect, select, text
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -19,7 +19,7 @@ from app.database import Base, SessionLocal, engine, get_db
 from app.models import DailyQuote, Word, WordList, WordListItem
 from app.services.enrichment import enrich_word
 from app.services.excel_importer import parse_preview_from_excel, parse_words_from_preview
-from app.services.image_storage import is_local_media_url, store_word_image
+from app.services.image_storage import is_local_media_url, remove_local_image, store_uploaded_word_image, store_word_image
 from app.services.images import ImageClient
 
 
@@ -40,6 +40,7 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 @app.on_event("startup")
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
+    ensure_schema_columns()
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
     IMAGE_DIR.mkdir(parents=True, exist_ok=True)
     with SessionLocal() as db:
@@ -77,7 +78,7 @@ def list_detail(word_list_id: int, request: Request, db: Session = Depends(get_d
     pending_image_words = [
         {"id": word.id, "word": word.word}
         for word in words
-        if not is_local_media_url(word.image_url)
+        if not word.image_locked and not is_local_media_url(word.image_url)
     ]
     return templates.TemplateResponse(
         "list_detail.html",
@@ -104,6 +105,39 @@ def rename_word_list(word_list_id: int, name: str = Form(...), db: Session = Dep
     return RedirectResponse(url=f"/lists/{word_list_id}", status_code=303)
 
 
+@app.post("/words/{word_id}/image")
+async def replace_word_image(
+    word_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=400, detail="请上传图片文件")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="图片文件为空")
+    if len(content) > 12 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="图片不能超过 12MB")
+
+    previous_url = word.image_url
+    try:
+        word.image_url = store_uploaded_word_image(word.word, content, IMAGE_DIR)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"图片处理失败: {exc}") from exc
+
+    word.image_locked = True
+    word.enrichment_error = None
+    db.add(word)
+    db.commit()
+    remove_local_image(previous_url, IMAGE_DIR)
+    return RedirectResponse(url=f"/words/{word_id}", status_code=303)
+
+
 @app.post("/words/{word_id}/sync-image")
 async def sync_word_image(word_id: int, db: Session = Depends(get_db)):
     word = db.get(Word, word_id)
@@ -112,6 +146,9 @@ async def sync_word_image(word_id: int, db: Session = Depends(get_db)):
 
     if is_local_media_url(word.image_url):
         return {"ok": True, "word": word.word, "image_url": word.image_url, "skipped": True}
+
+    if word.image_locked:
+        return {"ok": True, "word": word.word, "image_url": word.image_url, "skipped": True, "locked": True}
 
     candidates = []
     if word.image_url:
@@ -262,6 +299,22 @@ def page_context(request: Request, db: Session, extra: dict | None = None) -> di
     if extra:
         context.update(extra)
     return context
+
+
+def ensure_schema_columns() -> None:
+    inspector = inspect(engine)
+    word_columns = {column["name"] for column in inspector.get_columns("words")}
+    if "image_locked" in word_columns:
+        return
+
+    dialect = engine.dialect.name
+    if dialect == "mysql":
+        statement = "ALTER TABLE words ADD COLUMN image_locked TINYINT(1) NOT NULL DEFAULT 0"
+    else:
+        statement = "ALTER TABLE words ADD COLUMN image_locked BOOLEAN NOT NULL DEFAULT 0"
+
+    with engine.begin() as connection:
+        connection.execute(text(statement))
 
 
 def seed_daily_quotes(db: Session) -> None:
