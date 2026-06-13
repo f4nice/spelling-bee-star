@@ -175,19 +175,29 @@ async def tts_audio(word: str = Query(..., min_length=1, max_length=80), accent:
     ]
 
     last_error = None
+    fallback_response = None
     async with httpx.AsyncClient(timeout=20, headers=headers) as client:
         for url, params in candidates:
             try:
                 response = await client.get(url, params=params)
                 response.raise_for_status()
-                if response.content:
+                if response.content and len(response.content) >= 9000:
                     return Response(
                         content=response.content,
                         media_type=response.headers.get("content-type", "audio/mpeg"),
-                        headers={"Cache-Control": "public, max-age=86400"},
+                        headers={"Cache-Control": "no-store"},
                     )
+                if response.content and fallback_response is None:
+                    fallback_response = response
             except Exception as exc:
                 last_error = exc
+
+        if fallback_response is not None:
+            return Response(
+                content=fallback_response.content,
+                media_type=fallback_response.headers.get("content-type", "audio/mpeg"),
+                headers={"Cache-Control": "no-store"},
+            )
 
     raise HTTPException(status_code=502, detail=f"朗读音频暂不可用: {last_error}")
 
