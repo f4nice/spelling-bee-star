@@ -303,6 +303,7 @@ button:hover {
 }
 
 .word-card {
+  position: relative;
   display: block;
   min-height: 270px;
   overflow: hidden;
@@ -311,6 +312,22 @@ button:hover {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.word-index-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1;
+  min-width: 34px;
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #fff;
+  background: rgba(28, 36, 48, 0.82);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
 }
 
 .list-card {
