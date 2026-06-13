@@ -136,16 +136,14 @@ def challenge_page(
 
     current_word = None if is_daily_complete or progress.completed_count >= total or not words else words[progress.current_index]
     challenge_audio_sources = None
+    challenge_image_url = None
     masked_example = None
     if current_word:
         challenge_audio_sources = {
-            "us": current_word.american_audio_url
-            if is_local_audio_url(current_word.american_audio_url)
-            else f"/words/{current_word.id}/tts?accent=us&v=2",
-            "gb": current_word.british_audio_url
-            if is_local_audio_url(current_word.british_audio_url)
-            else f"/words/{current_word.id}/tts?accent=gb&v=2",
+            "us": f"/words/{current_word.id}/audio?accent=us&v=2",
+            "gb": f"/words/{current_word.id}/audio?accent=gb&v=2",
         }
+        challenge_image_url = f"/words/{current_word.id}/image-view" if current_word.image_url else None
         masked_example = mask_word_in_text(current_word.english_example, current_word.word)
     state = challenge_state(db, word_list)
     today_challenge = {
@@ -170,6 +168,7 @@ def challenge_page(
                 "challenge": state,
                 "today_challenge": today_challenge,
                 "challenge_audio_sources": challenge_audio_sources,
+                "challenge_image_url": challenge_image_url,
                 "masked_example": masked_example,
             },
         ),
@@ -352,6 +351,14 @@ async def sync_word_image(word_id: int, db: Session = Depends(get_db)):
     db.add(word)
     db.commit()
     return {"ok": False, "word": word.word, "error": word.enrichment_error}
+
+
+@app.get("/words/{word_id}/image-view")
+def word_image_view(word_id: int, db: Session = Depends(get_db)):
+    word = db.get(Word, word_id)
+    if not word or not word.image_url:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return RedirectResponse(url=word.image_url, status_code=302)
 
 
 @app.post("/words/{word_id}/audio-options")
@@ -821,6 +828,17 @@ async def word_id_tts_audio(word_id: int, accent: str = "us", db: Session = Depe
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
+    return await tts_audio(word.word, accent)
+
+
+@app.get("/words/{word_id}/audio")
+async def word_audio(word_id: int, accent: str = "us", db: Session = Depends(get_db)):
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+    audio_url = word.british_audio_url if accent == "gb" else word.american_audio_url
+    if is_local_audio_url(audio_url):
+        return RedirectResponse(url=audio_url, status_code=302)
     return await tts_audio(word.word, accent)
 
 

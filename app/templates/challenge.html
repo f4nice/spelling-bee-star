@@ -20,8 +20,8 @@
   {% if current_word %}
     <div class="challenge-card">
       <div class="challenge-word-media">
-        {% if current_word.image_url %}
-          <img src="{{ current_word.image_url }}" alt="challenge image">
+        {% if challenge_image_url %}
+          <img src="{{ challenge_image_url }}" alt="challenge image">
         {% else %}
           <div class="image-fallback large">?</div>
         {% endif %}
