@@ -3,15 +3,15 @@
 {% block content %}
 <section class="panel upload-panel">
   <div>
-    <h1>{{ word_list.name }}</h1>
+    <div class="list-title-edit" data-list-title-edit data-url="/lists/{{ word_list.id }}/rename">
+      <h1 data-list-title-text>{{ word_list.name }}</h1>
+      <input type="text" value="{{ word_list.name }}" data-list-title-input>
+      <span class="inline-edit-status" data-list-title-status></span>
+    </div>
     <p>{{ words|length }} 个单词</p>
   </div>
   <div class="list-actions">
-    <form action="/lists/{{ word_list.id }}/rename" method="post" class="rename-form">
-      <input type="text" name="name" value="{{ word_list.name }}" required>
-      <button type="submit">保存名称</button>
-      <a class="ghost-button" href="/upload">继续导入</a>
-    </form>
+    <a class="ghost-button" href="/upload">继续导入</a>
     <button
       class="secondary-button sync-image-button"
       type="button"
@@ -88,6 +88,88 @@
   const syncCount = document.querySelector('[data-sync-count]');
   const syncMessage = document.querySelector('[data-sync-message]');
   const syncProgress = document.querySelector('[data-sync-progress]');
+  const listTitleEditor = document.querySelector('[data-list-title-edit]');
+
+  if (listTitleEditor) {
+    const titleText = listTitleEditor.querySelector('[data-list-title-text]');
+    const titleInput = listTitleEditor.querySelector('[data-list-title-input]');
+    const titleStatus = listTitleEditor.querySelector('[data-list-title-status]');
+    let originalTitle = titleInput.value;
+    let titleTimer = null;
+    let titleSaving = false;
+
+    function setTitleStatus(message, autoHide = true) {
+      window.clearTimeout(titleTimer);
+      titleStatus.textContent = message;
+      if (message && autoHide) {
+        titleTimer = window.setTimeout(() => {
+          titleStatus.textContent = '';
+        }, 1600);
+      }
+    }
+
+    function openTitleEditor() {
+      listTitleEditor.classList.add('is-editing');
+      titleInput.value = originalTitle;
+      titleInput.focus();
+      titleInput.select();
+      setTitleStatus('编辑后点击其他地方自动保存', false);
+    }
+
+    async function saveTitleEditor() {
+      if (!listTitleEditor.classList.contains('is-editing') || titleSaving) {
+        return;
+      }
+      const nextTitle = titleInput.value.trim();
+      if (!nextTitle) {
+        titleInput.value = originalTitle;
+        listTitleEditor.classList.remove('is-editing');
+        setTitleStatus('名称不能为空');
+        return;
+      }
+      listTitleEditor.classList.remove('is-editing');
+      if (nextTitle === originalTitle.trim()) {
+        setTitleStatus('');
+        return;
+      }
+
+      titleSaving = true;
+      setTitleStatus('保存中...', false);
+      const form = new FormData();
+      form.append('name', nextTitle);
+      try {
+        const response = await fetch(listTitleEditor.dataset.url, {
+          method: 'POST',
+          body: form,
+          headers: { 'X-Requested-With': 'fetch' },
+        });
+        if (!response.ok) {
+          throw new Error('save failed');
+        }
+        originalTitle = nextTitle;
+        titleText.textContent = nextTitle;
+        setTitleStatus('已保存');
+      } catch (error) {
+        titleInput.value = originalTitle;
+        setTitleStatus('保存失败，请再试一次', false);
+      } finally {
+        titleSaving = false;
+      }
+    }
+
+    titleText.addEventListener('dblclick', openTitleEditor);
+    titleInput.addEventListener('blur', saveTitleEditor);
+    titleInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        titleInput.value = originalTitle;
+        listTitleEditor.classList.remove('is-editing');
+        setTitleStatus('');
+      }
+      if (event.key === 'Enter') {
+        titleInput.blur();
+      }
+    });
+  }
 
   function setSyncProgress(done, total) {
     const percent = total ? Math.round((done / total) * 100) : 100;

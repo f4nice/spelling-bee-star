@@ -10,7 +10,7 @@ from uuid import uuid4
 
 import httpx
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete, func, inspect, select, text
@@ -234,13 +234,20 @@ def challenge_answer(
 
 
 @app.post("/lists/{word_list_id}/rename")
-def rename_word_list(word_list_id: int, name: str = Form(...), db: Session = Depends(get_db)):
+def rename_word_list(
+    word_list_id: int,
+    request: Request,
+    name: str = Form(...),
+    db: Session = Depends(get_db),
+):
     word_list = db.get(WordList, word_list_id)
     if not word_list:
         raise HTTPException(status_code=404, detail="Word list not found")
     word_list.name = clean_list_name(name)
     db.add(word_list)
     db.commit()
+    if request.headers.get("x-requested-with") == "fetch":
+        return JSONResponse({"ok": True, "name": word_list.name})
     return RedirectResponse(url=f"/lists/{word_list_id}", status_code=303)
 
 
