@@ -50,7 +50,7 @@ async def enrich_word(db: Session, word: Word) -> Word:
             word.british_audio_url = word.british_audio_url or british_audio
 
         optional_errors: list[str] = []
-        if not word.chinese_definition:
+        if not word.chinese_definition and not word.chinese_definition_locked:
             try:
                 word.chinese_definition = await translator.translate_definition(entry.english_definition)
             except Exception as exc:

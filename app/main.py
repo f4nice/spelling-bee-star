@@ -405,6 +405,23 @@ def update_english_definition(
     return RedirectResponse(url=f"/words/{word_id}", status_code=303)
 
 
+@app.post("/words/{word_id}/chinese-definition")
+def update_chinese_definition(
+    word_id: int,
+    chinese_definition: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+    word.chinese_definition = chinese_definition.strip() or None
+    word.chinese_definition_locked = True
+    word.enrichment_error = None
+    db.add(word)
+    db.commit()
+    return RedirectResponse(url=f"/words/{word_id}", status_code=303)
+
+
 @app.get("/words/{word_id}", response_class=HTMLResponse)
 def word_detail(word_id: int, request: Request, db: Session = Depends(get_db)):
     word = db.get(Word, word_id)
@@ -540,7 +557,13 @@ def ensure_schema_columns() -> None:
     boolean_type = "TINYINT(1)" if dialect == "mysql" else "BOOLEAN"
     missing_columns = [
         column
-        for column in ("image_locked", "american_audio_locked", "british_audio_locked", "english_definition_locked")
+        for column in (
+            "image_locked",
+            "american_audio_locked",
+            "british_audio_locked",
+            "english_definition_locked",
+            "chinese_definition_locked",
+        )
         if column not in word_columns
     ]
     if not missing_columns:
