@@ -8,10 +8,12 @@
       <input type="text" value="{{ word_list.name }}" data-list-title-input>
       <span class="inline-edit-status" data-list-title-status></span>
     </div>
-    <p>{{ words|length }} 个单词</p>
+    <div class="word-list-meta">
+      <p>{{ words|length }} 个单词</p>
+      <a class="ghost-button compact-button" href="/upload">继续导入</a>
+    </div>
   </div>
   <div class="list-actions">
-    <a class="ghost-button" href="/upload">继续导入</a>
     <form action="/lists/{{ word_list.id }}/delete" method="post" class="delete-list-form" data-delete-list-form>
       <input type="password" name="password" placeholder="删除密码" required>
       <button type="submit" class="danger-button">删除</button>

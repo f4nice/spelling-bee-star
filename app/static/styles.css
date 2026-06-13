@@ -903,6 +903,25 @@ dd {
   display: block;
 }
 
+.word-list-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.word-list-meta p {
+  line-height: 28px;
+}
+
+.compact-button {
+  min-height: 28px;
+  border-radius: 5px;
+  padding: 4px 9px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
 .error-box {
   margin-top: 24px;
   padding: 12px 14px;
