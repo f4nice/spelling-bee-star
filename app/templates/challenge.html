@@ -65,7 +65,18 @@
           <input type="hidden" name="start_count" value="{{ today_challenge.start_count }}">
           <label>
             输入拼写
-            <input type="text" name="spelling" autocomplete="off" autocapitalize="none" spellcheck="false" required autofocus>
+            <input
+              type="text"
+              name="spelling"
+              autocomplete="off"
+              autocapitalize="none"
+              spellcheck="false"
+              inputmode="text"
+              pattern="[^0-9]*"
+              data-spelling-input
+              required
+              autofocus
+            >
           </label>
           <button type="submit">提交</button>
         </form>
@@ -124,6 +135,15 @@
       audio.play().catch(() => {
         audio.controls = true;
       });
+    });
+  });
+
+  document.querySelectorAll('[data-spelling-input]').forEach((input) => {
+    input.addEventListener('input', () => {
+      const withoutDigits = input.value.replace(/[0-9]/g, '');
+      if (input.value !== withoutDigits) {
+        input.value = withoutDigits;
+      }
     });
   });
 </script>

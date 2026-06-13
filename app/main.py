@@ -211,7 +211,7 @@ def challenge_answer(
     elif total:
         current_word = words[progress.current_index] if 0 <= progress.current_index < total else None
         if action == "spell" and current_word:
-            typed = " ".join(spelling.strip().lower().split())
+            typed = " ".join(re.sub(r"\d+", "", spelling).strip().lower().split())
             expected = " ".join(current_word.word.strip().lower().split())
             action = "known" if typed == expected else "wrong"
         if action == "wrong" and current_word:
