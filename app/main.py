@@ -19,6 +19,8 @@ from app.database import Base, SessionLocal, engine, get_db
 from app.models import DailyQuote, Word, WordList, WordListItem
 from app.services.enrichment import enrich_word
 from app.services.excel_importer import parse_preview_from_excel, parse_words_from_preview
+from app.services.image_storage import is_local_media_url, store_word_image
+from app.services.images import ImageClient
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -72,9 +74,22 @@ def list_detail(word_list_id: int, request: Request, db: Session = Depends(get_d
         .where(WordListItem.word_list_id == word_list_id)
         .order_by(Word.word.asc())
     ).all()
+    pending_image_words = [
+        {"id": word.id, "word": word.word}
+        for word in words
+        if not is_local_media_url(word.image_url)
+    ]
     return templates.TemplateResponse(
         "list_detail.html",
-        page_context(request, db, {"word_list": word_list, "words": words}),
+        page_context(
+            request,
+            db,
+            {
+                "word_list": word_list,
+                "words": words,
+                "pending_image_words": pending_image_words,
+            },
+        ),
     )
 
 
@@ -87,6 +102,45 @@ def rename_word_list(word_list_id: int, name: str = Form(...), db: Session = Dep
     db.add(word_list)
     db.commit()
     return RedirectResponse(url=f"/lists/{word_list_id}", status_code=303)
+
+
+@app.post("/words/{word_id}/sync-image")
+async def sync_word_image(word_id: int, db: Session = Depends(get_db)):
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+
+    if is_local_media_url(word.image_url):
+        return {"ok": True, "word": word.word, "image_url": word.image_url, "skipped": True}
+
+    candidates = []
+    if word.image_url:
+        candidates.append(word.image_url)
+
+    try:
+        found_image_url = await ImageClient().find_image(word.word)
+        if found_image_url:
+            candidates.append(found_image_url)
+    except Exception as exc:
+        word.enrichment_error = f"图片搜索失败: {exc}"
+
+    errors: list[str] = []
+    for image_url in candidates:
+        try:
+            local_url = await store_word_image(word.word, image_url, IMAGE_DIR)
+            if local_url:
+                word.image_url = local_url
+                word.enrichment_error = None
+                db.add(word)
+                db.commit()
+                return {"ok": True, "word": word.word, "image_url": local_url, "skipped": False}
+        except Exception as exc:
+            errors.append(str(exc))
+
+    word.enrichment_error = "图片同步失败: " + ("; ".join(errors[:2]) or "未找到可用图片")
+    db.add(word)
+    db.commit()
+    return {"ok": False, "word": word.word, "error": word.enrichment_error}
 
 
 @app.get("/words/{word_id}", response_class=HTMLResponse)

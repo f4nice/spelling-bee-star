@@ -430,6 +430,96 @@ dd {
   align-items: end;
 }
 
+.list-actions {
+  display: grid;
+  gap: 12px;
+  justify-items: end;
+}
+
+.sync-image-button:disabled {
+  color: var(--muted);
+  background: #eef1ed;
+  cursor: not-allowed;
+}
+
+.image-sync-panel {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  margin: -8px 0 24px;
+  background: #fbfcfa;
+}
+
+.sync-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sync-heading strong {
+  font-size: 16px;
+}
+
+.sync-heading span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.sync-progress {
+  overflow: hidden;
+  height: 10px;
+  border-radius: 999px;
+  background: #e5eae4;
+}
+
+.sync-progress span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+
+.image-sync-panel.is-syncing .sync-progress span {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.24) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.24) 50%,
+    rgba(255, 255, 255, 0.24) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 22px 22px;
+  animation: sync-stripes 0.8s linear infinite;
+}
+
+.image-sync-panel.is-complete .sync-progress span {
+  width: 100%;
+}
+
+.image-sync-panel.has-error {
+  border-color: #ffd8d3;
+  background: #fff8f7;
+}
+
+.image-sync-panel.has-error .sync-progress span {
+  background: var(--warn);
+}
+
+@keyframes sync-stripes {
+  from {
+    background-position: 0 0;
+  }
+
+  to {
+    background-position: 22px 0;
+  }
+}
+
 .preview-panel {
   padding: 22px;
 }

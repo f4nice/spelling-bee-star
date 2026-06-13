@@ -6,16 +6,53 @@
     <h1>{{ word_list.name }}</h1>
     <p>{{ words|length }} 个单词</p>
   </div>
-  <form action="/lists/{{ word_list.id }}/rename" method="post" class="rename-form">
-    <input type="text" name="name" value="{{ word_list.name }}" required>
-    <button type="submit">保存名称</button>
-    <a class="ghost-button" href="/upload">继续导入</a>
-  </form>
+  <div class="list-actions">
+    <form action="/lists/{{ word_list.id }}/rename" method="post" class="rename-form">
+      <input type="text" name="name" value="{{ word_list.name }}" required>
+      <button type="submit">保存名称</button>
+      <a class="ghost-button" href="/upload">继续导入</a>
+    </form>
+    <button
+      class="secondary-button sync-image-button"
+      type="button"
+      data-sync-images
+      {% if not pending_image_words %}disabled{% endif %}
+    >
+      同步图片
+    </button>
+  </div>
+</section>
+
+<section
+  class="panel image-sync-panel {% if not pending_image_words %}is-complete{% endif %}"
+  data-sync-panel
+  data-words='{{ pending_image_words|tojson }}'
+>
+  <div class="sync-heading">
+    <strong data-sync-title>
+      {% if pending_image_words %}
+        待同步 {{ pending_image_words|length }} 张图片
+      {% else %}
+        图片已同步完成
+      {% endif %}
+    </strong>
+    <span data-sync-count>0 / {{ pending_image_words|length }}</span>
+  </div>
+  <div class="sync-progress" aria-hidden="true">
+    <span data-sync-progress></span>
+  </div>
+  <p data-sync-message>
+    {% if pending_image_words %}
+      点击同步图片后，会从网上查找缺失图片，下载到服务器图片库并压缩。
+    {% else %}
+      当前单词表没有缺失图片。
+    {% endif %}
+  </p>
 </section>
 
 <section class="word-grid">
   {% for word in words %}
-    <a class="word-card" href="/words/{{ word.id }}">
+    <a class="word-card" href="/words/{{ word.id }}" data-word-card="{{ word.id }}">
       {% if word.image_url %}
         <img src="{{ word.image_url }}" alt="{{ word.word }}">
       {% else %}
@@ -33,4 +70,71 @@
     <div class="empty-state">这个单词表还没有导入单词。</div>
   {% endfor %}
 </section>
+
+<script>
+  const syncPanel = document.querySelector('[data-sync-panel]');
+  const syncButton = document.querySelector('[data-sync-images]');
+  const syncWords = JSON.parse(syncPanel.dataset.words || '[]');
+  const syncTitle = document.querySelector('[data-sync-title]');
+  const syncCount = document.querySelector('[data-sync-count]');
+  const syncMessage = document.querySelector('[data-sync-message]');
+  const syncProgress = document.querySelector('[data-sync-progress]');
+
+  function setSyncProgress(done, total) {
+    const percent = total ? Math.round((done / total) * 100) : 100;
+    syncProgress.style.width = `${percent}%`;
+    syncCount.textContent = `${done} / ${total}`;
+  }
+
+  syncButton?.addEventListener('click', async () => {
+    if (!syncWords.length) {
+      return;
+    }
+
+    syncButton.disabled = true;
+    syncPanel.classList.remove('is-complete', 'has-error');
+    syncPanel.classList.add('is-syncing');
+    syncTitle.textContent = '正在同步图片';
+
+    let done = 0;
+    let failed = 0;
+    const total = syncWords.length;
+    setSyncProgress(done, total);
+
+    for (const item of syncWords) {
+      syncMessage.textContent = `正在查找并下载：${item.word}`;
+      try {
+        const response = await fetch(`/words/${item.id}/sync-image`, { method: 'POST' });
+        const result = await response.json();
+        if (!response.ok || !result.ok) {
+          failed += 1;
+        } else {
+          const card = document.querySelector(`[data-word-card="${item.id}"]`);
+          const cardImage = card?.querySelector('img');
+          const cardFallback = card?.querySelector('.image-fallback');
+          if (result.image_url && cardImage) {
+            cardImage.src = `${result.image_url}?v=${Date.now()}`;
+          } else if (result.image_url && cardFallback) {
+            const image = document.createElement('img');
+            image.src = `${result.image_url}?v=${Date.now()}`;
+            image.alt = item.word;
+            cardFallback.replaceWith(image);
+          }
+        }
+      } catch (error) {
+        failed += 1;
+      }
+      done += 1;
+      setSyncProgress(done, total);
+    }
+
+    syncPanel.classList.remove('is-syncing');
+    syncPanel.classList.toggle('has-error', failed > 0);
+    syncPanel.classList.toggle('is-complete', failed === 0);
+    syncTitle.textContent = failed ? '图片同步完成，部分失败' : '图片同步完成';
+    syncMessage.textContent = failed
+      ? `已处理 ${done} 个单词，${failed} 个没有找到可用图片。`
+      : `已下载并压缩 ${done} 张图片，已保存到服务器图片库。`;
+  });
+</script>
 {% endblock %}
