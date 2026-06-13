@@ -12,7 +12,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request,
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, inspect, select, text
+from sqlalchemy import delete, func, inspect, select, text
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -70,7 +70,12 @@ def upload_page(request: Request, db: Session = Depends(get_db)):
 
 
 @app.get("/lists/{word_list_id}", response_class=HTMLResponse)
-def list_detail(word_list_id: int, request: Request, db: Session = Depends(get_db)):
+def list_detail(
+    word_list_id: int,
+    request: Request,
+    delete_error: int = Query(default=0),
+    db: Session = Depends(get_db),
+):
     word_list = db.get(WordList, word_list_id)
     if not word_list:
         raise HTTPException(status_code=404, detail="Word list not found")
@@ -94,6 +99,7 @@ def list_detail(word_list_id: int, request: Request, db: Session = Depends(get_d
                 "word_list": word_list,
                 "words": words,
                 "pending_image_words": pending_image_words,
+                "delete_error": bool(delete_error),
             },
         ),
     )
@@ -217,6 +223,40 @@ def rename_word_list(word_list_id: int, name: str = Form(...), db: Session = Dep
     db.add(word_list)
     db.commit()
     return RedirectResponse(url=f"/lists/{word_list_id}", status_code=303)
+
+
+@app.post("/lists/{word_list_id}/delete")
+def delete_word_list(
+    word_list_id: int,
+    password: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    word_list = db.get(WordList, word_list_id)
+    if not word_list:
+        raise HTTPException(status_code=404, detail="Word list not found")
+    if password != settings.list_delete_password:
+        return RedirectResponse(url=f"/lists/{word_list_id}?delete_error=1", status_code=303)
+
+    word_ids = [
+        row[0]
+        for row in db.execute(
+            select(WordListItem.word_id).where(WordListItem.word_list_id == word_list_id)
+        ).all()
+    ]
+    exclusive_word_ids = []
+    for word_id in word_ids:
+        linked_count = db.scalar(select(func.count(WordListItem.id)).where(WordListItem.word_id == word_id)) or 0
+        if linked_count <= 1:
+            exclusive_word_ids.append(word_id)
+
+    db.execute(delete(ChallengeProgress).where(ChallengeProgress.word_list_id == word_list_id))
+    db.execute(delete(WordListItem).where(WordListItem.word_list_id == word_list_id))
+    if exclusive_word_ids:
+        db.execute(delete(WrongWord).where(WrongWord.word_id.in_(exclusive_word_ids)))
+        db.execute(delete(Word).where(Word.id.in_(exclusive_word_ids)))
+    db.delete(word_list)
+    db.commit()
+    return RedirectResponse(url="/", status_code=303)
 
 
 @app.post("/words/{word_id}/image")

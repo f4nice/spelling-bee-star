@@ -757,6 +757,24 @@ dd {
   justify-items: end;
 }
 
+.delete-list-form {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.delete-list-form input[type="password"] {
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 10px;
+}
+
+.list-delete-error {
+  margin: -8px 0 16px;
+}
+
 .sync-image-button:disabled {
   color: var(--muted);
   background: #eef1ed;

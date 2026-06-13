@@ -20,8 +20,16 @@
     >
       同步图片
     </button>
+    <form action="/lists/{{ word_list.id }}/delete" method="post" class="delete-list-form" data-delete-list-form>
+      <input type="password" name="password" placeholder="删除密码" required>
+      <button type="submit" class="danger-button">删除</button>
+    </form>
   </div>
 </section>
+
+{% if delete_error %}
+  <div class="error-box list-delete-error">删除密码不正确。</div>
+{% endif %}
 
 <section
   class="panel image-sync-panel {% if not pending_image_words %}is-complete{% endif %}"
@@ -136,6 +144,12 @@
     syncMessage.textContent = failed
       ? `已处理 ${done} 个单词，${failed} 个没有找到可用图片。`
       : `已下载并压缩 ${done} 张图片，已保存到服务器图片库。`;
+  });
+
+  document.querySelector('[data-delete-list-form]')?.addEventListener('submit', (event) => {
+    if (!confirm('确认删除这个单词表吗？删除后不能恢复。')) {
+      event.preventDefault();
+    }
   });
 </script>
 {% endblock %}
