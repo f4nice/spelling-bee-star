@@ -208,14 +208,14 @@ def seed_daily_quotes(db: Session) -> None:
     if db.scalar(select(func.count(DailyQuote.id))) > 0:
         return
     quotes = [
-        "不急于证明自己，只专注做好决策。",
-        "每天记住一个词，就是给未来多开一扇窗。",
-        "稳稳地学，慢慢地赢。",
-        "看见一个陌生词，就是靠近一个新世界。",
-        "今天的小进步，会在某天突然发光。",
+        ("The limits of my language mean the limits of my world.", "Ludwig Wittgenstein"),
+        ("One language sets you in a corridor for life. Two languages open every door along the way.", "Frank Smith"),
+        ("To learn a language is to have one more window from which to look at the world.", "Chinese proverb"),
+        ("Language is the road map of a culture.", "Rita Mae Brown"),
+        ("Learning never exhausts the mind.", "Leonardo da Vinci"),
     ]
-    for quote in quotes:
-        db.add(DailyQuote(content=quote))
+    for content, author in quotes:
+        db.add(DailyQuote(content=content, author=author))
     db.commit()
 
 
