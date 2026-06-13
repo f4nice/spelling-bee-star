@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import random
 from threading import Thread
+from urllib.parse import quote_plus
 from uuid import uuid4
 
 import httpx
@@ -19,6 +20,7 @@ from app.database import Base, SessionLocal, engine, get_db
 from app.models import ChallengeProgress, DailyQuote, Word, WordList, WordListItem
 from app.services.enrichment import enrich_word
 from app.services.excel_importer import parse_preview_from_excel, parse_words_from_preview
+from app.services.audio_storage import audio_candidates_with_dictionary, is_local_audio_url, store_audio_candidate
 from app.services.image_storage import is_local_media_url, remove_local_image, store_uploaded_word_image, store_word_image
 from app.services.images import ImageClient
 
@@ -27,10 +29,12 @@ BASE_DIR = Path(__file__).resolve().parent
 PREVIEW_DIR = BASE_DIR.parent / "uploads" / "previews"
 MEDIA_DIR = BASE_DIR.parent / "uploads"
 IMAGE_DIR = MEDIA_DIR / "images"
+AUDIO_DIR = MEDIA_DIR / "audio"
 settings = get_settings()
 
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title=settings.app_name)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
@@ -43,6 +47,7 @@ def startup() -> None:
     ensure_schema_columns()
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
     IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    AUDIO_DIR.mkdir(parents=True, exist_ok=True)
     with SessionLocal() as db:
         seed_daily_quotes(db)
         ensure_default_word_list(db)
@@ -241,12 +246,71 @@ async def sync_word_image(word_id: int, db: Session = Depends(get_db)):
     return {"ok": False, "word": word.word, "error": word.enrichment_error}
 
 
+@app.post("/words/{word_id}/audio-options")
+async def word_audio_options(
+    word_id: int,
+    accent: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    if accent not in {"us", "gb"}:
+        raise HTTPException(status_code=400, detail="Invalid accent")
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+
+    options = []
+    for candidate in await audio_candidates_with_dictionary(word.word, accent):
+        try:
+            local_url = await store_audio_candidate(word.word, accent, candidate["key"], candidate["url"], AUDIO_DIR)
+        except Exception:
+            local_url = None
+        if local_url:
+            options.append({"label": candidate["label"], "url": local_url})
+
+    if not options:
+        return {"ok": False, "word": word.word, "accent": accent, "options": [], "error": "没有找到可用音频"}
+    return {"ok": True, "word": word.word, "accent": accent, "options": options}
+
+
+@app.post("/words/{word_id}/audio-choice")
+async def word_audio_choice(
+    word_id: int,
+    accent: str = Form(...),
+    audio_url: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    if accent not in {"us", "gb"}:
+        raise HTTPException(status_code=400, detail="Invalid accent")
+    if not is_local_audio_url(audio_url):
+        raise HTTPException(status_code=400, detail="请先选择服务器上的音频")
+
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+
+    if accent == "gb":
+        word.british_audio_url = audio_url
+        word.british_audio_locked = True
+    else:
+        word.american_audio_url = audio_url
+        word.american_audio_locked = True
+    word.enrichment_error = None
+    db.add(word)
+    db.commit()
+    return {"ok": True, "word": word.word, "accent": accent, "audio_url": audio_url}
+
+
 @app.get("/words/{word_id}", response_class=HTMLResponse)
 def word_detail(word_id: int, request: Request, db: Session = Depends(get_db)):
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
-    return templates.TemplateResponse("detail.html", page_context(request, db, {"word": word}))
+    encoded_word = quote_plus(word.word)
+    audio_sources = {
+        "us": word.american_audio_url if is_local_audio_url(word.american_audio_url) else f"/tts?word={encoded_word}&accent=us&v=2",
+        "gb": word.british_audio_url if is_local_audio_url(word.british_audio_url) else f"/tts?word={encoded_word}&accent=gb&v=2",
+    }
+    return templates.TemplateResponse("detail.html", page_context(request, db, {"word": word, "audio_sources": audio_sources}))
 
 
 @app.post("/upload")
@@ -366,17 +430,19 @@ def page_context(request: Request, db: Session, extra: dict | None = None) -> di
 def ensure_schema_columns() -> None:
     inspector = inspect(engine)
     word_columns = {column["name"] for column in inspector.get_columns("words")}
-    if "image_locked" in word_columns:
+    dialect = engine.dialect.name
+    boolean_type = "TINYINT(1)" if dialect == "mysql" else "BOOLEAN"
+    missing_columns = [
+        column
+        for column in ("image_locked", "american_audio_locked", "british_audio_locked")
+        if column not in word_columns
+    ]
+    if not missing_columns:
         return
 
-    dialect = engine.dialect.name
-    if dialect == "mysql":
-        statement = "ALTER TABLE words ADD COLUMN image_locked TINYINT(1) NOT NULL DEFAULT 0"
-    else:
-        statement = "ALTER TABLE words ADD COLUMN image_locked BOOLEAN NOT NULL DEFAULT 0"
-
     with engine.begin() as connection:
-        connection.execute(text(statement))
+        for column in missing_columns:
+            connection.execute(text(f"ALTER TABLE words ADD COLUMN {column} {boolean_type} NOT NULL DEFAULT 0"))
 
 
 def seed_daily_quotes(db: Session) -> None:

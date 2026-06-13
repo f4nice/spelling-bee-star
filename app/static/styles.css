@@ -586,13 +586,49 @@ button:hover {
 
 .audio-actions {
   display: grid;
-  grid-template-columns: auto minmax(220px, 1fr);
+  grid-template-columns: auto minmax(220px, 1fr) auto;
   align-items: center;
   gap: 10px;
 }
 
 audio {
   width: 100%;
+}
+
+.audio-options {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.audio-options > p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.audio-option {
+  display: grid;
+  grid-template-columns: 120px minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfa;
+}
+
+.audio-option strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.audio-option-error {
+  color: var(--error) !important;
+}
+
+.audio-option-success {
+  color: var(--accent-dark) !important;
+  font-weight: 800;
 }
 
 .definition-list {
@@ -878,6 +914,10 @@ select {
   }
 
   .audio-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .audio-option {
     grid-template-columns: 1fr;
   }
 }

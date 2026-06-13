@@ -4,13 +4,16 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models import Word
+from app.services.audio_storage import is_local_audio_url, store_first_available_audio
 from app.services.dictionary import FreeDictionaryAudioClient, FreeDictionaryClient, MerriamWebsterClient
 from app.services.image_storage import is_local_media_url, store_word_image
 from app.services.images import ImageClient
 from app.services.translation import TranslationClient
 
 
-IMAGE_DIR = Path(__file__).resolve().parents[2] / "uploads" / "images"
+UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads"
+IMAGE_DIR = UPLOAD_DIR / "images"
+AUDIO_DIR = UPLOAD_DIR / "audio"
 
 
 async def enrich_word(db: Session, word: Word) -> Word:
@@ -31,15 +34,19 @@ async def enrich_word(db: Session, word: Word) -> Word:
             entry = await free_dictionary.lookup(word.word)
 
         word.phonetic = word.phonetic or entry.phonetic
-        word.american_audio_url = entry.american_audio_url
-        word.british_audio_url = entry.british_audio_url
+        if not word.american_audio_locked:
+            word.american_audio_url = entry.american_audio_url
+        if not word.british_audio_locked:
+            word.british_audio_url = entry.british_audio_url
         word.english_definition = entry.english_definition
         word.english_example = entry.english_example
         word.source = entry.source
 
         american_audio, british_audio = await audio_client.lookup_audio(word.word)
-        word.american_audio_url = word.american_audio_url or american_audio
-        word.british_audio_url = british_audio
+        if not word.american_audio_locked:
+            word.american_audio_url = word.american_audio_url or american_audio
+        if not word.british_audio_locked:
+            word.british_audio_url = word.british_audio_url or british_audio
 
         optional_errors: list[str] = []
         if not word.chinese_definition:
@@ -47,6 +54,7 @@ async def enrich_word(db: Session, word: Word) -> Word:
                 word.chinese_definition = await translator.translate_definition(entry.english_definition)
             except Exception as exc:
                 optional_errors.append(f"中文翻译暂不可用: {exc}")
+
         if word.image_url and not word.image_locked and not is_local_media_url(word.image_url):
             try:
                 word.image_url = await store_word_image(word.word, word.image_url, IMAGE_DIR)
@@ -59,6 +67,17 @@ async def enrich_word(db: Session, word: Word) -> Word:
                     word.image_url = await store_word_image(word.word, remote_image_url, IMAGE_DIR)
             except Exception as exc:
                 optional_errors.append(f"图片搜索暂不可用: {exc}")
+
+        if not word.american_audio_locked and not is_local_audio_url(word.american_audio_url):
+            try:
+                word.american_audio_url = await store_first_available_audio(word.word, "us", AUDIO_DIR) or word.american_audio_url
+            except Exception as exc:
+                optional_errors.append(f"美式音频本地化暂不可用: {exc}")
+        if not word.british_audio_locked and not is_local_audio_url(word.british_audio_url):
+            try:
+                word.british_audio_url = await store_first_available_audio(word.word, "gb", AUDIO_DIR) or word.british_audio_url
+            except Exception as exc:
+                optional_errors.append(f"英式音频本地化暂不可用: {exc}")
 
         word.enrichment_status = "done"
         word.enrichment_error = "\n".join(optional_errors) or None
