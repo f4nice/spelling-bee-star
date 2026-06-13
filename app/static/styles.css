@@ -850,6 +850,7 @@ dd {
 }
 
 .inline-edit-status {
+  display: inline-flex;
   width: fit-content;
   border-radius: 999px;
   padding: 3px 8px;
@@ -857,6 +858,10 @@ dd {
   background: #eef2f6;
   font-size: 12px;
   font-weight: 800;
+}
+
+.inline-edit-status:empty {
+  display: none;
 }
 
 .error-box {

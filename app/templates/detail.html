@@ -82,9 +82,7 @@
           >
             <div class="inline-edit-text" data-edit-text>{{ word.english_definition or "暂无" }}</div>
             <textarea data-edit-input rows="4">{{ word.english_definition or "" }}</textarea>
-            <span class="inline-edit-status" data-edit-status>
-              {% if word.english_definition_locked %}已锁定，重新补全不会覆盖{% else %}双击编辑{% endif %}
-            </span>
+            <span class="inline-edit-status" data-edit-status></span>
           </div>
         {% else %}
           {{ word.english_definition or "暂无" }}
@@ -101,9 +99,7 @@
           >
             <div class="inline-edit-text" data-edit-text>{{ word.chinese_definition or "暂无" }}</div>
             <textarea data-edit-input rows="3">{{ word.chinese_definition or "" }}</textarea>
-            <span class="inline-edit-status" data-edit-status>
-              {% if word.chinese_definition_locked %}已锁定，重新补全不会覆盖{% else %}双击编辑{% endif %}
-            </span>
+            <span class="inline-edit-status" data-edit-status></span>
           </div>
         {% else %}
           {{ word.chinese_definition or "暂无" }}
@@ -120,9 +116,7 @@
           >
             <div class="inline-edit-text" data-edit-text>{{ word.english_example or "暂无" }}</div>
             <textarea data-edit-input rows="3">{{ word.english_example or "" }}</textarea>
-            <span class="inline-edit-status" data-edit-status>
-              {% if word.english_example_locked %}已锁定，重新补全不会覆盖{% else %}双击编辑{% endif %}
-            </span>
+            <span class="inline-edit-status" data-edit-status></span>
           </div>
         {% else %}
           {{ word.english_example or "暂无" }}
@@ -162,13 +156,24 @@
     const status = editor.querySelector('[data-edit-status]');
     let originalValue = input.value;
     let saving = false;
+    let statusTimer = null;
+
+    function setStatus(message, autoHide = true) {
+      window.clearTimeout(statusTimer);
+      status.textContent = message;
+      if (message && autoHide) {
+        statusTimer = window.setTimeout(() => {
+          status.textContent = '';
+        }, 1600);
+      }
+    }
 
     function openEditor() {
       editor.classList.add('is-editing');
       input.value = originalValue;
       input.focus();
       input.select();
-      status.textContent = '编辑后点击其他地方自动保存';
+      setStatus('编辑后点击其他地方自动保存', false);
     }
 
     async function saveEditor() {
@@ -179,12 +184,12 @@
       editor.classList.remove('is-editing');
 
       if (nextValue === originalValue.trim()) {
-        status.textContent = '未修改';
+        setStatus('');
         return;
       }
 
       saving = true;
-      status.textContent = '保存中...';
+      setStatus('保存中...', false);
       const form = new FormData();
       form.append('edit_token', '1');
       form.append(editor.dataset.name, nextValue);
@@ -196,10 +201,10 @@
         }
         originalValue = nextValue;
         text.textContent = nextValue || '暂无';
-        status.textContent = '已保存';
+        setStatus('已保存');
       } catch (error) {
         input.value = originalValue;
-        status.textContent = '保存失败，请再试一次';
+        setStatus('保存失败，请再试一次', false);
       } finally {
         saving = false;
       }
@@ -211,7 +216,7 @@
       if (event.key === 'Escape') {
         input.value = originalValue;
         editor.classList.remove('is-editing');
-        status.textContent = '已取消';
+        setStatus('');
       }
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
         input.blur();
