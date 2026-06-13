@@ -15,7 +15,7 @@ class ImageClient:
             "origin": "*",
         }
         headers = {
-            "User-Agent": "SpellingBeeStar/1.0 (local learning app; contact: local@example.com)"
+            "User-Agent": "SpellingBeeStar/1.0 (https://github.com/f4nice/spelling-bee-star; contact: f4nice@example.com)"
         }
         async with httpx.AsyncClient(timeout=20, headers=headers) as client:
             response = await client.get("https://commons.wikimedia.org/w/api.php", params=params)
