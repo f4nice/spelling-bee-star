@@ -67,6 +67,7 @@
 
 <section class="word-grid">
   {% for word in words %}
+    {% set challenge_stats = challenge_word_stats.get(word.id, {"correct": 0, "wrong": 0}) %}
     <a class="word-card" href="/words/{{ word.id }}?edit=1&list_id={{ word_list.id }}" data-word-card="{{ word.id }}">
       <span class="word-index-badge">#{{ loop.index }}</span>
       {% if word.image_url %}
@@ -77,7 +78,10 @@
       <div class="word-card-body">
         <div class="word-card-title">
           <strong>{{ word.word }}</strong>
-          <span class="status {{ word.enrichment_status }}">{{ word.enrichment_status }}</span>
+          <span class="challenge-result-badges" aria-label="挑战结果：正确 {{ challenge_stats.correct }} 次，错误 {{ challenge_stats.wrong }} 次">
+            <span class="challenge-result-badge is-correct">对 {{ challenge_stats.correct }}</span>
+            <span class="challenge-result-badge is-wrong">错 {{ challenge_stats.wrong }}</span>
+          </span>
         </div>
         <p>{{ word.chinese_definition or word.english_definition or "等待补全" }}</p>
       </div>

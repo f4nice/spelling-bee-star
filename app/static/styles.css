@@ -1820,6 +1820,32 @@ button:hover {
   color: var(--warn);
 }
 
+.challenge-result-badges {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  align-items: center;
+}
+
+.challenge-result-badge {
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.challenge-result-badge.is-correct {
+  background: #e4f6ee;
+  color: var(--accent-dark);
+}
+
+.challenge-result-badge.is-wrong {
+  background: #fff1e3;
+  color: var(--warn);
+}
+
 .image-fallback {
   display: grid;
   place-items: center;

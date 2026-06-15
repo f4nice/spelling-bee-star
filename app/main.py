@@ -510,6 +510,8 @@ def list_detail(
         .where(WordListItem.word_list_id == word_list_id)
         .order_by(Word.word.asc())
     ).all()
+    word_ids = [word.id for word in words]
+    challenge_word_stats = challenge_counts_for_words(db, word_ids)
     pending_image_words = [{"id": word.id, "word": word.word} for word in words if needs_image_sync(word)]
     return templates.TemplateResponse(
         "list_detail.html",
@@ -519,6 +521,7 @@ def list_detail(
             {
                 "word_list": word_list,
                 "words": words,
+                "challenge_word_stats": challenge_word_stats,
                 "pending_image_words": pending_image_words,
                 "delete_error": bool(delete_error),
             },
@@ -2253,6 +2256,24 @@ def challenge_state(db: Session, word_list: WordList) -> dict:
         "total": total,
         "percent": percent,
         "is_complete": bool(total and completed >= total),
+    }
+
+
+def challenge_counts_for_words(db: Session, word_ids: list[int]) -> dict[int, dict[str, int]]:
+    if not word_ids:
+        return {}
+    rows = db.execute(
+        select(
+            ChallengeDailyWord.word_id,
+            func.coalesce(func.sum(ChallengeDailyWord.correct_count), 0),
+            func.coalesce(func.sum(ChallengeDailyWord.wrong_count), 0),
+        )
+        .where(ChallengeDailyWord.word_id.in_(word_ids))
+        .group_by(ChallengeDailyWord.word_id)
+    ).all()
+    return {
+        word_id: {"correct": int(correct or 0), "wrong": int(wrong or 0)}
+        for word_id, correct, wrong in rows
     }
 
 
