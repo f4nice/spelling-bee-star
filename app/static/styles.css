@@ -2302,15 +2302,9 @@ button:hover {
 .alternate-spellings-row {
   display: flex;
   align-items: start;
-  gap: 10px;
   color: var(--muted);
   font-size: 14px;
   line-height: 1.5;
-}
-
-.alternate-spellings-row > span {
-  flex: 0 0 auto;
-  font-weight: 800;
 }
 
 .alternate-spellings-row > strong {
