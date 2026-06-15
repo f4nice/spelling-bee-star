@@ -2289,9 +2289,34 @@ button:hover {
   text-align: right;
 }
 
+.word-title-stack {
+  display: grid;
+  gap: 6px;
+}
+
 .phonetic {
   color: var(--accent-dark);
   font-size: 18px;
+}
+
+.alternate-spellings-row {
+  display: flex;
+  align-items: start;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.alternate-spellings-row > span {
+  flex: 0 0 auto;
+  font-weight: 800;
+}
+
+.alternate-spellings-row > strong {
+  color: var(--ink);
+  font-weight: 800;
+  white-space: pre-wrap;
 }
 
 .audio-row {
@@ -2461,6 +2486,22 @@ dd {
 
 .inline-edit.is-editing textarea {
   display: block;
+}
+
+.inline-edit-compact {
+  flex: 1 1 auto;
+  min-width: 220px;
+}
+
+.inline-edit-compact .inline-edit-text {
+  min-height: 0;
+  padding: 0 6px;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.inline-edit-compact textarea {
+  min-height: 58px;
 }
 
 .inline-edit-status {
@@ -3076,6 +3117,16 @@ select {
   .auto-study-controls span {
     min-width: 0;
     text-align: left;
+  }
+
+  .alternate-spellings-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .inline-edit-compact {
+    width: 100%;
+    min-width: 0;
   }
 
   .challenge-card {

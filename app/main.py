@@ -1279,6 +1279,24 @@ def update_english_definition(
     return RedirectResponse(url=f"/words/{word_id}?edit=1", status_code=303)
 
 
+@app.post("/words/{word_id}/alternate-spellings")
+def update_alternate_spellings(
+    word_id: int,
+    alternate_spellings: str = Form(default=""),
+    edit_token: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    require_word_write_access(edit_token)
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+    word.alternate_spellings = alternate_spellings.strip() or None
+    word.enrichment_error = None
+    db.add(word)
+    db.commit()
+    return RedirectResponse(url=f"/words/{word_id}?edit=1", status_code=303)
+
+
 @app.post("/words/{word_id}/chinese-definition")
 def update_chinese_definition(
     word_id: int,

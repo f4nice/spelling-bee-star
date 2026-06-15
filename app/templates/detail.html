@@ -45,9 +45,26 @@
     </div>
 
     <div class="detail-heading">
-      <div>
+      <div class="word-title-stack">
         <h1>{{ word.word }}</h1>
         {% if word.phonetic %}<p class="phonetic">/{{ word.phonetic }}/</p>{% endif %}
+        <div class="alternate-spellings-row">
+          <span>其他拼法</span>
+          {% if can_edit %}
+            <div
+              class="inline-edit inline-edit-compact"
+              data-inline-edit
+              data-url="/words/{{ word.id }}/alternate-spellings"
+              data-name="alternate_spellings"
+            >
+              <div class="inline-edit-text" data-edit-text>{{ word.alternate_spellings or "暂无" }}</div>
+              <textarea data-edit-input rows="2">{{ word.alternate_spellings or "" }}</textarea>
+              <span class="inline-edit-status" data-edit-status></span>
+            </div>
+          {% else %}
+            <strong>{{ word.alternate_spellings or "暂无" }}</strong>
+          {% endif %}
+        </div>
       </div>
       <div class="detail-heading-actions">
         {% if can_edit %}
@@ -93,8 +110,6 @@
     </div>
 
     <dl class="definition-list">
-      <dt>其他拼法</dt>
-      <dd>{{ word.alternate_spellings or "暂无" }}</dd>
       <dt>词性</dt>
       <dd>{{ word.part_of_speech or "暂无" }}</dd>
       <dt>英文定义</dt>
