@@ -17,6 +17,34 @@
     <span style="width: {{ today_challenge.percent }}%"></span>
   </div>
 
+  <div class="challenge-stats">
+    <div>
+      <span>本组一共</span>
+      <strong>{{ today_challenge.total }}</strong>
+      <span>个</span>
+    </div>
+    <div>
+      <span>已答</span>
+      <strong>{{ today_challenge.answered }}</strong>
+      <span>个</span>
+    </div>
+    <div>
+      <span>剩余</span>
+      <strong>{{ today_challenge.remaining }}</strong>
+      <span>个</span>
+    </div>
+    <div>
+      <span>本次正确</span>
+      <strong class="result-correct">{{ today_challenge.correct }}</strong>
+      <span>个</span>
+    </div>
+    <div>
+      <span>本次错误</span>
+      <strong class="result-wrong">{{ today_challenge.wrong }}</strong>
+      <span>个</span>
+    </div>
+  </div>
+
   {% if current_word %}
     <div class="challenge-card">
       <div class="challenge-word-media">
@@ -53,6 +81,8 @@
           </div>
         {% endif %}
         <dl class="definition-list compact">
+          <dt>词性</dt>
+          <dd>{{ current_word.part_of_speech or "暂无" }}</dd>
           <dt>英文定义</dt>
           <dd>{{ current_word.english_definition or "暂无" }}</dd>
           <dt>中文定义</dt>
@@ -67,6 +97,11 @@
           <input type="hidden" name="action" value="spell">
           <input type="hidden" name="daily_count" value="{{ today_challenge.daily_count }}">
           <input type="hidden" name="start_count" value="{{ today_challenge.start_count }}">
+          <input type="hidden" name="session_correct" value="{{ today_challenge.correct }}">
+          <input type="hidden" name="session_wrong" value="{{ today_challenge.wrong }}">
+          {% if wrong_date %}
+            <input type="hidden" name="wrong_date" value="{{ wrong_date.isoformat() }}">
+          {% endif %}
           <label>
             输入拼写
             <input
@@ -92,21 +127,47 @@
       {% if today_challenge.all_complete %}
         <h2>你怎么如此优秀，整组都拿下了</h2>
         <p>这不是运气，是你一次一次拼出来的实力。可以回到单词表复习，也可以重新挑战这一组。</p>
+      {% elif today_challenge.wrong %}
+        <h2>有点遗憾，但这正是进步的入口</h2>
+        <p>错过的 {{ today_challenge.wrong }} 个单词已经加入生词本，下次再见它们，就轮到你赢了。</p>
       {% else %}
         <h2>你怎么如此优秀，今日目标完成了</h2>
         <p>今天设定的 {{ today_challenge.total }} 个单词已经完成。还有一点意犹未尽的话，就顺手再加一小组。</p>
       {% endif %}
+      <div class="challenge-result-grid">
+        <div>
+          <span>本次挑战</span>
+          <strong>{{ today_challenge.answered }} / {{ today_challenge.total }}</strong>
+        </div>
+        <div>
+          <span>答对</span>
+          <strong class="result-correct">{{ today_challenge.correct }}</strong>
+        </div>
+        <div>
+          <span>答错</span>
+          <strong class="result-wrong">{{ today_challenge.wrong }}</strong>
+        </div>
+        <div>
+          <span>正确率</span>
+          <strong>{{ today_challenge.accuracy }}%</strong>
+        </div>
+      </div>
       <div class="challenge-complete-actions">
         <form action="/challenge/{{ word_list.id }}/answer" method="post">
           <input type="hidden" name="action" value="reset">
           <input type="hidden" name="daily_count" value="{{ today_challenge.daily_count }}">
           <input type="hidden" name="start_count" value="0">
+          <input type="hidden" name="session_correct" value="0">
+          <input type="hidden" name="session_wrong" value="0">
+          {% if wrong_date %}
+            <input type="hidden" name="wrong_date" value="{{ wrong_date.isoformat() }}">
+          {% endif %}
           <button type="submit">重新挑战</button>
         </form>
         {% if not today_challenge.all_complete %}
-          <a class="secondary-button" href="/challenge/{{ word_list.id }}?daily_count=5&start_count={{ challenge.completed }}">再加 5 个</a>
-          <a class="secondary-button" href="/challenge/{{ word_list.id }}?daily_count=10&start_count={{ challenge.completed }}">再加 10 个</a>
-          <a class="secondary-button" href="/challenge/{{ word_list.id }}?daily_count=20&start_count={{ challenge.completed }}">再加 20 个</a>
+          <a class="secondary-button" href="/challenge/{{ word_list.id }}?daily_count=5&start_count={{ challenge.completed }}{% if wrong_date %}&wrong_date={{ wrong_date.isoformat() }}{% endif %}">再加 5 个</a>
+          <a class="secondary-button" href="/challenge/{{ word_list.id }}?daily_count=10&start_count={{ challenge.completed }}{% if wrong_date %}&wrong_date={{ wrong_date.isoformat() }}{% endif %}">再加 10 个</a>
+          <a class="secondary-button" href="/challenge/{{ word_list.id }}?daily_count=20&start_count={{ challenge.completed }}{% if wrong_date %}&wrong_date={{ wrong_date.isoformat() }}{% endif %}">再加 20 个</a>
         {% endif %}
       </div>
     </div>
@@ -130,6 +191,42 @@
     });
   });
 
+  async function playAudioTwice(audio) {
+    if (!audio) {
+      return false;
+    }
+    for (let index = 0; index < 2; index += 1) {
+      try {
+        audio.pause();
+        audio.load();
+        audio.currentTime = 0;
+        await audio.play();
+        await new Promise((resolve) => {
+          const finish = () => {
+            audio.removeEventListener('ended', finish);
+            audio.removeEventListener('error', finish);
+            resolve();
+          };
+          audio.addEventListener('ended', finish, { once: true });
+          audio.addEventListener('error', finish, { once: true });
+        });
+      } catch (error) {
+        audio.controls = true;
+        return false;
+      }
+    }
+    return true;
+  }
+
+  async function autoplayChallengeAudio() {
+    const americanAudio = document.getElementById('challenge-audio-us');
+    const britishAudio = document.getElementById('challenge-audio-gb');
+    const playedAmerican = await playAudioTwice(americanAudio);
+    if (!playedAmerican) {
+      await playAudioTwice(britishAudio);
+    }
+  }
+
   document.querySelectorAll('[data-spelling-input]').forEach((input) => {
     input.addEventListener('input', () => {
       const withoutDigits = input.value.replace(/[0-9]/g, '');
@@ -137,6 +234,20 @@
         input.value = withoutDigits;
       }
     });
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowRight' || event.isComposing) {
+        return;
+      }
+      if (!input.value.trim()) {
+        return;
+      }
+      event.preventDefault();
+      input.closest('form')?.requestSubmit();
+    });
+  });
+
+  window.addEventListener('DOMContentLoaded', () => {
+    autoplayChallengeAudio();
   });
 
   document.querySelectorAll('[data-fetch-audio]').forEach((button) => {

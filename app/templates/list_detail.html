@@ -49,8 +49,11 @@
       {% endif %}
     </p>
   </div>
-  <div class="sync-progress" aria-hidden="true">
-    <span data-sync-progress></span>
+  <div class="sync-progress-wrap">
+    <div class="sync-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{% if pending_image_words %}0{% else %}100{% endif %}">
+      <span data-sync-progress></span>
+    </div>
+    <strong data-sync-percent>{% if pending_image_words %}完成 0%{% else %}完成 100%{% endif %}</strong>
   </div>
   <button
     class="secondary-button sync-image-button"
@@ -64,7 +67,7 @@
 
 <section class="word-grid">
   {% for word in words %}
-    <a class="word-card" href="/words/{{ word.id }}?edit=1" data-word-card="{{ word.id }}">
+    <a class="word-card" href="/words/{{ word.id }}?edit=1&list_id={{ word_list.id }}" data-word-card="{{ word.id }}">
       <span class="word-index-badge">#{{ loop.index }}</span>
       {% if word.image_url %}
         <img src="{{ word.image_url }}" alt="{{ word.word }}">
@@ -92,6 +95,8 @@
   const syncCount = document.querySelector('[data-sync-count]');
   const syncMessage = document.querySelector('[data-sync-message]');
   const syncProgress = document.querySelector('[data-sync-progress]');
+  const syncProgressBar = document.querySelector('.sync-progress');
+  const syncPercent = document.querySelector('[data-sync-percent]');
   const listTitleEditor = document.querySelector('[data-list-title-edit]');
 
   if (listTitleEditor) {
@@ -178,8 +183,12 @@
   function setSyncProgress(done, total) {
     const percent = total ? Math.round((done / total) * 100) : 100;
     syncProgress.style.width = `${percent}%`;
+    syncProgressBar?.setAttribute('aria-valuenow', String(percent));
+    syncPercent.textContent = `完成 ${percent}%`;
     syncCount.textContent = `${done} / ${total}`;
   }
+
+  setSyncProgress(0, syncWords.length);
 
   syncButton?.addEventListener('click', async () => {
     if (!syncWords.length) {

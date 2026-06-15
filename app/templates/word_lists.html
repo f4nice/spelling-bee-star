@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel list-page-heading">
+  <div>
+    <p class="section-kicker">Word Lists</p>
+    <h1>我的单词表</h1>
+    <p>管理你导入和从书籍生成的单词表，进入详情可以同步图片、编辑名称、继续导入或开始挑战。</p>
+  </div>
+</section>
+
+<section class="panel lists-tools-panel">
+  <div class="lists-tool-card">
+    <div class="lists-import-heading">
+      <p class="section-kicker">Import</p>
+      <h2>新增单词表</h2>
+    </div>
+    <form action="/upload" method="post" enctype="multipart/form-data" class="home-upload-form lists-import-form">
+      <input type="text" name="word_list_name" placeholder="单词表名称" required data-file-name-target>
+      <select class="native-list-picker" name="word_list_id" data-list-picker-select data-list-picker-label="新建单词表">
+        <option value="">新建单词表</option>
+        {% for card in cards %}
+          <option value="{{ card.list.id }}">{{ card.list.name }}</option>
+        {% endfor %}
+      </select>
+      <button type="button" class="list-picker-trigger" data-list-picker-trigger>新建单词表</button>
+      <input type="file" name="file" accept=".xlsx,.xlsm,.xltx,.xltm" required data-file-name-source>
+      <button type="submit">上传预览</button>
+    </form>
+  </div>
+
+  <div class="lists-tool-card">
+    <div class="lists-import-heading">
+      <p class="section-kicker">Images</p>
+      <h2>批量上传图片</h2>
+      <p>选择图片目录，按序号或英文名自动匹配单词。</p>
+    </div>
+    <form action="/lists/batch-images" method="post" enctype="multipart/form-data" class="home-upload-form batch-image-form">
+      <select class="native-list-picker" name="word_list_id" required data-list-picker-select data-list-picker-label="选择单词表">
+        <option value="">选择单词表</option>
+        {% for card in cards %}
+          <option value="{{ card.list.id }}">{{ card.list.name }}</option>
+        {% endfor %}
+      </select>
+      <button type="button" class="list-picker-trigger" data-list-picker-trigger>选择单词表</button>
+      <input
+        type="file"
+        name="image_files"
+        accept="image/*"
+        multiple
+        webkitdirectory
+        directory
+        required
+        data-image-batch-input
+      >
+      <button type="button" data-image-preview-open>上传预览</button>
+    </form>
+    {% if image_upload_result %}
+      <p class="batch-image-result">
+        已匹配 {{ image_upload_result.matched }} 张{% if image_upload_result.unmatched %}，未匹配 {{ image_upload_result.unmatched }} 张{% endif %}{% if image_upload_result.failed %}，失败 {{ image_upload_result.failed }} 张{% endif %}。
+      </p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="word-grid">
+  {% for card in cards %}
+    <article class="word-card list-card">
+      <a class="list-card-link" href="/lists/{{ card.list.id }}">
+        {% if card.cover_word and card.cover_word.image_url %}
+          <img src="{{ card.cover_word.image_url }}" alt="{{ card.list.name }}">
+        {% elif card.cover_word %}
+          <div class="image-fallback">{{ card.cover_word.word[:1]|upper }}</div>
+        {% else %}
+          <div class="image-fallback">+</div>
+        {% endif %}
+        <div class="word-card-body">
+          <div class="word-card-title">
+            <strong>{{ card.list.name }}</strong>
+            <span class="status">{{ card.count }} 词</span>
+          </div>
+        </div>
+      </a>
+      <div class="challenge-card-actions">
+        <div class="mini-progress">
+          <span>{{ card.challenge.completed }} / {{ card.challenge.total }}</span>
+          <div><i style="width: {{ card.challenge.percent }}%"></i></div>
+        </div>
+        <form class="challenge-start-form" action="/challenge/{{ card.list.id }}" method="get">
+          <label>
+            今日挑战数量
+            <input
+              type="number"
+              name="daily_count"
+              min="1"
+              max="{{ card.challenge.total or 1 }}"
+              value="{{ 20 if card.challenge.total >= 20 else card.challenge.total or 1 }}"
+            >
+          </label>
+          <input type="hidden" name="start_count" value="{{ card.challenge.completed }}">
+          <button type="submit" class="challenge-button">
+            {% if card.challenge.completed %}继续挑战{% else %}开始挑战{% endif %}
+          </button>
+        </form>
+      </div>
+    </article>
+  {% else %}
+    <div class="empty-state">还没有单词表。先新增一个单词表吧。</div>
+  {% endfor %}
+</section>
+
+<div class="list-picker-backdrop" data-list-picker-modal hidden>
+  <div class="list-picker-modal" role="dialog" aria-modal="true" aria-labelledby="list-picker-title">
+    <div class="list-picker-head">
+      <div>
+        <h2 id="list-picker-title">选择单词表</h2>
+        <p>搜索后勾选一个单词本，点击确认。</p>
+      </div>
+      <button type="button" class="secondary-button" data-list-picker-close>关闭</button>
+    </div>
+    <input class="list-picker-search" type="search" placeholder="搜索单词表" data-list-picker-search>
+    <div class="list-picker-options" data-list-picker-options></div>
+    <div class="list-picker-actions">
+      <span data-list-picker-summary>还没有选择</span>
+      <button type="button" data-list-picker-confirm>确认</button>
+    </div>
+  </div>
+</div>
+
+<div class="image-preview-backdrop" data-image-preview-modal hidden>
+  <div class="image-preview-modal" role="dialog" aria-modal="true" aria-labelledby="image-preview-title">
+    <div class="image-preview-head">
+      <div>
+        <h2 id="image-preview-title">图片上传预览</h2>
+        <p>勾选需要上传匹配的图片，确认后会按序号或英文名匹配单词。</p>
+      </div>
+      <button type="button" class="secondary-button" data-image-preview-close>关闭</button>
+    </div>
+    <div class="image-preview-toolbar">
+      <strong data-image-preview-count>已选择 0 张</strong>
+      <button type="button" class="secondary-button" data-image-preview-all>全选</button>
+      <button type="button" class="secondary-button" data-image-preview-none>取消全选</button>
+    </div>
+    <div class="image-preview-grid" data-image-preview-grid></div>
+    <div class="image-preview-actions">
+      <span data-image-preview-summary>等待选择图片</span>
+      <button type="button" data-image-preview-confirm>确认上传</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  const listNameInput = document.querySelector('[data-file-name-target]');
+  const listFileInput = document.querySelector('[data-file-name-source]');
+
+  function titleFromFilename(filename) {
+    return filename
+      .replace(/\.[^.]+$/, '')
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  listFileInput?.addEventListener('change', () => {
+    const file = listFileInput.files?.[0];
+    if (!file || !listNameInput) return;
+    listNameInput.value = titleFromFilename(file.name);
+  });
+
+  const pickerModal = document.querySelector('[data-list-picker-modal]');
+  const pickerOptions = document.querySelector('[data-list-picker-options]');
+  const pickerSearch = document.querySelector('[data-list-picker-search]');
+  const pickerSummary = document.querySelector('[data-list-picker-summary]');
+  const pickerConfirm = document.querySelector('[data-list-picker-confirm]');
+  const pickerClose = document.querySelector('[data-list-picker-close]');
+  let activeSelect = null;
+  let pendingValue = '';
+
+  const escapeText = (value = '') => String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+
+  const selectLabel = (select) => select?.selectedOptions?.[0]?.textContent?.trim() || select?.dataset.listPickerLabel || '选择单词表';
+
+  const syncPickerButton = (select) => {
+    const button = select?.parentElement?.querySelector('[data-list-picker-trigger]');
+    if (button) button.textContent = selectLabel(select);
+  };
+
+  const renderPickerOptions = () => {
+    if (!activeSelect) return;
+    const keyword = (pickerSearch.value || '').trim().toLowerCase();
+    const options = Array.from(activeSelect.options).filter((option) => {
+      if (!keyword) return true;
+      return option.textContent.trim().toLowerCase().includes(keyword);
+    });
+    pickerOptions.innerHTML = options.map((option) => {
+      const checked = option.value === pendingValue ? 'checked' : '';
+      return `
+        <label class="list-picker-option">
+          <input type="radio" name="list-picker-choice" value="${escapeText(option.value)}" ${checked}>
+          <span>${escapeText(option.textContent.trim())}</span>
+        </label>
+      `;
+    }).join('') || '<p class="list-picker-empty">没有找到匹配的单词表</p>';
+    pickerSummary.textContent = pendingValue
+      ? (options.find((option) => option.value === pendingValue)?.textContent.trim() || '已选择')
+      : (activeSelect.dataset.listPickerLabel || '新建单词表');
+  };
+
+  const openPicker = (select) => {
+    activeSelect = select;
+    pendingValue = select.value;
+    pickerSearch.value = '';
+    renderPickerOptions();
+    pickerModal.hidden = false;
+    setTimeout(() => pickerSearch.focus(), 0);
+  };
+
+  document.querySelectorAll('[data-list-picker-select]').forEach((select) => {
+    select.classList.add('native-list-picker');
+    syncPickerButton(select);
+    select.parentElement?.querySelector('[data-list-picker-trigger]')?.addEventListener('click', () => openPicker(select));
+  });
+
+  pickerSearch?.addEventListener('input', renderPickerOptions);
+  pickerOptions?.addEventListener('change', (event) => {
+    if (event.target.matches('input[type="radio"]')) {
+      pendingValue = event.target.value;
+      const label = event.target.closest('label')?.textContent?.trim() || '已选择';
+      pickerSummary.textContent = label;
+    }
+  });
+  pickerConfirm?.addEventListener('click', () => {
+    if (!activeSelect) return;
+    activeSelect.value = pendingValue;
+    activeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    syncPickerButton(activeSelect);
+    pickerModal.hidden = true;
+  });
+  pickerClose?.addEventListener('click', () => {
+    pickerModal.hidden = true;
+  });
+  pickerModal?.addEventListener('click', (event) => {
+    if (event.target === pickerModal) pickerModal.hidden = true;
+  });
+
+  document.querySelectorAll('.home-upload-form').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+      const requiredPicker = form.querySelector('[data-list-picker-select][required]');
+      if (requiredPicker && !requiredPicker.value) {
+        event.preventDefault();
+        openPicker(requiredPicker);
+      }
+    });
+  });
+
+  const imagePreviewModal = document.querySelector('[data-image-preview-modal]');
+  const imagePreviewGrid = document.querySelector('[data-image-preview-grid]');
+  const imagePreviewCount = document.querySelector('[data-image-preview-count]');
+  const imagePreviewSummary = document.querySelector('[data-image-preview-summary]');
+  const imagePreviewConfirm = document.querySelector('[data-image-preview-confirm]');
+  const imagePreviewClose = document.querySelector('[data-image-preview-close]');
+  const imagePreviewAll = document.querySelector('[data-image-preview-all]');
+  const imagePreviewNone = document.querySelector('[data-image-preview-none]');
+  const batchImageForm = document.querySelector('.batch-image-form');
+  const batchImageInput = batchImageForm?.querySelector('[data-image-batch-input]');
+  const batchPreviewButton = batchImageForm?.querySelector('[data-image-preview-open]');
+  let batchImageFiles = [];
+  let batchImageObjectUrls = [];
+  let allowBatchImageSubmit = false;
+
+  const clearBatchImageUrls = () => {
+    batchImageObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+    batchImageObjectUrls = [];
+  };
+
+  const checkedBatchImages = () => Array.from(imagePreviewGrid.querySelectorAll('input[type="checkbox"]:checked'));
+
+  const syncBatchImageSummary = () => {
+    const checked = checkedBatchImages().length;
+    const total = batchImageFiles.length;
+    imagePreviewCount.textContent = `已选择 ${checked} / ${total} 张`;
+    imagePreviewSummary.textContent = checked ? `确认后上传 ${checked} 张图片` : '请至少勾选一张图片';
+  };
+
+  const openBatchImagePreview = () => {
+    clearBatchImageUrls();
+    batchImageFiles = Array.from(batchImageInput?.files || []).filter((file) => file.type.startsWith('image/'));
+    if (!batchImageFiles.length) return;
+    imagePreviewGrid.innerHTML = batchImageFiles.map((file, index) => {
+      const url = URL.createObjectURL(file);
+      batchImageObjectUrls.push(url);
+      const path = file.webkitRelativePath || file.name;
+      return `
+        <label class="image-preview-card">
+          <input type="checkbox" value="${index}" checked>
+          <img src="${url}" alt="${escapeText(file.name)}">
+          <span>${escapeText(path)}</span>
+        </label>
+      `;
+    }).join('');
+    syncBatchImageSummary();
+    imagePreviewModal.hidden = false;
+  };
+
+  batchPreviewButton?.addEventListener('click', () => {
+    const requiredPicker = batchImageForm.querySelector('[data-list-picker-select][required]');
+    if (requiredPicker && !requiredPicker.value) {
+      openPicker(requiredPicker);
+      return;
+    }
+    if (batchImageInput.files?.length) {
+      openBatchImagePreview();
+      return;
+    }
+    batchImageInput.click();
+  });
+
+  batchImageInput?.addEventListener('change', openBatchImagePreview);
+
+  imagePreviewGrid?.addEventListener('change', (event) => {
+    if (event.target.matches('input[type="checkbox"]')) syncBatchImageSummary();
+  });
+
+  imagePreviewAll?.addEventListener('click', () => {
+    imagePreviewGrid.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+      input.checked = true;
+    });
+    syncBatchImageSummary();
+  });
+
+  imagePreviewNone?.addEventListener('click', () => {
+    imagePreviewGrid.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+      input.checked = false;
+    });
+    syncBatchImageSummary();
+  });
+
+  imagePreviewClose?.addEventListener('click', () => {
+    imagePreviewModal.hidden = true;
+  });
+
+  imagePreviewModal?.addEventListener('click', (event) => {
+    if (event.target === imagePreviewModal) imagePreviewModal.hidden = true;
+  });
+
+  imagePreviewConfirm?.addEventListener('click', () => {
+    const selected = checkedBatchImages().map((input) => batchImageFiles[Number(input.value)]).filter(Boolean);
+    if (!selected.length || !batchImageInput) return;
+    const transfer = new DataTransfer();
+    selected.forEach((file) => transfer.items.add(file));
+    batchImageInput.files = transfer.files;
+    allowBatchImageSubmit = true;
+    imagePreviewModal.hidden = true;
+    batchImageForm.requestSubmit();
+  });
+
+  batchImageForm?.addEventListener('submit', (event) => {
+    if (event.defaultPrevented) return;
+    if (allowBatchImageSubmit) {
+      allowBatchImageSubmit = false;
+      return;
+    }
+    event.preventDefault();
+    if (batchImageInput.files?.length) {
+      openBatchImagePreview();
+    } else {
+      batchImageInput.click();
+    }
+  });
+</script>
+{% endblock %}

@@ -1,16 +1,169 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="panel upload-panel">
+<section class="home-hero panel">
   <div>
-    <h1>单词表</h1>
-    <p>按表管理导入的单词，每个单词表会自动使用表内单词图片做封面。</p>
+    <p class="section-kicker">SpeakEasy Hub</p>
+    <h1>今天从这里开始</h1>
+    <p>把单词挑战、英文小报、好词好句和生词本放在一个首页，先看整体，再进入具体学习。</p>
   </div>
-  <a class="primary-link" href="/upload">新增单词表</a>
+  <div class="home-today-card">
+    <span>{{ home_stats.today }}</span>
+    <strong>{{ home_stats.today_total }}</strong>
+    <small>今日已挑战</small>
+  </div>
 </section>
 
-<section class="word-grid">
-  {% for card in cards %}
+<section class="home-stats-grid">
+  <a class="home-stat-card panel" href="/lists">
+    <span>我的单词表</span>
+    <strong>{{ home_stats.word_lists }}</strong>
+    <small>{{ home_stats.words }} 个单词</small>
+  </a>
+  <a class="home-stat-card panel" href="/newspaper">
+    <span>英文小报</span>
+    <strong>Today</strong>
+    <small>China Daily 今日泛读</small>
+  </a>
+  <a class="home-stat-card panel" href="/booklearner">
+    <span>好词好句</span>
+    <strong>{{ home_quotes|length }}</strong>
+    <small>书摘与难点词</small>
+  </a>
+  <a class="home-stat-card panel" href="/wrong-words{% if home_stats.today_wrong_count %}?date={{ home_stats.today }}{% endif %}">
+    <span>我的生词本</span>
+    <strong>{{ home_stats.wrong_words }}</strong>
+    <small>今日 {{ home_stats.today_wrong_count }} 个</small>
+  </a>
+</section>
+
+<section class="home-main-grid">
+  <article class="panel calendar-panel home-calendar">
+    <div class="calendar-heading">
+      <div>
+        <p class="section-kicker">Challenge</p>
+        <h2>挑战日历</h2>
+        <p>{{ challenge_calendar.title }} · 本月答对 {{ challenge_calendar.month_correct }} 个，答错 {{ challenge_calendar.month_wrong }} 个</p>
+      </div>
+    </div>
+    <div class="challenge-calendar">
+      {% for weekday in challenge_calendar.weekdays %}
+        <div class="calendar-weekday">{{ weekday }}</div>
+      {% endfor %}
+      {% for week in challenge_calendar.weeks %}
+        {% for day in week %}
+          <div
+            class="calendar-day {% if day.is_today %}today{% endif %} {% if not day.day %}empty{% endif %} {% if day.total %}has-records{% endif %}"
+            {% if day.total %}data-calendar-date="{{ day.date }}" role="button" tabindex="0" aria-label="查看 {{ day.date }} 默写明细"{% endif %}
+          >
+            {% if day.day %}
+              <div class="calendar-day-number">{{ day.day }}</div>
+              {% if day.total %}
+                <div class="calendar-total">{{ day.total }} 个</div>
+                <div class="calendar-marks">
+                  {% if day.correct %}
+                    <span class="mark-correct">对 {{ day.correct }}</span>
+                  {% endif %}
+                  {% if day.wrong %}
+                    <span class="mark-wrong">错 {{ day.wrong }}</span>
+                  {% endif %}
+                </div>
+              {% endif %}
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% endfor %}
+    </div>
+  </article>
+
+  <aside class="home-side-stack">
+    <section class="panel home-wrong-panel">
+      <p class="section-kicker">Review</p>
+      <h2>今日生词本</h2>
+      <p>今天收进 {{ home_stats.today_wrong_count }} 个错词。</p>
+      {% if home_stats.today_wrong_words %}
+        <div class="home-wrong-list">
+          {% for item in home_stats.today_wrong_words %}
+            <a href="/words/{{ item.word.id }}">
+              <span>×</span>
+              <strong>{{ item.word.word }}</strong>
+              {% if item.wrong_count > 1 %}<em>{{ item.wrong_count }}次</em>{% endif %}
+            </a>
+          {% endfor %}
+        </div>
+        {% if home_stats.today_wrong_count > home_stats.today_wrong_words|length %}
+          <a class="home-wrong-more" href="/wrong-words?date={{ home_stats.today }}">查看全部 {{ home_stats.today_wrong_count }} 个</a>
+        {% endif %}
+      {% endif %}
+      {% if home_stats.today_wrong_list %}
+        <a class="challenge-button" href="/challenge/{{ home_stats.today_wrong_list.id }}?daily_count={{ home_stats.today_wrong_count or 1 }}&start_count=0&wrong_date={{ home_stats.today }}">挑战今日错词</a>
+      {% else %}
+        <a class="secondary-button" href="/wrong-words">查看生词本</a>
+      {% endif %}
+    </section>
+  </aside>
+</section>
+
+<section class="home-section-head">
+  <div>
+    <p class="section-kicker">Reading</p>
+    <h2>英文小报</h2>
+  </div>
+  <a class="ghost-button" href="/newspaper">更多</a>
+</section>
+<section class="home-news-grid">
+  {% set ns = namespace(count=0) %}
+  {% for section in home_newspaper.sections %}
+    {% for article in section.articles %}
+      {% if ns.count < 4 %}
+        <a class="panel home-news-card" href="/newspaper/{{ section.key }}/{{ loop.index0 }}">
+          {% if article.image_url %}
+            <div class="home-news-image">
+              <img src="{{ article.image_url }}" alt="{{ article.title }}" loading="lazy">
+            </div>
+          {% endif %}
+          <div class="home-news-body">
+            <div class="newspaper-card-meta">
+              <span>{{ section.name }}</span>
+              {% if article.published %}<span>{{ article.published }}</span>{% endif %}
+            </div>
+            <h3>{{ article.title }}</h3>
+            {% if article.summary %}<p>{{ article.summary }}</p>{% endif %}
+          </div>
+        </a>
+        {% set ns.count = ns.count + 1 %}
+      {% endif %}
+    {% endfor %}
+  {% endfor %}
+</section>
+
+<section class="home-section-head">
+  <div>
+    <p class="section-kicker">Books</p>
+    <h2>好词好句</h2>
+  </div>
+  <a class="ghost-button" href="/booklearner">更多</a>
+</section>
+<section class="home-quote-grid">
+  {% for quote in home_quotes %}
+    <a class="panel home-quote-card" href="/booklearner">
+      <p>“{{ quote.quote }}”</p>
+      <span>{{ quote.title }} · {{ quote.author }}</span>
+    </a>
+  {% else %}
+    <div class="panel empty-state">还没有保存书籍分析，去好词好句上传一本书吧。</div>
+  {% endfor %}
+</section>
+
+<section class="home-section-head">
+  <div>
+    <p class="section-kicker">Lists</p>
+    <h2>我的单词表</h2>
+  </div>
+  <a class="ghost-button" href="/lists">全部单词表</a>
+</section>
+<section class="word-grid home-list-grid" id="my-word-lists">
+  {% for card in featured_cards %}
     <article class="word-card list-card">
       <a class="list-card-link" href="/lists/{{ card.list.id }}">
         {% if card.cover_word and card.cover_word.image_url %}
@@ -25,13 +178,6 @@
             <strong>{{ card.list.name }}</strong>
             <span class="status">{{ card.count }} 词</span>
           </div>
-          <p>
-            {% for word in card.preview_words %}
-              {{ word.word }}{% if not loop.last %} · {% endif %}
-            {% else %}
-              暂无单词
-            {% endfor %}
-          </p>
         </div>
       </a>
       <div class="challenge-card-actions">
@@ -52,11 +198,7 @@
           </label>
           <input type="hidden" name="start_count" value="{{ card.challenge.completed }}">
           <button type="submit" class="challenge-button">
-            {% if card.challenge.completed %}
-              继续挑战
-            {% else %}
-              开始挑战
-            {% endif %}
+            {% if card.challenge.completed %}继续挑战{% else %}开始挑战{% endif %}
           </button>
         </form>
       </div>
@@ -65,4 +207,24 @@
     <div class="empty-state">还没有单词表。先新增一个单词表吧。</div>
   {% endfor %}
 </section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.querySelectorAll('[data-calendar-date]').forEach((cell) => {
+    const open = () => {
+      window.location.href = `/challenge-calendar/${encodeURIComponent(cell.dataset.calendarDate)}`;
+    };
+    cell.addEventListener('click', (event) => {
+      if (event.target.closest('a')) return;
+      open();
+    });
+    cell.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        open();
+      }
+    });
+  });
+</script>
 {% endblock %}

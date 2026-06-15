@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel newspaper-article">
+  <div class="newspaper-article-head">
+    <div>
+      <p class="newspaper-kicker">{{ section.name }} · {{ article.source }}</p>
+      <h1>{{ article.title }}</h1>
+      <div class="newspaper-card-meta">
+        {% if article.published %}<span>{{ article.published }}</span>{% endif %}
+        {% if article.category %}<span>{{ article.category }}</span>{% endif %}
+        {% if article.author %}<span>By {{ article.author }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="newspaper-article-actions">
+      <a class="ghost-button" href="/newspaper">返回英文小报</a>
+      {% if article.link %}
+        <a class="ghost-button" href="{{ article.link }}" target="_blank" rel="noreferrer">查看原文</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if article.image_url %}
+    <figure class="newspaper-article-image">
+      <img src="{{ article.image_url }}" alt="{{ article.title }}">
+    </figure>
+  {% endif %}
+
+  {% if article.summary %}
+    <p class="newspaper-article-summary">{{ article.summary }}</p>
+  {% endif %}
+
+  <article class="newspaper-article-body">
+    {% set content = article.body or article.excerpt or article.summary %}
+    {% for paragraph in content.split('\n') %}
+      {% if paragraph.strip() %}
+        <p>{{ paragraph }}</p>
+      {% endif %}
+    {% endfor %}
+  </article>
+</section>
+{% endblock %}

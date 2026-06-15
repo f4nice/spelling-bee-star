@@ -10,7 +10,7 @@
     <a class="ghost-button" href="/upload">重新选择文件</a>
   </div>
 
-  <form action="/import-preview" method="post" class="preview-form" data-preview-form>
+  <form action="/import-preview" method="post" enctype="multipart/form-data" class="preview-form" data-preview-form>
     <input type="hidden" name="preview_id" value="{{ preview_id }}">
     <input type="hidden" name="word_list_id" value="{{ preview.word_list_id }}">
 
@@ -19,18 +19,53 @@
         单词表名称
         <input type="text" name="word_list_name" value="{{ preview.word_list_name }}" required>
       </label>
-      <label>
-        英文单词列
-        <select name="word_column" required>
-          {% for column in preview.columns %}
-            <option value="{{ column }}" {% if column == preview.inferred_word_column %}selected{% endif %}>{{ column }}</option>
-          {% endfor %}
-        </select>
+      <label class="sheet-picker">
+        Sheet 表
+        {% if preview.sheet_names and preview.sheet_names|length > 1 %}
+          <select name="sheet_name" data-sheet-select>
+            {% for sheet in preview.sheet_names %}
+              <option value="{{ sheet }}" {% if sheet == preview.sheet_name %}selected{% endif %}>{{ loop.index }}. {{ sheet }}</option>
+            {% endfor %}
+          </select>
+        {% else %}
+          <input type="text" value="{{ preview.sheet_name or 'Sheet1' }}" disabled>
+        {% endif %}
       </label>
+      <div class="word-column-picker" data-word-column-picker>
+        <span class="field-label">英文单词列（可多选）</span>
+        <button type="button" class="word-column-trigger" data-word-column-open>
+          <span data-word-column-summary>选择单词列</span>
+        </button>
+        <div class="word-column-hidden" data-word-column-hidden>
+          {% for column in preview.columns %}
+            <input
+              type="checkbox"
+              name="word_columns"
+              value="{{ column }}"
+              {% if column in preview.inferred_word_columns %}checked{% endif %}
+              data-word-column-hidden-check
+            >
+          {% endfor %}
+        </div>
+      </div>
       <button type="button" class="secondary-button" data-action="check-all-rows">全选行</button>
       <button type="button" class="secondary-button" data-action="uncheck-all-rows">取消行</button>
       <button type="button" class="secondary-button" data-action="check-all-columns">全选列</button>
       <button type="button" class="secondary-button" data-action="uncheck-all-columns">取消列</button>
+      <div class="batch-image-inline preview-batch-image">
+        <span>批量图片</span>
+        <button type="button" class="secondary-button" data-image-preview-open>选择目录</button>
+        <strong data-image-preview-file-count>未选择目录</strong>
+        <input
+          type="file"
+          name="image_files"
+          accept="image/*"
+          multiple
+          webkitdirectory
+          directory
+          data-image-batch-input
+        >
+      </div>
       <button type="submit" data-submit-import>确认导入</button>
     </div>
 
@@ -68,15 +103,272 @@
   </form>
 </section>
 
+<div class="word-column-modal-backdrop" data-word-column-modal hidden>
+  <div class="word-column-modal" role="dialog" aria-modal="true" aria-labelledby="word-column-title">
+    <div class="word-column-modal-main">
+      <div class="word-column-modal-heading">
+        <div>
+          <h2 id="word-column-title">选择英文单词列</h2>
+          <p>一个单词有多种拼法时，可以勾选多列；挑战时输入任意一种拼法都算正确。</p>
+        </div>
+        <button type="button" class="secondary-button" data-word-column-close>关闭</button>
+      </div>
+      <div class="word-column-options" data-word-column-options>
+        {% for column in preview.columns %}
+          <label class="word-column-option">
+            <input
+              type="checkbox"
+              value="{{ column }}"
+              {% if column in preview.inferred_word_columns %}checked{% endif %}
+              data-word-column-option
+            >
+            <span>{{ column }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    </div>
+    <aside class="word-column-modal-side">
+      <strong>已选择</strong>
+      <div class="word-column-selected-list" data-word-column-selected></div>
+      <button type="button" data-word-column-save>保存</button>
+    </aside>
+  </div>
+</div>
+
+<div class="image-preview-backdrop" data-image-preview-modal hidden>
+  <div class="image-preview-modal" role="dialog" aria-modal="true" aria-labelledby="image-preview-title">
+    <div class="image-preview-head">
+      <div>
+        <h2 id="image-preview-title">图片上传预览</h2>
+        <p>勾选需要随本次导入一起上传的图片，确认后会按序号或英文名匹配单词。</p>
+      </div>
+      <button type="button" class="secondary-button" data-image-preview-close>关闭</button>
+    </div>
+    <div class="image-preview-toolbar">
+      <strong data-image-preview-count>已选择 0 张</strong>
+      <button type="button" class="secondary-button" data-image-preview-all>全选</button>
+      <button type="button" class="secondary-button" data-image-preview-none>取消全选</button>
+    </div>
+    <div class="image-preview-grid" data-image-preview-grid></div>
+    <div class="image-preview-actions">
+      <span data-image-preview-summary>等待选择图片</span>
+      <button type="button" data-image-preview-confirm>确认并导入</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const setChecked = (selector, checked) => {
     document.querySelectorAll(selector).forEach((item) => { item.checked = checked; });
   };
+  const previewForm = document.querySelector('[data-preview-form]');
+  const wordColumnModal = document.querySelector('[data-word-column-modal]');
+  const wordColumnOpen = document.querySelector('[data-word-column-open]');
+  const wordColumnClose = document.querySelector('[data-word-column-close]');
+  const wordColumnSave = document.querySelector('[data-word-column-save]');
+  const wordColumnSummary = document.querySelector('[data-word-column-summary]');
+  const wordColumnSelected = document.querySelector('[data-word-column-selected]');
+  const wordColumnOptions = Array.from(document.querySelectorAll('[data-word-column-option]'));
+  const wordColumnHiddenChecks = Array.from(document.querySelectorAll('[data-word-column-hidden-check]'));
+  const sheetSelect = document.querySelector('[data-sheet-select]');
+
+  sheetSelect?.addEventListener('change', () => {
+    const params = new URLSearchParams({ sheet_name: sheetSelect.value });
+    const listName = document.querySelector('input[name="word_list_name"]')?.value || '';
+    const listId = document.querySelector('input[name="word_list_id"]')?.value || '';
+    if (listName) {
+      params.set('word_list_name', listName);
+    }
+    if (listId) {
+      params.set('word_list_id', listId);
+    }
+    window.location.href = `/upload/preview/{{ preview_id }}?${params.toString()}`;
+  });
+
+  const selectedWordColumns = () =>
+    wordColumnHiddenChecks.filter((item) => item.checked).map((item) => item.value);
+
+  const setWordColumnSummary = () => {
+    const selected = selectedWordColumns();
+    wordColumnSummary.textContent = selected.length ? selected.join('、') : '选择单词列';
+  };
+
+  const renderSelectedWordColumns = () => {
+    const selected = wordColumnOptions.filter((item) => item.checked).map((item) => item.value);
+    wordColumnSelected.replaceChildren();
+    if (!selected.length) {
+      const empty = document.createElement('em');
+      empty.textContent = '还没有选择';
+      wordColumnSelected.append(empty);
+      return;
+    }
+    selected.forEach((item) => {
+      const chip = document.createElement('span');
+      chip.textContent = item;
+      wordColumnSelected.append(chip);
+    });
+  };
+
+  const syncModalFromHidden = () => {
+    const selected = new Set(selectedWordColumns());
+    wordColumnOptions.forEach((item) => {
+      item.checked = selected.has(item.value);
+    });
+    renderSelectedWordColumns();
+  };
+
+  const saveWordColumnSelection = () => {
+    const selected = new Set(wordColumnOptions.filter((item) => item.checked).map((item) => item.value));
+    wordColumnHiddenChecks.forEach((item) => {
+      item.checked = selected.has(item.value);
+    });
+    setWordColumnSummary();
+    wordColumnModal.hidden = true;
+  };
+
+  wordColumnOpen.addEventListener('click', () => {
+    syncModalFromHidden();
+    wordColumnModal.hidden = false;
+  });
+  wordColumnClose.addEventListener('click', () => {
+    wordColumnModal.hidden = true;
+  });
+  wordColumnModal.addEventListener('click', (event) => {
+    if (event.target === wordColumnModal) {
+      wordColumnModal.hidden = true;
+    }
+  });
+  wordColumnOptions.forEach((item) => item.addEventListener('change', renderSelectedWordColumns));
+  wordColumnSave.addEventListener('click', saveWordColumnSelection);
+  setWordColumnSummary();
+
   document.querySelector('[data-action="check-all-rows"]').addEventListener('click', () => setChecked('[data-row-check]', true));
   document.querySelector('[data-action="uncheck-all-rows"]').addEventListener('click', () => setChecked('[data-row-check]', false));
   document.querySelector('[data-action="check-all-columns"]').addEventListener('click', () => setChecked('[data-column-check]', true));
   document.querySelector('[data-action="uncheck-all-columns"]').addEventListener('click', () => setChecked('[data-column-check]', false));
-  document.querySelector('[data-preview-form]').addEventListener('submit', () => {
+
+  const imagePreviewModal = document.querySelector('[data-image-preview-modal]');
+  const imagePreviewGrid = document.querySelector('[data-image-preview-grid]');
+  const imagePreviewCount = document.querySelector('[data-image-preview-count]');
+  const imagePreviewSummary = document.querySelector('[data-image-preview-summary]');
+  const imagePreviewConfirm = document.querySelector('[data-image-preview-confirm]');
+  const imagePreviewClose = document.querySelector('[data-image-preview-close]');
+  const imagePreviewAll = document.querySelector('[data-image-preview-all]');
+  const imagePreviewNone = document.querySelector('[data-image-preview-none]');
+  const batchImageInput = document.querySelector('[data-image-batch-input]');
+  const batchPreviewButton = document.querySelector('[data-image-preview-open]');
+  const batchFileCount = document.querySelector('[data-image-preview-file-count]');
+  let batchImageFiles = [];
+  let batchImageObjectUrls = [];
+  let allowPreviewSubmit = false;
+
+  const clearBatchImageUrls = () => {
+    batchImageObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+    batchImageObjectUrls = [];
+  };
+
+  const escapeText = (value = '') => String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+
+  const checkedBatchImages = () => Array.from(imagePreviewGrid.querySelectorAll('input[type="checkbox"]:checked'));
+
+  const syncBatchImageSummary = () => {
+    const checked = checkedBatchImages().length;
+    const total = batchImageFiles.length;
+    imagePreviewCount.textContent = `已选择 ${checked} / ${total} 张`;
+    imagePreviewSummary.textContent = checked ? `确认后导入 ${checked} 张图片` : '请至少勾选一张图片';
+    imagePreviewConfirm.disabled = checked === 0;
+  };
+
+  const syncBatchFileCount = () => {
+    const total = Array.from(batchImageInput?.files || []).filter((file) => file.type.startsWith('image/')).length;
+    batchFileCount.textContent = total ? `已选择 ${total} 张` : '未选择目录';
+  };
+
+  const openBatchImagePreview = () => {
+    clearBatchImageUrls();
+    batchImageFiles = Array.from(batchImageInput?.files || []).filter((file) => file.type.startsWith('image/'));
+    syncBatchFileCount();
+    if (!batchImageFiles.length) {
+      batchImageInput.click();
+      return;
+    }
+    imagePreviewGrid.innerHTML = batchImageFiles.map((file, index) => {
+      const url = URL.createObjectURL(file);
+      batchImageObjectUrls.push(url);
+      const path = file.webkitRelativePath || file.name;
+      return `
+        <label class="image-preview-card">
+          <input type="checkbox" value="${index}" checked>
+          <img src="${url}" alt="${escapeText(file.name)}">
+          <span>${escapeText(path)}</span>
+        </label>
+      `;
+    }).join('');
+    syncBatchImageSummary();
+    imagePreviewModal.hidden = false;
+  };
+
+  batchPreviewButton?.addEventListener('click', openBatchImagePreview);
+  batchImageInput?.addEventListener('change', () => {
+    syncBatchFileCount();
+    openBatchImagePreview();
+  });
+
+  imagePreviewGrid?.addEventListener('change', (event) => {
+    if (event.target.matches('input[type="checkbox"]')) syncBatchImageSummary();
+  });
+
+  imagePreviewAll?.addEventListener('click', () => {
+    imagePreviewGrid.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+      input.checked = true;
+    });
+    syncBatchImageSummary();
+  });
+
+  imagePreviewNone?.addEventListener('click', () => {
+    imagePreviewGrid.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+      input.checked = false;
+    });
+    syncBatchImageSummary();
+  });
+
+  imagePreviewClose?.addEventListener('click', () => {
+    imagePreviewModal.hidden = true;
+  });
+
+  imagePreviewModal?.addEventListener('click', (event) => {
+    if (event.target === imagePreviewModal) imagePreviewModal.hidden = true;
+  });
+
+  imagePreviewConfirm?.addEventListener('click', () => {
+    const selected = checkedBatchImages().map((input) => batchImageFiles[Number(input.value)]).filter(Boolean);
+    if (!selected.length || !batchImageInput) return;
+    const transfer = new DataTransfer();
+    selected.forEach((file) => transfer.items.add(file));
+    batchImageInput.files = transfer.files;
+    allowPreviewSubmit = true;
+    imagePreviewModal.hidden = true;
+    previewForm.requestSubmit();
+  });
+
+  previewForm.addEventListener('submit', (event) => {
+    if (!selectedWordColumns().length) {
+      event.preventDefault();
+      syncModalFromHidden();
+      wordColumnModal.hidden = false;
+      return;
+    }
+    if (!allowPreviewSubmit && batchImageInput?.files?.length) {
+      event.preventDefault();
+      openBatchImagePreview();
+      return;
+    }
+    allowPreviewSubmit = false;
     const button = document.querySelector('[data-submit-import]');
     button.disabled = true;
     button.textContent = '正在导入...';

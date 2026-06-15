@@ -4,12 +4,17 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ app_name }}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='/speakeasy-mouth-logo.svg') }}">
+    <link rel="shortcut icon" href="{{ url_for('static', path='/speakeasy-mouth-logo.svg') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+    {% block extra_head %}{% endblock %}
   </head>
   <body>
     <header class="app-topbar">
       <a class="app-brand" href="/">
-        <span class="brand-mark">拼</span>
+        <span class="brand-mark" aria-hidden="true">
+          <img src="{{ url_for('static', path='/speakeasy-mouth-logo.svg') }}" alt="">
+        </span>
         <span>{{ app_name }}</span>
       </a>
       <button class="menu-toggle" type="button" aria-label="缩放页面" data-toggle-shell>☰</button>
@@ -26,8 +31,9 @@
       <aside class="sidebar">
         <nav class="side-nav">
           <a class="{% if request.url.path == '/' %}active{% endif %}" href="/">首页</a>
-          <a class="{% if request.url.path == '/upload' %}active{% endif %}" href="/upload">新增单词表</a>
-          <a class="{% if request.url.path.startswith('/lists') %}active{% endif %}" href="/">我的单词表</a>
+          <a class="{% if request.url.path.startswith('/lists') %}active{% endif %}" href="/lists">我的单词表</a>
+          <a class="{% if request.url.path.startswith('/newspaper') %}active{% endif %}" href="/newspaper">英文小报</a>
+          <a class="{% if request.url.path.startswith('/booklearner') %}active{% endif %}" href="/booklearner">好词好句</a>
           <a class="{% if request.url.path == '/wrong-words' %}active{% endif %}" href="/wrong-words">
             我的生词本 <span class="nav-count">{{ wrong_word_count }}</span>
           </a>
@@ -58,5 +64,6 @@
         layout.classList.toggle('sidebar-collapsed');
       });
     </script>
+    {% block extra_scripts %}{% endblock %}
   </body>
 </html>

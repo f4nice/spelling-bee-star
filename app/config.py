@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "拼词之星"
+    app_name: str = "SpeakEasy"
     database_url: str = "mysql+pymysql://root:password@127.0.0.1:3306/spelling_bee?charset=utf8mb4"
     merriam_webster_api_key: str = ""
     merriam_webster_reference: str = "collegiate"
@@ -13,8 +13,15 @@ class Settings(BaseSettings):
     libretranslate_api_key: str = ""
     image_provider: str = "wikimedia"
     list_delete_password: str = "841108"
+    ai_image_provider: str = "tencent_hunyuan"
+    openai_api_key: str = ""
+    openai_image_model: str = "gpt-image-1"
+    tencentcloud_secret_id: str = ""
+    tencentcloud_secret_key: str = ""
+    tencentcloud_region: str = "ap-guangzhou"
+    tencent_hunyuan_image_action: str = "TextToImageRapid"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
 @lru_cache
