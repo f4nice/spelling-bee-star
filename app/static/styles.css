@@ -2234,6 +2234,12 @@ button:hover {
   padding: 24px;
 }
 
+.detail-study-row {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 14px;
+}
+
 .detail-heading {
   display: flex;
   justify-content: space-between;

@@ -31,22 +31,25 @@
   </div>
 
   <article class="panel detail-panel">
+    <div class="detail-study-row">
+      <div class="auto-study-controls" data-auto-study>
+        <label>
+          间隔
+          <input type="number" min="2" max="120" step="1" value="6" data-auto-interval>
+          秒
+        </label>
+        <button type="button" class="secondary-button" data-auto-start>自动学习</button>
+        <button type="button" class="secondary-button" data-auto-stop hidden>停止</button>
+        <span data-auto-status></span>
+      </div>
+    </div>
+
     <div class="detail-heading">
       <div>
         <h1>{{ word.word }}</h1>
         {% if word.phonetic %}<p class="phonetic">/{{ word.phonetic }}/</p>{% endif %}
       </div>
       <div class="detail-heading-actions">
-        <div class="auto-study-controls" data-auto-study>
-          <label>
-            间隔
-            <input type="number" min="2" max="120" step="1" value="6" data-auto-interval>
-            秒
-          </label>
-          <button type="button" class="secondary-button" data-auto-start>自动学习</button>
-          <button type="button" class="secondary-button" data-auto-stop hidden>停止</button>
-          <span data-auto-status></span>
-        </div>
         {% if can_edit %}
           <form action="/words/{{ word.id }}/refresh" method="post">
             <input type="hidden" name="edit_token" value="1">
