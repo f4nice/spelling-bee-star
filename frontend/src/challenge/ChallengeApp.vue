@@ -1,8 +1,15 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 
+const props = defineProps({
+  wordListId: {
+    type: Number,
+    default: null,
+  },
+});
+
 const root = document.getElementById('challenge-vue-app');
-const wordListId = Number(root?.dataset.wordListId || 0);
+const wordListId = Number(props.wordListId || root?.dataset.wordListId || 0);
 const initialParams = new URLSearchParams(window.location.search);
 
 const state = ref(null);

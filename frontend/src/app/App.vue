@@ -96,7 +96,7 @@ onMounted(loadRoute);
 
   <template v-else-if="route.name === 'challenge'">
     <div id="challenge-vue-app" :data-word-list-id="route.params.id">
-      <ChallengeApp />
+      <ChallengeApp :word-list-id="route.params.id" />
     </div>
   </template>
 
