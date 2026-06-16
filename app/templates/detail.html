@@ -202,7 +202,7 @@
     });
   }
 
-  function nextWordUrl() {
+  function wordUrl(wordId) {
     const params = new URLSearchParams();
     {% if can_edit %}
       params.set('edit', '1');
@@ -211,7 +211,19 @@
       params.set('list_id', '{{ detail_list_id }}');
     {% endif %}
     const query = params.toString();
-    return '/words/{{ next_word_id }}' + (query ? `?${query}` : '');
+    return `/words/${wordId}` + (query ? `?${query}` : '');
+  }
+
+  function previousWordUrl() {
+    return wordUrl('{{ previous_word_id }}');
+  }
+
+  function nextWordUrl() {
+    return wordUrl('{{ next_word_id }}');
+  }
+
+  function goToPreviousWord() {
+    window.location.href = previousWordUrl();
   }
 
   function goToNextWord() {
@@ -344,7 +356,7 @@
   }, { once: true });
 
   document.addEventListener('keydown', (event) => {
-    if (event.key !== 'ArrowRight') {
+    if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) {
       return;
     }
     const active = document.activeElement;
@@ -352,6 +364,10 @@
       active?.matches('input, textarea, select, button, audio') ||
       active?.isContentEditable
     ) {
+      return;
+    }
+    if (event.key === 'ArrowLeft') {
+      goToPreviousWord();
       return;
     }
     goToNextWord();

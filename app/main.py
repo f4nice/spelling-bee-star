@@ -1375,6 +1375,7 @@ def word_detail(
                 "can_edit": edit == 1,
                 "word_index": word_nav["index"],
                 "detail_list_id": word_nav["list_id"],
+                "previous_word_id": word_nav["previous_word_id"],
                 "next_word_id": word_nav["next_word_id"],
             },
         ),
@@ -2303,7 +2304,7 @@ def word_navigation_context(db: Session, word_id: int, list_id: int | None = Non
             .limit(1)
         )
     if not list_id:
-        return {"list_id": None, "index": None, "next_word_id": word_id + 1}
+        return {"list_id": None, "index": None, "previous_word_id": max(word_id - 1, 1), "next_word_id": word_id + 1}
 
     word_ids = db.scalars(
         select(Word.id)
@@ -2314,11 +2315,18 @@ def word_navigation_context(db: Session, word_id: int, list_id: int | None = Non
     try:
         current_index = list(word_ids).index(word_id)
     except ValueError:
-        return {"list_id": list_id, "index": None, "next_word_id": word_id + 1}
+        return {"list_id": list_id, "index": None, "previous_word_id": max(word_id - 1, 1), "next_word_id": word_id + 1}
 
+    previous_index = current_index - 1
     next_index = current_index + 1
+    previous_word_id = word_ids[previous_index] if previous_index >= 0 else word_ids[current_index]
     next_word_id = word_ids[next_index] if next_index < len(word_ids) else word_ids[current_index]
-    return {"list_id": list_id, "index": current_index + 1, "next_word_id": next_word_id}
+    return {
+        "list_id": list_id,
+        "index": current_index + 1,
+        "previous_word_id": previous_word_id,
+        "next_word_id": next_word_id,
+    }
 
 
 def sidebar_challenge_progress(db: Session) -> list[dict]:
