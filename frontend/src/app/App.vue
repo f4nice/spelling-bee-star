@@ -1,17 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import ChallengeApp from '../challenge/ChallengeApp.vue';
-import HomePage from './pages/HomePage.vue';
-import ListsPage from './pages/ListsPage.vue';
-import ListDetailPage from './pages/ListDetailPage.vue';
-import WordDetailPage from './pages/WordDetailPage.vue';
-import UploadPage from './pages/UploadPage.vue';
-import PreviewPage from './pages/PreviewPage.vue';
-import NewspaperPage from './pages/NewspaperPage.vue';
-import NewspaperArticlePage from './pages/NewspaperArticlePage.vue';
-import BooklearnerPage from './pages/BooklearnerPage.vue';
-import WrongWordsPage from './pages/WrongWordsPage.vue';
-import ChallengeDayPage from './pages/ChallengeDayPage.vue';
+import VuePageHeader from './components/VuePageHeader.vue';
+import VuePageOutlet from './components/VuePageOutlet.vue';
 import { useBooklearner } from './composables/useBooklearner.js';
 import { useImportPreview } from './composables/useImportPreview.js';
 import { useListTools } from './composables/useListTools.js';
@@ -89,6 +79,48 @@ const {
   syncListImages,
 } = useListTools({ data, go, loadRoute });
 
+const pageContext = computed(() => ({
+  route: route.value,
+  data: data.value,
+  go,
+  fallbackLetter,
+  imageForWord,
+  wordVueUrl,
+  articleText,
+  importForm: importForm.value,
+  setAllRows,
+  setAllColumns,
+  changePreviewSheet,
+  submitImport,
+  wordEdit: wordEdit.value,
+  imageCandidates: imageCandidates.value,
+  audioOptions: audioOptions.value,
+  recorderState: recorderState.value,
+  saveWordField,
+  refreshWord,
+  uploadWordImage,
+  findImages,
+  chooseNetworkImage,
+  playAudio,
+  fetchAudioOptions,
+  chooseAudio,
+  startRecording,
+  stopRecording,
+  saveRecording,
+  wordNavUrl,
+  book: book.value,
+  analyzeBookQuery,
+  analyzeBookText,
+  analyzeBookFile,
+  saveBookAnalysis,
+  createBookWordList,
+  uploadOptions: uploadOptions.value,
+  uploadForm: uploadForm.value,
+  submitUpload,
+  renameList,
+  syncListImages,
+}));
+
 function onPopState() {
   route.value = parseRoute();
   loadRoute();
@@ -137,40 +169,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="panel vue-page-heading">
-    <div>
-      <p class="section-kicker">Vue App</p>
-      <h1>{{ routeTitle }}</h1>
-    </div>
-    <nav class="vue-page-nav" aria-label="Vue 页面导航">
-      <button type="button" class="secondary-button" @click="go('/')">首页</button>
-      <button type="button" class="secondary-button" @click="go('/lists')">我的单词表</button>
-      <button type="button" class="secondary-button" @click="go('/upload')">导入</button>
-      <button type="button" class="secondary-button" @click="go('/newspaper')">英文小报</button>
-      <button type="button" class="secondary-button" @click="go('/booklearner')">好词好句</button>
-      <button type="button" class="secondary-button" @click="go('/wrong-words')">我的生词本</button>
-      <a class="ghost-button" :href="legacyHref">返回旧版</a>
-    </nav>
-  </section>
-
+  <VuePageHeader :route-title="routeTitle" :legacy-href="legacyHref" :go="go" />
   <div v-if="loading" class="empty-state">正在加载...</div>
   <div v-else-if="error" class="error-box">{{ error }}</div>
-
-  <template v-else-if="route.name === 'challenge'">
-    <div id="challenge-vue-app" :data-word-list-id="route.params.id">
-      <ChallengeApp :word-list-id="route.params.id" />
-    </div>
-  </template>
-
-  <HomePage v-else-if="route.name === 'home' && data" :data="data" :go="go" :fallback-letter="fallbackLetter" />
-  <ListsPage v-else-if="route.name === 'lists' && data" :data="data" :upload-options="uploadOptions" :upload-form="uploadForm" :submit-upload="submitUpload" :fallback-letter="fallbackLetter" :go="go" />
-  <ListDetailPage v-else-if="route.name === 'listDetail' && data" :data="data" :rename-list="renameList" :sync-list-images="syncListImages" :word-vue-url="wordVueUrl" :image-for-word="imageForWord" :fallback-letter="fallbackLetter" />
-  <WordDetailPage v-else-if="route.name === 'wordDetail' && data" :data="data" :word-edit="wordEdit" :image-candidates="imageCandidates" :audio-options="audioOptions" :recorder-state="recorderState" :upload-word-image="uploadWordImage" :find-images="findImages" :choose-network-image="chooseNetworkImage" :word-nav-url="wordNavUrl" :save-word-field="saveWordField" :refresh-word="refreshWord" :play-audio="playAudio" :fetch-audio-options="fetchAudioOptions" :start-recording="startRecording" :choose-audio="chooseAudio" :stop-recording="stopRecording" :save-recording="saveRecording" :fallback-letter="fallbackLetter" />
-  <UploadPage v-else-if="route.name === 'upload' && data" :upload-form="uploadForm" :upload-options="uploadOptions" :submit-upload="submitUpload" />
-  <PreviewPage v-else-if="route.name === 'preview' && data" :data="data" :import-form="importForm" :go="go" :change-preview-sheet="changePreviewSheet" :set-all-rows="setAllRows" :set-all-columns="setAllColumns" :submit-import="submitImport" />
-  <NewspaperPage v-else-if="route.name === 'newspaper' && data" :data="data" :go="go" />
-  <NewspaperArticlePage v-else-if="route.name === 'newspaperArticle' && data" :data="data" :go="go" :article-text="articleText" />
-  <BooklearnerPage v-else-if="route.name.startsWith('booklearner') && data" :route="route" :book="book" :go="go" :analyze-book-query="analyzeBookQuery" :analyze-book-text="analyzeBookText" :analyze-book-file="analyzeBookFile" :save-book-analysis="saveBookAnalysis" :create-book-word-list="createBookWordList" />
-  <WrongWordsPage v-else-if="route.name === 'wrongWords' && data" :data="data" :go="go" />
-  <ChallengeDayPage v-else-if="route.name === 'challengeDay' && data" :data="data" :go="go" :fallback-letter="fallbackLetter" />
+  <VuePageOutlet v-else :ctx="pageContext" />
 </template>
