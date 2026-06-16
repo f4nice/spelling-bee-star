@@ -1900,6 +1900,51 @@ button:hover {
   justify-content: flex-end;
 }
 
+.vue-page-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.vue-page-heading h1 {
+  margin: 0;
+}
+
+.vue-page-nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.plain-card-button,
+button.home-stat-card,
+button.calendar-day {
+  width: 100%;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.plain-card-button {
+  display: block;
+  padding: 0;
+  background: transparent;
+}
+
+button.home-stat-card {
+  display: block;
+}
+
+button.calendar-day:disabled {
+  cursor: default;
+}
+
 .challenge-large-progress {
   height: 12px;
 }
@@ -3172,6 +3217,15 @@ select {
   }
 
   .challenge-top-actions {
+    justify-content: flex-start;
+  }
+
+  .vue-page-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .vue-page-nav {
     justify-content: flex-start;
   }
 

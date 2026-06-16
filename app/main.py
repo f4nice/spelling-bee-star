@@ -631,6 +631,106 @@ def challenge_vue_page(word_list_id: int, request: Request, db: Session = Depend
     )
 
 
+@app.get("/vue", response_class=HTMLResponse)
+@app.get("/vue/{vue_path:path}", response_class=HTMLResponse)
+def vue_app_page(vue_path: str = "", request: Request = None, db: Session = Depends(get_db)):
+    return templates.TemplateResponse("vue_app.html", page_context(request, db, {"vue_path": vue_path}))
+
+
+@app.get("/api/vue/home")
+def vue_home_api(db: Session = Depends(get_db)):
+    today = date.today()
+    word_lists = regular_word_lists(db)
+    cards = [serialize_word_list_card(word_list_card(db, word_list)) for word_list in word_lists]
+    today_stat = db.scalar(select(ChallengeDailyStat).where(ChallengeDailyStat.stat_date == today))
+    today_wrong_list = get_wrong_word_list(db, today)
+    today_wrong_count = db.scalar(select(func.count(WrongWord.id)).where(WrongWord.wrong_date == today)) or 0
+    today_wrong_words = db.execute(
+        select(WrongWord, Word)
+        .join(Word, Word.id == WrongWord.word_id)
+        .where(WrongWord.wrong_date == today)
+        .order_by(WrongWord.updated_at.desc(), WrongWord.id.desc())
+        .limit(12)
+    ).all()
+    return {
+        "today": today.isoformat(),
+        "cards": cards,
+        "featured_cards": cards[:4],
+        "calendar": challenge_calendar(db),
+        "stats": {
+            "word_lists": len(word_lists),
+            "words": db.scalar(select(func.count(Word.id))) or 0,
+            "wrong_words": wrong_word_count(db),
+            "today_correct": today_stat.correct_count if today_stat else 0,
+            "today_wrong": today_stat.wrong_count if today_stat else 0,
+            "today_total": (today_stat.correct_count + today_stat.wrong_count) if today_stat else 0,
+            "today_wrong_count": today_wrong_count,
+            "today_wrong_list_id": today_wrong_list.id if today_wrong_list else None,
+            "today_wrong_words": [
+                {"word": serialize_word(word), "wrong_count": wrong_word.wrong_count}
+                for wrong_word, word in today_wrong_words
+            ],
+        },
+    }
+
+
+@app.get("/api/vue/lists")
+def vue_lists_api(db: Session = Depends(get_db)):
+    cards = [serialize_word_list_card(word_list_card(db, word_list)) for word_list in regular_word_lists(db)]
+    return {"cards": cards}
+
+
+@app.get("/api/vue/lists/{word_list_id}")
+def vue_list_detail_api(word_list_id: int, db: Session = Depends(get_db)):
+    word_list = db.get(WordList, word_list_id)
+    if not word_list:
+        raise HTTPException(status_code=404, detail="Word list not found")
+    words = db.scalars(
+        select(Word)
+        .join(WordListItem, WordListItem.word_id == Word.id)
+        .where(WordListItem.word_list_id == word_list_id)
+        .order_by(Word.word.asc())
+    ).all()
+    stats = challenge_counts_for_words(db, [word.id for word in words])
+    return {
+        "word_list": {"id": word_list.id, "name": word_list.name},
+        "challenge": challenge_state(db, word_list),
+        "words": [
+            {
+                **serialize_word(word),
+                "detail_url": f"/words/{word.id}?edit=1&list_id={word_list.id}",
+                "challenge_stats": stats.get(word.id, {"correct": 0, "wrong": 0}),
+            }
+            for word in words
+        ],
+    }
+
+
+@app.get("/api/vue/wrong-words")
+def vue_wrong_words_api(db: Session = Depends(get_db)):
+    wrong_rows = db.execute(
+        select(WrongWord, Word)
+        .join(Word, Word.id == WrongWord.word_id)
+        .order_by(WrongWord.wrong_date.desc(), WrongWord.updated_at.desc(), WrongWord.id.desc())
+    ).all()
+    groups: dict[str, dict[str, Any]] = {}
+    for wrong_word, word in wrong_rows:
+        day = (wrong_word.wrong_date or date.today()).isoformat()
+        group = groups.setdefault(day, {"date": day, "count": 0, "wrong_total": 0, "words": []})
+        group["count"] += 1
+        group["wrong_total"] += wrong_word.wrong_count
+        group["words"].append({"word": serialize_word(word), "wrong_count": wrong_word.wrong_count})
+    return {"groups": list(groups.values())}
+
+
+@app.get("/api/vue/challenge-calendar/{day}")
+def vue_challenge_day_api(day: str, db: Session = Depends(get_db)):
+    challenge_date = parse_wrong_date(day)
+    if not challenge_date:
+        raise HTTPException(status_code=400, detail="Invalid date")
+    return challenge_calendar_day_payload(db, challenge_date)
+
+
 @app.get("/api/challenge/{word_list_id}/state")
 def challenge_state_api(
     word_list_id: int,
@@ -953,6 +1053,30 @@ def serialize_challenge_word(word: Word | None) -> dict[str, Any] | None:
         "english_definition": word.english_definition,
         "chinese_definition": word.chinese_definition,
         "english_example": word.english_example,
+    }
+
+
+def serialize_word(word: Word) -> dict[str, Any]:
+    return {
+        "id": word.id,
+        "word": word.word,
+        "phonetic": word.phonetic,
+        "part_of_speech": word.part_of_speech,
+        "english_definition": word.english_definition,
+        "chinese_definition": word.chinese_definition,
+        "english_example": word.english_example,
+        "image_url": word.image_url,
+    }
+
+
+def serialize_word_list_card(card: dict[str, Any]) -> dict[str, Any]:
+    word_list = card["list"]
+    cover_word = card.get("cover_word")
+    return {
+        "list": {"id": word_list.id, "name": word_list.name},
+        "count": card["count"],
+        "cover_word": serialize_word(cover_word) if cover_word else None,
+        "challenge": card["challenge"],
     }
 
 

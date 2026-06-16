@@ -7,9 +7,12 @@ export default defineConfig({
     outDir: '../app/static/vue',
     emptyOutDir: true,
     rollupOptions: {
-      input: 'src/challenge/main.js',
+      input: {
+        challenge: 'src/challenge/main.js',
+        app: 'src/app/main.js',
+      },
       output: {
-        entryFileNames: 'challenge-app.js',
+        entryFileNames: (chunk) => (chunk.name === 'app' ? 'speakeasy-app.js' : 'challenge-app.js'),
         chunkFileNames: '[name].js',
         assetFileNames: '[name][extname]',
       },
