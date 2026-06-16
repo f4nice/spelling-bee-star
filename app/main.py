@@ -108,7 +108,7 @@ def startup() -> None:
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, db: Session = Depends(get_db)):
-    word_lists = db.scalars(select(WordList).order_by(WordList.created_at.desc())).all()
+    word_lists = regular_word_lists(db)
     cards = [word_list_card(db, word_list) for word_list in word_lists]
     calendar = challenge_calendar(db)
     today = date.today()
@@ -236,7 +236,7 @@ def word_lists_page(
     image_failed: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
-    word_lists = db.scalars(select(WordList).order_by(WordList.created_at.desc())).all()
+    word_lists = regular_word_lists(db)
     cards = [word_list_card(db, word_list) for word_list in word_lists]
     image_upload_result = None
     if image_matched or image_unmatched or image_failed:
@@ -494,7 +494,7 @@ async def good_words_create_word_list(request: Request, db: Session = Depends(ge
 
 @app.get("/upload", response_class=HTMLResponse)
 def upload_page(request: Request, db: Session = Depends(get_db)):
-    word_lists = db.scalars(select(WordList).order_by(WordList.created_at.desc())).all()
+    word_lists = regular_word_lists(db)
     return templates.TemplateResponse("upload.html", page_context(request, db, {"word_lists": word_lists}))
 
 
@@ -1933,6 +1933,15 @@ def get_words_for_list_sequence(db: Session, word_list_id: int) -> list[Word]:
         .where(WordListItem.word_list_id == word_list_id)
         .order_by(WordListItem.id.asc())
     ).all()
+
+
+def is_wrong_word_list_name(name: str | None) -> bool:
+    return bool(name and re.fullmatch(r"生词本 \d{4}-\d{2}-\d{2}", name.strip()))
+
+
+def regular_word_lists(db: Session) -> list[WordList]:
+    word_lists = db.scalars(select(WordList).order_by(WordList.created_at.desc())).all()
+    return [word_list for word_list in word_lists if not is_wrong_word_list_name(word_list.name)]
 
 
 def normalize_image_match_key(value: str | None) -> str:
