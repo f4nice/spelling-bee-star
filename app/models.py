@@ -103,6 +103,19 @@ class ChallengeDailyWord(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class ChallengeSpellingAttempt(Base):
+    __tablename__ = "challenge_spelling_attempts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    word_id: Mapped[int] = mapped_column(ForeignKey("words.id", ondelete="CASCADE"), nullable=False, index=True)
+    word_list_id: Mapped[int | None] = mapped_column(ForeignKey("word_lists.id", ondelete="SET NULL"), index=True)
+    typed_spelling: Mapped[str] = mapped_column(String(255), nullable=False)
+    normalized_spelling: Mapped[str] = mapped_column(String(255), nullable=False)
+    expected_spellings: Mapped[str] = mapped_column(Text, nullable=False)
+    is_correct: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+
+
 class WrongWord(Base):
     __tablename__ = "wrong_words"
     __table_args__ = (UniqueConstraint("word_id", "wrong_date", name="uq_wrong_words_word_date"),)

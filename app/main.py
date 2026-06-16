@@ -29,6 +29,7 @@ from app.models import (
     ChallengeDailyStat,
     ChallengeDailyWord,
     ChallengeProgress,
+    ChallengeSpellingAttempt,
     DailyQuote,
     Word,
     WordList,
@@ -710,11 +711,19 @@ def challenge_answer(
         session_wrong = 0
     elif total:
         current_word = words[progress.current_index] if 0 <= progress.current_index < total else None
-        is_spelling_submission = action == "spell"
         if action == "spell" and current_word:
             typed = normalize_spelling_answer(spelling)
             expected = spelling_answer_options(current_word)
             action = "known" if typed in expected else "wrong"
+            record_spelling_attempt(
+                db,
+                word=current_word,
+                word_list_id=word_list_id,
+                typed_spelling=spelling,
+                normalized_spelling=typed,
+                expected_spellings=expected,
+                is_correct=action == "known",
+            )
         if action == "wrong" and current_word:
             record_wrong_word(db, current_word.id)
         if action == "known":
@@ -2215,6 +2224,27 @@ def record_challenge_daily_result(
             detail.last_result = "wrong"
         db.add(detail)
     db.flush()
+
+
+def record_spelling_attempt(
+    db: Session,
+    word: Word,
+    word_list_id: int | None,
+    typed_spelling: str,
+    normalized_spelling: str,
+    expected_spellings: set[str],
+    is_correct: bool,
+) -> None:
+    db.add(
+        ChallengeSpellingAttempt(
+            word_id=word.id,
+            word_list_id=word_list_id,
+            typed_spelling=typed_spelling.strip(),
+            normalized_spelling=normalized_spelling,
+            expected_spellings=json.dumps(sorted(expected_spellings), ensure_ascii=False),
+            is_correct=is_correct,
+        )
+    )
 
 
 def challenge_calendar(db: Session) -> dict:
