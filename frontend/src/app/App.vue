@@ -16,8 +16,9 @@ import { useBooklearner } from './composables/useBooklearner.js';
 import { useImportPreview } from './composables/useImportPreview.js';
 import { useListTools } from './composables/useListTools.js';
 import { useWordDetail } from './composables/useWordDetail.js';
+import { loadVueRouteData } from './routeDataLoader.js';
 import { oldPathFor, parseRoute, routeTitle as titleForRoute } from './router.js';
-import { articleText, fallbackLetter, fetchJson, imageForWord, wordVueUrl } from './utils.js';
+import { articleText, fallbackLetter, imageForWord, wordVueUrl } from './utils.js';
 
 const route = ref(parseRoute());
 const data = ref(null);
@@ -88,10 +89,10 @@ const {
   syncListImages,
 } = useListTools({ data, go, loadRoute });
 
-window.addEventListener('popstate', () => {
+function onPopState() {
   route.value = parseRoute();
   loadRoute();
-});
+}
 
 async function loadRoute() {
   if (route.value.name === 'challenge') {
@@ -99,36 +100,20 @@ async function loadRoute() {
     error.value = '';
     return;
   }
+
   loading.value = true;
   error.value = '';
-  resetWordTools();
   try {
-    if (route.value.name === 'home') data.value = await fetchJson('/api/vue/home');
-    if (route.value.name === 'lists') {
-      data.value = await fetchJson('/api/vue/lists');
-      setUploadOptionsFromCards(data.value.cards);
-    }
-    if (route.value.name === 'listDetail') data.value = await fetchJson(`/api/vue/lists/${route.value.params.id}`);
-    if (route.value.name === 'wrongWords') data.value = await fetchJson('/api/vue/wrong-words');
-    if (route.value.name === 'challengeDay') data.value = await fetchJson(`/api/vue/challenge-calendar/${route.value.params.day}`);
-    if (route.value.name === 'wordDetail') {
-      data.value = await fetchJson(`/api/vue/words/${route.value.params.id}${window.location.search}`);
-      setWordEdit(data.value.word);
-    }
-    if (route.value.name === 'upload') {
-      await loadUploadOptions();
-      data.value = { ok: true };
-    }
-    if (route.value.name === 'preview') {
-      data.value = await fetchJson(`/api/vue/upload/preview/${route.value.params.id}${window.location.search}`);
-      resetImportForm();
-    }
-    if (route.value.name === 'newspaper') data.value = await fetchJson('/api/vue/newspaper');
-    if (route.value.name === 'newspaperArticle') data.value = await fetchJson(`/api/vue/newspaper/${route.value.params.section}/${route.value.params.index}`);
-    if (route.value.name.startsWith('booklearner')) {
-      data.value = { ok: true };
-      await loadBooklearner();
-    }
+    await loadVueRouteData({
+      route: route.value,
+      data,
+      resetWordTools,
+      setWordEdit,
+      setUploadOptionsFromCards,
+      loadUploadOptions,
+      resetImportForm,
+      loadBooklearner,
+    });
   } catch (err) {
     error.value = err.message || '页面数据加载失败';
   } finally {
@@ -141,10 +126,14 @@ function onKeydown(event) {
 }
 
 onMounted(() => {
+  window.addEventListener('popstate', onPopState);
   window.addEventListener('keydown', onKeydown);
   loadRoute();
 });
-onUnmounted(() => window.removeEventListener('keydown', onKeydown));
+onUnmounted(() => {
+  window.removeEventListener('popstate', onPopState);
+  window.removeEventListener('keydown', onKeydown);
+});
 </script>
 
 <template>
