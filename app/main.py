@@ -1795,7 +1795,8 @@ def ensure_schema_columns() -> None:
     ]
     missing_text_columns = [column for column in ("alternate_spellings",) if column not in word_columns]
     missing_string_columns = [column for column in ("part_of_speech",) if column not in word_columns]
-    wrong_columns = {column["name"] for column in inspector.get_columns("wrong_words")} if "wrong_words" in inspector.get_table_names() else set()
+    table_names = set(inspector.get_table_names())
+    wrong_columns = {column["name"] for column in inspector.get_columns("wrong_words")} if "wrong_words" in table_names else set()
 
     with engine.begin() as connection:
         for column in missing_boolean_columns:
@@ -1804,7 +1805,7 @@ def ensure_schema_columns() -> None:
             connection.execute(text(f"ALTER TABLE words ADD COLUMN {column} TEXT NULL"))
         for column in missing_string_columns:
             connection.execute(text(f"ALTER TABLE words ADD COLUMN {column} VARCHAR(120) NULL"))
-        if "wrong_words" in inspector.get_table_names() and "wrong_date" not in wrong_columns:
+        if "wrong_words" in table_names and "wrong_date" not in wrong_columns:
             if dialect == "mysql":
                 connection.execute(text("ALTER TABLE wrong_words ADD COLUMN wrong_date DATE NULL"))
                 connection.execute(text("UPDATE wrong_words SET wrong_date = CURDATE() WHERE wrong_date IS NULL"))
@@ -1812,12 +1813,18 @@ def ensure_schema_columns() -> None:
             else:
                 connection.execute(text("ALTER TABLE wrong_words ADD COLUMN wrong_date DATE NULL"))
                 connection.execute(text("UPDATE wrong_words SET wrong_date = DATE('now') WHERE wrong_date IS NULL"))
-        if "wrong_words" in inspector.get_table_names() and dialect == "mysql":
+        if "wrong_words" in table_names and dialect == "mysql":
             indexes = {index["name"] for index in inspector.get_indexes("wrong_words")}
             if "uq_wrong_words_word" in indexes:
                 connection.execute(text("ALTER TABLE wrong_words DROP INDEX uq_wrong_words_word"))
             if "uq_wrong_words_word_date" not in indexes:
                 connection.execute(text("ALTER TABLE wrong_words ADD UNIQUE INDEX uq_wrong_words_word_date (word_id, wrong_date)"))
+        if "challenge_daily_stats" in table_names:
+            connection.execute(text("UPDATE challenge_daily_stats SET correct_count = 0 WHERE correct_count IS NULL"))
+            connection.execute(text("UPDATE challenge_daily_stats SET wrong_count = 0 WHERE wrong_count IS NULL"))
+        if "challenge_daily_words" in table_names:
+            connection.execute(text("UPDATE challenge_daily_words SET correct_count = 0 WHERE correct_count IS NULL"))
+            connection.execute(text("UPDATE challenge_daily_words SET wrong_count = 0 WHERE wrong_count IS NULL"))
 
 
 def seed_daily_quotes(db: Session) -> None:
@@ -2185,9 +2192,9 @@ def record_challenge_daily_result(
     if not stat:
         stat = ChallengeDailyStat(stat_date=today, correct_count=0, wrong_count=0)
     if is_correct:
-        stat.correct_count += 1
+        stat.correct_count = (stat.correct_count or 0) + 1
     else:
-        stat.wrong_count += 1
+        stat.wrong_count = (stat.wrong_count or 0) + 1
     db.add(stat)
     if word_id:
         detail = db.scalar(
@@ -2201,10 +2208,10 @@ def record_challenge_daily_result(
         elif word_list_id:
             detail.word_list_id = word_list_id
         if is_correct:
-            detail.correct_count += 1
+            detail.correct_count = (detail.correct_count or 0) + 1
             detail.last_result = "correct"
         else:
-            detail.wrong_count += 1
+            detail.wrong_count = (detail.wrong_count or 0) + 1
             detail.last_result = "wrong"
         db.add(detail)
     db.flush()
