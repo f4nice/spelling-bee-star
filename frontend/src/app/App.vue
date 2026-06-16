@@ -14,6 +14,7 @@ import WrongWordsPage from './pages/WrongWordsPage.vue';
 import ChallengeDayPage from './pages/ChallengeDayPage.vue';
 import { useBooklearner } from './composables/useBooklearner.js';
 import { useImportPreview } from './composables/useImportPreview.js';
+import { useListTools } from './composables/useListTools.js';
 import { useWordDetail } from './composables/useWordDetail.js';
 import { oldPathFor, parseRoute, routeTitle as titleForRoute } from './router.js';
 import { articleText, fallbackLetter, fetchJson, imageForWord, wordVueUrl } from './utils.js';
@@ -22,8 +23,6 @@ const route = ref(parseRoute());
 const data = ref(null);
 const loading = ref(false);
 const error = ref('');
-const uploadOptions = ref({ word_lists: [] });
-const uploadForm = ref({ word_list_id: '', word_list_name: '', file: null });
 
 const routeTitle = computed(() => titleForRoute(route.value, data.value));
 const legacyHref = computed(() => oldPathFor(window.location.pathname));
@@ -79,6 +78,16 @@ const {
   createBookWordList,
 } = useBooklearner({ route, go });
 
+const {
+  uploadOptions,
+  uploadForm,
+  setUploadOptionsFromCards,
+  loadUploadOptions,
+  submitUpload,
+  renameList,
+  syncListImages,
+} = useListTools({ data, go, loadRoute });
+
 window.addEventListener('popstate', () => {
   route.value = parseRoute();
   loadRoute();
@@ -97,7 +106,7 @@ async function loadRoute() {
     if (route.value.name === 'home') data.value = await fetchJson('/api/vue/home');
     if (route.value.name === 'lists') {
       data.value = await fetchJson('/api/vue/lists');
-      uploadOptions.value = { word_lists: data.value.cards.map((card) => card.list) };
+      setUploadOptionsFromCards(data.value.cards);
     }
     if (route.value.name === 'listDetail') data.value = await fetchJson(`/api/vue/lists/${route.value.params.id}`);
     if (route.value.name === 'wrongWords') data.value = await fetchJson('/api/vue/wrong-words');
@@ -107,7 +116,7 @@ async function loadRoute() {
       setWordEdit(data.value.word);
     }
     if (route.value.name === 'upload') {
-      uploadOptions.value = await fetchJson('/api/vue/upload/options');
+      await loadUploadOptions();
       data.value = { ok: true };
     }
     if (route.value.name === 'preview') {
@@ -125,39 +134,6 @@ async function loadRoute() {
   } finally {
     loading.value = false;
   }
-}
-
-async function submitUpload() {
-  if (!uploadForm.value.file) return;
-  const form = new FormData();
-  form.append('file', uploadForm.value.file);
-  form.append('word_list_id', uploadForm.value.word_list_id || '');
-  form.append('word_list_name', uploadForm.value.word_list_name || '');
-  const result = await fetchJson('/api/vue/upload', { method: 'POST', body: form });
-  go(`/upload/preview/${result.preview_id}`);
-}
-
-async function renameList() {
-  const form = new FormData();
-  form.append('name', data.value.word_list.name);
-  await fetchJson(`/lists/${data.value.word_list.id}/rename`, {
-    method: 'POST',
-    body: form,
-    headers: { 'x-requested-with': 'fetch' },
-  });
-}
-
-async function syncListImages() {
-  const job = await fetchJson(`/lists/${data.value.word_list.id}/sync-images/start`, { method: 'POST' });
-  data.value.sync_job = job;
-  const timer = window.setInterval(async () => {
-    const next = await fetchJson(`/lists/${data.value.word_list.id}/sync-images/${job.id}`);
-    data.value.sync_job = next;
-    if (['done', 'failed'].includes(next.status)) {
-      window.clearInterval(timer);
-      await loadRoute();
-    }
-  }, 1200);
 }
 
 function onKeydown(event) {
