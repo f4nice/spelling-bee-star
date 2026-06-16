@@ -139,7 +139,7 @@ def parse_words_from_frame(
 
         rows.append(
             {
-                "word": word.lower(),
+                "word": word,
                 "alternate_spellings": "\n".join(alternate_spellings) if alternate_spellings else None,
                 "phonetic": _optional_text(row.get(phonetic_col)) if phonetic_col else None,
                 "part_of_speech": _optional_text(row.get(part_of_speech_col)) if part_of_speech_col else None,
@@ -185,7 +185,7 @@ def _split_spellings(value: Any) -> list[str]:
     if not text:
         return []
     parts = re.split(r"[,;/；，、\n\r]+", text)
-    return [part.strip().lower() for part in parts if _looks_like_english_word(part.strip())]
+    return [part.strip() for part in parts if _looks_like_english_word(part.strip())]
 
 
 def _spellings_from_row(row: Any, word_cols: list[str]) -> list[str]:
@@ -196,7 +196,7 @@ def _spellings_from_row(row: Any, word_cols: list[str]) -> list[str]:
             normalized = spelling.lower()
             if normalized not in seen:
                 seen.add(normalized)
-                spellings.append(normalized)
+                spellings.append(spelling)
     return spellings
 
 

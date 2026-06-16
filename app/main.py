@@ -456,12 +456,15 @@ async def good_words_create_word_list(request: Request, db: Session = Depends(ge
     for item in vocabulary:
         if not isinstance(item, dict):
             continue
-        word_text = " ".join(str(item.get("word") or "").strip().lower().split())
-        if not word_text or not re.fullmatch(r"[a-z][a-z'-]{1,127}", word_text):
+        word_text = " ".join(str(item.get("word") or "").strip().split())
+        word_key = word_text.lower()
+        if not word_text or not re.fullmatch(r"[a-z][a-z'-]{1,127}", word_key):
             continue
 
-        word = db.scalar(select(Word).where(Word.word == word_text))
+        word = db.scalar(select(Word).where(func.lower(Word.word) == word_key))
         if word:
+            if word.word != word_text:
+                word.word = word_text
             word.part_of_speech = word.part_of_speech or item.get("partOfSpeech")
             word.english_definition = word.english_definition or item.get("definition")
             word.english_example = word.english_example or item.get("example")
@@ -1490,8 +1493,11 @@ def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]
     word_ids: list[int] = []
 
     for row in rows:
-        existing = db.scalar(select(Word).where(Word.word == row["word"]))
+        word_text = row["word"]
+        existing = db.scalar(select(Word).where(func.lower(Word.word) == word_text.lower()))
         if existing:
+            if existing.word != word_text:
+                existing.word = word_text
             existing.phonetic = row.get("phonetic") or existing.phonetic
             existing.alternate_spellings = merge_spellings(existing.alternate_spellings, row.get("alternate_spellings"))
             existing.part_of_speech = row.get("part_of_speech") or existing.part_of_speech
@@ -1507,7 +1513,7 @@ def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]
             updated += 1
         else:
             word = Word(
-                word=row["word"],
+                word=word_text,
                 phonetic=row.get("phonetic"),
                 alternate_spellings=row.get("alternate_spellings"),
                 part_of_speech=row.get("part_of_speech"),
@@ -1531,7 +1537,7 @@ def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]
         except Exception as exc:
             db.rollback()
             skipped += 1
-            errors.append(f"第 {row.get('row_number')} 行 {row['word']}: {exc}")
+            errors.append(f"第 {row.get('row_number')} 行 {word_text}: {exc}")
 
     return word_ids
 
@@ -1543,9 +1549,10 @@ def merge_spellings(existing: str | None, incoming: str | None) -> str | None:
         if not text:
             continue
         for item in re.split(r"[,;/；，、\n\r]+", text):
-            spelling = item.strip().lower()
-            if spelling and spelling not in seen:
-                seen.add(spelling)
+            spelling = item.strip()
+            normalized = spelling.lower()
+            if spelling and normalized not in seen:
+                seen.add(normalized)
                 values.append(spelling)
     return "\n".join(values) if values else None
 
