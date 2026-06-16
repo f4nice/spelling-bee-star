@@ -1,7 +1,9 @@
 <script setup>
 import WordAudioPanel from "../components/WordAudioPanel.vue";
 import WordDefinitionList from "../components/WordDefinitionList.vue";
+import WordDetailHeading from "../components/WordDetailHeading.vue";
 import WordMediaPanel from "../components/WordMediaPanel.vue";
+import WordStudyNav from "../components/WordStudyNav.vue";
 
 defineProps([
   "data",
@@ -37,29 +39,13 @@ defineProps([
     />
 
     <article class="panel detail-panel">
-      <div class="detail-study-row">
-        <div class="auto-study-controls">
-          <a class="secondary-button" :href="wordNavUrl(data.navigation.previous_word_id)">上一个</a>
-          <a class="secondary-button" :href="wordNavUrl(data.navigation.next_word_id)">下一个</a>
-        </div>
-      </div>
-
-      <div class="detail-heading">
-        <div class="word-title-stack">
-          <h1>{{ data.word.word }}</h1>
-          <p v-if="data.word.phonetic" class="phonetic">/{{ data.word.phonetic }}/</p>
-          <textarea
-            v-if="data.can_edit"
-            v-model="wordEdit.alternate_spellings"
-            class="inline-edit-input"
-            @blur="saveWordField('alternate_spellings')"
-          ></textarea>
-          <strong v-else>{{ data.word.alternate_spellings || '暂无' }}</strong>
-        </div>
-        <div class="detail-heading-actions">
-          <button v-if="data.can_edit" type="button" @click="refreshWord">重新补全</button>
-        </div>
-      </div>
+      <WordStudyNav :data="data" :word-nav-url="wordNavUrl" />
+      <WordDetailHeading
+        :data="data"
+        :word-edit="wordEdit"
+        :save-word-field="saveWordField"
+        :refresh-word="refreshWord"
+      />
 
       <WordAudioPanel
         :data="data"
