@@ -731,6 +731,219 @@ def vue_challenge_day_api(day: str, db: Session = Depends(get_db)):
     return challenge_calendar_day_payload(db, challenge_date)
 
 
+@app.get("/api/vue/words/{word_id}")
+def vue_word_detail_api(
+    word_id: int,
+    edit: int = Query(default=0),
+    list_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+    cleaned_error = friendly_enrichment_error(word.enrichment_error)
+    if cleaned_error != word.enrichment_error:
+        word.enrichment_error = cleaned_error
+        db.add(word)
+        db.commit()
+        db.refresh(word)
+    encoded_word = quote_plus(word.word)
+    nav = word_navigation_context(db, word.id, list_id)
+    return {
+        "word": {
+            **serialize_word(word),
+            "alternate_spellings": word.alternate_spellings,
+            "source": word.source,
+            "note": word.note,
+            "enrichment_error": word.enrichment_error,
+            "image_locked": word.image_locked,
+            "american_audio_locked": word.american_audio_locked,
+            "british_audio_locked": word.british_audio_locked,
+        },
+        "can_edit": edit == 1,
+        "audio_sources": {
+            "us": word.american_audio_url if is_local_audio_url(word.american_audio_url) else f"/tts?word={encoded_word}&accent=us&v=2",
+            "gb": word.british_audio_url if is_local_audio_url(word.british_audio_url) else f"/tts?word={encoded_word}&accent=gb&v=2",
+        },
+        "navigation": nav,
+    }
+
+
+@app.post("/api/vue/words/{word_id}/field")
+def vue_update_word_field(
+    word_id: int,
+    field: str = Form(...),
+    value: str = Form(default=""),
+    edit_token: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    require_word_write_access(edit_token)
+    allowed = {
+        "alternate_spellings",
+        "english_definition",
+        "chinese_definition",
+        "english_example",
+    }
+    if field not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid field")
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+    next_value = value.strip() or None
+    setattr(word, field, next_value)
+    if field == "english_definition":
+        word.english_definition_locked = True
+    if field == "chinese_definition":
+        word.chinese_definition_locked = True
+    if field == "english_example":
+        word.english_example_locked = True
+    word.enrichment_error = None
+    db.add(word)
+    db.commit()
+    return {"ok": True, "field": field, "value": next_value}
+
+
+@app.post("/api/vue/words/{word_id}/refresh")
+async def vue_refresh_word(
+    word_id: int,
+    edit_token: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    require_word_write_access(edit_token)
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+    await enrich_word(db, word)
+    return {"ok": True, "word": serialize_word(word)}
+
+
+@app.get("/api/vue/newspaper")
+def vue_newspaper_api(db: Session = Depends(get_db)):
+    return cached_json(
+        db,
+        cache_key=f"chinadaily:list:{date.today().isoformat()}:6",
+        ttl=timedelta(minutes=45),
+        producer=lambda: load_chinadaily_articles(limit_per_feed=6),
+        fallback={"sections": []},
+    )
+
+
+@app.get("/api/vue/newspaper/{section_key}/{article_index}")
+def vue_newspaper_article_api(section_key: str, article_index: int, db: Session = Depends(get_db)):
+    try:
+        return cached_json(
+            db,
+            cache_key=f"chinadaily:detail:{date.today().isoformat()}:{section_key}:{article_index}",
+            ttl=timedelta(hours=6),
+            producer=lambda: get_chinadaily_article(section_key, article_index),
+        )
+    except (ValueError, IndexError):
+        raise HTTPException(status_code=404, detail="Article not found")
+
+
+@app.get("/api/vue/upload/options")
+def vue_upload_options(db: Session = Depends(get_db)):
+    return {
+        "word_lists": [
+            {"id": word_list.id, "name": word_list.name}
+            for word_list in regular_word_lists(db)
+        ]
+    }
+
+
+@app.post("/api/vue/upload")
+async def vue_upload_excel(
+    file: UploadFile = File(...),
+    word_list_id: str = Form(default=""),
+    word_list_name: str = Form(default=""),
+):
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in {".xlsx", ".xlsm", ".xltx", ".xltm"}:
+        raise HTTPException(status_code=400, detail="请上传 .xlsx 格式的 Excel 文件")
+    content = await file.read()
+    preview = parse_preview_from_excel(content)
+    preview_id = uuid4().hex
+    preview["filename"] = file.filename
+    preview["word_list_id"] = word_list_id
+    preview["word_list_name"] = clean_list_name(word_list_name or Path(file.filename or "新单词表").stem)
+    preview_path(preview_id).write_text(json.dumps(preview, ensure_ascii=False), encoding="utf-8")
+    preview_excel_path(preview_id).write_bytes(content)
+    return {"ok": True, "preview_id": preview_id, "preview": preview}
+
+
+@app.get("/api/vue/upload/preview/{preview_id}")
+def vue_upload_preview_api(
+    preview_id: str,
+    sheet_name: str = Query(default=""),
+    word_list_id: str = Query(default=""),
+    word_list_name: str = Query(default=""),
+):
+    excel_path = preview_excel_path(preview_id)
+    if not excel_path.exists():
+        raise HTTPException(status_code=404, detail="预览已过期，请重新上传 Excel")
+    existing_preview: dict[str, Any] = {}
+    path = preview_path(preview_id)
+    if path.exists():
+        existing_preview = json.loads(path.read_text(encoding="utf-8"))
+    if sheet_name:
+        preview = parse_preview_from_excel(excel_path.read_bytes(), sheet_name=sheet_name)
+        preview["filename"] = existing_preview.get("filename", "Excel")
+        preview["word_list_id"] = word_list_id or existing_preview.get("word_list_id", "")
+        preview["word_list_name"] = clean_list_name(
+            word_list_name or existing_preview.get("word_list_name") or Path(preview["filename"]).stem
+        )
+        path.write_text(json.dumps(preview, ensure_ascii=False), encoding="utf-8")
+    elif existing_preview:
+        preview = existing_preview
+    else:
+        preview = parse_preview_from_excel(excel_path.read_bytes())
+        path.write_text(json.dumps(preview, ensure_ascii=False), encoding="utf-8")
+    return {"preview_id": preview_id, "preview": preview}
+
+
+@app.post("/api/vue/import-preview")
+async def vue_import_preview(
+    preview_id: str = Form(...),
+    word_list_id: str = Form(default=""),
+    word_list_name: str = Form(...),
+    word_columns: list[str] = Form(default=[]),
+    selected_rows: list[int] = Form(default=[]),
+    selected_columns: list[str] = Form(default=[]),
+    image_files: list[UploadFile] = File(default=[]),
+    db: Session = Depends(get_db),
+):
+    path = preview_path(preview_id)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="预览已过期，请重新上传 Excel")
+    preview = json.loads(path.read_text(encoding="utf-8"))
+    target_list = get_or_create_word_list(db, word_list_id, word_list_name)
+    if not word_columns:
+        word_columns = preview.get("inferred_word_columns") or [preview.get("inferred_word_column")]
+        word_columns = [column for column in word_columns if column]
+    rows = parse_words_from_preview(
+        preview=preview,
+        selected_row_indexes=set(selected_rows),
+        selected_columns=set(selected_columns),
+        word_columns=word_columns,
+    )
+    word_ids = import_rows(rows, db, target_list)
+    image_result = {"matched": 0, "unmatched": 0, "failed": 0}
+    if image_files:
+        imported_words = [word for word_id in word_ids if (word := db.get(Word, word_id))]
+        image_result = await apply_uploaded_images_to_words(imported_words, image_files, db)
+    if word_ids:
+        start_enrichment_thread(word_ids)
+    path.unlink(missing_ok=True)
+    preview_excel_path(preview_id).unlink(missing_ok=True)
+    return {
+        "ok": True,
+        "word_list_id": target_list.id,
+        "word_list_name": target_list.name,
+        "count": len(word_ids),
+        "image_result": image_result,
+    }
+
+
 @app.get("/api/challenge/{word_list_id}/state")
 def challenge_state_api(
     word_list_id: int,

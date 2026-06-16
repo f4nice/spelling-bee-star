@@ -1937,6 +1937,43 @@ button.calendar-day {
   background: transparent;
 }
 
+.list-title-input,
+.inline-edit-input,
+.definition-list textarea,
+.booklearner-json {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  padding: 0.7rem 0.8rem;
+}
+
+.list-title-input {
+  max-width: 32rem;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-weight: 800;
+}
+
+.definition-list textarea,
+.inline-edit-input {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+.inline-image-grid {
+  margin-top: 1rem;
+  max-height: 28rem;
+  overflow: auto;
+}
+
+.booklearner-json {
+  max-height: 32rem;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
 button.home-stat-card {
   display: block;
 }
