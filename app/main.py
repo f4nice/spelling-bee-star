@@ -2376,7 +2376,7 @@ def word_navigation_context(db: Session, word_id: int, list_id: int | None = Non
 
 
 def sidebar_challenge_progress(db: Session) -> list[dict]:
-    word_lists = db.scalars(select(WordList).order_by(WordList.created_at.desc())).all()
+    word_lists = regular_word_lists(db)
     return [{"list": word_list, "challenge": challenge_state(db, word_list)} for word_list in word_lists]
 
 
