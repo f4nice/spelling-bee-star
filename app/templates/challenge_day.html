@@ -47,13 +47,10 @@
       <div class="challenge-day-word-body">
         <div>
           <h2>{{ item.word }}</h2>
-          <span>{{ item.word_list_name or "挑战记录" }}</span>
         </div>
         <strong class="challenge-day-status {{ 'is-correct' if is_correct else 'is-wrong' }}">
           {{ "正确" if is_correct else "错误" }}
         </strong>
-        {% if item.phonetic %}<p class="phonetic">{{ item.phonetic }}</p>{% endif %}
-        {% if item.part_of_speech %}<p class="challenge-day-tag">{{ item.part_of_speech }}</p>{% endif %}
         <p>{{ item.chinese_definition or item.english_definition or "暂无定义" }}</p>
         <div class="challenge-day-counts">
           <span>对 {{ item.correct_count }}</span>
