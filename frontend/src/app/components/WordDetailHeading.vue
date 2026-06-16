@@ -30,7 +30,7 @@ defineProps({
         class="inline-edit-input"
         @blur="saveWordField('alternate_spellings')"
       ></textarea>
-      <strong v-else>{{ data.word.alternate_spellings || '暂无' }}</strong>
+      <strong v-else>{{ data.word.alternate_spellings || "暂无" }}</strong>
     </div>
     <div class="detail-heading-actions">
       <button v-if="data.can_edit" type="button" @click="refreshWord">重新补全</button>

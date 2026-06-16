@@ -53,7 +53,7 @@ defineProps({
         @click="chooseNetworkImage(item.url)"
       >
         <img :src="item.url" :alt="`候选图 ${index + 1}`">
-        <span>{{ item.source || '网络图片' }}</span>
+        <span>{{ item.source || "网络图片" }}</span>
       </button>
     </div>
   </div>

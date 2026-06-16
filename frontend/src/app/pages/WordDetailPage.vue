@@ -1,9 +1,6 @@
 <script setup>
-import WordAudioPanel from "../components/WordAudioPanel.vue";
-import WordDefinitionList from "../components/WordDefinitionList.vue";
-import WordDetailHeading from "../components/WordDetailHeading.vue";
+import WordDetailContentPanel from "../components/WordDetailContentPanel.vue";
 import WordMediaPanel from "../components/WordMediaPanel.vue";
-import WordStudyNav from "../components/WordStudyNav.vue";
 
 defineProps([
   "data",
@@ -23,7 +20,7 @@ defineProps([
   "chooseAudio",
   "stopRecording",
   "saveRecording",
-  "fallbackLetter"
+  "fallbackLetter",
 ]);
 </script>
 
@@ -38,29 +35,20 @@ defineProps([
       :choose-network-image="chooseNetworkImage"
     />
 
-    <article class="panel detail-panel">
-      <WordStudyNav :data="data" :word-nav-url="wordNavUrl" />
-      <WordDetailHeading
-        :data="data"
-        :word-edit="wordEdit"
-        :save-word-field="saveWordField"
-        :refresh-word="refreshWord"
-      />
-
-      <WordAudioPanel
-        :data="data"
-        :audio-options="audioOptions"
-        :recorder-state="recorderState"
-        :play-audio="playAudio"
-        :fetch-audio-options="fetchAudioOptions"
-        :start-recording="startRecording"
-        :choose-audio="chooseAudio"
-        :stop-recording="stopRecording"
-        :save-recording="saveRecording"
-      />
-
-      <WordDefinitionList :data="data" :word-edit="wordEdit" :save-word-field="saveWordField" />
-      <div v-if="data.word.enrichment_error" class="error-box">{{ data.word.enrichment_error }}</div>
-    </article>
+    <WordDetailContentPanel
+      :data="data"
+      :word-edit="wordEdit"
+      :audio-options="audioOptions"
+      :recorder-state="recorderState"
+      :word-nav-url="wordNavUrl"
+      :save-word-field="saveWordField"
+      :refresh-word="refreshWord"
+      :play-audio="playAudio"
+      :fetch-audio-options="fetchAudioOptions"
+      :start-recording="startRecording"
+      :choose-audio="chooseAudio"
+      :stop-recording="stopRecording"
+      :save-recording="saveRecording"
+    />
   </section>
 </template>
