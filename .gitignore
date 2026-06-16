@@ -6,6 +6,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 uploads/
+frontend/node_modules/
 *.sqlite
 *.db
 *.tmp.css

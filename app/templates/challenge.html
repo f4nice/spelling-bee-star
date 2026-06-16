@@ -10,7 +10,10 @@
         · 今日目标 {{ today_challenge.done }} / {{ today_challenge.total }}
       </p>
     </div>
-    <a class="ghost-button" href="/lists/{{ word_list.id }}">返回单词表</a>
+    <div class="challenge-top-actions">
+      <a class="secondary-button" href="/challenge-vue/{{ word_list.id }}?daily_count={{ today_challenge.daily_count }}&start_count={{ today_challenge.start_count }}&session_correct={{ today_challenge.correct }}&session_wrong={{ today_challenge.wrong }}{% if wrong_date %}&wrong_date={{ wrong_date.isoformat() }}{% endif %}">Vue版挑战</a>
+      <a class="ghost-button" href="/lists/{{ word_list.id }}">返回单词表</a>
+    </div>
   </div>
 
   <div class="challenge-large-progress">

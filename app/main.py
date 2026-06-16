@@ -620,6 +620,72 @@ def challenge_page(
     )
 
 
+@app.get("/challenge-vue/{word_list_id}", response_class=HTMLResponse)
+def challenge_vue_page(word_list_id: int, request: Request, db: Session = Depends(get_db)):
+    word_list = db.get(WordList, word_list_id)
+    if not word_list:
+        raise HTTPException(status_code=404, detail="Word list not found")
+    return templates.TemplateResponse(
+        "challenge_vue.html",
+        page_context(request, db, {"word_list_id": word_list_id}),
+    )
+
+
+@app.get("/api/challenge/{word_list_id}/state")
+def challenge_state_api(
+    word_list_id: int,
+    daily_count: int = Query(default=20, ge=1, le=500),
+    start_count: int | None = Query(default=None),
+    session_correct: int = Query(default=0, ge=0),
+    session_wrong: int = Query(default=0, ge=0),
+    wrong_date: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    return challenge_payload(
+        db,
+        word_list_id=word_list_id,
+        daily_count=daily_count,
+        start_count=start_count,
+        session_correct=session_correct,
+        session_wrong=session_wrong,
+        wrong_date=wrong_date,
+    )
+
+
+@app.post("/api/challenge/{word_list_id}/answer")
+def challenge_answer_api(
+    word_list_id: int,
+    action: str = Form(default="known"),
+    daily_count: int = Form(default=20),
+    start_count: int = Form(default=0),
+    session_correct: int = Form(default=0),
+    session_wrong: int = Form(default=0),
+    spelling: str = Form(default=""),
+    wrong_date: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    result = apply_challenge_answer(
+        db,
+        word_list_id=word_list_id,
+        action=action,
+        daily_count=daily_count,
+        start_count=start_count,
+        session_correct=session_correct,
+        session_wrong=session_wrong,
+        spelling=spelling,
+        wrong_date=wrong_date,
+    )
+    query = {
+        "daily_count": result["daily_count"],
+        "start_count": result["start_count"],
+        "session_correct": result["session_correct"],
+        "session_wrong": result["session_wrong"],
+    }
+    if result["wrong_date"]:
+        query["wrong_date"] = result["wrong_date"].isoformat()
+    return {"ok": True, "query": query}
+
+
 @app.get("/wrong-words", response_class=HTMLResponse)
 def wrong_words_page(
     request: Request,
@@ -695,6 +761,38 @@ def challenge_answer(
     wrong_date: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
+    result = apply_challenge_answer(
+        db,
+        word_list_id=word_list_id,
+        action=action,
+        daily_count=daily_count,
+        start_count=start_count,
+        session_correct=session_correct,
+        session_wrong=session_wrong,
+        spelling=spelling,
+        wrong_date=wrong_date,
+    )
+    return RedirectResponse(
+        url=(
+            f"/challenge/{word_list_id}?daily_count={result['daily_count']}&start_count={result['start_count']}"
+            f"&session_correct={result['session_correct']}&session_wrong={result['session_wrong']}"
+            f"{'&wrong_date=' + result['wrong_date'].isoformat() if result['wrong_date'] else ''}"
+        ),
+        status_code=303,
+    )
+
+
+def apply_challenge_answer(
+    db: Session,
+    word_list_id: int,
+    action: str,
+    daily_count: int,
+    start_count: int,
+    session_correct: int,
+    session_wrong: int,
+    spelling: str,
+    wrong_date: str,
+) -> dict[str, Any]:
     word_list = db.get(WordList, word_list_id)
     if not word_list:
         raise HTTPException(status_code=404, detail="Word list not found")
@@ -753,14 +851,109 @@ def challenge_answer(
     start_count = max(start_count, 0)
     session_correct = max(session_correct, 0)
     session_wrong = max(session_wrong, 0)
-    return RedirectResponse(
-        url=(
-            f"/challenge/{word_list_id}?daily_count={daily_count}&start_count={start_count}"
-            f"&session_correct={session_correct}&session_wrong={session_wrong}"
-            f"{'&wrong_date=' + wrong_date_value.isoformat() if wrong_date_value else ''}"
-        ),
-        status_code=303,
-    )
+    return {
+        "daily_count": daily_count,
+        "start_count": start_count,
+        "session_correct": session_correct,
+        "session_wrong": session_wrong,
+        "wrong_date": wrong_date_value,
+    }
+
+
+def challenge_payload(
+    db: Session,
+    word_list_id: int,
+    daily_count: int,
+    start_count: int | None,
+    session_correct: int,
+    session_wrong: int,
+    wrong_date: str | None,
+) -> dict[str, Any]:
+    word_list = db.get(WordList, word_list_id)
+    if not word_list:
+        raise HTTPException(status_code=404, detail="Word list not found")
+    wrong_date_value = parse_wrong_date(wrong_date)
+
+    words = get_words_for_list(db, word_list_id)
+    progress = get_or_create_challenge_progress(db, word_list_id)
+    total = len(words)
+    progress.completed_count = min(progress.completed_count, total)
+    progress.current_index = min(progress.current_index, max(total - 1, 0))
+    db.add(progress)
+    db.commit()
+
+    start_count = progress.completed_count if start_count is None else start_count
+    start_count = min(max(start_count, 0), total)
+    daily_count = min(max(daily_count, 1), max(total, 1))
+    daily_target = min(total, start_count + daily_count)
+    daily_total = max(0, daily_target - start_count)
+    session_correct = max(session_correct, 0)
+    session_wrong = max(session_wrong, 0)
+    session_answered = min(session_correct + session_wrong, daily_total) if daily_total else 0
+    daily_done = session_answered
+    daily_remaining = max(0, daily_total - session_answered)
+    is_daily_complete = bool(total and daily_total and session_answered >= daily_total)
+
+    current_word = None if is_daily_complete or progress.completed_count >= total or not words else words[progress.current_index]
+    challenge_audio_sources = None
+    challenge_image_url = None
+    masked_example = None
+    if current_word:
+        challenge_audio_sources = {
+            "us": f"/words/{current_word.id}/audio?accent=us&v=2",
+            "gb": f"/words/{current_word.id}/audio?accent=gb&v=2",
+        }
+        challenge_image_url = f"/words/{current_word.id}/image-view" if current_word.image_url else None
+        masked_example = mask_word_in_text(
+            current_word.english_example,
+            current_word.word,
+            current_word.alternate_spellings,
+        )
+
+    state = challenge_state(db, word_list)
+    today_challenge = {
+        "daily_count": daily_count,
+        "start_count": start_count,
+        "target": daily_target,
+        "done": daily_done,
+        "total": daily_total,
+        "percent": round((daily_done / daily_total) * 100) if daily_total else 100,
+        "is_complete": is_daily_complete,
+        "all_complete": bool(total and progress.completed_count >= total),
+        "correct": session_correct,
+        "wrong": session_wrong,
+        "answered": session_answered,
+        "remaining": daily_remaining,
+        "accuracy": round((session_correct / session_answered) * 100) if session_answered else 0,
+    }
+    return {
+        "word_list": {"id": word_list.id, "name": word_list.name},
+        "current_word": serialize_challenge_word(current_word),
+        "progress": {
+            "current_index": progress.current_index,
+            "completed_count": progress.completed_count,
+        },
+        "challenge": state,
+        "today_challenge": today_challenge,
+        "challenge_audio_sources": challenge_audio_sources,
+        "challenge_image_url": challenge_image_url,
+        "masked_example": masked_example,
+        "wrong_date": wrong_date_value.isoformat() if wrong_date_value else None,
+    }
+
+
+def serialize_challenge_word(word: Word | None) -> dict[str, Any] | None:
+    if not word:
+        return None
+    return {
+        "id": word.id,
+        "word": word.word,
+        "phonetic": word.phonetic,
+        "part_of_speech": word.part_of_speech,
+        "english_definition": word.english_definition,
+        "chinese_definition": word.chinese_definition,
+        "english_example": word.english_example,
+    }
 
 
 def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
