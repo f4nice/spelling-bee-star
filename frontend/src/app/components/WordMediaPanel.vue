@@ -1,35 +1,11 @@
 <script setup>
 import { useSelectedWordImage } from "../composables/useSelectedWordImage.js";
+import { wordMediaPanelProps } from "../props/wordMediaPanelProps.js";
 import WordImageCandidateGrid from "./WordImageCandidateGrid.vue";
 import WordImageFrame from "./WordImageFrame.vue";
 import WordImageTools from "./WordImageTools.vue";
 
-const props = defineProps({
-  data: {
-    type: Object,
-    required: true,
-  },
-  imageCandidates: {
-    type: Array,
-    required: true,
-  },
-  imageForWord: {
-    type: Function,
-    required: true,
-  },
-  uploadWordImage: {
-    type: Function,
-    required: true,
-  },
-  findImages: {
-    type: Function,
-    required: true,
-  },
-  chooseNetworkImage: {
-    type: Function,
-    required: true,
-  },
-});
+const props = defineProps(wordMediaPanelProps);
 
 const { selectedImageFile, selectImageFile, saveSelectedImage } = useSelectedWordImage({
   uploadWordImage: props.uploadWordImage,
