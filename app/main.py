@@ -510,6 +510,16 @@ def vue_home_api(db: Session = Depends(get_db)):
     }
 
 
+@app.get("/api/vue/shell")
+def vue_shell_api(db: Session = Depends(get_db)):
+    return serialize_shell_context({
+        "app_name": settings.app_name,
+        "daily_quote": get_daily_quote(db),
+        "sidebar_challenges": sidebar_challenge_progress(db),
+        "wrong_word_count": wrong_word_count(db),
+    })
+
+
 @app.get("/api/vue/lists")
 def vue_lists_api(db: Session = Depends(get_db)):
     cards = [serialize_word_list_card(word_list_card(db, word_list)) for word_list in regular_word_lists(db)]

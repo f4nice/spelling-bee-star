@@ -10,12 +10,13 @@ import { useWordDetail } from "./composables/useWordDetail.js";
 import { usePageContext } from "./pageContext.js";
 import { loadVueRouteData } from "./routeDataLoader.js";
 import { parseRoute, routeTitle as titleForRoute } from "./router.js";
+import { fetchJson } from "./utils.js";
 
 const route = ref(parseRoute());
 const data = ref(null);
 const loading = ref(false);
 const error = ref("");
-const shellContext = readShellContext();
+const shellContext = ref(readShellContext());
 
 const routeTitle = computed(() => titleForRoute(route.value, data.value));
 
@@ -64,6 +65,7 @@ async function loadRoute() {
   if (route.value.name === "challenge") {
     data.value = null;
     error.value = "";
+    refreshShellContext();
     return;
   }
 
@@ -84,6 +86,15 @@ async function loadRoute() {
     error.value = err.message || "页面数据加载失败";
   } finally {
     loading.value = false;
+    refreshShellContext();
+  }
+}
+
+async function refreshShellContext() {
+  try {
+    shellContext.value = await fetchJson("/api/vue/shell");
+  } catch {
+    // Keep the server-rendered shell context if the lightweight refresh fails.
   }
 }
 
