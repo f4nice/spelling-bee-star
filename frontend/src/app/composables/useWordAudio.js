@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import { fetchJson } from '../utils.js';
+import { useAudioPlayback } from './useAudioPlayback.js';
 import { useWordRecorder } from './useWordRecorder.js';
 
 export function useWordAudio({ data, loadRoute }) {
@@ -10,19 +11,10 @@ export function useWordAudio({ data, loadRoute }) {
     stopRecording,
     saveRecording,
   } = useWordRecorder({ data, loadRoute });
+  const { playAudio } = useAudioPlayback();
 
   function resetAudioTools() {
     audioOptions.value = { us: [], gb: [] };
-  }
-
-  function playAudio(id) {
-    const audio = document.getElementById(id);
-    if (!audio) return;
-    audio.load();
-    audio.currentTime = 0;
-    audio.play().catch(() => {
-      audio.controls = true;
-    });
   }
 
   async function fetchAudioOptions(accent) {
