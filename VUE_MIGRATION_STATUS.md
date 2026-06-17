@@ -35,12 +35,13 @@
   - `170514c`：拆分 `useImportPreviewForm.js` 的表单状态和 URL helper。
   - `cf3b750`：拆分 BookLearner Hero 动作区、精选书摘列表和 props helper。
   - `1a7dc31`：拆分 `shellContext.js` 的默认值、JSON 解析和 DOM 文本读取 helper。
-  - 待提交：拆分 `useListDetailTools.js` 的列表重命名、删除和图片同步 action helper。
+  - `f67a080`：拆分 `useListDetailTools.js` 的列表重命名、删除和图片同步 action helper。
+  - 待提交：拆分 `WordCard.vue` 的媒体和挑战统计子组件，并修复卡片中文乱码。
 
 ## 正在进行
 
-- 当前推进区域：列表详情工具。
-- 当前已改到：`useListDetailTools.js` 已瘦身，新增 `listDetailActions.js` 承担重命名、删除和图片同步 action。
+- 当前推进区域：列表单词卡片。
+- 当前已改到：`WordCard.vue` 已瘦身，新增 `WordCardMedia.vue` 和 `WordChallengeStats.vue`；卡片里的“对/错/等待补全”乱码已修复。
 - 当前轮状态：本地 `npm run build`、`py -3 -m py_compile app\main.py`、Node UTF-8 乱码扫描已通过；等待提交、推送、部署和线上验证。
 
 ## 下一批改哪里
@@ -50,8 +51,9 @@
 最终扫描已记录的后续可选候选：
 
 - `frontend/src/app/composables/useWordRecorder.js`：录音逻辑仍偏集中，后续可按 capture/state/actions 再拆。
-- `frontend/src/app/composables/useListDetailTools.js`：本轮已抽出 `listDetailActions.js`，提交部署后可从候选中移除。
-- `frontend/src/app/components/WordCard.vue`、`ListDetailHeader.vue`、`AppSidebar.vue`：组件体量中等，暂未发现必须立即处理的旧模板逻辑。
+- `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDetailActions.js`。
+- `frontend/src/app/components/WordCard.vue`：本轮已拆出媒体和挑战统计子组件，提交部署后可从候选中移除。
+- `frontend/src/app/components/ListDetailHeader.vue`、`AppSidebar.vue`：组件体量中等，暂未发现必须立即处理的旧模板逻辑。
 - `frontend/src/app/components/ImportPreviewTable.vue` 和 `frontend/src/app/forms/importPreviewFormState.js`：导入预览已拆一轮，后续只做低风险细化。
 - 旧逻辑边界扫描目前主要命中预期项：`vue_app.html` shell、`app/main.py` 的 Vue shell 返回、Vue/浏览器事件监听、构建产物中的打包代码。
 
