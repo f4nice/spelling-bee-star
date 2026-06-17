@@ -10,7 +10,7 @@ import { useImportPreview } from "./composables/useImportPreview.js";
 import { useListTools } from "./composables/useListTools.js";
 import { useWordDetail } from "./composables/useWordDetail.js";
 import { usePageContext } from "./pageContext.js";
-import { routeTitle as titleForRoute } from "./router.js";
+import { routeTitle as titleForRoute } from "./routeTitles.js";
 import { useShellContext } from "./shellContext.js";
 
 const data = ref(null);
