@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from "vue";
+import { isSidebarNavItemActive, sidebarNavItems } from "../sidebarNav.js";
 
 const props = defineProps({
   route: {
@@ -16,13 +17,13 @@ const props = defineProps({
   },
 });
 
-const navItems = computed(() => [
-  { label: "首页", path: "/", active: props.route.name === "home" },
-  { label: "我的单词表", path: "/lists", active: props.route.name === "lists" || props.route.name === "listDetail" },
-  { label: "英文小报", path: "/newspaper", active: props.route.name.startsWith("newspaper") },
-  { label: "好词好句", path: "/booklearner", active: props.route.name.startsWith("booklearner") },
-  { label: "我的生词本", path: "/wrong-words", active: props.route.name === "wrongWords", count: props.shell.wrongWordCount },
-]);
+const navItems = computed(() =>
+  sidebarNavItems.map((item) => ({
+    ...item,
+    active: isSidebarNavItemActive(item, props.route),
+    count: item.countKey ? props.shell[item.countKey] : undefined,
+  })),
+);
 
 function navigate(path) {
   props.go(path);
