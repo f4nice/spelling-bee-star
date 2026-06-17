@@ -1,8 +1,9 @@
 import { onMounted, ref } from 'vue';
 import { challengeMessages, fetchChallengeState, postChallengeAnswer } from './challengeApi.js';
+import { currentChallengeParams, paramsFromChallengeResult, replaceChallengeParams } from './challengeRouteState.js';
 
 export function useChallengeSession(wordListId) {
-  const initialParams = new URLSearchParams(window.location.search);
+  const initialParams = currentChallengeParams();
   const state = ref(null);
   const spelling = ref('');
   const loading = ref(true);
@@ -28,8 +29,8 @@ export function useChallengeSession(wordListId) {
     errorMessage.value = '';
     try {
       const result = await postChallengeAnswer({ wordListId, state: state.value, spelling: spelling.value });
-      const nextParams = new URLSearchParams(result.query);
-      history.replaceState(null, '', `${window.location.pathname}?${nextParams.toString()}`);
+      const nextParams = paramsFromChallengeResult(result);
+      replaceChallengeParams(nextParams);
       await loadState(nextParams);
     } catch (error) {
       errorMessage.value = error.message || challengeMessages.submitFailed;
