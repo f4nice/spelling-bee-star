@@ -1570,30 +1570,6 @@ def word_detail(
     return vue_shell(request, db, f"words/{word_id}")
 
 
-@app.post("/upload")
-async def upload_excel(
-    request: Request,
-    file: UploadFile = File(...),
-    word_list_id: str = Form(default=""),
-    word_list_name: str = Form(default=""),
-    db: Session = Depends(get_db),
-):
-    suffix = Path(file.filename or "").suffix.lower()
-    if suffix not in {".xlsx", ".xlsm", ".xltx", ".xltm"}:
-        raise HTTPException(status_code=400, detail="请上传 .xlsx 格式的 Excel 文件")
-
-    content = await file.read()
-    preview = parse_preview_from_excel(content)
-    preview_id = uuid4().hex
-    preview["filename"] = file.filename
-    preview["word_list_id"] = word_list_id
-    preview["word_list_name"] = clean_list_name(word_list_name or Path(file.filename or "新单词表").stem)
-    preview_path(preview_id).write_text(json.dumps(preview, ensure_ascii=False), encoding="utf-8")
-    preview_excel_path(preview_id).write_bytes(content)
-
-    return RedirectResponse(url=f"/upload/preview/{preview_id}", status_code=303)
-
-
 @app.get("/upload/preview/{preview_id}", response_class=HTMLResponse)
 def upload_preview_sheet(
     preview_id: str,
@@ -1621,53 +1597,6 @@ def upload_preview_sheet(
     path.write_text(json.dumps(preview, ensure_ascii=False), encoding="utf-8")
 
     return vue_shell(request, db, f"upload/preview/{preview_id}")
-
-
-@app.post("/import-preview")
-async def import_preview(
-    preview_id: str = Form(...),
-    word_list_id: str = Form(default=""),
-    word_list_name: str = Form(...),
-    word_columns: list[str] = Form(default=[]),
-    selected_rows: list[int] = Form(default=[]),
-    selected_columns: list[str] = Form(default=[]),
-    image_files: list[UploadFile] = File(default=[]),
-    db: Session = Depends(get_db),
-):
-    path = preview_path(preview_id)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="预览已过期，请重新上传 Excel")
-
-    preview = json.loads(path.read_text(encoding="utf-8"))
-    target_list = get_or_create_word_list(db, word_list_id, word_list_name)
-    if not word_columns:
-        word_columns = preview.get("inferred_word_columns") or [preview.get("inferred_word_column")]
-        word_columns = [column for column in word_columns if column]
-    rows = parse_words_from_preview(
-        preview=preview,
-        selected_row_indexes=set(selected_rows),
-        selected_columns=set(selected_columns),
-        word_columns=word_columns,
-    )
-    word_ids = import_rows(rows, db, target_list)
-    image_result = {"matched": 0, "unmatched": 0, "failed": 0}
-    if image_files:
-        imported_words = [word for word_id in word_ids if (word := db.get(Word, word_id))]
-        image_result = await apply_uploaded_images_to_words(imported_words, image_files, db)
-    if word_ids:
-        start_enrichment_thread(word_ids)
-    path.unlink(missing_ok=True)
-    preview_excel_path(preview_id).unlink(missing_ok=True)
-    if image_result["matched"] or image_result["unmatched"] or image_result["failed"]:
-        return RedirectResponse(
-            url=(
-                f"/lists?image_matched={image_result['matched']}"
-                f"&image_unmatched={image_result['unmatched']}"
-                f"&image_failed={image_result['failed']}"
-            ),
-            status_code=303,
-        )
-    return RedirectResponse(url="/", status_code=303)
 
 
 def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]:
