@@ -31,13 +31,13 @@
   - `74be5ef`：抽出批量图片上传表单、列表工具 props helper。
   - `cbef214`：拆分 `UploadExcelForm.vue` 的 page/card 字段组件，并同步新 Vite chunk。
   - `ae6e42c`：拆分 `WordAudioOptionList.vue` 的候选项组件和 props helper。
-  - 待提交：拆分导入预览工具栏 props、提交按钮和图片选择 helper。
+  - `f80c5c3`：拆分导入预览工具栏 props、提交按钮和图片选择 helper。
 
 ## 正在进行
 
 - 当前推进区域：导入预览表单 composable。
 - 当前已改到：`ImportPreviewToolbar.vue`、`ImportPreviewSheetControls.vue`、`ImportPreviewSelectionActions.vue`、`ImportPreviewImagePicker.vue`、`ImportPreviewSubmitButton.vue` 和对应 props/helper。
-- 当前轮状态：本地 build、`py_compile`、乱码扫描已通过；等待提交、推送、部署和线上验证。
+- 当前轮状态：`f80c5c3` 已推送并部署；本地 build、`py_compile`、乱码扫描、线上 HTTP、临时 Playwright 控制台检查和服务日志验证均已通过。
 
 ## 下一批改哪里
 
