@@ -1,9 +1,10 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, ref } from "vue";
 import AppShell from "./components/AppShell.vue";
 import PageHeader from "./components/PageHeader.vue";
 import PageOutlet from "./components/PageOutlet.vue";
 import { useAppRouteController } from "./appRouteController.js";
+import { useAppWindowEvents } from "./composables/useAppWindowEvents.js";
 import { useBooklearner } from "./composables/useBooklearner.js";
 import { useImportPreview } from "./composables/useImportPreview.js";
 import { useListTools } from "./composables/useListTools.js";
@@ -47,16 +48,7 @@ function onKeydown(event) {
   handleWordKeydown(event, route.value);
 }
 
-onMounted(() => {
-  window.addEventListener("popstate", onPopState);
-  window.addEventListener("keydown", onKeydown);
-  loadRoute();
-});
-
-onUnmounted(() => {
-  window.removeEventListener("popstate", onPopState);
-  window.removeEventListener("keydown", onKeydown);
-});
+useAppWindowEvents({ onPopState, onKeydown, loadRoute });
 </script>
 
 <template>
