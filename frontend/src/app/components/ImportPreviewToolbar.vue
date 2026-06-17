@@ -2,33 +2,10 @@
 import ImportPreviewImagePicker from "./ImportPreviewImagePicker.vue";
 import ImportPreviewSelectionActions from "./ImportPreviewSelectionActions.vue";
 import ImportPreviewSheetControls from "./ImportPreviewSheetControls.vue";
+import ImportPreviewSubmitButton from "./ImportPreviewSubmitButton.vue";
+import { importPreviewToolbarProps } from "../props/importPreviewToolbarProps.js";
 
-defineProps({
-  preview: {
-    type: Object,
-    required: true,
-  },
-  importForm: {
-    type: Object,
-    required: true,
-  },
-  changePreviewSheet: {
-    type: Function,
-    required: true,
-  },
-  setAllRows: {
-    type: Function,
-    required: true,
-  },
-  setAllColumns: {
-    type: Function,
-    required: true,
-  },
-  submitImport: {
-    type: Function,
-    required: true,
-  },
-});
+defineProps(importPreviewToolbarProps);
 </script>
 
 <template>
@@ -40,6 +17,6 @@ defineProps({
     />
     <ImportPreviewSelectionActions :set-all-rows="setAllRows" :set-all-columns="setAllColumns" />
     <ImportPreviewImagePicker :import-form="importForm" />
-    <button type="button" @click="submitImport">确认导入</button>
+    <ImportPreviewSubmitButton :submit-import="submitImport" />
   </div>
 </template>

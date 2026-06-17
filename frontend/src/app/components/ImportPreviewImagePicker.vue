@@ -1,10 +1,8 @@
 <script setup>
-defineProps({
-  importForm: {
-    type: Object,
-    required: true,
-  },
-});
+import { setImportPreviewImages } from "../forms/importPreviewImageHandlers.js";
+import { importPreviewImagePickerProps } from "../props/importPreviewImagePickerProps.js";
+
+defineProps(importPreviewImagePickerProps);
 </script>
 
 <template>
@@ -16,7 +14,7 @@ defineProps({
       multiple
       webkitdirectory
       directory
-      @change="importForm.image_files = Array.from($event.target.files || [])"
+      @change="setImportPreviewImages(importForm, $event)"
     >
   </label>
 </template>

@@ -1,14 +1,7 @@
 <script setup>
-defineProps({
-  setAllRows: {
-    type: Function,
-    required: true,
-  },
-  setAllColumns: {
-    type: Function,
-    required: true,
-  },
-});
+import { importPreviewSelectionActionsProps } from "../props/importPreviewSelectionActionsProps.js";
+
+defineProps(importPreviewSelectionActionsProps);
 </script>
 
 <template>

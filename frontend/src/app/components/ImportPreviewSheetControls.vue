@@ -1,18 +1,7 @@
 <script setup>
-defineProps({
-  preview: {
-    type: Object,
-    required: true,
-  },
-  importForm: {
-    type: Object,
-    required: true,
-  },
-  changePreviewSheet: {
-    type: Function,
-    required: true,
-  },
-});
+import { importPreviewSheetControlsProps } from "../props/importPreviewSheetControlsProps.js";
+
+defineProps(importPreviewSheetControlsProps);
 </script>
 
 <template>
