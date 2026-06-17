@@ -16,7 +16,7 @@ import zipfile
 
 import httpx
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete, func, inspect, select, text
@@ -201,24 +201,6 @@ async def vue_batch_upload_word_images(
 ):
     result = await batch_upload_word_images_result(word_list_id, image_files, db)
     return {"ok": True, **result}
-
-
-@app.post("/lists/batch-images")
-async def batch_upload_word_images(
-    word_list_id: int = Form(...),
-    image_files: list[UploadFile] = File(...),
-    db: Session = Depends(get_db),
-):
-    result = await batch_upload_word_images_result(word_list_id, image_files, db)
-
-    return RedirectResponse(
-        url=(
-            f"/lists?image_matched={result['matched']}"
-            f"&image_unmatched={result['unmatched']}"
-            f"&image_failed={result['failed']}"
-        ),
-        status_code=303,
-    )
 
 
 @app.get("/booklearner/", response_class=HTMLResponse, include_in_schema=False)
@@ -1230,10 +1212,8 @@ def challenge_calendar_day(day: str = Query(...), db: Session = Depends(get_db))
 
 
 @app.post("/api/vue/lists/{word_list_id}/rename")
-@app.post("/lists/{word_list_id}/rename")
 def rename_word_list(
     word_list_id: int,
-    request: Request,
     name: str = Form(...),
     db: Session = Depends(get_db),
 ):
@@ -1243,9 +1223,7 @@ def rename_word_list(
     word_list.name = clean_list_name(name)
     db.add(word_list)
     db.commit()
-    if request.headers.get("x-requested-with") == "fetch":
-        return JSONResponse({"ok": True, "name": word_list.name})
-    return RedirectResponse(url=f"/lists/{word_list_id}", status_code=303)
+    return {"ok": True, "name": word_list.name}
 
 
 def delete_word_list_record(word_list_id: int, password: str, db: Session) -> None:
@@ -1286,21 +1264,6 @@ def vue_delete_word_list(
     return {"ok": True}
 
 
-@app.post("/lists/{word_list_id}/delete")
-def delete_word_list(
-    word_list_id: int,
-    password: str = Form(...),
-    db: Session = Depends(get_db),
-):
-    try:
-        delete_word_list_record(word_list_id, password, db)
-    except HTTPException as exc:
-        if exc.status_code == 403:
-            return RedirectResponse(url=f"/lists/{word_list_id}?delete_error=1", status_code=303)
-        raise
-    return RedirectResponse(url="/", status_code=303)
-
-
 @app.post("/api/vue/words/{word_id}/image")
 async def replace_word_image(
     word_id: int,
@@ -1338,7 +1301,6 @@ async def replace_word_image(
 
 
 @app.post("/api/vue/words/{word_id}/ai-image")
-@app.post("/words/{word_id}/ai-image")
 async def generate_ai_word_image(
     word_id: int,
     edit_token: str = Form(default=""),
@@ -1384,7 +1346,6 @@ async def generate_ai_word_image(
 
 
 @app.post("/api/vue/words/{word_id}/image-candidates")
-@app.post("/words/{word_id}/image-candidates")
 async def word_image_candidates(
     word_id: int,
     edit_token: str = Form(default=""),
@@ -1403,7 +1364,6 @@ async def word_image_candidates(
 
 
 @app.post("/api/vue/words/{word_id}/network-image")
-@app.post("/words/{word_id}/network-image")
 async def replace_word_image_from_network(
     word_id: int,
     edit_token: str = Form(default=""),
@@ -1437,7 +1397,6 @@ async def replace_word_image_from_network(
 
 
 @app.post("/api/vue/words/{word_id}/sync-image")
-@app.post("/words/{word_id}/sync-image")
 async def sync_word_image(word_id: int, db: Session = Depends(get_db)):
     word = db.get(Word, word_id)
     if not word:
@@ -1484,7 +1443,6 @@ async def sync_word_image_record(db: Session, word: Word) -> dict:
 
 
 @app.post("/api/vue/lists/{word_list_id}/sync-images/start")
-@app.post("/lists/{word_list_id}/sync-images/start")
 def start_list_image_sync(word_list_id: int, db: Session = Depends(get_db)):
     word_list = db.get(WordList, word_list_id)
     if not word_list:
@@ -1511,7 +1469,6 @@ def start_list_image_sync(word_list_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/vue/lists/{word_list_id}/sync-images/{job_id}")
-@app.get("/lists/{word_list_id}/sync-images/{job_id}")
 def list_image_sync_status(word_list_id: int, job_id: str):
     with IMAGE_SYNC_LOCK:
         job = IMAGE_SYNC_JOBS.get(job_id)
@@ -1529,7 +1486,6 @@ def word_image_view(word_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/api/vue/words/{word_id}/audio-options")
-@app.post("/words/{word_id}/audio-options")
 async def word_audio_options(
     word_id: int,
     accent: str = Form(...),
@@ -1558,7 +1514,6 @@ async def word_audio_options(
 
 
 @app.post("/api/vue/words/{word_id}/audio-choice")
-@app.post("/words/{word_id}/audio-choice")
 async def word_audio_choice(
     word_id: int,
     accent: str = Form(...),
@@ -1589,7 +1544,6 @@ async def word_audio_choice(
 
 
 @app.post("/api/vue/words/{word_id}/recorded-audio")
-@app.post("/words/{word_id}/recorded-audio")
 async def word_recorded_audio(
     word_id: int,
     accent: str = Form(...),

@@ -41,7 +41,6 @@ export function useListTools({ data, go, loadRoute }) {
     await fetchJson(`/api/vue/lists/${data.value.word_list.id}/rename`, {
       method: "POST",
       body: form,
-      headers: { "x-requested-with": "fetch" },
     });
   }
 
