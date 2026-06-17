@@ -1,5 +1,6 @@
 <script setup>
 import ListHeaderActions from "./ListHeaderActions.vue";
+import ListTitleEditor from "./ListTitleEditor.vue";
 
 defineProps({
   data: {
@@ -27,10 +28,7 @@ defineProps({
 
 <template>
   <section class="panel upload-panel">
-    <div>
-      <input v-model="data.word_list.name" class="list-title-input">
-      <p>{{ data.words.length }} 个单词</p>
-    </div>
+    <ListTitleEditor :word-list="data.word_list" :word-count="data.words.length" />
     <ListHeaderActions
       :delete-list-state="deleteListState"
       :rename-list="renameList"
