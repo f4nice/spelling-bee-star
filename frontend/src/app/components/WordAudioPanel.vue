@@ -1,4 +1,5 @@
 <script setup>
+import { wordAudioAccents } from "../wordAudioAccents.js";
 import WordAudioAccentList from "./WordAudioAccentList.vue";
 import WordRecorderPanel from "./WordRecorderPanel.vue";
 
@@ -40,18 +41,13 @@ defineProps({
     required: true,
   },
 });
-
-const accents = [
-  { key: "us", label: "美式发音", actionLabel: "朗读美式" },
-  { key: "gb", label: "英式发音", actionLabel: "朗读英式" },
-];
 </script>
 
 <template>
   <WordAudioAccentList
     :data="data"
     :audio-options="audioOptions"
-    :accents="accents"
+    :accents="wordAudioAccents"
     :play-audio="playAudio"
     :fetch-audio-options="fetchAudioOptions"
     :start-recording="startRecording"
