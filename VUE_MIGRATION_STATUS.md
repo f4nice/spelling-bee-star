@@ -32,26 +32,23 @@
   - `cbef214`：拆分 `UploadExcelForm.vue` 的 page/card 字段组件，并同步新 Vite chunk。
   - `ae6e42c`：拆分 `WordAudioOptionList.vue` 的候选项组件和 props helper。
   - `f80c5c3`：拆分导入预览工具栏 props、提交按钮和图片选择 helper。
+  - 待提交：拆分 `useImportPreviewForm.js` 的表单状态和 URL helper。
 
 ## 正在进行
 
-- 当前推进区域：导入预览表单 composable。
-- 当前已改到：`ImportPreviewToolbar.vue`、`ImportPreviewSheetControls.vue`、`ImportPreviewSelectionActions.vue`、`ImportPreviewImagePicker.vue`、`ImportPreviewSubmitButton.vue` 和对应 props/helper。
-- 当前轮状态：`f80c5c3` 已推送并部署；本地 build、`py_compile`、乱码扫描、线上 HTTP、临时 Playwright 控制台检查和服务日志验证均已通过。
+- 当前推进区域：BookLearner Hero。
+- 当前已改到：`useImportPreviewForm.js`、`importPreviewFormState.js`。
+- 当前轮状态：本地 build、`py_compile`、乱码扫描已通过；等待提交、推送、部署和线上验证。
 
 ## 下一批改哪里
 
 优先按这个顺序做，除非当前检查发现更高风险问题：
 
-1. `frontend/src/app/composables/useImportPreviewForm.js`
-   - 目标：把 URL 构造、表单初始化、批量选择逻辑继续拆成 helper。
-   - 方向：优先抽纯函数，降低 composable 内状态和派生逻辑混杂。
-
-2. `frontend/src/app/components/BooklearnerHero.vue`
+1. `frontend/src/app/components/BooklearnerHero.vue`
    - 目标：拆 BookLearner 顶部动作和空状态。
    - 方向：把操作按钮组或 quote list 状态拆成子组件。
 
-3. `frontend/src/app/shellContext.js`
+2. `frontend/src/app/shellContext.js`
    - 目标：检查 shell context 默认值、解析、刷新逻辑是否还可拆。
    - 方向：只抽清晰纯函数，不影响初始化时序。
 

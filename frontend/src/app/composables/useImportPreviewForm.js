@@ -1,35 +1,35 @@
 import { ref } from "vue";
-import { importPreviewSheetUrl } from "../appRouteUrls.js";
+import {
+  buildImportPreviewFormState,
+  buildPreviewSheetUrl,
+  createImportPreviewFormState,
+  getPreviewColumnSelection,
+  getPreviewRowSelection,
+} from "../forms/importPreviewFormState.js";
 
 export function useImportPreviewForm({ data, route, loadRoute }) {
-  const importForm = ref({ word_list_name: "", word_columns: [], selected_rows: [], selected_columns: [], image_files: [] });
+  const importForm = ref(createImportPreviewFormState());
 
   function resetImportForm() {
     const preview = data.value?.preview;
     if (!preview) return;
-    importForm.value = {
-      word_list_name: preview.word_list_name || "",
-      word_columns: [...(preview.inferred_word_columns || [preview.inferred_word_column].filter(Boolean))],
-      selected_rows: preview.rows.map((row) => row.index),
-      selected_columns: [...preview.columns],
-      image_files: [],
-    };
+    importForm.value = buildImportPreviewFormState(preview);
   }
 
   function setAllRows(checked) {
-    importForm.value.selected_rows = checked ? data.value.preview.rows.map((row) => row.index) : [];
+    importForm.value.selected_rows = getPreviewRowSelection(data.value.preview, checked);
   }
 
   function setAllColumns(checked) {
-    importForm.value.selected_columns = checked ? [...data.value.preview.columns] : [];
+    importForm.value.selected_columns = getPreviewColumnSelection(data.value.preview, checked);
   }
 
   async function changePreviewSheet(sheetName) {
-    const url = importPreviewSheetUrl({
+    const url = buildPreviewSheetUrl({
       previewId: route.value.params.id,
+      preview: data.value.preview,
+      importForm: importForm.value,
       sheetName,
-      wordListName: importForm.value.word_list_name || data.value.preview.word_list_name,
-      wordListId: data.value.preview.word_list_id,
     });
     history.replaceState(null, "", url);
     await loadRoute();
