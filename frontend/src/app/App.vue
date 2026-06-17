@@ -10,30 +10,18 @@ import { useWordDetail } from "./composables/useWordDetail.js";
 import { usePageContext } from "./pageContext.js";
 import { loadRouteData } from "./routeDataLoader.js";
 import { parseRoute, routeTitle as titleForRoute } from "./router.js";
-import { fetchJson } from "./utils.js";
+import { useShellContext } from "./shellContext.js";
 
 const route = ref(parseRoute());
 const data = ref(null);
 const loading = ref(false);
 const error = ref("");
-const shellContext = ref(readShellContext());
+const { shellContext, refreshShellContext } = useShellContext();
 
 const routeTitle = computed(() => titleForRoute(route.value, data.value));
 
 function setError(message) {
   error.value = message;
-}
-
-function readShellContext() {
-  const element = document.getElementById("speakeasy-shell-context");
-  if (!element?.textContent) {
-    return { appName: "SpeakEasy", dailyQuote: null, wrongWordCount: 0, sidebarChallenges: [] };
-  }
-  try {
-    return JSON.parse(element.textContent);
-  } catch {
-    return { appName: "SpeakEasy", dailyQuote: null, wrongWordCount: 0, sidebarChallenges: [] };
-  }
 }
 
 function go(path) {
@@ -87,14 +75,6 @@ async function loadRoute() {
   } finally {
     loading.value = false;
     refreshShellContext();
-  }
-}
-
-async function refreshShellContext() {
-  try {
-    shellContext.value = await fetchJson("/api/vue/shell");
-  } catch {
-    // Keep the server-rendered shell context if the lightweight refresh fails.
   }
 }
 
