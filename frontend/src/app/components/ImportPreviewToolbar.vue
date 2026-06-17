@@ -1,4 +1,8 @@
 <script setup>
+import ImportPreviewImagePicker from "./ImportPreviewImagePicker.vue";
+import ImportPreviewSelectionActions from "./ImportPreviewSelectionActions.vue";
+import ImportPreviewSheetControls from "./ImportPreviewSheetControls.vue";
+
 defineProps({
   preview: {
     type: Object,
@@ -29,36 +33,13 @@ defineProps({
 
 <template>
   <div class="import-toolbar" role="group" aria-label="导入预览工具栏">
-    <label>
-      单词表名称
-      <input v-model="importForm.word_list_name" required>
-    </label>
-    <label>
-      Sheet
-      <select
-        v-if="preview.sheet_names?.length > 1"
-        :value="preview.sheet_name"
-        @change="changePreviewSheet($event.target.value)"
-      >
-        <option v-for="name in preview.sheet_names" :key="name" :value="name">{{ name }}</option>
-      </select>
-      <input v-else :value="preview.sheet_name || 'Sheet1'" disabled>
-    </label>
-    <button type="button" class="secondary-button" @click="setAllRows(true)">全选行</button>
-    <button type="button" class="secondary-button" @click="setAllRows(false)">取消行</button>
-    <button type="button" class="secondary-button" @click="setAllColumns(true)">全选列</button>
-    <button type="button" class="secondary-button" @click="setAllColumns(false)">取消列</button>
-    <label>
-      批量图片
-      <input
-        type="file"
-        accept="image/*"
-        multiple
-        webkitdirectory
-        directory
-        @change="importForm.image_files = Array.from($event.target.files || [])"
-      >
-    </label>
+    <ImportPreviewSheetControls
+      :preview="preview"
+      :import-form="importForm"
+      :change-preview-sheet="changePreviewSheet"
+    />
+    <ImportPreviewSelectionActions :set-all-rows="setAllRows" :set-all-columns="setAllColumns" />
+    <ImportPreviewImagePicker :import-form="importForm" />
     <button type="button" @click="submitImport">确认导入</button>
   </div>
 </template>
