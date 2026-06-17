@@ -1,35 +1,26 @@
 import { ref } from "vue";
 import { saveRecordedAudio } from "../wordRecorderApi.js";
-import { canRecordAudio, createWordRecorderCapture } from "../wordRecorderCapture.js";
-import {
-  createReadyRecorderState,
-  createRecorderState,
-  createRecordingRecorderState,
-  createSavedRecorderState,
-  createUnsupportedRecorderState,
-} from "../wordRecorderState.js";
+import { createRecorderState, createSavedRecorderState } from "../wordRecorderState.js";
+import { prepareWordRecorderSession, stopWordRecorderSession } from "../wordRecorderSession.js";
 
 export function useWordRecorder({ data, loadRoute }) {
   const recorderState = ref(createRecorderState());
   let mediaRecorder = null;
 
   async function startRecording(accent) {
-    if (!canRecordAudio()) {
-      recorderState.value = createUnsupportedRecorderState(accent);
-      return;
-    }
-
-    mediaRecorder = await createWordRecorderCapture({
-      onReady: (recording) => {
-        recorderState.value = createReadyRecorderState(accent, recording);
+    const session = await prepareWordRecorderSession({
+      accent,
+      setReadyState: (state) => {
+        recorderState.value = state;
       },
     });
-    recorderState.value = createRecordingRecorderState(accent);
-    mediaRecorder.start();
+    recorderState.value = session.state;
+    mediaRecorder = session.recorder;
+    if (session.canStart) mediaRecorder.start();
   }
 
   function stopRecording() {
-    if (mediaRecorder?.state === "recording") mediaRecorder.stop();
+    stopWordRecorderSession(mediaRecorder);
   }
 
   async function saveRecording() {
