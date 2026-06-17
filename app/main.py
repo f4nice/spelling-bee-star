@@ -2020,9 +2020,34 @@ def page_context(request: Request, db: Session, extra: dict | None = None) -> di
         "wrong_word_count": wrong_word_count(db),
         "static_version": static_asset_version(),
     }
+    context["shell_context"] = serialize_shell_context(context)
     if extra:
         context.update(extra)
     return context
+
+
+def serialize_shell_context(context: dict[str, Any]) -> dict[str, Any]:
+    daily_quote = context.get("daily_quote")
+    return {
+        "appName": context.get("app_name", settings.app_name),
+        "dailyQuote": {
+            "content": daily_quote.content,
+            "author": daily_quote.author,
+        }
+        if daily_quote
+        else None,
+        "wrongWordCount": context.get("wrong_word_count", 0),
+        "sidebarChallenges": [
+            {
+                "id": item["list"].id,
+                "name": item["list"].name,
+                "completed": item["challenge"]["completed"],
+                "total": item["challenge"]["total"],
+                "percent": item["challenge"]["percent"],
+            }
+            for item in context.get("sidebar_challenges", [])
+        ],
+    }
 
 
 def cached_json(

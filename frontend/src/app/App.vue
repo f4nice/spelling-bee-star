@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from "vue";
+import AppShell from "./components/AppShell.vue";
 import VuePageHeader from "./components/VuePageHeader.vue";
 import VuePageOutlet from "./components/VuePageOutlet.vue";
 import { useBooklearner } from "./composables/useBooklearner.js";
@@ -14,11 +15,24 @@ const route = ref(parseRoute());
 const data = ref(null);
 const loading = ref(false);
 const error = ref("");
+const shellContext = readShellContext();
 
 const routeTitle = computed(() => titleForRoute(route.value, data.value));
 
 function setError(message) {
   error.value = message;
+}
+
+function readShellContext() {
+  const element = document.getElementById("speakeasy-shell-context");
+  if (!element?.textContent) {
+    return { appName: "SpeakEasy", dailyQuote: null, wrongWordCount: 0, sidebarChallenges: [] };
+  }
+  try {
+    return JSON.parse(element.textContent);
+  } catch {
+    return { appName: "SpeakEasy", dailyQuote: null, wrongWordCount: 0, sidebarChallenges: [] };
+  }
 }
 
 function go(path) {
@@ -90,8 +104,10 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <VuePageHeader :route-title="routeTitle" :go="go" />
-  <div v-if="loading" class="empty-state">正在加载...</div>
-  <div v-else-if="error" class="error-box">{{ error }}</div>
-  <VuePageOutlet v-else :ctx="pageContext" />
+  <AppShell :route="route" :route-title="routeTitle" :shell="shellContext" :go="go">
+    <VuePageHeader :route-title="routeTitle" :go="go" />
+    <div v-if="loading" class="empty-state">正在加载...</div>
+    <div v-else-if="error" class="error-box">{{ error }}</div>
+    <VuePageOutlet v-else :ctx="pageContext" />
+  </AppShell>
 </template>

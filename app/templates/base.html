@@ -10,54 +10,8 @@
     {% block extra_head %}{% endblock %}
   </head>
   <body>
-    <input class="shell-sidebar-toggle" id="shellSidebarToggle" type="checkbox" aria-hidden="true">
-    <header class="app-topbar">
-      <a class="app-brand" href="/">
-        <span class="brand-mark" aria-hidden="true">
-          <img src="{{ url_for('static', path='/speakeasy-mouth-logo.svg') }}" alt="">
-        </span>
-        <span>{{ app_name }}</span>
-      </a>
-      <label class="menu-toggle" for="shellSidebarToggle" aria-label="缩放页面">☰</label>
-      <div class="daily-quote">
-        {% if daily_quote %}
-          {{ daily_quote.content }}{% if daily_quote.author %}<span> - {{ daily_quote.author }}</span>{% endif %}
-        {% else %}
-          Every word is a new window.
-        {% endif %}
-      </div>
-    </header>
-
-    <div class="app-layout">
-      <aside class="sidebar">
-        <nav class="side-nav">
-          <a class="{% if request.url.path == '/' %}active{% endif %}" href="/">首页</a>
-          <a class="{% if request.url.path.startswith('/lists') %}active{% endif %}" href="/lists">我的单词表</a>
-          <a class="{% if request.url.path.startswith('/newspaper') %}active{% endif %}" href="/newspaper">英文小报</a>
-          <a class="{% if request.url.path.startswith('/booklearner') %}active{% endif %}" href="/booklearner">好词好句</a>
-          <a class="{% if request.url.path == '/wrong-words' %}active{% endif %}" href="/wrong-words">
-            我的生词本 <span class="nav-count">{{ wrong_word_count }}</span>
-          </a>
-
-          <div class="challenge-sidebar">
-            <div class="challenge-sidebar-title">挑战进度</div>
-            {% for item in sidebar_challenges %}
-              <a class="challenge-progress-link" href="/challenge/{{ item.list.id }}">
-                <strong>{{ item.list.name }}</strong>
-                <span>{{ item.challenge.completed }} / {{ item.challenge.total }}</span>
-                <div class="sidebar-progress"><i style="width: {{ item.challenge.percent }}%"></i></div>
-              </a>
-            {% else %}
-              <p>还没有可挑战的单词表。</p>
-            {% endfor %}
-          </div>
-        </nav>
-      </aside>
-      <main class="shell">
-        {% block content %}{% endblock %}
-      </main>
-    </div>
-
+    <script id="speakeasy-shell-context" type="application/json">{{ shell_context | tojson }}</script>
+    {% block content %}{% endblock %}
     {% block extra_scripts %}{% endblock %}
   </body>
 </html>
