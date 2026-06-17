@@ -210,7 +210,7 @@ def booklearner_index_slash():
 
 @app.get("/好词好句", include_in_schema=False)
 @app.get("/好词好句/", include_in_schema=False)
-def good_words_legacy_index():
+def good_words_redirect_index():
     return RedirectResponse(url="/booklearner", status_code=301)
 
 
@@ -1098,7 +1098,7 @@ def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
 
     correct = stat.correct_count if stat else sum(item["correct_count"] for item in words)
     wrong = stat.wrong_count if stat else sum(item["wrong_count"] for item in words)
-    legacy_note = ""
+    recovery_note = ""
     if not words and stat and (stat.correct_count or stat.wrong_count):
         recovered_wrong_words = []
         wrong_rows = db.execute(
@@ -1183,7 +1183,7 @@ def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
 
         words.extend(recovered_correct_words[: stat.correct_count])
         words.extend(recovered_wrong_words)
-        legacy_note = (
+        recovery_note = (
             "\u8fd9\u4e00\u5929\u7684\u65e7\u6311\u6218\u8bb0\u5f55\u53ea\u4fdd\u5b58\u4e86\u603b\u6570\uff0c"
             "\u7b54\u5bf9\u5355\u8bcd\u5df2\u6309\u5f53\u65f6\u6311\u6218\u8fdb\u5ea6\u5c3d\u91cf\u6062\u590d\uff0c"
             "\u9519\u8bef\u5355\u8bcd\u5df2\u4ece\u5f53\u65e5\u751f\u8bcd\u672c\u6062\u590d\uff1b"
@@ -1196,7 +1196,7 @@ def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
         "wrong": wrong,
         "words": words,
         "has_detail_rows": bool(detail_rows),
-        "legacy_note": legacy_note,
+        "recovery_note": recovery_note,
     }
 
 
@@ -1325,7 +1325,7 @@ async def generate_ai_word_image(
         detail = str(exc)
         if "not configured" in detail:
             raise HTTPException(status_code=400, detail=detail) from exc
-        raise HTTPException(status_code=502, detail=f"AI 鐢熷浘澶辫触: {detail}") from exc
+        raise HTTPException(status_code=502, detail=f"AI 生图失败: {detail}") from exc
     except httpx.HTTPStatusError as exc:
         detail = exc.response.text[:400] if exc.response is not None else str(exc)
         raise HTTPException(status_code=502, detail=f"AI 生图失败: {detail}") from exc
