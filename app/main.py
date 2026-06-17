@@ -1584,81 +1584,6 @@ async def word_recorded_audio(
     return {"ok": True, "word": word.word, "accent": accent, "audio_url": audio_url}
 
 
-@app.post("/words/{word_id}/english-definition")
-def update_english_definition(
-    word_id: int,
-    english_definition: str = Form(default=""),
-    edit_token: str = Form(default=""),
-    db: Session = Depends(get_db),
-):
-    require_word_write_access(edit_token)
-    word = db.get(Word, word_id)
-    if not word:
-        raise HTTPException(status_code=404, detail="Word not found")
-    word.english_definition = english_definition.strip() or None
-    word.english_definition_locked = True
-    word.enrichment_error = None
-    db.add(word)
-    db.commit()
-    return RedirectResponse(url=f"/words/{word_id}?edit=1", status_code=303)
-
-
-@app.post("/words/{word_id}/alternate-spellings")
-def update_alternate_spellings(
-    word_id: int,
-    alternate_spellings: str = Form(default=""),
-    edit_token: str = Form(default=""),
-    db: Session = Depends(get_db),
-):
-    require_word_write_access(edit_token)
-    word = db.get(Word, word_id)
-    if not word:
-        raise HTTPException(status_code=404, detail="Word not found")
-    word.alternate_spellings = alternate_spellings.strip() or None
-    word.enrichment_error = None
-    db.add(word)
-    db.commit()
-    return RedirectResponse(url=f"/words/{word_id}?edit=1", status_code=303)
-
-
-@app.post("/words/{word_id}/chinese-definition")
-def update_chinese_definition(
-    word_id: int,
-    chinese_definition: str = Form(default=""),
-    edit_token: str = Form(default=""),
-    db: Session = Depends(get_db),
-):
-    require_word_write_access(edit_token)
-    word = db.get(Word, word_id)
-    if not word:
-        raise HTTPException(status_code=404, detail="Word not found")
-    word.chinese_definition = chinese_definition.strip() or None
-    word.chinese_definition_locked = True
-    word.enrichment_error = None
-    db.add(word)
-    db.commit()
-    return RedirectResponse(url=f"/words/{word_id}?edit=1", status_code=303)
-
-
-@app.post("/words/{word_id}/english-example")
-def update_english_example(
-    word_id: int,
-    english_example: str = Form(default=""),
-    edit_token: str = Form(default=""),
-    db: Session = Depends(get_db),
-):
-    require_word_write_access(edit_token)
-    word = db.get(Word, word_id)
-    if not word:
-        raise HTTPException(status_code=404, detail="Word not found")
-    word.english_example = english_example.strip() or None
-    word.english_example_locked = True
-    word.enrichment_error = None
-    db.add(word)
-    db.commit()
-    return RedirectResponse(url=f"/words/{word_id}?edit=1", status_code=303)
-
-
 @app.get("/words/{word_id}", response_class=HTMLResponse)
 def word_detail(
     word_id: int,
@@ -2696,20 +2621,6 @@ async def enrich_word_ids(word_ids: list[int]) -> None:
                 await enrich_word(db, word)
     finally:
         db.close()
-
-
-@app.post("/words/{word_id}/refresh")
-async def refresh_word(
-    word_id: int,
-    edit_token: str = Form(default=""),
-    db: Session = Depends(get_db),
-):
-    require_word_write_access(edit_token)
-    word = db.get(Word, word_id)
-    if not word:
-        raise HTTPException(status_code=404, detail="Word not found")
-    await enrich_word(db, word)
-    return RedirectResponse(url=f"/words/{word_id}?edit=1", status_code=303)
 
 
 @app.get("/tts")
