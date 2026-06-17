@@ -13,7 +13,7 @@ export default defineConfig({
       },
       output: {
         entryFileNames: (chunk) => (chunk.name === 'app' ? 'speakeasy-app.js' : 'challenge-app.js'),
-        chunkFileNames: '[name].js',
+        chunkFileNames: '[name]-[hash].js',
         assetFileNames: '[name][extname]',
       },
     },
