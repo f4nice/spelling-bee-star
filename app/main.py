@@ -88,6 +88,10 @@ app.mount("/好词好句/assets", StaticFiles(directory=GOOD_WORDS_DIR / "public
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
+def vue_shell(request: Request, db: Session, vue_path: str = ""):
+    return templates.TemplateResponse("vue_app.html", page_context(request, db, {"vue_path": vue_path}))
+
+
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
     return RedirectResponse(url="/static/speakeasy-mouth-logo.svg", status_code=302)
@@ -108,102 +112,35 @@ def startup() -> None:
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, db: Session = Depends(get_db)):
-    word_lists = regular_word_lists(db)
-    cards = [word_list_card(db, word_list) for word_list in word_lists]
-    calendar = challenge_calendar(db)
-    today = date.today()
-    today_stat = db.scalar(select(ChallengeDailyStat).where(ChallengeDailyStat.stat_date == today))
-    today_wrong_list = get_wrong_word_list(db, today)
-    today_wrong_count = db.scalar(select(func.count(WrongWord.id)).where(WrongWord.wrong_date == today)) or 0
-    today_wrong_words = db.execute(
-        select(WrongWord, Word)
-        .join(Word, Word.id == WrongWord.word_id)
-        .where(WrongWord.wrong_date == today)
-        .order_by(WrongWord.updated_at.desc(), WrongWord.id.desc())
-        .limit(12)
-    ).all()
-    total_words = db.scalar(select(func.count(Word.id))) or 0
-    newspaper = cached_json(
-        db,
-        cache_key=f"chinadaily:list:{today.isoformat()}:3",
-        ttl=timedelta(minutes=60),
-        producer=lambda: load_chinadaily_articles(limit_per_feed=3),
-        fallback={"sections": []},
-    )
-    return templates.TemplateResponse(
-        "index.html",
-        page_context(
-            request,
-            db,
-            {
-                "cards": cards,
-                "word_lists": word_lists,
-                "challenge_calendar": calendar,
-                "featured_cards": cards[:4],
-                "home_stats": {
-                    "word_lists": len(word_lists),
-                    "words": total_words,
-                    "wrong_words": wrong_word_count(db),
-                    "today_correct": today_stat.correct_count if today_stat else 0,
-                    "today_wrong": today_stat.wrong_count if today_stat else 0,
-                    "today_total": (today_stat.correct_count + today_stat.wrong_count) if today_stat else 0,
-                    "today_wrong_count": today_wrong_count,
-                    "today_wrong_list": today_wrong_list,
-                    "today_wrong_words": [
-                        {"word": word, "wrong_count": wrong_word.wrong_count}
-                        for wrong_word, word in today_wrong_words
-                    ],
-                    "today": today.isoformat(),
-                },
-                "home_newspaper": newspaper,
-                "home_quotes": list_featured_good_words_quotes(limit=4),
-            },
-        ),
-    )
+    return vue_shell(request, db)
 
 
 @app.get("/booklearner", response_class=HTMLResponse)
 def good_words_index(request: Request, db: Session = Depends(get_db)):
-    return templates.TemplateResponse("booklearner.html", page_context(request, db))
+    return vue_shell(request, db, "booklearner")
 
 
 @app.get("/booklearner/upload", response_class=HTMLResponse)
 def good_words_upload_page(request: Request, db: Session = Depends(get_db)):
-    return templates.TemplateResponse(
-        "booklearner.html",
-        page_context(request, db, {"booklearner_upload_page": True}),
-    )
+    return vue_shell(request, db, "booklearner/upload")
 
 
 @app.get("/booklearner/quotes", response_class=HTMLResponse)
 def good_words_quotes_page(request: Request, db: Session = Depends(get_db)):
-    return templates.TemplateResponse(
-        "booklearner.html",
-        page_context(request, db, {"booklearner_quotes_only": True}),
-    )
+    return vue_shell(request, db, "booklearner/quotes")
 
 
 @app.get("/booklearner/detail/{analysis_id}", response_class=HTMLResponse)
 def good_words_detail_page(analysis_id: int, request: Request, db: Session = Depends(get_db)):
     item = get_good_words_analysis(analysis_id)
     if not item:
-        raise HTTPException(status_code=404, detail="记录不存在，或 MySQL 未启用。")
-    return templates.TemplateResponse(
-        "booklearner.html",
-        page_context(request, db, {"booklearner_detail_id": analysis_id}),
-    )
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    return vue_shell(request, db, f"booklearner/detail/{analysis_id}")
 
 
 @app.get("/newspaper", response_class=HTMLResponse)
 def newspaper_page(request: Request, db: Session = Depends(get_db)):
-    newspaper = cached_json(
-        db,
-        cache_key=f"chinadaily:list:{date.today().isoformat()}:6",
-        ttl=timedelta(minutes=45),
-        producer=lambda: load_chinadaily_articles(limit_per_feed=6),
-        fallback={"sections": []},
-    )
-    return templates.TemplateResponse("newspaper.html", page_context(request, db, {"newspaper": newspaper}))
+    return vue_shell(request, db, "newspaper")
 
 
 @app.get("/newspaper/{section_key}/{article_index}", response_class=HTMLResponse)
@@ -214,7 +151,7 @@ def newspaper_article_page(
     db: Session = Depends(get_db),
 ):
     try:
-        article_context = cached_json(
+        cached_json(
             db,
             cache_key=f"chinadaily:detail:{date.today().isoformat()}:{section_key}:{article_index}",
             ttl=timedelta(hours=6),
@@ -222,10 +159,7 @@ def newspaper_article_page(
         )
     except (ValueError, IndexError):
         raise HTTPException(status_code=404, detail="Article not found")
-    return templates.TemplateResponse(
-        "newspaper_detail.html",
-        page_context(request, db, article_context),
-    )
+    return vue_shell(request, db, f"newspaper/{section_key}/{article_index}")
 
 
 @app.get("/lists", response_class=HTMLResponse)
@@ -236,27 +170,7 @@ def word_lists_page(
     image_failed: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
-    word_lists = regular_word_lists(db)
-    cards = [word_list_card(db, word_list) for word_list in word_lists]
-    image_upload_result = None
-    if image_matched or image_unmatched or image_failed:
-        image_upload_result = {
-            "matched": image_matched,
-            "unmatched": image_unmatched,
-            "failed": image_failed,
-        }
-    return templates.TemplateResponse(
-        "word_lists.html",
-        page_context(
-            request,
-            db,
-            {
-                "cards": cards,
-                "word_lists": word_lists,
-                "image_upload_result": image_upload_result,
-            },
-        ),
-    )
+    return vue_shell(request, db, "lists")
 
 
 @app.post("/lists/batch-images")
@@ -284,7 +198,7 @@ async def batch_upload_word_images(
 
 @app.get("/booklearner/", response_class=HTMLResponse, include_in_schema=False)
 def booklearner_index_slash():
-    return good_words_index()
+    return RedirectResponse(url="/booklearner", status_code=301)
 
 
 @app.get("/好词好句", include_in_schema=False)
@@ -494,8 +408,7 @@ async def good_words_create_word_list(request: Request, db: Session = Depends(ge
 
 @app.get("/upload", response_class=HTMLResponse)
 def upload_page(request: Request, db: Session = Depends(get_db)):
-    word_lists = regular_word_lists(db)
-    return templates.TemplateResponse("upload.html", page_context(request, db, {"word_lists": word_lists}))
+    return vue_shell(request, db, "upload")
 
 
 @app.get("/lists/{word_list_id}", response_class=HTMLResponse)
@@ -508,29 +421,7 @@ def list_detail(
     word_list = db.get(WordList, word_list_id)
     if not word_list:
         raise HTTPException(status_code=404, detail="Word list not found")
-    words = db.scalars(
-        select(Word)
-        .join(WordListItem, WordListItem.word_id == Word.id)
-        .where(WordListItem.word_list_id == word_list_id)
-        .order_by(Word.word.asc())
-    ).all()
-    word_ids = [word.id for word in words]
-    challenge_word_stats = challenge_counts_for_words(db, word_ids)
-    pending_image_words = [{"id": word.id, "word": word.word} for word in words if needs_image_sync(word)]
-    return templates.TemplateResponse(
-        "list_detail.html",
-        page_context(
-            request,
-            db,
-            {
-                "word_list": word_list,
-                "words": words,
-                "challenge_word_stats": challenge_word_stats,
-                "pending_image_words": pending_image_words,
-                "delete_error": bool(delete_error),
-            },
-        ),
-    )
+    return vue_shell(request, db, f"lists/{word_list_id}")
 
 
 @app.get("/challenge/{word_list_id}", response_class=HTMLResponse)
@@ -547,77 +438,7 @@ def challenge_page(
     word_list = db.get(WordList, word_list_id)
     if not word_list:
         raise HTTPException(status_code=404, detail="Word list not found")
-    wrong_date_value = parse_wrong_date(wrong_date)
-
-    words = get_words_for_list(db, word_list_id)
-    progress = get_or_create_challenge_progress(db, word_list_id)
-    total = len(words)
-    progress.completed_count = min(progress.completed_count, total)
-    progress.current_index = min(progress.current_index, max(total - 1, 0))
-    db.add(progress)
-    db.commit()
-
-    start_count = progress.completed_count if start_count is None else start_count
-    start_count = min(max(start_count, 0), total)
-    daily_count = min(max(daily_count, 1), max(total, 1))
-    daily_target = min(total, start_count + daily_count)
-    daily_total = max(0, daily_target - start_count)
-    session_correct = max(session_correct, 0)
-    session_wrong = max(session_wrong, 0)
-    session_answered = min(session_correct + session_wrong, daily_total) if daily_total else 0
-    daily_done = session_answered
-    daily_remaining = max(0, daily_total - session_answered)
-    is_daily_complete = bool(total and daily_total and session_answered >= daily_total)
-
-    current_word = None if is_daily_complete or progress.completed_count >= total or not words else words[progress.current_index]
-    challenge_audio_sources = None
-    challenge_image_url = None
-    masked_example = None
-    if current_word:
-        challenge_audio_sources = {
-            "us": f"/words/{current_word.id}/audio?accent=us&v=2",
-            "gb": f"/words/{current_word.id}/audio?accent=gb&v=2",
-        }
-        challenge_image_url = f"/words/{current_word.id}/image-view" if current_word.image_url else None
-        masked_example = mask_word_in_text(
-            current_word.english_example,
-            current_word.word,
-            current_word.alternate_spellings,
-        )
-    state = challenge_state(db, word_list)
-    today_challenge = {
-        "daily_count": daily_count,
-        "start_count": start_count,
-        "target": daily_target,
-        "done": daily_done,
-        "total": daily_total,
-        "percent": round((daily_done / daily_total) * 100) if daily_total else 100,
-        "is_complete": is_daily_complete,
-        "all_complete": bool(total and progress.completed_count >= total),
-        "correct": session_correct,
-        "wrong": session_wrong,
-        "answered": session_answered,
-        "remaining": daily_remaining,
-        "accuracy": round((session_correct / session_answered) * 100) if session_answered else 0,
-    }
-    return templates.TemplateResponse(
-        "challenge.html",
-        page_context(
-            request,
-            db,
-            {
-                "word_list": word_list,
-                "current_word": current_word,
-                "progress": progress,
-                "challenge": state,
-                "today_challenge": today_challenge,
-                "challenge_audio_sources": challenge_audio_sources,
-                "challenge_image_url": challenge_image_url,
-                "masked_example": masked_example,
-                "wrong_date": wrong_date_value,
-            },
-        ),
-    )
+    return vue_shell(request, db, f"challenge/{word_list_id}")
 
 
 @app.get("/challenge-vue/{word_list_id}", response_class=HTMLResponse)
@@ -625,16 +446,13 @@ def challenge_vue_page(word_list_id: int, request: Request, db: Session = Depend
     word_list = db.get(WordList, word_list_id)
     if not word_list:
         raise HTTPException(status_code=404, detail="Word list not found")
-    return templates.TemplateResponse(
-        "challenge_vue.html",
-        page_context(request, db, {"word_list_id": word_list_id}),
-    )
+    return vue_shell(request, db, f"challenge/{word_list_id}")
 
 
 @app.get("/vue", response_class=HTMLResponse)
 @app.get("/vue/{vue_path:path}", response_class=HTMLResponse)
 def vue_app_page(vue_path: str = "", request: Request = None, db: Session = Depends(get_db)):
-    return templates.TemplateResponse("vue_app.html", page_context(request, db, {"vue_path": vue_path}))
+    return vue_shell(request, db, vue_path)
 
 
 @app.get("/api/vue/home")
@@ -1000,66 +818,17 @@ def challenge_answer_api(
 
 
 @app.get("/wrong-words", response_class=HTMLResponse)
-def wrong_words_page(
-    request: Request,
-    wrong_date: str | None = Query(default=None, alias="date"),
-    db: Session = Depends(get_db),
-):
-    wrong_date_value = parse_wrong_date(wrong_date)
-    wrong_words_query = (
-        select(WrongWord, Word)
-        .join(Word, Word.id == WrongWord.word_id)
-        .order_by(WrongWord.wrong_date.desc(), WrongWord.updated_at.desc(), WrongWord.id.desc())
-    )
-    if wrong_date_value:
-        wrong_words_query = wrong_words_query.where(WrongWord.wrong_date == wrong_date_value)
-    wrong_words = db.execute(wrong_words_query).all()
-    groups_by_date: dict[date, dict] = {}
-    for wrong_word, word in wrong_words:
-        wrong_date_value = wrong_word.wrong_date or date.today()
-        word_list = get_or_create_wrong_word_list(db, wrong_date_value)
-        existing_item = db.scalar(
-            select(WordListItem).where(
-                WordListItem.word_list_id == word_list.id,
-                WordListItem.word_id == word.id,
-            )
-        )
-        if not existing_item:
-            db.add(WordListItem(word_list_id=word_list.id, word_id=word.id))
-        group = groups_by_date.setdefault(
-            wrong_date_value,
-            {
-                "date": wrong_date_value,
-                "word_list": word_list,
-                "items": [],
-                "count": 0,
-                "wrong_total": 0,
-                "cover_word": word,
-            },
-        )
-        group["items"].append((wrong_word, word))
-        group["count"] += 1
-        group["wrong_total"] += wrong_word.wrong_count
-        if not group["cover_word"].image_url and word.image_url:
-            group["cover_word"] = word
-    if wrong_words:
-        db.commit()
-    wrong_groups = list(groups_by_date.values())
-    return templates.TemplateResponse(
-        "wrong_words.html",
-        page_context(request, db, {"wrong_groups": wrong_groups}),
-    )
+def wrong_words_page(request: Request, db: Session = Depends(get_db)):
+    ensure_wrong_word_lists(db)
+    return vue_shell(request, db, "wrong-words")
 
 
 @app.get("/challenge-calendar/{day}", response_class=HTMLResponse)
 def challenge_calendar_detail_page(day: str, request: Request, db: Session = Depends(get_db)):
     challenge_date = parse_wrong_date(day)
     if not challenge_date:
-        raise HTTPException(status_code=404, detail="日期不存在")
-    return templates.TemplateResponse(
-        "challenge_day.html",
-        page_context(request, db, {"challenge_day": challenge_calendar_day_payload(db, challenge_date)}),
-    )
+        raise HTTPException(status_code=404, detail="Date not found")
+    return vue_shell(request, db, f"challenge-calendar/{day}")
 
 
 @app.post("/challenge/{word_list_id}/answer")
@@ -1896,29 +1665,7 @@ def word_detail(
         word.enrichment_error = cleaned_error
         db.add(word)
         db.commit()
-        db.refresh(word)
-    encoded_word = quote_plus(word.word)
-    audio_sources = {
-        "us": word.american_audio_url if is_local_audio_url(word.american_audio_url) else f"/tts?word={encoded_word}&accent=us&v=2",
-        "gb": word.british_audio_url if is_local_audio_url(word.british_audio_url) else f"/tts?word={encoded_word}&accent=gb&v=2",
-    }
-    word_nav = word_navigation_context(db, word.id, list_id)
-    return templates.TemplateResponse(
-        "detail.html",
-        page_context(
-            request,
-            db,
-            {
-                "word": word,
-                "audio_sources": audio_sources,
-                "can_edit": edit == 1,
-                "word_index": word_nav["index"],
-                "detail_list_id": word_nav["list_id"],
-                "previous_word_id": word_nav["previous_word_id"],
-                "next_word_id": word_nav["next_word_id"],
-            },
-        ),
-    )
+    return vue_shell(request, db, f"words/{word_id}")
 
 
 @app.post("/upload")
@@ -1942,10 +1689,7 @@ async def upload_excel(
     preview_path(preview_id).write_text(json.dumps(preview, ensure_ascii=False), encoding="utf-8")
     preview_excel_path(preview_id).write_bytes(content)
 
-    return templates.TemplateResponse(
-        "preview.html",
-        page_context(request, db, {"preview_id": preview_id, "preview": preview}),
-    )
+    return RedirectResponse(url=f"/upload/preview/{preview_id}", status_code=303)
 
 
 @app.get("/upload/preview/{preview_id}", response_class=HTMLResponse)
@@ -1974,10 +1718,7 @@ def upload_preview_sheet(
     )
     path.write_text(json.dumps(preview, ensure_ascii=False), encoding="utf-8")
 
-    return templates.TemplateResponse(
-        "preview.html",
-        page_context(request, db, {"preview_id": preview_id, "preview": preview}),
-    )
+    return vue_shell(request, db, f"upload/preview/{preview_id}")
 
 
 @app.post("/import-preview")
