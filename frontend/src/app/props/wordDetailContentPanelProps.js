@@ -1,17 +1,8 @@
+import { wordAudioPanelProps } from "./wordAudioPanelProps.js";
+
 export const wordDetailContentPanelProps = {
-  data: {
-    type: Object,
-    required: true,
-  },
+  ...wordAudioPanelProps,
   wordEdit: {
-    type: Object,
-    required: true,
-  },
-  audioOptions: {
-    type: Object,
-    required: true,
-  },
-  recorderState: {
     type: Object,
     required: true,
   },
@@ -24,30 +15,6 @@ export const wordDetailContentPanelProps = {
     required: true,
   },
   refreshWord: {
-    type: Function,
-    required: true,
-  },
-  playAudio: {
-    type: Function,
-    required: true,
-  },
-  fetchAudioOptions: {
-    type: Function,
-    required: true,
-  },
-  startRecording: {
-    type: Function,
-    required: true,
-  },
-  chooseAudio: {
-    type: Function,
-    required: true,
-  },
-  stopRecording: {
-    type: Function,
-    required: true,
-  },
-  saveRecording: {
     type: Function,
     required: true,
   },
