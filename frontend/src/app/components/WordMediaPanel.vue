@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from "vue";
+import { useSelectedWordImage } from "../composables/useSelectedWordImage.js";
 import WordImageCandidateGrid from "./WordImageCandidateGrid.vue";
 import WordImageFrame from "./WordImageFrame.vue";
 import WordImageTools from "./WordImageTools.vue";
@@ -31,13 +31,9 @@ const props = defineProps({
   },
 });
 
-const selectedImageFile = ref(null);
-
-async function saveSelectedImage() {
-  if (!selectedImageFile.value) return;
-  await props.uploadWordImage(selectedImageFile.value);
-  selectedImageFile.value = null;
-}
+const { selectedImageFile, selectImageFile, saveSelectedImage } = useSelectedWordImage({
+  uploadWordImage: props.uploadWordImage,
+});
 </script>
 
 <template>
@@ -49,7 +45,7 @@ async function saveSelectedImage() {
       :selected-image-file="selectedImageFile"
       :find-images="findImages"
       :save-selected-image="saveSelectedImage"
-      @select-image="selectedImageFile = $event"
+      @select-image="selectImageFile"
     />
 
     <WordImageCandidateGrid
