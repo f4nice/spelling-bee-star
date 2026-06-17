@@ -2,18 +2,16 @@ from __future__ import annotations
 
 import argparse
 import json
-import mimetypes
 import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, urlparse
 
 from booklearner.analyzer import analyze_query, analyze_text, suggest_books
 from booklearner.storage import get_analysis, get_storage_status, list_recent_analyses, save_analysis
 
 
 ROOT = Path(__file__).resolve().parent
-PUBLIC_DIR = ROOT / "public"
 
 
 class BookLearnerHandler(BaseHTTPRequestHandler):
@@ -60,7 +58,17 @@ class BookLearnerHandler(BaseHTTPRequestHandler):
                 self._json({"error": f"分析失败：{exc}"}, status=500)
             return
 
-        self._serve_static(parsed.path)
+        if parsed.path in {"/", "/index.html"}:
+            self._json(
+                {
+                    "ok": True,
+                    "service": "BookLearner API",
+                    "message": "独立旧页面已退役，请在主应用打开 /booklearner 使用 Vue 页面。",
+                }
+            )
+            return
+
+        self._json({"error": "页面不存在。"}, status=404)
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
@@ -100,38 +108,15 @@ class BookLearnerHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _serve_static(self, raw_path: str) -> None:
-        path = unquote(raw_path)
-        if path == "/":
-            path = "/index.html"
-
-        target = (PUBLIC_DIR / path.lstrip("/")).resolve()
-        if not str(target).startswith(str(PUBLIC_DIR.resolve())) or not target.is_file():
-            self._json({"error": "页面不存在。"}, status=404)
-            return
-
-        content = target.read_bytes()
-        mime_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
-        if target.suffix == ".js":
-            mime_type = "application/javascript"
-        elif target.suffix == ".css":
-            mime_type = "text/css"
-
-        self.send_response(200)
-        self.send_header("Content-Type", f"{mime_type}; charset=utf-8")
-        self.send_header("Content-Length", str(len(content)))
-        self.end_headers()
-        self.wfile.write(content)
-
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the BookLearner local web app.")
+    parser = argparse.ArgumentParser(description="Run the BookLearner local API server.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", default=8765, type=int)
     args = parser.parse_args()
 
     server = ThreadingHTTPServer((args.host, args.port), BookLearnerHandler)
-    print(f"BookLearner running at http://{args.host}:{args.port}")
+    print(f"BookLearner API running at http://{args.host}:{args.port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

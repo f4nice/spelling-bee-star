@@ -83,8 +83,6 @@ BOOK_COVER_DIR.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title=settings.app_name)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
-app.mount("/booklearner/assets", StaticFiles(directory=GOOD_WORDS_DIR / "public"), name="booklearner_assets")
-app.mount("/好词好句/assets", StaticFiles(directory=GOOD_WORDS_DIR / "public"), name="good_words_assets")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 

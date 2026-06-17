@@ -1,39 +1,53 @@
 # BookLearner
 
-BookLearner 是一个本地运行的读书学习工具。输入书名或作者名后，它会优先检索可公开访问的公版全文，自动整理：
+BookLearner 是 SpeakEasy / spelling-bee-star 中的“好词好句”阅读学习模块。主项目已经把它接入 Vue 页面，常规使用请启动根目录应用后打开：
 
-- 经典短句
-- 难点单词
-- 单词释义
-- 原文例句
-- 阅读关注点
+```text
+http://127.0.0.1:8000/booklearner
+```
 
-如果没有找到可分析的公版全文，系统只显示书籍元信息和下一步建议，避免编造语录。
+兼容入口也会跳转到同一个 Vue 页面：
 
-## 运行
+```text
+http://127.0.0.1:8000/好词好句
+```
+
+## 本地 API
+
+`好词好句/app.py` 现在只保留独立 API 服务，旧的 vanilla JS 静态页面已经退役，避免和主应用 Vue 入口重复维护。
 
 ```powershell
 py app.py
 ```
 
-然后打开：
+默认地址：
 
 ```text
 http://127.0.0.1:8765
 ```
 
+可用接口包括：
+
+- `GET /api/health`
+- `GET /api/storage`
+- `GET /api/history`
+- `GET /api/history/{id}`
+- `GET /api/suggest?q=...`
+- `GET /api/analyze?q=...`
+- `POST /api/analyze-text`
+
 ## 数据来源
 
-- Gutendex / Project Gutenberg：用于查找公版全文。
-- Standard Ebooks：用于补充可公开访问的公版全文。
-- Open Library：用于在没有全文时补充书籍元信息。
-- Internet Archive：用于补充书籍元信息和搜索提示。
-- Google Books：用于补充书籍元信息和搜索提示；如果接口限流会自动跳过。
-- Free Dictionary API：用于补充英文单词释义；网络不可用时会自动降级。
+- Gutendex / Project Gutenberg：查找可公开访问的公版全文。
+- Standard Ebooks：补充可公开访问的公版全文。
+- Open Library：在没有全文时补充书籍元信息。
+- Internet Archive：补充书籍元信息和搜索提示。
+- Google Books：补充书籍元信息和搜索提示；如果接口限流会自动跳过。
+- Free Dictionary API：补充英文单词释义；网络不可用时会自动降级。
 
 ## MySQL
 
-MySQL 用于保存每次分析的学习记录。当前项目在未配置 MySQL 时仍可正常运行，只是不保存历史。
+MySQL 用于保存每次分析的学习记录。项目未配置 MySQL 时仍可正常运行，只是不保存历史。
 
 安装依赖：
 
@@ -53,7 +67,7 @@ Copy-Item .env.example .env
 py scripts/init_mysql.py
 ```
 
-如果你使用 Docker，可用下面命令启动 MySQL：
+如果使用 Docker，可以启动 MySQL：
 
 ```powershell
 docker compose up -d mysql
