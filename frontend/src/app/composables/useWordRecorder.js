@@ -1,15 +1,14 @@
 import { ref } from "vue";
 import { fetchJson } from "../utils.js";
+import { canRecordAudio, createWordRecorderCapture } from "../wordRecorderCapture.js";
 import { wordRecorderMessages } from "../wordRecorderMessages.js";
 
 export function useWordRecorder({ data, loadRoute }) {
   const recorderState = ref({ accent: "", status: "", blob: null, preview: "" });
   let mediaRecorder = null;
-  let mediaStream = null;
-  let mediaChunks = [];
 
   async function startRecording(accent) {
-    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    if (!canRecordAudio()) {
       recorderState.value = {
         accent,
         status: wordRecorderMessages.unsupported,
@@ -19,21 +18,15 @@ export function useWordRecorder({ data, loadRoute }) {
       return;
     }
 
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaChunks = [];
-    mediaRecorder = new MediaRecorder(mediaStream);
-    mediaRecorder.addEventListener("dataavailable", (event) => {
-      if (event.data?.size) mediaChunks.push(event.data);
-    });
-    mediaRecorder.addEventListener("stop", () => {
-      const blob = new Blob(mediaChunks, { type: mediaRecorder.mimeType || "audio/webm" });
-      recorderState.value = {
-        accent,
-        status: wordRecorderMessages.ready,
-        blob,
-        preview: URL.createObjectURL(blob),
-      };
-      mediaStream?.getTracks().forEach((track) => track.stop());
+    mediaRecorder = await createWordRecorderCapture({
+      onReady: ({ blob, preview }) => {
+        recorderState.value = {
+          accent,
+          status: wordRecorderMessages.ready,
+          blob,
+          preview,
+        };
+      },
     });
     recorderState.value = { accent, status: wordRecorderMessages.recording, blob: null, preview: "" };
     mediaRecorder.start();
