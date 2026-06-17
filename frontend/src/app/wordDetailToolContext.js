@@ -1,0 +1,24 @@
+export function createWordDetailToolContext({ editing, images, audio, navigation, lifecycle }) {
+  return {
+    wordEdit: editing.wordEdit,
+    wordSaving: editing.wordSaving,
+    imageCandidates: images.imageCandidates,
+    audioOptions: audio.audioOptions,
+    recorderState: audio.recorderState,
+    resetWordTools: lifecycle.resetWordTools,
+    setWordEdit: editing.setWordEdit,
+    saveWordField: editing.saveWordField,
+    refreshWord: lifecycle.refreshWord,
+    uploadWordImage: images.uploadWordImage,
+    findImages: images.findImages,
+    chooseNetworkImage: images.chooseNetworkImage,
+    playAudio: audio.playAudio,
+    fetchAudioOptions: audio.fetchAudioOptions,
+    chooseAudio: audio.chooseAudio,
+    startRecording: audio.startRecording,
+    stopRecording: audio.stopRecording,
+    saveRecording: audio.saveRecording,
+    wordNavUrl: navigation.wordNavUrl,
+    handleWordKeydown: navigation.handleWordKeydown,
+  };
+}
