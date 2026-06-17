@@ -12,7 +12,7 @@ export function useWordImages({ data, loadRoute }) {
     const form = new FormData();
     form.append('edit_token', '1');
     form.append('file', file);
-    await fetch(`/api/vue/words/${data.value.word.id}/image`, { method: 'POST', body: form });
+    await fetchJson(`/api/vue/words/${data.value.word.id}/image`, { method: 'POST', body: form });
     await loadRoute();
   }
 

@@ -1302,7 +1302,6 @@ def delete_word_list(
 
 
 @app.post("/api/vue/words/{word_id}/image")
-@app.post("/words/{word_id}/image")
 async def replace_word_image(
     word_id: int,
     file: UploadFile = File(...),
@@ -1335,7 +1334,7 @@ async def replace_word_image(
     db.commit()
     if previous_url != word.image_url:
         remove_local_image(previous_url, IMAGE_DIR)
-    return RedirectResponse(url=f"/words/{word_id}?edit=1", status_code=303)
+    return {"ok": True, "word": word.word, "image_url": word.image_url}
 
 
 @app.post("/api/vue/words/{word_id}/ai-image")
