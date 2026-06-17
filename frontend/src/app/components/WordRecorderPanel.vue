@@ -1,33 +1,13 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed } from "vue";
+import { useLoadingAction } from "../composables/useLoadingAction.js";
+import { wordRecorderPanelProps } from "../props/wordRecorderPanelProps.js";
+import { wordRecorderMessages } from "../wordRecorderMessages.js";
 
-const props = defineProps({
-  recorderState: {
-    type: Object,
-    required: true,
-  },
-  stopRecording: {
-    type: Function,
-    required: true,
-  },
-  saveRecording: {
-    type: Function,
-    required: true,
-  },
-});
+const props = defineProps(wordRecorderPanelProps);
 
-const saving = ref(false);
-const isRecording = computed(() => props.recorderState.status === "录音中...");
-
-async function saveRecordedAudio() {
-  if (!props.recorderState.blob || saving.value) return;
-  saving.value = true;
-  try {
-    await props.saveRecording();
-  } finally {
-    saving.value = false;
-  }
-}
+const isRecording = computed(() => props.recorderState.status === wordRecorderMessages.recording);
+const { loading: saving, run: saveRecordedAudio } = useLoadingAction(() => props.saveRecording());
 </script>
 
 <template>
