@@ -1,4 +1,6 @@
 <script setup>
+import WordListChallengeProgress from "./WordListChallengeProgress.vue";
+
 defineProps({
   card: {
     type: Object,
@@ -32,18 +34,6 @@ defineProps({
       </div>
     </button>
 
-    <div v-if="showChallenge" class="challenge-card-actions">
-      <div class="mini-progress">
-        <span>{{ card.challenge.completed }} / {{ card.challenge.total }}</span>
-        <div><i :style="{ width: `${card.challenge.percent}%` }"></i></div>
-      </div>
-      <button
-        class="challenge-button"
-        type="button"
-        @click="go(`/challenge/${card.list.id}?daily_count=20&start_count=${card.challenge.completed}`)"
-      >
-        开始挑战
-      </button>
-    </div>
+    <WordListChallengeProgress v-if="showChallenge" :card="card" :go="go" />
   </article>
 </template>

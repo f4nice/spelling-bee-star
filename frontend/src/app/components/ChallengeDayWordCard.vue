@@ -1,4 +1,7 @@
 <script setup>
+import ChallengeDayWordMedia from "./ChallengeDayWordMedia.vue";
+import ChallengeDayWordResult from "./ChallengeDayWordResult.vue";
+
 defineProps({
   item: {
     type: Object,
@@ -22,16 +25,12 @@ function wordUrl(item) {
     :class="item.status === 'correct' ? 'is-correct' : 'is-wrong'"
     :href="wordUrl(item)"
   >
-    <span class="challenge-day-result">{{ item.status === 'correct' ? '✓' : '×' }}</span>
-    <img v-if="item.image_url" :src="item.image_url" :alt="item.word" loading="lazy">
-    <div v-else class="image-fallback">{{ fallbackLetter(item) }}</div>
+    <ChallengeDayWordResult :item="item" />
+    <ChallengeDayWordMedia :item="item" :fallback-letter="fallbackLetter" />
     <div class="challenge-day-word-body">
       <div>
         <h2>{{ item.word }}</h2>
       </div>
-      <strong class="challenge-day-status" :class="item.status === 'correct' ? 'is-correct' : 'is-wrong'">
-        {{ item.status === 'correct' ? '正确' : '错误' }}
-      </strong>
       <p>{{ item.chinese_definition || item.english_definition || '暂无定义' }}</p>
       <div class="challenge-day-counts">
         <span>对 {{ item.correct_count }}</span>
