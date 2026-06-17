@@ -1,4 +1,6 @@
 <script setup>
+import NewspaperArticleParagraphs from "./NewspaperArticleParagraphs.vue";
+
 defineProps({
   article: {
     type: Object,
@@ -16,7 +18,5 @@ defineProps({
     <img :src="article.image_url" :alt="article.title">
   </figure>
   <p v-if="article.summary" class="newspaper-article-summary">{{ article.summary }}</p>
-  <article class="newspaper-article-body">
-    <p v-for="(paragraph, index) in paragraphs" :key="index">{{ paragraph }}</p>
-  </article>
+  <NewspaperArticleParagraphs :paragraphs="paragraphs" />
 </template>
