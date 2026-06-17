@@ -1,5 +1,5 @@
-import { fetchJson } from '../utils.js';
 import { useWordAudio } from './useWordAudio.js';
+import { useWordDetailLifecycle } from './useWordDetailLifecycle.js';
 import { useWordEditing } from './useWordEditing.js';
 import { useWordImages } from './useWordImages.js';
 import { useWordNavigation } from './useWordNavigation.js';
@@ -33,18 +33,10 @@ export function useWordDetail({ data, loadRoute }) {
     wordNavUrl,
     handleWordKeydown,
   } = useWordNavigation({ data });
-
-  function resetWordTools() {
-    resetImageTools();
-    resetAudioTools();
-  }
-
-  async function refreshWord() {
-    const form = new FormData();
-    form.append('edit_token', '1');
-    await fetchJson(`/api/vue/words/${data.value.word.id}/refresh`, { method: 'POST', body: form });
-    await loadRoute();
-  }
+  const {
+    resetWordTools,
+    refreshWord,
+  } = useWordDetailLifecycle({ data, loadRoute, resetImageTools, resetAudioTools });
 
   return {
     wordEdit,
