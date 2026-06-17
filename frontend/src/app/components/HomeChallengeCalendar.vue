@@ -1,5 +1,6 @@
 <script setup>
 import HomeChallengeCalendarDay from "./HomeChallengeCalendarDay.vue";
+import HomeChallengeCalendarHeading from "./HomeChallengeCalendarHeading.vue";
 
 defineProps({
   calendar: {
@@ -15,16 +16,7 @@ defineProps({
 
 <template>
   <section class="panel calendar-panel home-calendar">
-    <div class="calendar-heading">
-      <div>
-        <p class="section-kicker">Challenge</p>
-        <h2>挑战日历</h2>
-        <p>
-          {{ calendar.title }} · 本月答对 {{ calendar.month_correct }} 个，答错
-          {{ calendar.month_wrong }} 个
-        </p>
-      </div>
-    </div>
+    <HomeChallengeCalendarHeading :calendar="calendar" />
     <div class="challenge-calendar">
       <div v-for="weekday in calendar.weekdays" :key="weekday" class="calendar-weekday">{{ weekday }}</div>
       <template v-for="(week, weekIndex) in calendar.weeks" :key="weekIndex">
