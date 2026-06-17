@@ -1,4 +1,5 @@
 <script setup>
+import { editableDefinitionFields } from "../wordDefinitionFields.js";
 import WordEditableDefinitionItem from "./WordEditableDefinitionItem.vue";
 
 defineProps({
@@ -20,16 +21,11 @@ defineProps({
   },
 });
 
-const fields = [
-  { label: "英文定义", field: "english_definition" },
-  { label: "中文定义", field: "chinese_definition" },
-  { label: "英文例句", field: "english_example" },
-];
 </script>
 
 <template>
   <WordEditableDefinitionItem
-    v-for="item in fields"
+    v-for="item in editableDefinitionFields"
     :key="item.field"
     :label="item.label"
     :field="item.field"

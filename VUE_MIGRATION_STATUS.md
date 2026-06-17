@@ -43,12 +43,13 @@
   - `5642ecf`：拆分导入预览表单行列选择 helper。
   - `e648933`：拆分单词录音 session helper。
   - `a2b0767`：拆分单词音频候选加载和选择 action helper。
-  - 待提交：拆分挑战日历词卡正文组件和详情链接 helper。
+  - `a0fb6f0`：拆分挑战日历词卡正文组件和详情链接 helper。
+  - 待提交：拆分单词定义可编辑字段配置 helper。
 
 ## 正在进行
 
-- 当前推进区域：挑战日历词卡。
-- 当前已改到：新增 `ChallengeDayWordBody.vue` 和 `challengeDayWordUrl.js`，把词卡正文与详情链接构造从 `ChallengeDayWordCard.vue` 中拆出；收口小扫描未发现真实乱码或旧模板交互残留。
+- 当前推进区域：单词定义编辑字段。
+- 当前已改到：新增 `wordDefinitionFields.js`，把 `WordEditableDefinitionFields.vue` 的字段配置移出组件；收口小扫描未发现真实乱码或旧模板交互残留。
 - 当前轮状态：本地 `npm run build`、`py -3 -m py_compile app\main.py`、Node UTF-8 乱码扫描已通过；等待提交、推送、部署和线上验证。
 
 ## 下一批改哪里
@@ -59,7 +60,8 @@
 
 - `frontend/src/app/composables/useWordRecorder.js`：已抽出 `wordRecorderSession.js`。
 - `frontend/src/app/composables/useWordAudio.js`：已抽出 `wordAudioActions.js`。
-- `frontend/src/app/components/ChallengeDayWordCard.vue`：本轮已抽出正文组件和详情链接 helper，提交部署后可从候选中移除。
+- `frontend/src/app/components/ChallengeDayWordCard.vue`：已抽出正文组件和详情链接 helper。
+- `frontend/src/app/components/WordEditableDefinitionFields.vue`：本轮已抽出 `wordDefinitionFields.js`，提交部署后可从候选中移除。
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDetailActions.js`。
 - `frontend/src/app/components/WordCard.vue`：已拆出媒体和挑战统计子组件。
 - `frontend/src/app/components/ListDetailHeader.vue`：已拆出 `ListTitleEditor.vue`。
