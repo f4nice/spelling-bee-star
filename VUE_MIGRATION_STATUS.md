@@ -32,13 +32,13 @@
   - `cbef214`：拆分 `UploadExcelForm.vue` 的 page/card 字段组件，并同步新 Vite chunk。
   - `ae6e42c`：拆分 `WordAudioOptionList.vue` 的候选项组件和 props helper。
   - `f80c5c3`：拆分导入预览工具栏 props、提交按钮和图片选择 helper。
-  - 待提交：拆分 `useImportPreviewForm.js` 的表单状态和 URL helper。
+  - `170514c`：拆分 `useImportPreviewForm.js` 的表单状态和 URL helper。
 
 ## 正在进行
 
 - 当前推进区域：BookLearner Hero。
 - 当前已改到：`useImportPreviewForm.js`、`importPreviewFormState.js`。
-- 当前轮状态：本地 build、`py_compile`、乱码扫描已通过；等待提交、推送、部署和线上验证。
+- 当前轮状态：`170514c` 已推送并部署；本地 build、`py_compile`、乱码扫描、线上 HTTP、临时 Playwright 控制台检查和服务日志验证均已通过。
 
 ## 下一批改哪里
 
