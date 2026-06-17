@@ -1,5 +1,5 @@
 import { onMounted, ref } from 'vue';
-import { buildChallengeAnswerForm } from './challengeAnswerForm.js';
+import { challengeMessages, fetchChallengeState, postChallengeAnswer } from './challengeApi.js';
 
 export function useChallengeSession(wordListId) {
   const initialParams = new URLSearchParams(window.location.search);
@@ -13,12 +13,10 @@ export function useChallengeSession(wordListId) {
     loading.value = true;
     errorMessage.value = '';
     try {
-      const response = await fetch(`/api/challenge/${wordListId}/state?${params.toString()}`);
-      if (!response.ok) throw new Error('加载挑战失败');
-      state.value = await response.json();
+      state.value = await fetchChallengeState(wordListId, params);
       spelling.value = '';
     } catch (error) {
-      errorMessage.value = error.message || '加载挑战失败';
+      errorMessage.value = error.message || challengeMessages.loadFailed;
     } finally {
       loading.value = false;
     }
@@ -28,19 +26,13 @@ export function useChallengeSession(wordListId) {
     if (!spelling.value.trim() || submitting.value) return;
     submitting.value = true;
     errorMessage.value = '';
-    const form = buildChallengeAnswerForm({ state: state.value, spelling: spelling.value });
     try {
-      const response = await fetch(`/api/challenge/${wordListId}/answer`, {
-        method: 'POST',
-        body: form,
-      });
-      if (!response.ok) throw new Error('提交失败');
-      const result = await response.json();
+      const result = await postChallengeAnswer({ wordListId, state: state.value, spelling: spelling.value });
       const nextParams = new URLSearchParams(result.query);
       history.replaceState(null, '', `${window.location.pathname}?${nextParams.toString()}`);
       await loadState(nextParams);
     } catch (error) {
-      errorMessage.value = error.message || '提交失败';
+      errorMessage.value = error.message || challengeMessages.submitFailed;
     } finally {
       submitting.value = false;
     }
