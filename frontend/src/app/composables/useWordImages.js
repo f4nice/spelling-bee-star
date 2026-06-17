@@ -12,14 +12,14 @@ export function useWordImages({ data, loadRoute }) {
     const form = new FormData();
     form.append('edit_token', '1');
     form.append('file', file);
-    await fetch(`/words/${data.value.word.id}/image`, { method: 'POST', body: form });
+    await fetch(`/api/vue/words/${data.value.word.id}/image`, { method: 'POST', body: form });
     await loadRoute();
   }
 
   async function findImages() {
     const form = new FormData();
     form.append('edit_token', '1');
-    const result = await fetchJson(`/words/${data.value.word.id}/image-candidates`, { method: 'POST', body: form });
+    const result = await fetchJson(`/api/vue/words/${data.value.word.id}/image-candidates`, { method: 'POST', body: form });
     imageCandidates.value = result.images || [];
   }
 
@@ -27,7 +27,7 @@ export function useWordImages({ data, loadRoute }) {
     const form = new FormData();
     form.append('edit_token', '1');
     form.append('image_url', url);
-    await fetchJson(`/words/${data.value.word.id}/network-image`, { method: 'POST', body: form });
+    await fetchJson(`/api/vue/words/${data.value.word.id}/network-image`, { method: 'POST', body: form });
     await loadRoute();
   }
 

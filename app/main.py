@@ -1208,6 +1208,7 @@ def challenge_calendar_day(day: str = Query(...), db: Session = Depends(get_db))
     return challenge_calendar_day_payload(db, challenge_date)
 
 
+@app.post("/api/vue/lists/{word_list_id}/rename")
 @app.post("/lists/{word_list_id}/rename")
 def rename_word_list(
     word_list_id: int,
@@ -1260,6 +1261,7 @@ def delete_word_list(
     return RedirectResponse(url="/", status_code=303)
 
 
+@app.post("/api/vue/words/{word_id}/image")
 @app.post("/words/{word_id}/image")
 async def replace_word_image(
     word_id: int,
@@ -1296,6 +1298,7 @@ async def replace_word_image(
     return RedirectResponse(url=f"/words/{word_id}?edit=1", status_code=303)
 
 
+@app.post("/api/vue/words/{word_id}/ai-image")
 @app.post("/words/{word_id}/ai-image")
 async def generate_ai_word_image(
     word_id: int,
@@ -1341,6 +1344,7 @@ async def generate_ai_word_image(
     return {"ok": True, "word": word.word, "image_url": word.image_url}
 
 
+@app.post("/api/vue/words/{word_id}/image-candidates")
 @app.post("/words/{word_id}/image-candidates")
 async def word_image_candidates(
     word_id: int,
@@ -1359,6 +1363,7 @@ async def word_image_candidates(
     return {"ok": True, "word": word.word, "images": images}
 
 
+@app.post("/api/vue/words/{word_id}/network-image")
 @app.post("/words/{word_id}/network-image")
 async def replace_word_image_from_network(
     word_id: int,
@@ -1392,6 +1397,7 @@ async def replace_word_image_from_network(
     return {"ok": True, "word": word.word, "image_url": word.image_url}
 
 
+@app.post("/api/vue/words/{word_id}/sync-image")
 @app.post("/words/{word_id}/sync-image")
 async def sync_word_image(word_id: int, db: Session = Depends(get_db)):
     word = db.get(Word, word_id)
@@ -1438,6 +1444,7 @@ async def sync_word_image_record(db: Session, word: Word) -> dict:
     return {"ok": False, "id": word.id, "word": word.word, "error": word.enrichment_error}
 
 
+@app.post("/api/vue/lists/{word_list_id}/sync-images/start")
 @app.post("/lists/{word_list_id}/sync-images/start")
 def start_list_image_sync(word_list_id: int, db: Session = Depends(get_db)):
     word_list = db.get(WordList, word_list_id)
@@ -1464,6 +1471,7 @@ def start_list_image_sync(word_list_id: int, db: Session = Depends(get_db)):
     return job
 
 
+@app.get("/api/vue/lists/{word_list_id}/sync-images/{job_id}")
 @app.get("/lists/{word_list_id}/sync-images/{job_id}")
 def list_image_sync_status(word_list_id: int, job_id: str):
     with IMAGE_SYNC_LOCK:
@@ -1481,6 +1489,7 @@ def word_image_view(word_id: int, db: Session = Depends(get_db)):
     return RedirectResponse(url=word.image_url, status_code=302)
 
 
+@app.post("/api/vue/words/{word_id}/audio-options")
 @app.post("/words/{word_id}/audio-options")
 async def word_audio_options(
     word_id: int,
@@ -1509,6 +1518,7 @@ async def word_audio_options(
     return {"ok": True, "word": word.word, "accent": accent, "options": options}
 
 
+@app.post("/api/vue/words/{word_id}/audio-choice")
 @app.post("/words/{word_id}/audio-choice")
 async def word_audio_choice(
     word_id: int,
@@ -1539,6 +1549,7 @@ async def word_audio_choice(
     return {"ok": True, "word": word.word, "accent": accent, "audio_url": audio_url}
 
 
+@app.post("/api/vue/words/{word_id}/recorded-audio")
 @app.post("/words/{word_id}/recorded-audio")
 async def word_recorded_audio(
     word_id: int,

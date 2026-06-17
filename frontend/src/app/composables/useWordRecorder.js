@@ -48,7 +48,7 @@ export function useWordRecorder({ data, loadRoute }) {
     form.append('edit_token', '1');
     form.append('accent', recorderState.value.accent);
     form.append('audio_file', recorderState.value.blob, `recorded-${recorderState.value.accent}.webm`);
-    await fetchJson(`/words/${data.value.word.id}/recorded-audio`, { method: 'POST', body: form });
+    await fetchJson(`/api/vue/words/${data.value.word.id}/recorded-audio`, { method: 'POST', body: form });
     recorderState.value = { accent: '', status: '录音已保存', blob: null, preview: '' };
     await loadRoute();
   }

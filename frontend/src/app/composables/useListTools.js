@@ -26,7 +26,7 @@ export function useListTools({ data, go, loadRoute }) {
   async function renameList() {
     const form = new FormData();
     form.append('name', data.value.word_list.name);
-    await fetchJson(`/lists/${data.value.word_list.id}/rename`, {
+    await fetchJson(`/api/vue/lists/${data.value.word_list.id}/rename`, {
       method: 'POST',
       body: form,
       headers: { 'x-requested-with': 'fetch' },
@@ -34,10 +34,10 @@ export function useListTools({ data, go, loadRoute }) {
   }
 
   async function syncListImages() {
-    const job = await fetchJson(`/lists/${data.value.word_list.id}/sync-images/start`, { method: 'POST' });
+    const job = await fetchJson(`/api/vue/lists/${data.value.word_list.id}/sync-images/start`, { method: 'POST' });
     data.value.sync_job = job;
     const timer = window.setInterval(async () => {
-      const next = await fetchJson(`/lists/${data.value.word_list.id}/sync-images/${job.id}`);
+      const next = await fetchJson(`/api/vue/lists/${data.value.word_list.id}/sync-images/${job.id}`);
       data.value.sync_job = next;
       if (['done', 'failed'].includes(next.status)) {
         window.clearInterval(timer);

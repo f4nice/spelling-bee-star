@@ -29,7 +29,7 @@ export function useWordAudio({ data, loadRoute }) {
     const form = new FormData();
     form.append('edit_token', '1');
     form.append('accent', accent);
-    const result = await fetchJson(`/words/${data.value.word.id}/audio-options`, { method: 'POST', body: form });
+    const result = await fetchJson(`/api/vue/words/${data.value.word.id}/audio-options`, { method: 'POST', body: form });
     audioOptions.value[accent] = result.options || [];
   }
 
@@ -38,7 +38,7 @@ export function useWordAudio({ data, loadRoute }) {
     form.append('edit_token', '1');
     form.append('accent', accent);
     form.append('audio_url', url);
-    await fetchJson(`/words/${data.value.word.id}/audio-choice`, { method: 'POST', body: form });
+    await fetchJson(`/api/vue/words/${data.value.word.id}/audio-choice`, { method: 'POST', body: form });
     await loadRoute();
   }
 
