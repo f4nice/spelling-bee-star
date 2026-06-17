@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { buildSidebarNavItems } from "../sidebarNav.js";
 import SidebarChallengeProgress from "./SidebarChallengeProgress.vue";
+import SidebarNavLink from "./SidebarNavLink.vue";
 
 const props = defineProps({
   route: {
@@ -28,15 +29,12 @@ function navigate(path) {
 <template>
   <aside class="sidebar">
     <nav class="side-nav" aria-label="主导航">
-      <a
+      <SidebarNavLink
         v-for="item in navItems"
         :key="item.path"
-        :class="{ active: item.active }"
-        :href="item.path"
-        @click.prevent="navigate(item.path)"
-      >
-        {{ item.label }} <span v-if="item.count !== undefined" class="nav-count">{{ item.count }}</span>
-      </a>
+        :item="item"
+        :navigate="navigate"
+      />
       <SidebarChallengeProgress :challenges="shell.sidebarChallenges" :navigate="navigate" />
     </nav>
   </aside>
