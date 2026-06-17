@@ -1,15 +1,16 @@
 import { fetchJson } from "../utils.js";
+import { booklearnerApiPaths } from "../booklearnerApiPaths.js";
 
 export function useBooklearnerAnalysisActions({ book, setNotice }) {
   async function analyzeBookQuery() {
     setNotice("正在分析...");
-    book.value.result = await fetchJson(`/booklearner/api/analyze?q=${encodeURIComponent(book.value.query)}`);
+    book.value.result = await fetchJson(booklearnerApiPaths.analyze(book.value.query));
     setNotice("分析完成");
   }
 
   async function analyzeBookText() {
     setNotice("正在分析文本...");
-    book.value.result = await fetchJson("/booklearner/api/analyze-text", {
+    book.value.result = await fetchJson(booklearnerApiPaths.analyzeText(), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ title: book.value.title, author: book.value.author, text: book.value.text }),
@@ -24,7 +25,7 @@ export function useBooklearnerAnalysisActions({ book, setNotice }) {
     form.append("author", book.value.author);
     form.append("file", book.value.file);
     setNotice("正在分析文件...");
-    book.value.result = await fetchJson("/booklearner/api/analyze-file", { method: "POST", body: form });
+    book.value.result = await fetchJson(booklearnerApiPaths.analyzeFile(), { method: "POST", body: form });
     setNotice("分析完成");
   }
 
