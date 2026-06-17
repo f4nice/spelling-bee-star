@@ -1,34 +1,31 @@
 import { ref } from "vue";
 import { fetchJson } from "../utils.js";
 import { canRecordAudio, createWordRecorderCapture } from "../wordRecorderCapture.js";
-import { wordRecorderMessages } from "../wordRecorderMessages.js";
+import {
+  createRecordedAudioForm,
+  createReadyRecorderState,
+  createRecorderState,
+  createRecordingRecorderState,
+  createSavedRecorderState,
+  createUnsupportedRecorderState,
+} from "../wordRecorderState.js";
 
 export function useWordRecorder({ data, loadRoute }) {
-  const recorderState = ref({ accent: "", status: "", blob: null, preview: "" });
+  const recorderState = ref(createRecorderState());
   let mediaRecorder = null;
 
   async function startRecording(accent) {
     if (!canRecordAudio()) {
-      recorderState.value = {
-        accent,
-        status: wordRecorderMessages.unsupported,
-        blob: null,
-        preview: "",
-      };
+      recorderState.value = createUnsupportedRecorderState(accent);
       return;
     }
 
     mediaRecorder = await createWordRecorderCapture({
-      onReady: ({ blob, preview }) => {
-        recorderState.value = {
-          accent,
-          status: wordRecorderMessages.ready,
-          blob,
-          preview,
-        };
+      onReady: (recording) => {
+        recorderState.value = createReadyRecorderState(accent, recording);
       },
     });
-    recorderState.value = { accent, status: wordRecorderMessages.recording, blob: null, preview: "" };
+    recorderState.value = createRecordingRecorderState(accent);
     mediaRecorder.start();
   }
 
@@ -38,12 +35,9 @@ export function useWordRecorder({ data, loadRoute }) {
 
   async function saveRecording() {
     if (!recorderState.value.blob) return;
-    const form = new FormData();
-    form.append("edit_token", "1");
-    form.append("accent", recorderState.value.accent);
-    form.append("audio_file", recorderState.value.blob, `recorded-${recorderState.value.accent}.webm`);
+    const form = createRecordedAudioForm(recorderState.value);
     await fetchJson(`/api/vue/words/${data.value.word.id}/recorded-audio`, { method: "POST", body: form });
-    recorderState.value = { accent: "", status: wordRecorderMessages.saved, blob: null, preview: "" };
+    recorderState.value = createSavedRecorderState();
     await loadRoute();
   }
 
