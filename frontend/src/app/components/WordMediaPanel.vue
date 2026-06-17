@@ -1,4 +1,6 @@
 <script setup>
+import { ref } from "vue";
+
 defineProps({
   data: {
     type: Object,
@@ -6,9 +8,9 @@ defineProps({
   },
   imageCandidates: {
     type: Array,
-    default: () => [],
+    required: true,
   },
-  fallbackLetter: {
+  imageForWord: {
     type: Function,
     required: true,
   },
@@ -25,36 +27,47 @@ defineProps({
     required: true,
   },
 });
+
+const selectedImageFile = ref(null);
 </script>
 
 <template>
-  <div class="detail-media-panel">
-    <div class="detail-media">
-      <span v-if="data.navigation.index" class="word-index-badge">#{{ data.navigation.index }}</span>
-      <img v-if="data.word.image_url" :src="data.word.image_url" :alt="data.word.word">
-      <div v-else class="image-fallback large">{{ fallbackLetter(data.word) }}</div>
+  <aside class="panel media-panel">
+    <div class="word-image-frame">
+      <img v-if="imageForWord(data.word)" :src="imageForWord(data.word)" :alt="data.word.word">
+      <div v-else class="image-fallback">{{ data.word.word.slice(0, 1).toUpperCase() }}</div>
     </div>
 
-    <div v-if="data.can_edit" class="image-replace-form">
+    <div v-if="data.can_edit" class="media-tools" role="group" aria-label="单词图片工具">
       <label>
-        替换图片
-        <input type="file" accept="image/*" @change="$event.target.files[0] && uploadWordImage($event.target.files[0])">
+        上传图片
+        <input
+          type="file"
+          accept="image/*"
+          @change="selectedImageFile = $event.target.files[0] || null"
+        >
       </label>
+      <button
+        type="button"
+        class="secondary-button"
+        :disabled="!selectedImageFile"
+        @click="uploadWordImage(selectedImageFile)"
+      >
+        保存图片
+      </button>
       <button type="button" class="secondary-button" @click="findImages">网络找图</button>
-      <span v-if="data.word.image_locked" class="lock-badge">已锁定</span>
     </div>
 
     <div v-if="imageCandidates.length" class="image-picker-grid inline-image-grid">
       <button
         v-for="(item, index) in imageCandidates"
-        :key="item.url"
+        :key="item.url || index"
         type="button"
-        class="image-picker-option"
+        class="image-candidate-button"
         @click="chooseNetworkImage(item.url)"
       >
-        <img :src="item.url" :alt="`候选图 ${index + 1}`">
-        <span>{{ item.source || "网络图片" }}</span>
+        <img :src="item.url" :alt="`${data.word.word} 候选图 ${index + 1}`">
       </button>
     </div>
-  </div>
+  </aside>
 </template>
