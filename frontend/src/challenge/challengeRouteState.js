@@ -9,3 +9,7 @@ export function paramsFromChallengeResult(result) {
 export function replaceChallengeParams(params) {
   history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
 }
+
+export function restartChallengeUrl(wordListId) {
+  return `/challenge/${wordListId}?daily_count=20&start_count=0`;
+}

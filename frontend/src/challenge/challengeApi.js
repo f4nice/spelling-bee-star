@@ -1,3 +1,4 @@
+import { challengeApiPaths } from './challengeApiPaths.js';
 import { buildChallengeAnswerForm } from './challengeAnswerForm.js';
 
 export const challengeMessages = {
@@ -6,14 +7,14 @@ export const challengeMessages = {
 };
 
 export async function fetchChallengeState(wordListId, params) {
-  const response = await fetch(`/api/challenge/${wordListId}/state?${params.toString()}`);
+  const response = await fetch(challengeApiPaths.state(wordListId, params));
   if (!response.ok) throw new Error(challengeMessages.loadFailed);
   return response.json();
 }
 
 export async function postChallengeAnswer({ wordListId, state, spelling }) {
   const form = buildChallengeAnswerForm({ state, spelling });
-  const response = await fetch(`/api/challenge/${wordListId}/answer`, {
+  const response = await fetch(challengeApiPaths.answer(wordListId), {
     method: 'POST',
     body: form,
   });

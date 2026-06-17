@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { coreApiPaths } from "./coreApiPaths.js";
 import { fetchJson } from "./utils.js";
 
 const DEFAULT_SHELL_CONTEXT = {
@@ -29,7 +30,7 @@ export function useShellContext() {
 
   async function refreshShellContext() {
     try {
-      shellContext.value = await fetchJson("/api/vue/shell");
+      shellContext.value = await fetchJson(coreApiPaths.shell());
     } catch {
       // Keep the server-rendered shell context if the lightweight refresh fails.
     }

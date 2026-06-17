@@ -1,3 +1,4 @@
+import { coreApiPaths } from "../coreApiPaths.js";
 import { fetchJson } from "../utils.js";
 
 export function useImportPreviewSubmit({ data, route, go, setError, importForm }) {
@@ -14,7 +15,7 @@ export function useImportPreviewSubmit({ data, route, go, setError, importForm }
     importForm.value.selected_rows.forEach((item) => form.append("selected_rows", item));
     importForm.value.selected_columns.forEach((item) => form.append("selected_columns", item));
     importForm.value.image_files.forEach((item) => form.append("image_files", item));
-    const result = await fetchJson("/api/vue/import-preview", { method: "POST", body: form });
+    const result = await fetchJson(coreApiPaths.importPreview(), { method: "POST", body: form });
     go(`/lists/${result.word_list_id}`);
   }
 

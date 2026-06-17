@@ -3,6 +3,7 @@ import ChallengeComplete from "./ChallengeComplete.vue";
 import ChallengeHeader from "./ChallengeHeader.vue";
 import ChallengeStats from "./ChallengeStats.vue";
 import ChallengeWordCard from "./ChallengeWordCard.vue";
+import { restartChallengeUrl } from "./challengeRouteState.js";
 import { useChallengeSession } from "./useChallengeSession.js";
 
 const props = defineProps({
@@ -15,10 +16,6 @@ const props = defineProps({
 const root = document.getElementById("speakeasy-challenge-app");
 const wordListId = Number(props.wordListId || root?.dataset.wordListId || 0);
 const { state, spelling, loading, submitting, errorMessage, submitSpelling, stripDigits } = useChallengeSession(wordListId);
-
-function challengeUrl(extra = "") {
-  return `/challenge/${wordListId}${extra}`;
-}
 </script>
 
 <template>
@@ -37,7 +34,7 @@ function challengeUrl(extra = "") {
         @submit="submitSpelling"
         @strip-digits="stripDigits"
       />
-      <ChallengeComplete v-else :state="state" :restart-url="challengeUrl('?daily_count=20&start_count=0')" />
+      <ChallengeComplete v-else :state="state" :restart-url="restartChallengeUrl(wordListId)" />
     </template>
   </section>
 </template>
