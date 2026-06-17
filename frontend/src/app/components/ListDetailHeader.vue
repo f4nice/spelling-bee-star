@@ -32,10 +32,10 @@ defineProps({
     <div class="list-actions">
       <button class="secondary-button" type="button" @click="renameList">保存名称</button>
       <button class="ghost-button compact-button" type="button" @click="go('/upload')">继续导入</button>
-      <form class="delete-list-form" @submit.prevent="deleteList">
+      <div class="delete-list-form" role="group" aria-label="删除单词表">
         <input v-model="deleteListState.password" type="password" placeholder="删除密码" required>
-        <button class="danger-button" type="submit">删除</button>
-      </form>
+        <button class="danger-button" type="button" @click="deleteList">删除</button>
+      </div>
     </div>
     <p v-if="deleteListState.notice" class="notice">{{ deleteListState.notice }}</p>
   </section>
