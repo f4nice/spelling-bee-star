@@ -88,6 +88,15 @@ app.mount("/好词好句/assets", StaticFiles(directory=GOOD_WORDS_DIR / "public
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
+def static_asset_version() -> str:
+    assets = [
+        BASE_DIR / "static" / "styles.css",
+        BASE_DIR / "static" / "vue" / "speakeasy-app.js",
+    ]
+    mtimes = [path.stat().st_mtime_ns for path in assets if path.exists()]
+    return str(max(mtimes)) if mtimes else str(int(datetime.utcnow().timestamp()))
+
+
 def vue_shell(request: Request, db: Session, vue_path: str = ""):
     return templates.TemplateResponse("vue_app.html", page_context(request, db, {"vue_path": vue_path}))
 
@@ -1970,6 +1979,7 @@ def page_context(request: Request, db: Session, extra: dict | None = None) -> di
         "daily_quote": get_daily_quote(db),
         "sidebar_challenges": sidebar_challenge_progress(db),
         "wrong_word_count": wrong_word_count(db),
+        "static_version": static_asset_version(),
     }
     if extra:
         context.update(extra)
