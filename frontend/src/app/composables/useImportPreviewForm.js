@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { importPreviewSheetUrl } from "../appRouteUrls.js";
 
 export function useImportPreviewForm({ data, route, loadRoute }) {
   const importForm = ref({ word_list_name: "", word_columns: [], selected_rows: [], selected_columns: [], image_files: [] });
@@ -24,12 +25,13 @@ export function useImportPreviewForm({ data, route, loadRoute }) {
   }
 
   async function changePreviewSheet(sheetName) {
-    const params = new URLSearchParams({
-      sheet_name: sheetName,
-      word_list_name: importForm.value.word_list_name || data.value.preview.word_list_name || "",
-      word_list_id: data.value.preview.word_list_id || "",
+    const url = importPreviewSheetUrl({
+      previewId: route.value.params.id,
+      sheetName,
+      wordListName: importForm.value.word_list_name || data.value.preview.word_list_name,
+      wordListId: data.value.preview.word_list_id,
     });
-    history.replaceState(null, "", `/upload/preview/${route.value.params.id}?${params.toString()}`);
+    history.replaceState(null, "", url);
     await loadRoute();
   }
 

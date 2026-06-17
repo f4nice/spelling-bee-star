@@ -1,8 +1,8 @@
+import { wordDetailEditUrl } from "../appRouteUrls.js";
+
 export function useWordNavigation({ data }) {
   function wordNavUrl(wordId) {
-    const params = new URLSearchParams(window.location.search);
-    params.set('edit', '1');
-    return `/words/${wordId}?${params.toString()}`;
+    return wordDetailEditUrl(wordId);
   }
 
   function handleWordKeydown(event, route) {
