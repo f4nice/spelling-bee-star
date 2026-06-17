@@ -36,7 +36,10 @@ defineProps({
           @click="day.total && go(`/challenge-calendar/${day.date}`)"
         >
           <span v-if="day.day" class="calendar-day-number">{{ day.day }}</span>
-          <span v-if="day.total" class="calendar-total">{{ day.total }} 个</span>
+          <span v-if="day.total" class="calendar-total">
+            <strong>{{ day.total }}</strong>
+            <span>个</span>
+          </span>
         </button>
       </template>
     </div>

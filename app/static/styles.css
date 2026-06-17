@@ -1411,6 +1411,9 @@ button:hover {
 }
 
 .calendar-day {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   min-height: 72px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1438,17 +1441,26 @@ button:hover {
 }
 
 .calendar-day-number {
+  display: block;
   color: var(--ink);
   font-size: 13px;
   font-weight: 900;
 }
 
 .calendar-total {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
   margin-top: 5px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
   text-align: center;
+}
+
+.calendar-total strong {
+  color: var(--accent);
+  font-size: 13px;
 }
 
 .calendar-marks {
