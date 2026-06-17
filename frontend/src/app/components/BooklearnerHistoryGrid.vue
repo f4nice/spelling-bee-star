@@ -1,4 +1,6 @@
 <script setup>
+import BooklearnerHistoryCard from "./BooklearnerHistoryCard.vue";
+
 defineProps({
   book: {
     type: Object,
@@ -13,17 +15,11 @@ defineProps({
 
 <template>
   <section class="word-grid">
-    <article v-for="item in book.history" :key="item.id" class="word-card list-card">
-      <button class="list-card-link plain-card-button" type="button" @click="go(`/booklearner/detail/${item.id}`)">
-        <div class="image-fallback">B</div>
-        <div class="word-card-body">
-          <div class="word-card-title">
-            <strong>{{ item.title || item.query || `记录 #${item.id}` }}</strong>
-            <span class="status">书摘</span>
-          </div>
-          <p>{{ item.createdAt || item.created_at }}</p>
-        </div>
-      </button>
-    </article>
+    <BooklearnerHistoryCard
+      v-for="item in book.history"
+      :key="item.id"
+      :item="item"
+      :go="go"
+    />
   </section>
 </template>
