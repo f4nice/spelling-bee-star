@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from "vue";
+import { useLoadingAction } from "../composables/useLoadingAction.js";
+import { wordAudioActionLabels } from "../wordAudioActionLabels.js";
 
 const props = defineProps({
   accent: {
@@ -28,17 +29,9 @@ const props = defineProps({
   },
 });
 
-const loadingOptions = ref(false);
-
-async function loadOptions() {
-  if (loadingOptions.value) return;
-  loadingOptions.value = true;
-  try {
-    await props.fetchAudioOptions(props.accent.key);
-  } finally {
-    loadingOptions.value = false;
-  }
-}
+const { loading: loadingOptions, run: loadOptions } = useLoadingAction(() =>
+  props.fetchAudioOptions(props.accent.key),
+);
 </script>
 
 <template>
@@ -54,8 +47,10 @@ async function loadOptions() {
       :disabled="loadingOptions"
       @click="loadOptions"
     >
-      {{ loadingOptions ? "获取中..." : "重新获取音频" }}
+      {{ loadingOptions ? wordAudioActionLabels.loadingOptions : wordAudioActionLabels.reloadOptions }}
     </button>
-    <button v-if="canEdit" type="button" class="secondary-button" @click="startRecording(accent.key)">录制音源</button>
+    <button v-if="canEdit" type="button" class="secondary-button" @click="startRecording(accent.key)">
+      {{ wordAudioActionLabels.recordSource }}
+    </button>
   </div>
 </template>
