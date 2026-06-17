@@ -1,15 +1,15 @@
 <script setup>
-import BooklearnerRouteOutlet from './BooklearnerRouteOutlet.vue';
-import ChallengeRouteOutlet from './ChallengeRouteOutlet.vue';
-import ImportRouteOutlet from './ImportRouteOutlet.vue';
-import WordDetailRoute from './WordDetailRoute.vue';
-import ChallengeDayPage from '../pages/ChallengeDayPage.vue';
-import HomePage from '../pages/HomePage.vue';
-import ListDetailPage from '../pages/ListDetailPage.vue';
-import ListsPage from '../pages/ListsPage.vue';
-import NewspaperArticlePage from '../pages/NewspaperArticlePage.vue';
-import NewspaperPage from '../pages/NewspaperPage.vue';
-import WrongWordsPage from '../pages/WrongWordsPage.vue';
+import BooklearnerRouteOutlet from "./BooklearnerRouteOutlet.vue";
+import ChallengeRouteOutlet from "./ChallengeRouteOutlet.vue";
+import ImportRouteOutlet from "./ImportRouteOutlet.vue";
+import WordDetailRoute from "./WordDetailRoute.vue";
+import ChallengeDayPage from "../pages/ChallengeDayPage.vue";
+import HomePage from "../pages/HomePage.vue";
+import ListDetailPage from "../pages/ListDetailPage.vue";
+import ListsPage from "../pages/ListsPage.vue";
+import NewspaperArticlePage from "../pages/NewspaperArticlePage.vue";
+import NewspaperPage from "../pages/NewspaperPage.vue";
+import WrongWordsPage from "../pages/WrongWordsPage.vue";
 
 defineProps({
   ctx: {
@@ -22,8 +22,29 @@ defineProps({
 <template>
   <ChallengeRouteOutlet v-if="ctx.route.name === 'challenge'" :route="ctx.route" />
   <HomePage v-else-if="ctx.route.name === 'home' && ctx.data" :data="ctx.data" :go="ctx.go" :fallback-letter="ctx.fallbackLetter" />
-  <ListsPage v-else-if="ctx.route.name === 'lists' && ctx.data" :data="ctx.data" :upload-options="ctx.uploadOptions" :upload-form="ctx.uploadForm" :submit-upload="ctx.submitUpload" :fallback-letter="ctx.fallbackLetter" :go="ctx.go" />
-  <ListDetailPage v-else-if="ctx.route.name === 'listDetail' && ctx.data" :data="ctx.data" :rename-list="ctx.renameList" :sync-list-images="ctx.syncListImages" :word-vue-url="ctx.wordVueUrl" :image-for-word="ctx.imageForWord" :fallback-letter="ctx.fallbackLetter" />
+  <ListsPage
+    v-else-if="ctx.route.name === 'lists' && ctx.data"
+    :data="ctx.data"
+    :upload-options="ctx.uploadOptions"
+    :upload-form="ctx.uploadForm"
+    :batch-image-state="ctx.batchImageState"
+    :submit-upload="ctx.submitUpload"
+    :submit-batch-images="ctx.submitBatchImages"
+    :fallback-letter="ctx.fallbackLetter"
+    :go="ctx.go"
+  />
+  <ListDetailPage
+    v-else-if="ctx.route.name === 'listDetail' && ctx.data"
+    :data="ctx.data"
+    :delete-list-state="ctx.deleteListState"
+    :rename-list="ctx.renameList"
+    :delete-list="ctx.deleteList"
+    :sync-list-images="ctx.syncListImages"
+    :word-vue-url="ctx.wordVueUrl"
+    :image-for-word="ctx.imageForWord"
+    :fallback-letter="ctx.fallbackLetter"
+    :go="ctx.go"
+  />
   <WordDetailRoute v-else-if="ctx.route.name === 'wordDetail' && ctx.data" :ctx="ctx" />
   <ImportRouteOutlet v-else-if="(ctx.route.name === 'upload' || ctx.route.name === 'preview') && ctx.data" :ctx="ctx" />
   <NewspaperPage v-else-if="ctx.route.name === 'newspaper' && ctx.data" :data="ctx.data" :go="ctx.go" />

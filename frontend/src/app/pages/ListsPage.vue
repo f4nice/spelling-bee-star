@@ -6,9 +6,11 @@ defineProps([
   "data",
   "uploadOptions",
   "uploadForm",
+  "batchImageState",
   "submitUpload",
+  "submitBatchImages",
   "fallbackLetter",
-  "go"
+  "go",
 ]);
 </script>
 
@@ -17,16 +19,17 @@ defineProps([
     :data="data"
     :upload-options="uploadOptions"
     :upload-form="uploadForm"
+    :batch-image-state="batchImageState"
     :submit-upload="submitUpload"
+    :submit-batch-images="submitBatchImages"
   />
   <section class="word-grid">
     <WordListCard
       v-for="card in data.cards"
       :key="card.list.id"
       :card="card"
-      :go="go"
       :fallback-letter="fallbackLetter"
-      show-challenge
+      :go="go"
     />
   </section>
 </template>

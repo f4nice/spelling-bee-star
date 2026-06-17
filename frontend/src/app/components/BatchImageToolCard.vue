@@ -2,25 +2,42 @@
 defineProps({
   cards: {
     type: Array,
-    default: () => [],
+    required: true,
+  },
+  batchImageState: {
+    type: Object,
+    required: true,
+  },
+  submitBatchImages: {
+    type: Function,
+    required: true,
   },
 });
 </script>
 
 <template>
-  <div class="lists-tool-card">
-    <div class="lists-import-heading">
+  <article class="tool-card">
+    <div>
       <p class="section-kicker">Images</p>
       <h2>批量上传图片</h2>
       <p>按序号或英文名自动匹配单词。</p>
     </div>
-    <form action="/lists/batch-images" method="post" enctype="multipart/form-data" class="home-upload-form batch-image-form">
-      <select name="word_list_id" required>
+    <form class="home-upload-form batch-image-form" @submit.prevent="submitBatchImages">
+      <select v-model="batchImageState.word_list_id" required>
         <option value="">选择单词表</option>
         <option v-for="card in cards" :key="card.list.id" :value="card.list.id">{{ card.list.name }}</option>
       </select>
-      <input type="file" name="image_files" accept="image/*" multiple webkitdirectory directory required>
-      <button type="submit">上传匹配</button>
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        webkitdirectory
+        directory
+        required
+        @change="batchImageState.image_files = Array.from($event.target.files || [])"
+      >
+      <button type="submit">上传图片</button>
     </form>
-  </div>
+    <p v-if="batchImageState.notice" class="notice">{{ batchImageState.notice }}</p>
+  </article>
 </template>

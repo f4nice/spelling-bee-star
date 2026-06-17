@@ -180,18 +180,36 @@ def word_lists_page(
     return vue_shell(request, db, "lists")
 
 
+async def batch_upload_word_images_result(
+    word_list_id: int = Form(...),
+    image_files: list[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+) -> dict:
+    word_list = db.get(WordList, word_list_id)
+    if not word_list:
+        raise HTTPException(status_code=404, detail="Word list not found")
+
+    words = get_words_for_list_sequence(db, word_list_id)
+    return await apply_uploaded_images_to_words(words, image_files, db)
+
+
+@app.post("/api/vue/lists/batch-images")
+async def vue_batch_upload_word_images(
+    word_list_id: int = Form(...),
+    image_files: list[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+):
+    result = await batch_upload_word_images_result(word_list_id, image_files, db)
+    return {"ok": True, **result}
+
+
 @app.post("/lists/batch-images")
 async def batch_upload_word_images(
     word_list_id: int = Form(...),
     image_files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
 ):
-    word_list = db.get(WordList, word_list_id)
-    if not word_list:
-        raise HTTPException(status_code=404, detail="Word list not found")
-
-    words = get_words_for_list_sequence(db, word_list_id)
-    result = await apply_uploaded_images_to_words(words, image_files, db)
+    result = await batch_upload_word_images_result(word_list_id, image_files, db)
 
     return RedirectResponse(
         url=(
@@ -1227,17 +1245,12 @@ def rename_word_list(
     return RedirectResponse(url=f"/lists/{word_list_id}", status_code=303)
 
 
-@app.post("/lists/{word_list_id}/delete")
-def delete_word_list(
-    word_list_id: int,
-    password: str = Form(...),
-    db: Session = Depends(get_db),
-):
+def delete_word_list_record(word_list_id: int, password: str, db: Session) -> None:
     word_list = db.get(WordList, word_list_id)
     if not word_list:
         raise HTTPException(status_code=404, detail="Word list not found")
     if password != settings.list_delete_password:
-        return RedirectResponse(url=f"/lists/{word_list_id}?delete_error=1", status_code=303)
+        raise HTTPException(status_code=403, detail="删除密码不正确")
 
     word_ids = [
         row[0]
@@ -1258,6 +1271,30 @@ def delete_word_list(
         db.execute(delete(Word).where(Word.id.in_(exclusive_word_ids)))
     db.delete(word_list)
     db.commit()
+
+
+@app.post("/api/vue/lists/{word_list_id}/delete")
+def vue_delete_word_list(
+    word_list_id: int,
+    password: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    delete_word_list_record(word_list_id, password, db)
+    return {"ok": True}
+
+
+@app.post("/lists/{word_list_id}/delete")
+def delete_word_list(
+    word_list_id: int,
+    password: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        delete_word_list_record(word_list_id, password, db)
+    except HTTPException as exc:
+        if exc.status_code == 403:
+            return RedirectResponse(url=f"/lists/{word_list_id}?delete_error=1", status_code=303)
+        raise
     return RedirectResponse(url="/", status_code=303)
 
 

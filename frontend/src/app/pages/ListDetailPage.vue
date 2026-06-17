@@ -5,16 +5,25 @@ import WordCard from "../components/WordCard.vue";
 
 defineProps([
   "data",
+  "deleteListState",
   "renameList",
+  "deleteList",
   "syncListImages",
   "wordVueUrl",
   "imageForWord",
-  "fallbackLetter"
+  "fallbackLetter",
+  "go",
 ]);
 </script>
 
 <template>
-  <ListDetailHeader :data="data" :rename-list="renameList" />
+  <ListDetailHeader
+    :data="data"
+    :delete-list-state="deleteListState"
+    :rename-list="renameList"
+    :delete-list="deleteList"
+    :go="go"
+  />
   <ListImageSyncPanel :sync-job="data.sync_job" :sync-list-images="syncListImages" />
   <section class="word-grid">
     <WordCard
@@ -23,8 +32,8 @@ defineProps([
       :word="word"
       :index="index"
       :href="wordVueUrl(word, data.word_list.id)"
-      :image-for-word="imageForWord"
-      :fallback-letter="fallbackLetter"
+      :image-url="imageForWord(word)"
+      :fallback-letter="fallbackLetter(word)"
     />
   </section>
 </template>
