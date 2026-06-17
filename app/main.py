@@ -469,7 +469,8 @@ def challenge_page(
 @app.get("/vue", response_class=HTMLResponse)
 @app.get("/vue/{vue_path:path}", response_class=HTMLResponse)
 def vue_app_page(vue_path: str = "", request: Request = None, db: Session = Depends(get_db)):
-    return vue_shell(request, db, vue_path)
+    target = f"/{vue_path.strip('/')}" if vue_path else "/"
+    return RedirectResponse(url=target, status_code=301)
 
 
 @app.get("/api/vue/home")
