@@ -1,70 +1,110 @@
-# SpeakEasy Vue 化进度说明
+# SpeakEasy Vue 化工作台
 
-这份说明用于减少每轮重复扫描和上下文消耗。每轮仍以当前工作树、线上状态和命令输出为准；本文件只作为方向锚点。
+这份文档是后续推进 Vue 化的主索引，用来减少每轮重复扫描和沟通成本。每轮优先读取这里的计划和当前进度，做定点检查后直接修改；等计划项基本完成后，再做一次全项目遗漏扫描。
 
-## 当前状态
+## 目标
 
-- 主入口已切到 Vue shell：`app/templates/vue_app.html` 挂载 `#speakeasy-vue-app`，入口为 `app/static/vue/speakeasy-app.js`。
-- 主要 Vue 源码在 `frontend/src/app`，挑战页源码在 `frontend/src/challenge`。
-- 后端路由仍由 `app/main.py` 返回统一 Vue shell，并通过 `/api/vue/*`、挑战 API、BookLearner API 提供数据。
+- 把 SpeakEasy / spelling-bee-star 的主要页面、旧模板逻辑和前端交互逐步收敛到 Vue 入口。
+- 保持线上功能不变，优先拆组件、抽 props/helper/composable、修复真实中文乱码。
+- 每次代码修改后仍必须构建、编译、提交、推送、部署并验证线上状态。
+
+## 当前基线
+
+- 主入口：`app/templates/vue_app.html` 挂载 `#speakeasy-vue-app`。
+- Vue 源码：`frontend/src/app`；挑战页源码：`frontend/src/challenge`。
+- 构建产物：`app/static/vue/speakeasy-app.js`、`challenge-app.js` 和 Vite shared chunk。
+- 后端入口：`app/main.py` 返回统一 Vue shell，并通过 `/api/vue/*`、挑战 API、BookLearner API 提供数据。
 - 线上地址：`http://47.116.28.2:8010`。
-- GitHub `main` 分支持续提交部署。
+- 部署目标：`caishenye-aliyun:/opt/spelling-bee-star`，服务 `spelling-bee-star.service`。
 
-## 已 Vue 化/已拆分重点
+## 已完成结果
 
-- 页面/出口：列表、列表详情、单词详情、挑战页、挑战日历、英文小报、好词好句、上传、导入预览、生词本等已进入 Vue route outlet/page/component 结构。
-- 路由与数据：已拆出 route matchers、route loaders、route API paths、page context builders。
-- 单词详情：图片、音频、录音、定义编辑、导航等已拆为组件、props helper 和 composable。
-- 列表工具：上传、批量图片、删除、重命名、图片同步等已拆出 API path、form helper 和 composable。
-- BookLearner：分析、保存、详情、历史、上传 workspace 已拆为多个组件和 action/data composable。
-- Shell/Home：侧边栏导航派生、首页统计卡片配置已下沉到 JS helper。
-- 构建产物：Vite shared chunk 使用哈希文件名，部署时要避免入口和 chunk 版本错配。
+- 页面出口已 Vue 化：主页、列表、列表详情、单词详情、挑战页、挑战日历、英文小报、好词好句、上传、导入预览、生词本。
+- 路由和数据层已拆出：route matchers、route loaders、route API paths、page context builders。
+- 单词详情已拆出：媒体面板、定义面板、音频面板、录音面板、图片工具、导航和相关 props/composable。
+- 列表工具已拆出：上传、批量图片、删除、重命名、图片同步相关 API helper 和组件。
+- BookLearner 已拆出：首页、历史、详情、上传分析 workspace、查询面板、结果面板、action/data composable。
+- Shell/Home 已拆出：侧边栏导航派生、挑战进度、首页统计卡片配置。
+- 近期提交：
+  - `f0709f6`：抽出 BookLearner upload workspace props。
+  - `25b3b2c`：抽出通用 Excel 上传表单。
+  - `74be5ef`：抽出批量图片上传表单、列表工具 props helper。
 
-## 当前进行中
+## 正在进行
 
-- 继续把偏大的 Vue 组件、composable、页面配置拆成小组件或 helper。
-- 继续检查源码是否存在真实中文乱码；PowerShell `Get-Content` 可能假乱码，需用 Node 读取 UTF-8 确认。
-- 继续把 FormData、props 装配、卡片配置、路由派生这类非渲染逻辑从 `.vue` 中移出。
+- 当前推进区域：列表工具和上传相关组件。
+- 当前已改到：`BatchImageForm.vue`、`BatchImageToolCard.vue`、`ListsToolsPanel.vue`、`batchImageToolProps.js`、`listsToolsPanelProps.js`。
+- 当前轮状态：`74be5ef` 已推送并部署；本地 build、`py_compile`、乱码扫描、线上 HTTP、浏览器控制台和服务日志验证均已通过。本文档作为后续推进索引继续维护。
 
-## 下一步候选
+## 下一批改哪里
 
-- `frontend/src/app/components/BooklearnerUploadWorkspace.vue`
-- `frontend/src/app/components/WordAudioOptionList.vue`
-- `frontend/src/app/pages/UploadPage.vue`
-- `frontend/src/app/components/ListsToolsPanel.vue`
-- `frontend/src/app/composables/useImportPreviewForm.js`
-- `frontend/src/app/components/ImportPreviewToolbar.vue`
-- `frontend/src/app/components/BatchImageToolCard.vue`
-- `frontend/src/app/components/BooklearnerHero.vue`
-- `frontend/src/app/shellContext.js`
+优先按这个顺序做，除非当前检查发现更高风险问题：
 
-## 每轮固定检查
+1. `frontend/src/app/components/UploadExcelForm.vue`
+   - 目标：减少 `variant` 条件模板重复。
+   - 方向：抽出 select/options 或 page/card 两个轻量子组件，保持表单行为一致。
 
-1. 先检查工作树和热点：
+2. `frontend/src/app/components/WordAudioOptionList.vue`
+   - 目标：继续拆单词音频候选列表。
+   - 方向：把候选项按钮/播放/选择逻辑拆成小组件或 props helper。
+
+3. `frontend/src/app/components/ImportPreviewToolbar.vue`
+   - 目标：导入预览工具栏瘦身。
+   - 方向：拆 sheet 控件、选择动作、提交按钮配置。
+
+4. `frontend/src/app/composables/useImportPreviewForm.js`
+   - 目标：把 URL 构造、表单初始化、批量选择逻辑继续拆成 helper。
+   - 方向：优先抽纯函数，降低 composable 内状态和派生逻辑混杂。
+
+5. `frontend/src/app/components/BooklearnerHero.vue`
+   - 目标：拆 BookLearner 顶部动作和空状态。
+   - 方向：把操作按钮组或 quote list 状态拆成子组件。
+
+6. `frontend/src/app/shellContext.js`
+   - 目标：检查 shell context 默认值、解析、刷新逻辑是否还可拆。
+   - 方向：只抽清晰纯函数，不影响初始化时序。
+
+## 每轮轻量流程
+
+为了少用流量和上下文，后续每轮不再做完整热点扫描，改成：
+
+1. 读取本文件的“正在进行”和“下一批改哪里”。
+2. 运行最小状态检查：
    - `git status --short`
    - `git log -1 --oneline`
-   - 统计 `frontend/src/app` 下 `.vue`/`.js` 行数热点
-   - 搜索旧模板/旧逻辑边界：`TemplateResponse`、`x-data`、`Alpine`、`onclick`、`innerHTML`、`querySelector`、`addEventListener`
-2. 修改后必须运行：
+3. 针对当前计划文件做定点读取和修改。
+4. 修改后固定验证：
    - `npm run build`，工作目录 `frontend`
    - `py -3 -m py_compile app\main.py`
    - Node UTF-8 乱码扫描
-3. 提交并推送 `main`。
-4. 部署到服务器后验证：
+5. 提交并推送 `main`。
+6. 部署后验证：
    - 关键页面 HTTP 200
    - 浏览器控制台无 error
    - `spelling-bee-star.service` 日志无 ERROR/Traceback/Exception/500
+7. 把本文件的“正在进行”和“已完成结果”更新到最新提交。
 
-## 部署注意事项
+## 最终遗漏扫描
 
-- SSH alias：`caishenye-aliyun`
-- 线上目录：`/opt/spelling-bee-star`
-- systemd 服务：`spelling-bee-star.service`
-- 文件 owner/group：`spellingbee`
-- 不输出、不保存服务器密码明文。
-- 若 `app/static/vue` 中哈希 chunk 变化，优先同步整个 `app/static/vue` 目录或确保入口与 chunk 同版本。
+当“下一批改哪里”基本清空后，再执行一次全量扫描，而不是每轮都全扫：
 
-## 关键验证 URL
+- 工作树和提交：
+  - `git status --short`
+  - `git log -1 --oneline`
+- 源码热点：
+  - 统计 `frontend/src/app` 下 `.vue`/`.js` 行数前 30。
+  - 搜索旧模板/旧逻辑边界：`TemplateResponse`、`x-data`、`Alpine`、`onclick`、`innerHTML`、`querySelector`、`addEventListener`。
+- 乱码：
+  - 用 Node 读取 UTF-8 扫描，不以 PowerShell `Get-Content` 显示为准。
+- 后端模板：
+  - 检查 `app/templates` 中是否还有真实页面模板承担交互。
+  - 确认 `app/main.py` 中旧页面路由是否都返回 Vue shell 或 API 数据。
+- 线上：
+  - 全关键路径 HTTP 200。
+  - 浏览器控制台无 error。
+  - 服务日志无异常。
+
+## 固定验证 URL
 
 - `/`
 - `/lists`
@@ -78,3 +118,9 @@
 - `/newspaper`
 - `/newspaper/world/0`
 - `/challenge-calendar/2026-06-18`
+
+## 部署注意
+
+- 不输出、不保存服务器密码明文。
+- 文件 owner/group 使用 `spellingbee`。
+- 如果 `app/static/vue` 中哈希 chunk 变化，要同步入口和 chunk 的同版本文件，避免线上入口与 chunk 版本错配。
