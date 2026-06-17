@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import { fetchJson } from '../utils.js';
+import { wordApiPaths } from '../wordApiPaths.js';
 
 export function useWordEditing({ data }) {
   const wordEdit = ref({});
@@ -21,7 +22,7 @@ export function useWordEditing({ data }) {
     form.append('field', field);
     form.append('value', wordEdit.value[field] || '');
     try {
-      const result = await fetchJson(`/api/vue/words/${data.value.word.id}/field`, { method: 'POST', body: form });
+      const result = await fetchJson(wordApiPaths.field(data.value.word.id), { method: 'POST', body: form });
       data.value.word[field] = result.value;
     } finally {
       wordSaving.value = '';

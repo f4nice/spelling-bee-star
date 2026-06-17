@@ -1,11 +1,12 @@
 import { fetchJson } from "../utils.js";
+import { wordApiPaths } from "../wordApiPaths.js";
 
 export function useWordImageActions({ data, loadRoute }) {
   async function uploadWordImage(file) {
     const form = new FormData();
     form.append("edit_token", "1");
     form.append("file", file);
-    await fetchJson(`/api/vue/words/${data.value.word.id}/image`, { method: "POST", body: form });
+    await fetchJson(wordApiPaths.image(data.value.word.id), { method: "POST", body: form });
     await loadRoute();
   }
 
@@ -13,7 +14,7 @@ export function useWordImageActions({ data, loadRoute }) {
     const form = new FormData();
     form.append("edit_token", "1");
     form.append("image_url", url);
-    await fetchJson(`/api/vue/words/${data.value.word.id}/network-image`, { method: "POST", body: form });
+    await fetchJson(wordApiPaths.networkImage(data.value.word.id), { method: "POST", body: form });
     await loadRoute();
   }
 

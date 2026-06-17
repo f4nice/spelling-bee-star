@@ -1,4 +1,5 @@
 import { fetchJson } from "../utils.js";
+import { wordApiPaths } from "../wordApiPaths.js";
 
 export function useWordDetailLifecycle({ data, loadRoute, resetImageTools, resetAudioTools }) {
   function resetWordTools() {
@@ -9,7 +10,7 @@ export function useWordDetailLifecycle({ data, loadRoute, resetImageTools, reset
   async function refreshWord() {
     const form = new FormData();
     form.append("edit_token", "1");
-    await fetchJson(`/api/vue/words/${data.value.word.id}/refresh`, { method: "POST", body: form });
+    await fetchJson(wordApiPaths.refresh(data.value.word.id), { method: "POST", body: form });
     await loadRoute();
   }
 

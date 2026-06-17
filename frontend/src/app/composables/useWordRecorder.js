@@ -1,5 +1,6 @@
 import { ref } from "vue";
 import { fetchJson } from "../utils.js";
+import { wordApiPaths } from "../wordApiPaths.js";
 import { canRecordAudio, createWordRecorderCapture } from "../wordRecorderCapture.js";
 import {
   createRecordedAudioForm,
@@ -36,7 +37,7 @@ export function useWordRecorder({ data, loadRoute }) {
   async function saveRecording() {
     if (!recorderState.value.blob) return;
     const form = createRecordedAudioForm(recorderState.value);
-    await fetchJson(`/api/vue/words/${data.value.word.id}/recorded-audio`, { method: "POST", body: form });
+    await fetchJson(wordApiPaths.recordedAudio(data.value.word.id), { method: "POST", body: form });
     recorderState.value = createSavedRecorderState();
     await loadRoute();
   }
