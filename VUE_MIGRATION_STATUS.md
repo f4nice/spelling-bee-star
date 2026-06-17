@@ -33,22 +33,19 @@
   - `ae6e42c`：拆分 `WordAudioOptionList.vue` 的候选项组件和 props helper。
   - `f80c5c3`：拆分导入预览工具栏 props、提交按钮和图片选择 helper。
   - `170514c`：拆分 `useImportPreviewForm.js` 的表单状态和 URL helper。
+  - 待提交：拆分 BookLearner Hero 动作区、精选书摘列表和 props helper。
 
 ## 正在进行
 
-- 当前推进区域：BookLearner Hero。
-- 当前已改到：`useImportPreviewForm.js`、`importPreviewFormState.js`。
-- 当前轮状态：`170514c` 已推送并部署；本地 build、`py_compile`、乱码扫描、线上 HTTP、临时 Playwright 控制台检查和服务日志验证均已通过。
+- 当前推进区域：Shell context。
+- 当前已改到：`BooklearnerHero.vue`、`BooklearnerHeroActions.vue`、`BooklearnerFeaturedQuotes.vue` 和对应 props helper。
+- 当前轮状态：本地 build、`py_compile`、乱码扫描已通过；等待提交、推送、部署和线上验证。
 
 ## 下一批改哪里
 
 优先按这个顺序做，除非当前检查发现更高风险问题：
 
-1. `frontend/src/app/components/BooklearnerHero.vue`
-   - 目标：拆 BookLearner 顶部动作和空状态。
-   - 方向：把操作按钮组或 quote list 状态拆成子组件。
-
-2. `frontend/src/app/shellContext.js`
+1. `frontend/src/app/shellContext.js`
    - 目标：检查 shell context 默认值、解析、刷新逻辑是否还可拆。
    - 方向：只抽清晰纯函数，不影响初始化时序。
 
