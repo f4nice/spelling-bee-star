@@ -819,7 +819,6 @@ def challenge_answer_api(
 
 @app.get("/wrong-words", response_class=HTMLResponse)
 def wrong_words_page(request: Request, db: Session = Depends(get_db)):
-    ensure_wrong_word_lists(db)
     return vue_shell(request, db, "wrong-words")
 
 
