@@ -34,22 +34,23 @@
   - `f80c5c3`：拆分导入预览工具栏 props、提交按钮和图片选择 helper。
   - `170514c`：拆分 `useImportPreviewForm.js` 的表单状态和 URL helper。
   - `cf3b750`：拆分 BookLearner Hero 动作区、精选书摘列表和 props helper。
-  - 待提交：拆分 `shellContext.js` 的默认值、JSON 解析和 DOM 文本读取 helper。
+  - `1a7dc31`：拆分 `shellContext.js` 的默认值、JSON 解析和 DOM 文本读取 helper。
+  - 待提交：拆分 `useListDetailTools.js` 的列表重命名、删除和图片同步 action helper。
 
 ## 正在进行
 
-- 当前推进区域：收口扫描。
-- 当前已改到：`shellContext.js` 已瘦身，新增 `shellContextState.js` 承担默认 context、容错解析和 shell script 文本读取。
-- 当前轮状态：本地 `npm run build`、`py -3 -m py_compile app\main.py`、Node UTF-8 乱码扫描已通过；等待文档更新后提交、推送、部署和线上验证。
+- 当前推进区域：列表详情工具。
+- 当前已改到：`useListDetailTools.js` 已瘦身，新增 `listDetailActions.js` 承担重命名、删除和图片同步 action。
+- 当前轮状态：本地 `npm run build`、`py -3 -m py_compile app\main.py`、Node UTF-8 乱码扫描已通过；等待提交、推送、部署和线上验证。
 
 ## 下一批改哪里
 
-当前轻量计划队列已清空。下一步先完成本轮提交/部署，然后按“最终遗漏扫描”结果决定是否开启新一批小拆分。
+当前轻量计划队列继续按最终扫描候选推进。下一步先完成本轮提交/部署，然后再从下面候选中选择一个低风险拆分点。
 
 最终扫描已记录的后续可选候选：
 
 - `frontend/src/app/composables/useWordRecorder.js`：录音逻辑仍偏集中，后续可按 capture/state/actions 再拆。
-- `frontend/src/app/composables/useListDetailTools.js`：列表详情工具动作较多，可继续抽 API/action helper。
+- `frontend/src/app/composables/useListDetailTools.js`：本轮已抽出 `listDetailActions.js`，提交部署后可从候选中移除。
 - `frontend/src/app/components/WordCard.vue`、`ListDetailHeader.vue`、`AppSidebar.vue`：组件体量中等，暂未发现必须立即处理的旧模板逻辑。
 - `frontend/src/app/components/ImportPreviewTable.vue` 和 `frontend/src/app/forms/importPreviewFormState.js`：导入预览已拆一轮，后续只做低风险细化。
 - 旧逻辑边界扫描目前主要命中预期项：`vue_app.html` shell、`app/main.py` 的 Vue shell 返回、Vue/浏览器事件监听、构建产物中的打包代码。

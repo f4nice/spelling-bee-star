@@ -1,34 +1,32 @@
 import { ref } from "vue";
-import { fetchJson } from "../utils.js";
-import { listApiPaths } from "../listApiPaths.js";
-import { runListImageSyncJob } from "../listImageSyncJob.js";
-import { createDeleteListForm, createRenameListForm } from "../listForms.js";
+import {
+  deleteWordList,
+  LIST_DELETE_FALLBACK_ERROR,
+  renameWordList,
+  syncWordListImages,
+} from "../listDetailActions.js";
 
 export function useListDetailTools({ data, go, loadRoute }) {
   const deleteListState = ref({ password: "", notice: "" });
 
   async function renameList() {
-    const form = createRenameListForm(data.value.word_list.name);
-    await fetchJson(listApiPaths.rename(data.value.word_list.id), {
-      method: "POST",
-      body: form,
-    });
+    await renameWordList({ wordList: data.value.word_list });
   }
 
   async function deleteList() {
-    if (!data.value?.word_list?.id || !deleteListState.value.password) return;
-    const form = createDeleteListForm(deleteListState.value.password);
+    const wordListId = data.value?.word_list?.id;
+    if (!wordListId || !deleteListState.value.password) return;
     try {
-      await fetchJson(listApiPaths.delete(data.value.word_list.id), { method: "POST", body: form });
+      await deleteWordList({ wordListId, password: deleteListState.value.password });
       deleteListState.value = { password: "", notice: "" };
       go("/lists");
     } catch (error) {
-      deleteListState.value.notice = error.message || "删除失败";
+      deleteListState.value.notice = error.message || LIST_DELETE_FALLBACK_ERROR;
     }
   }
 
   async function syncListImages() {
-    await runListImageSyncJob({
+    await syncWordListImages({
       wordListId: data.value.word_list.id,
       setJob: (job) => {
         data.value.sync_job = job;
