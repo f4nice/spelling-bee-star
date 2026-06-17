@@ -29,13 +29,13 @@
   - `f0709f6`：抽出 BookLearner upload workspace props。
   - `25b3b2c`：抽出通用 Excel 上传表单。
   - `74be5ef`：抽出批量图片上传表单、列表工具 props helper。
-  - 待提交：拆分 `UploadExcelForm.vue` 的 page/card 字段组件。
+  - `cbef214`：拆分 `UploadExcelForm.vue` 的 page/card 字段组件，并同步新 Vite chunk。
 
 ## 正在进行
 
-- 当前推进区域：上传相关组件。
+- 当前推进区域：单词音频候选列表。
 - 当前已改到：`UploadExcelForm.vue`、`UploadExcelPageFields.vue`、`UploadExcelCardFields.vue`、`uploadExcelFormHandlers.js`。
-- 当前轮状态：本地 build、`py_compile`、乱码扫描已通过；本轮 Vite shared chunk 哈希已变化，部署时需要同步整个 `app/static/vue` 目录。
+- 当前轮状态：`cbef214` 已推送并部署；本地 build、`py_compile`、乱码扫描、线上 HTTP、临时 Playwright 控制台检查、静态 chunk 检查和服务日志验证均已通过。
 
 ## 下一批改哪里
 
