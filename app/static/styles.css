@@ -23,6 +23,14 @@ body {
   background: var(--bg);
 }
 
+.shell-sidebar-toggle {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .app-topbar {
   display: flex;
   align-items: center;
@@ -64,6 +72,8 @@ body {
 }
 
 .menu-toggle {
+  display: grid;
+  place-items: center;
   width: 40px;
   height: 40px;
   border: 1px solid rgba(255, 255, 255, 0.25);
@@ -71,6 +81,8 @@ body {
   color: #fff;
   font-size: 22px;
   padding: 0;
+  cursor: pointer;
+  user-select: none;
 }
 
 .menu-toggle:hover {
@@ -99,7 +111,7 @@ body {
   transition: grid-template-columns 0.2s ease;
 }
 
-.app-layout.sidebar-collapsed {
+.shell-sidebar-toggle:checked ~ .app-layout {
   grid-template-columns: 0 minmax(0, 1fr);
 }
 
@@ -3169,7 +3181,7 @@ select {
     margin-top: 16px;
   }
 
-  .app-layout.sidebar-collapsed .sidebar {
+  .shell-sidebar-toggle:checked ~ .app-layout .sidebar {
     display: none;
   }
 

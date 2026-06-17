@@ -10,6 +10,7 @@
     {% block extra_head %}{% endblock %}
   </head>
   <body>
+    <input class="shell-sidebar-toggle" id="shellSidebarToggle" type="checkbox" aria-hidden="true">
     <header class="app-topbar">
       <a class="app-brand" href="/">
         <span class="brand-mark" aria-hidden="true">
@@ -17,7 +18,7 @@
         </span>
         <span>{{ app_name }}</span>
       </a>
-      <button class="menu-toggle" type="button" aria-label="缩放页面" data-toggle-shell>☰</button>
+      <label class="menu-toggle" for="shellSidebarToggle" aria-label="缩放页面">☰</label>
       <div class="daily-quote">
         {% if daily_quote %}
           {{ daily_quote.content }}{% if daily_quote.author %}<span> - {{ daily_quote.author }}</span>{% endif %}
@@ -27,7 +28,7 @@
       </div>
     </header>
 
-    <div class="app-layout" data-app-layout>
+    <div class="app-layout">
       <aside class="sidebar">
         <nav class="side-nav">
           <a class="{% if request.url.path == '/' %}active{% endif %}" href="/">首页</a>
@@ -57,13 +58,6 @@
       </main>
     </div>
 
-    <script>
-      const layout = document.querySelector('[data-app-layout]');
-      const toggle = document.querySelector('[data-toggle-shell]');
-      toggle.addEventListener('click', () => {
-        layout.classList.toggle('sidebar-collapsed');
-      });
-    </script>
     {% block extra_scripts %}{% endblock %}
   </body>
 </html>
