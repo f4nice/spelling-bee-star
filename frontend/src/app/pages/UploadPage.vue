@@ -19,7 +19,7 @@ defineProps({
   <section class="panel upload-panel">
     <div>
       <h1>导入 Excel</h1>
-      <p>上传后会进入 Vue 预览页，可以选择行、列和单词列。</p>
+      <p>上传后会进入预览页，可以选择行、列和单词列。</p>
     </div>
   </section>
 

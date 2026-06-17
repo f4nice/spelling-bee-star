@@ -20,7 +20,7 @@ defineProps({
     <div>
       <p class="section-kicker">Excel</p>
       <h2>导入单词</h2>
-      <p>上传 Excel 后进入 Vue 预览页。</p>
+      <p>上传 Excel 后进入导入预览页。</p>
     </div>
     <div class="home-upload-form" role="group" aria-label="导入单词">
       <input v-model="uploadForm.word_list_name" placeholder="新单词表名称">

@@ -26,7 +26,7 @@ function challengeUrl(extra = "") {
     <template v-else-if="state">
       <div class="challenge-top">
         <div>
-          <p class="section-kicker">Vue Challenge</p>
+          <p class="section-kicker">Spelling Challenge</p>
           <h1>{{ state.word_list.name }}</h1>
           <p>
             总进度 {{ state.challenge.completed }} / {{ state.challenge.total }}

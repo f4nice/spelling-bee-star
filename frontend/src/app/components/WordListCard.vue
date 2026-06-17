@@ -42,7 +42,7 @@ defineProps({
         type="button"
         @click="go(`/challenge/${card.list.id}?daily_count=20&start_count=${card.challenge.completed}`)"
       >
-        Vue挑战
+        开始挑战
       </button>
     </div>
   </article>

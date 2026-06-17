@@ -17,7 +17,7 @@ defineProps({
       <p class="section-kicker">SpeakEasy</p>
       <h1>{{ routeTitle }}</h1>
     </div>
-    <nav class="vue-page-nav" aria-label="Vue 页面导航">
+    <nav class="vue-page-nav" aria-label="页面导航">
       <button type="button" class="secondary-button" @click="go('/')">首页</button>
       <button type="button" class="secondary-button" @click="go('/lists')">我的单词表</button>
       <button type="button" class="secondary-button" @click="go('/upload')">导入</button>
