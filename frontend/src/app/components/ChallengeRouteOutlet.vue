@@ -10,7 +10,7 @@ defineProps({
 </script>
 
 <template>
-  <div id="challenge-vue-app" :data-word-list-id="route.params.id">
+  <div id="speakeasy-challenge-app" :data-word-list-id="route.params.id">
     <ChallengeApp :word-list-id="route.params.id" />
   </div>
 </template>

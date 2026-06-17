@@ -1,7 +1,8 @@
-import { createApp } from 'vue';
-import ChallengeApp from './ChallengeApp.vue';
+import { createApp } from "vue";
+import ChallengeApp from "./ChallengeApp.vue";
 
-const root = document.getElementById('challenge-vue-app');
+const root = document.getElementById("speakeasy-challenge-app");
+
 createApp(ChallengeApp, {
   wordListId: Number(root?.dataset.wordListId || 0),
-}).mount('#challenge-vue-app');
+}).mount("#speakeasy-challenge-app");

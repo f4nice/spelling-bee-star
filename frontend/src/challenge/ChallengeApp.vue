@@ -10,7 +10,7 @@ const props = defineProps({
   },
 });
 
-const root = document.getElementById("challenge-vue-app");
+const root = document.getElementById("speakeasy-challenge-app");
 const wordListId = Number(props.wordListId || root?.dataset.wordListId || 0);
 const { state, spelling, loading, submitting, errorMessage, submitSpelling, stripDigits } = useChallengeSession(wordListId);
 
