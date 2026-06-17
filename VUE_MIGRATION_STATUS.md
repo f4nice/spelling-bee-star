@@ -41,12 +41,13 @@
   - `4dfb1fd`：拆分 `AppSidebar.vue` 的单个导航链接子组件。
   - `d9a9fc9`：拆分 `ImportPreviewTable.vue` 的表头和数据行子组件。
   - `5642ecf`：拆分导入预览表单行列选择 helper。
-  - 待提交：拆分单词录音 session helper。
+  - `e648933`：拆分单词录音 session helper。
+  - 待提交：拆分单词音频候选加载和选择 action helper。
 
 ## 正在进行
 
-- 当前推进区域：单词录音工具。
-- 当前已改到：新增 `wordRecorderSession.js`，把浏览器录音能力判断、capture 初始化、录音状态准备和停止 session 从 `useWordRecorder.js` 中拆出。
+- 当前推进区域：单词音频工具。
+- 当前已改到：新增 `wordAudioActions.js`，把音频候选加载和音频选择保存 API 调用从 `useWordAudio.js` 中拆出；收口小扫描未发现真实乱码或旧模板交互残留。
 - 当前轮状态：本地 `npm run build`、`py -3 -m py_compile app\main.py`、Node UTF-8 乱码扫描已通过；等待提交、推送、部署和线上验证。
 
 ## 下一批改哪里
@@ -55,7 +56,8 @@
 
 最终扫描已记录的后续可选候选：
 
-- `frontend/src/app/composables/useWordRecorder.js`：本轮已抽出 `wordRecorderSession.js`，提交部署后可从候选中移除。
+- `frontend/src/app/composables/useWordRecorder.js`：已抽出 `wordRecorderSession.js`。
+- `frontend/src/app/composables/useWordAudio.js`：本轮已抽出 `wordAudioActions.js`，提交部署后可从候选中移除。
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDetailActions.js`。
 - `frontend/src/app/components/WordCard.vue`：已拆出媒体和挑战统计子组件。
 - `frontend/src/app/components/ListDetailHeader.vue`：已拆出 `ListTitleEditor.vue`。

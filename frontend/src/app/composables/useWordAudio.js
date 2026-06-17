@@ -1,8 +1,6 @@
 import { ref } from "vue";
 import { useAudioPlayback } from "../../shared/useAudioPlayback.js";
-import { fetchJson } from "../utils.js";
-import { wordApiPaths } from "../wordApiPaths.js";
-import { createAudioChoiceForm, createAudioOptionsForm } from "../wordAudioForms.js";
+import { loadWordAudioOptions, saveWordAudioChoice } from "../wordAudioActions.js";
 import { useWordRecorder } from "./useWordRecorder.js";
 
 export function useWordAudio({ data, loadRoute }) {
@@ -20,14 +18,11 @@ export function useWordAudio({ data, loadRoute }) {
   }
 
   async function fetchAudioOptions(accent) {
-    const form = createAudioOptionsForm(accent);
-    const result = await fetchJson(wordApiPaths.audioOptions(data.value.word.id), { method: "POST", body: form });
-    audioOptions.value[accent] = result.options || [];
+    audioOptions.value[accent] = await loadWordAudioOptions({ wordId: data.value.word.id, accent });
   }
 
   async function chooseAudio(accent, url) {
-    const form = createAudioChoiceForm(accent, url);
-    await fetchJson(wordApiPaths.audioChoice(data.value.word.id), { method: "POST", body: form });
+    await saveWordAudioChoice({ wordId: data.value.word.id, accent, url });
     await loadRoute();
   }
 
