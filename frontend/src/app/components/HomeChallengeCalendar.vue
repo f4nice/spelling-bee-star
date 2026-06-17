@@ -31,12 +31,13 @@ defineProps({
           :key="`${weekIndex}-${dayIndex}`"
           type="button"
           class="calendar-day"
+          style="display: flex; flex-direction: column; align-items: flex-start;"
           :class="{ today: day.is_today, empty: !day.day, 'has-records': day.total }"
           :disabled="!day.total"
           @click="day.total && go(`/challenge-calendar/${day.date}`)"
         >
           <span v-if="day.day" class="calendar-day-number">{{ day.day }}</span>
-          <span v-if="day.total" class="calendar-total">
+          <span v-if="day.total" class="calendar-total" style="display: inline-flex; align-items: baseline; gap: 2px;">
             <strong>{{ day.total }}</strong>
             <span>个</span>
           </span>
