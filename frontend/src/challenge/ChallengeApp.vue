@@ -1,5 +1,7 @@
 <script setup>
 import ChallengeComplete from "./ChallengeComplete.vue";
+import ChallengeHeader from "./ChallengeHeader.vue";
+import ChallengeStats from "./ChallengeStats.vue";
 import ChallengeWordCard from "./ChallengeWordCard.vue";
 import { useChallengeSession } from "./useChallengeSession.js";
 
@@ -24,29 +26,8 @@ function challengeUrl(extra = "") {
     <div v-if="loading" class="empty-state">正在加载挑战...</div>
     <div v-else-if="errorMessage" class="error-box">{{ errorMessage }}</div>
     <template v-else-if="state">
-      <div class="challenge-top">
-        <div>
-          <p class="section-kicker">Spelling Challenge</p>
-          <h1>{{ state.word_list.name }}</h1>
-          <p>
-            总进度 {{ state.challenge.completed }} / {{ state.challenge.total }}
-            · 今日目标 {{ state.today_challenge.done }} / {{ state.today_challenge.total }}
-          </p>
-        </div>
-        <a class="ghost-button" :href="`/lists/${wordListId}`">返回单词表</a>
-      </div>
-
-      <div class="challenge-large-progress">
-        <span :style="{ width: `${state.today_challenge.percent}%` }"></span>
-      </div>
-
-      <div class="challenge-stats">
-        <div><span>本组一共</span><strong>{{ state.today_challenge.total }}</strong><span>个</span></div>
-        <div><span>已答</span><strong>{{ state.today_challenge.answered }}</strong><span>个</span></div>
-        <div><span>剩余</span><strong>{{ state.today_challenge.remaining }}</strong><span>个</span></div>
-        <div><span>本次正确</span><strong class="result-correct">{{ state.today_challenge.correct }}</strong><span>个</span></div>
-        <div><span>本次错误</span><strong class="result-wrong">{{ state.today_challenge.wrong }}</strong><span>个</span></div>
-      </div>
+      <ChallengeHeader :state="state" :word-list-id="wordListId" />
+      <ChallengeStats :today="state.today_challenge" />
 
       <ChallengeWordCard
         v-if="state.current_word"
