@@ -8,7 +8,7 @@ import { useListTools } from "./composables/useListTools.js";
 import { useWordDetail } from "./composables/useWordDetail.js";
 import { usePageContext } from "./pageContext.js";
 import { loadVueRouteData } from "./routeDataLoader.js";
-import { oldPathFor, parseRoute, routeTitle as titleForRoute } from "./router.js";
+import { parseRoute, routeTitle as titleForRoute } from "./router.js";
 
 const route = ref(parseRoute());
 const data = ref(null);
@@ -16,7 +16,6 @@ const loading = ref(false);
 const error = ref("");
 
 const routeTitle = computed(() => titleForRoute(route.value, data.value));
-const legacyHref = computed(() => oldPathFor(window.location.pathname));
 
 function setError(message) {
   error.value = message;
@@ -92,7 +91,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <VuePageHeader :route-title="routeTitle" :legacy-href="legacyHref" :go="go" />
+  <VuePageHeader :route-title="routeTitle" :go="go" />
   <div v-if="loading" class="empty-state">正在加载...</div>
   <div v-else-if="error" class="error-box">{{ error }}</div>
   <VuePageOutlet v-else :ctx="pageContext" />

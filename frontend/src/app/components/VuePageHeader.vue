@@ -4,10 +4,6 @@ defineProps({
     type: String,
     required: true,
   },
-  legacyHref: {
-    type: String,
-    required: true,
-  },
   go: {
     type: Function,
     required: true,
@@ -18,7 +14,7 @@ defineProps({
 <template>
   <section class="panel vue-page-heading">
     <div>
-      <p class="section-kicker">Vue App</p>
+      <p class="section-kicker">SpeakEasy</p>
       <h1>{{ routeTitle }}</h1>
     </div>
     <nav class="vue-page-nav" aria-label="Vue 页面导航">
@@ -28,7 +24,6 @@ defineProps({
       <button type="button" class="secondary-button" @click="go('/newspaper')">英文小报</button>
       <button type="button" class="secondary-button" @click="go('/booklearner')">好词好句</button>
       <button type="button" class="secondary-button" @click="go('/wrong-words')">我的生词本</button>
-      <a class="ghost-button" :href="legacyHref">返回旧版</a>
     </nav>
   </section>
 </template>

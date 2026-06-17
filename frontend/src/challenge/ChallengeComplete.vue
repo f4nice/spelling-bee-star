@@ -4,7 +4,7 @@ defineProps({
     type: Object,
     required: true,
   },
-  legacyUrl: {
+  restartUrl: {
     type: String,
     required: true,
   },
@@ -13,7 +13,7 @@ defineProps({
 
 <template>
   <div class="challenge-complete">
-    <h2>{{ state.today_challenge.all_complete ? '你怎么如此优秀，整组都拿下了' : '今日目标完成了' }}</h2>
+    <h2>{{ state.today_challenge.all_complete ? '太棒了，整组都拿下了' : '今日目标完成了' }}</h2>
     <div class="challenge-result-grid">
       <div><span>本次挑战</span><strong>{{ state.today_challenge.answered }} / {{ state.today_challenge.total }}</strong></div>
       <div><span>答对</span><strong class="result-correct">{{ state.today_challenge.correct }}</strong></div>
@@ -21,7 +21,7 @@ defineProps({
       <div><span>正确率</span><strong>{{ state.today_challenge.accuracy }}%</strong></div>
     </div>
     <div class="challenge-complete-actions">
-      <a class="secondary-button" :href="legacyUrl">回到原挑战页</a>
+      <a class="secondary-button" :href="restartUrl">再练一组</a>
     </div>
   </div>
 </template>

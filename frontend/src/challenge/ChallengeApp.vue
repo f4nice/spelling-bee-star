@@ -1,7 +1,7 @@
 <script setup>
-import ChallengeComplete from './ChallengeComplete.vue';
-import ChallengeWordCard from './ChallengeWordCard.vue';
-import { useChallengeSession } from './useChallengeSession.js';
+import ChallengeComplete from "./ChallengeComplete.vue";
+import ChallengeWordCard from "./ChallengeWordCard.vue";
+import { useChallengeSession } from "./useChallengeSession.js";
 
 const props = defineProps({
   wordListId: {
@@ -10,19 +10,11 @@ const props = defineProps({
   },
 });
 
-const root = document.getElementById('challenge-vue-app');
+const root = document.getElementById("challenge-vue-app");
 const wordListId = Number(props.wordListId || root?.dataset.wordListId || 0);
-const {
-  state,
-  spelling,
-  loading,
-  submitting,
-  errorMessage,
-  submitSpelling,
-  stripDigits,
-} = useChallengeSession(wordListId);
+const { state, spelling, loading, submitting, errorMessage, submitSpelling, stripDigits } = useChallengeSession(wordListId);
 
-function legacyChallengeUrl(extra = '') {
+function challengeUrl(extra = "") {
   return `/challenge/${wordListId}${extra}`;
 }
 </script>
@@ -64,7 +56,7 @@ function legacyChallengeUrl(extra = '') {
         @submit="submitSpelling"
         @strip-digits="stripDigits"
       />
-      <ChallengeComplete v-else :state="state" :legacy-url="legacyChallengeUrl(`?daily_count=20&start_count=0`)" />
+      <ChallengeComplete v-else :state="state" :restart-url="challengeUrl('?daily_count=20&start_count=0')" />
     </template>
   </section>
 </template>
