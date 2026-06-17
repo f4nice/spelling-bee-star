@@ -1,8 +1,9 @@
-import { ref } from 'vue';
-import { fetchJson } from '../utils.js';
-import { wordApiPaths } from '../wordApiPaths.js';
-import { useAudioPlayback } from '../../shared/useAudioPlayback.js';
-import { useWordRecorder } from './useWordRecorder.js';
+import { ref } from "vue";
+import { useAudioPlayback } from "../../shared/useAudioPlayback.js";
+import { fetchJson } from "../utils.js";
+import { wordApiPaths } from "../wordApiPaths.js";
+import { createAudioChoiceForm, createAudioOptionsForm } from "../wordAudioForms.js";
+import { useWordRecorder } from "./useWordRecorder.js";
 
 export function useWordAudio({ data, loadRoute }) {
   const audioOptions = ref({ us: [], gb: [] });
@@ -19,19 +20,14 @@ export function useWordAudio({ data, loadRoute }) {
   }
 
   async function fetchAudioOptions(accent) {
-    const form = new FormData();
-    form.append('edit_token', '1');
-    form.append('accent', accent);
-    const result = await fetchJson(wordApiPaths.audioOptions(data.value.word.id), { method: 'POST', body: form });
+    const form = createAudioOptionsForm(accent);
+    const result = await fetchJson(wordApiPaths.audioOptions(data.value.word.id), { method: "POST", body: form });
     audioOptions.value[accent] = result.options || [];
   }
 
   async function chooseAudio(accent, url) {
-    const form = new FormData();
-    form.append('edit_token', '1');
-    form.append('accent', accent);
-    form.append('audio_url', url);
-    await fetchJson(wordApiPaths.audioChoice(data.value.word.id), { method: 'POST', body: form });
+    const form = createAudioChoiceForm(accent, url);
+    await fetchJson(wordApiPaths.audioChoice(data.value.word.id), { method: "POST", body: form });
     await loadRoute();
   }
 
