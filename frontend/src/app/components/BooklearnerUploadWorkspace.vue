@@ -1,33 +1,9 @@
 <script setup>
+import { booklearnerUploadWorkspaceProps } from "../props/booklearnerUploadWorkspaceProps.js";
 import BooklearnerAnalysisResult from "./BooklearnerAnalysisResult.vue";
 import BooklearnerQueryPanel from "./BooklearnerQueryPanel.vue";
 
-defineProps({
-  book: {
-    type: Object,
-    required: true,
-  },
-  analyzeBookQuery: {
-    type: Function,
-    required: true,
-  },
-  analyzeBookText: {
-    type: Function,
-    required: true,
-  },
-  analyzeBookFile: {
-    type: Function,
-    required: true,
-  },
-  saveBookAnalysis: {
-    type: Function,
-    required: true,
-  },
-  createBookWordList: {
-    type: Function,
-    required: true,
-  },
-});
+defineProps(booklearnerUploadWorkspaceProps);
 </script>
 
 <template>
