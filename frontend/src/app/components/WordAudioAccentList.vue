@@ -1,36 +1,9 @@
 <script setup>
+import { wordAudioAccentListProps } from "../props/wordAudioAccentListProps.js";
+import { buildWordAudioAccentPanelProps } from "../wordAudioAccentPanelProps.js";
 import WordAudioAccentPanel from "./WordAudioAccentPanel.vue";
 
-defineProps({
-  data: {
-    type: Object,
-    required: true,
-  },
-  audioOptions: {
-    type: Object,
-    required: true,
-  },
-  accents: {
-    type: Array,
-    required: true,
-  },
-  playAudio: {
-    type: Function,
-    required: true,
-  },
-  fetchAudioOptions: {
-    type: Function,
-    required: true,
-  },
-  startRecording: {
-    type: Function,
-    required: true,
-  },
-  chooseAudio: {
-    type: Function,
-    required: true,
-  },
-});
+const props = defineProps(wordAudioAccentListProps);
 </script>
 
 <template>
@@ -38,13 +11,7 @@ defineProps({
     <WordAudioAccentPanel
       v-for="accent in accents"
       :key="accent.key"
-      :accent="accent"
-      :data="data"
-      :options="audioOptions[accent.key] || []"
-      :play-audio="playAudio"
-      :fetch-audio-options="fetchAudioOptions"
-      :start-recording="startRecording"
-      :choose-audio="chooseAudio"
+      v-bind="buildWordAudioAccentPanelProps(props, accent)"
     />
   </div>
 </template>
