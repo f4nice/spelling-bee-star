@@ -471,7 +471,7 @@ def challenge_vue_page(word_list_id: int, request: Request, db: Session = Depend
     word_list = db.get(WordList, word_list_id)
     if not word_list:
         raise HTTPException(status_code=404, detail="Word list not found")
-    return vue_shell(request, db, f"challenge/{word_list_id}")
+    return RedirectResponse(url=f"/challenge/{word_list_id}", status_code=301)
 
 
 @app.get("/vue", response_class=HTMLResponse)

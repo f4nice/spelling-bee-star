@@ -12,7 +12,7 @@ defineProps({
 
 function wordUrl(item) {
   const query = item.word_list_id ? `?edit=1&list_id=${item.word_list_id}` : '?edit=1';
-  return `/vue/words/${item.id}${query}`;
+  return `/words/${item.id}${query}`;
 }
 </script>
 

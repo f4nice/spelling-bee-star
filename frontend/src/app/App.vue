@@ -22,8 +22,7 @@ function setError(message) {
 }
 
 function go(path) {
-  const prefix = window.location.pathname.startsWith("/vue") ? "/vue" : "";
-  history.pushState(null, "", `${prefix}${path}`);
+  history.pushState(null, "", path);
   route.value = parseRoute();
   loadRoute();
 }

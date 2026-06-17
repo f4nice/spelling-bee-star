@@ -30,7 +30,7 @@ export function useImportPreview({ data, route, go, loadRoute, setError }) {
       word_list_name: importForm.value.word_list_name || data.value.preview.word_list_name || '',
       word_list_id: data.value.preview.word_list_id || '',
     });
-    history.replaceState(null, '', `/vue/upload/preview/${route.value.params.id}?${params.toString()}`);
+    history.replaceState(null, '', `/upload/preview/${route.value.params.id}?${params.toString()}`);
     await loadRoute();
   }
 

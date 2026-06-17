@@ -2,7 +2,7 @@ export function useWordNavigation({ data }) {
   function wordNavUrl(wordId) {
     const params = new URLSearchParams(window.location.search);
     params.set('edit', '1');
-    return `/vue/words/${wordId}?${params.toString()}`;
+    return `/words/${wordId}?${params.toString()}`;
   }
 
   function handleWordKeydown(event, route) {

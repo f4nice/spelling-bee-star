@@ -18,7 +18,7 @@ export function wordVueUrl(word, listId = null) {
   const params = new URLSearchParams();
   params.set('edit', '1');
   if (listId) params.set('list_id', listId);
-  return `/vue/words/${word.id}?${params.toString()}`;
+  return `/words/${word.id}?${params.toString()}`;
 }
 
 export function articleText(article) {
