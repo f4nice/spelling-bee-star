@@ -2,13 +2,13 @@ import { ref } from "vue";
 import { fetchJson } from "../utils.js";
 import { listApiPaths } from "../listApiPaths.js";
 import { runListImageSyncJob } from "../listImageSyncJob.js";
+import { createDeleteListForm, createRenameListForm } from "../listForms.js";
 
 export function useListDetailTools({ data, go, loadRoute }) {
   const deleteListState = ref({ password: "", notice: "" });
 
   async function renameList() {
-    const form = new FormData();
-    form.append("name", data.value.word_list.name);
+    const form = createRenameListForm(data.value.word_list.name);
     await fetchJson(listApiPaths.rename(data.value.word_list.id), {
       method: "POST",
       body: form,
@@ -17,8 +17,7 @@ export function useListDetailTools({ data, go, loadRoute }) {
 
   async function deleteList() {
     if (!data.value?.word_list?.id || !deleteListState.value.password) return;
-    const form = new FormData();
-    form.append("password", deleteListState.value.password);
+    const form = createDeleteListForm(deleteListState.value.password);
     try {
       await fetchJson(listApiPaths.delete(data.value.word_list.id), { method: "POST", body: form });
       deleteListState.value = { password: "", notice: "" };

@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import { fetchJson } from "../utils.js";
 import { listApiPaths } from "../listApiPaths.js";
+import { createListUploadForm } from "../listForms.js";
 
 export function useListUploadTools({ go }) {
   const uploadOptions = ref({ word_lists: [] });
@@ -16,10 +17,11 @@ export function useListUploadTools({ go }) {
 
   async function submitUpload() {
     if (!uploadForm.value.file) return;
-    const form = new FormData();
-    form.append("file", uploadForm.value.file);
-    form.append("word_list_id", uploadForm.value.word_list_id || "");
-    form.append("word_list_name", uploadForm.value.word_list_name || "");
+    const form = createListUploadForm({
+      file: uploadForm.value.file,
+      wordListId: uploadForm.value.word_list_id,
+      wordListName: uploadForm.value.word_list_name,
+    });
     const result = await fetchJson(listApiPaths.upload(), { method: "POST", body: form });
     go(`/upload/preview/${result.preview_id}`);
   }
