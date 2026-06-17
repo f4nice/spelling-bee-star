@@ -1,5 +1,5 @@
 import { computed } from "vue";
-import { articleText, fallbackLetter, imageForWord, wordVueUrl } from "./utils.js";
+import { articleText, fallbackLetter, imageForWord, wordDetailUrl } from "./utils.js";
 
 export function usePageContext({
   route,
@@ -16,7 +16,7 @@ export function usePageContext({
     go,
     fallbackLetter,
     imageForWord,
-    wordVueUrl,
+    wordDetailUrl,
     articleText,
     importForm: importPreview.importForm.value,
     setAllRows: importPreview.setAllRows,

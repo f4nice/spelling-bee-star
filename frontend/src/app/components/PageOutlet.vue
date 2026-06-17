@@ -40,7 +40,7 @@ defineProps({
     :rename-list="ctx.renameList"
     :delete-list="ctx.deleteList"
     :sync-list-images="ctx.syncListImages"
-    :word-vue-url="ctx.wordVueUrl"
+    :word-detail-url="ctx.wordDetailUrl"
     :image-for-word="ctx.imageForWord"
     :fallback-letter="ctx.fallbackLetter"
     :go="ctx.go"

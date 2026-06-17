@@ -9,7 +9,7 @@ defineProps([
   "renameList",
   "deleteList",
   "syncListImages",
-  "wordVueUrl",
+  "wordDetailUrl",
   "imageForWord",
   "fallbackLetter",
   "go",
@@ -31,7 +31,7 @@ defineProps([
       :key="word.id"
       :word="word"
       :index="index"
-      :href="wordVueUrl(word, data.word_list.id)"
+      :href="wordDetailUrl(word, data.word_list.id)"
       :image-url="imageForWord(word)"
       :fallback-letter="fallbackLetter(word)"
     />

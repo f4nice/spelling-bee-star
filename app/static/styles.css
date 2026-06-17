@@ -1924,7 +1924,7 @@ button:hover {
   justify-content: flex-end;
 }
 
-.vue-page-heading {
+.app-page-heading {
   display: flex;
   justify-content: space-between;
   gap: 16px;
@@ -1932,11 +1932,11 @@ button:hover {
   margin-bottom: 16px;
 }
 
-.vue-page-heading h1 {
+.app-page-heading h1 {
   margin: 0;
 }
 
-.vue-page-nav {
+.app-page-nav {
   display: flex;
   gap: 8px;
   align-items: center;
@@ -3281,12 +3281,12 @@ select {
     justify-content: flex-start;
   }
 
-  .vue-page-heading {
+  .app-page-heading {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .vue-page-nav {
+  .app-page-nav {
     justify-content: flex-start;
   }
 

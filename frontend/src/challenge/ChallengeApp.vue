@@ -20,7 +20,7 @@ function challengeUrl(extra = "") {
 </script>
 
 <template>
-  <section class="panel challenge-panel vue-challenge-panel">
+  <section class="panel challenge-panel spelling-challenge-panel">
     <div v-if="loading" class="empty-state">正在加载挑战...</div>
     <div v-else-if="errorMessage" class="error-box">{{ errorMessage }}</div>
     <template v-else-if="state">

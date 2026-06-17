@@ -14,7 +14,7 @@ export function fallbackLetter(word) {
   return (word?.word || '?').slice(0, 1).toUpperCase();
 }
 
-export function wordVueUrl(word, listId = null) {
+export function wordDetailUrl(word, listId = null) {
   const params = new URLSearchParams();
   params.set('edit', '1');
   if (listId) params.set('list_id', listId);

@@ -1,14 +1,14 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import AppShell from "./components/AppShell.vue";
-import VuePageHeader from "./components/VuePageHeader.vue";
-import VuePageOutlet from "./components/VuePageOutlet.vue";
+import PageHeader from "./components/PageHeader.vue";
+import PageOutlet from "./components/PageOutlet.vue";
 import { useBooklearner } from "./composables/useBooklearner.js";
 import { useImportPreview } from "./composables/useImportPreview.js";
 import { useListTools } from "./composables/useListTools.js";
 import { useWordDetail } from "./composables/useWordDetail.js";
 import { usePageContext } from "./pageContext.js";
-import { loadVueRouteData } from "./routeDataLoader.js";
+import { loadRouteData } from "./routeDataLoader.js";
 import { parseRoute, routeTitle as titleForRoute } from "./router.js";
 import { fetchJson } from "./utils.js";
 
@@ -72,7 +72,7 @@ async function loadRoute() {
   loading.value = true;
   error.value = "";
   try {
-    await loadVueRouteData({
+    await loadRouteData({
       route: route.value,
       data,
       resetWordTools,
@@ -116,9 +116,9 @@ onUnmounted(() => {
 
 <template>
   <AppShell :route="route" :route-title="routeTitle" :shell="shellContext" :go="go">
-    <VuePageHeader :route-title="routeTitle" :go="go" />
+    <PageHeader :route-title="routeTitle" :go="go" />
     <div v-if="loading" class="empty-state">正在加载...</div>
     <div v-else-if="error" class="error-box">{{ error }}</div>
-    <VuePageOutlet v-else :ctx="pageContext" />
+    <PageOutlet v-else :ctx="pageContext" />
   </AppShell>
 </template>

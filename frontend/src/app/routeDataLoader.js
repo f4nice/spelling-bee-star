@@ -1,6 +1,6 @@
 import { fetchJson } from './utils.js';
 
-export async function loadVueRouteData({
+export async function loadRouteData({
   route,
   data,
   resetWordTools,
