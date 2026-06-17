@@ -1,5 +1,6 @@
 <script setup>
-import WordEditableDefinitionItem from "./WordEditableDefinitionItem.vue";
+import WordEditableDefinitionFields from "./WordEditableDefinitionFields.vue";
+import WordStaticDefinitionItem from "./WordStaticDefinitionItem.vue";
 
 defineProps({
   data: {
@@ -19,35 +20,13 @@ defineProps({
 
 <template>
   <dl class="definition-list">
-    <dt>词性</dt>
-    <dd>{{ data.word.part_of_speech || "暂无" }}</dd>
-
-    <WordEditableDefinitionItem
-      label="英文定义"
-      field="english_definition"
+    <WordStaticDefinitionItem label="词性" :value="data.word.part_of_speech" />
+    <WordEditableDefinitionFields
       :word="data.word"
       :word-edit="wordEdit"
       :can-edit="data.can_edit"
       :save-word-field="saveWordField"
     />
-    <WordEditableDefinitionItem
-      label="中文定义"
-      field="chinese_definition"
-      :word="data.word"
-      :word-edit="wordEdit"
-      :can-edit="data.can_edit"
-      :save-word-field="saveWordField"
-    />
-    <WordEditableDefinitionItem
-      label="英文例句"
-      field="english_example"
-      :word="data.word"
-      :word-edit="wordEdit"
-      :can-edit="data.can_edit"
-      :save-word-field="saveWordField"
-    />
-
-    <dt>来源</dt>
-    <dd>{{ data.word.source || "暂无" }}</dd>
+    <WordStaticDefinitionItem label="来源" :value="data.word.source" />
   </dl>
 </template>
