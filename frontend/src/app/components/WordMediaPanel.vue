@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from "vue";
 
-defineProps({
+const props = defineProps({
   data: {
     type: Object,
     required: true,
@@ -29,6 +29,12 @@ defineProps({
 });
 
 const selectedImageFile = ref(null);
+
+async function saveSelectedImage() {
+  if (!selectedImageFile.value) return;
+  await props.uploadWordImage(selectedImageFile.value);
+  selectedImageFile.value = null;
+}
 </script>
 
 <template>
@@ -51,7 +57,7 @@ const selectedImageFile = ref(null);
         type="button"
         class="secondary-button"
         :disabled="!selectedImageFile"
-        @click="uploadWordImage(selectedImageFile)"
+        @click="saveSelectedImage"
       >
         保存图片
       </button>
