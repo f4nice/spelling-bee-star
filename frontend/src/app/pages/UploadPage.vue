@@ -1,18 +1,8 @@
 <script setup>
-defineProps({
-  uploadForm: {
-    type: Object,
-    required: true,
-  },
-  uploadOptions: {
-    type: Object,
-    required: true,
-  },
-  submitUpload: {
-    type: Function,
-    required: true,
-  },
-});
+import UploadExcelForm from "../components/UploadExcelForm.vue";
+import { uploadExcelFormProps } from "../props/uploadExcelFormProps.js";
+
+defineProps(uploadExcelFormProps);
 </script>
 
 <template>
@@ -23,27 +13,9 @@ defineProps({
     </div>
   </section>
 
-  <section class="panel upload-form wide-form" role="group" aria-label="导入 Excel">
-    <label>
-      单词表名称
-      <input v-model="uploadForm.word_list_name" required>
-    </label>
-    <label>
-      已有单词表
-      <select v-model="uploadForm.word_list_id">
-        <option value="">新建单词表</option>
-        <option v-for="item in uploadOptions.word_lists" :key="item.id" :value="item.id">{{ item.name }}</option>
-      </select>
-    </label>
-    <label>
-      Excel 文件
-      <input
-        type="file"
-        accept=".xlsx,.xlsm,.xltx,.xltm"
-        required
-        @change="uploadForm.file = $event.target.files[0]"
-      >
-    </label>
-    <button type="button" @click="submitUpload">上传预览</button>
-  </section>
+  <UploadExcelForm
+    :upload-form="uploadForm"
+    :upload-options="uploadOptions"
+    :submit-upload="submitUpload"
+  />
 </template>
