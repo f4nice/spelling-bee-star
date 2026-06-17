@@ -19,6 +19,7 @@ defineProps({
     :upload-word-image="ctx.uploadWordImage"
     :find-images="ctx.findImages"
     :choose-network-image="ctx.chooseNetworkImage"
+    :image-for-word="ctx.imageForWord"
     :word-nav-url="ctx.wordNavUrl"
     :save-word-field="ctx.saveWordField"
     :refresh-word="ctx.refreshWord"
@@ -28,6 +29,5 @@ defineProps({
     :choose-audio="ctx.chooseAudio"
     :stop-recording="ctx.stopRecording"
     :save-recording="ctx.saveRecording"
-    :fallback-letter="ctx.fallbackLetter"
   />
 </template>

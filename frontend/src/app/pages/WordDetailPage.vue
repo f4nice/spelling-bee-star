@@ -11,6 +11,7 @@ defineProps([
   "uploadWordImage",
   "findImages",
   "chooseNetworkImage",
+  "imageForWord",
   "wordNavUrl",
   "saveWordField",
   "refreshWord",
@@ -20,7 +21,6 @@ defineProps([
   "chooseAudio",
   "stopRecording",
   "saveRecording",
-  "fallbackLetter",
 ]);
 </script>
 
@@ -29,7 +29,7 @@ defineProps([
     <WordMediaPanel
       :data="data"
       :image-candidates="imageCandidates"
-      :fallback-letter="fallbackLetter"
+      :image-for-word="imageForWord"
       :upload-word-image="uploadWordImage"
       :find-images="findImages"
       :choose-network-image="chooseNetworkImage"
