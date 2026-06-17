@@ -3,32 +3,31 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import AppShell from "./components/AppShell.vue";
 import PageHeader from "./components/PageHeader.vue";
 import PageOutlet from "./components/PageOutlet.vue";
+import { useAppRouteController } from "./appRouteController.js";
 import { useBooklearner } from "./composables/useBooklearner.js";
 import { useImportPreview } from "./composables/useImportPreview.js";
 import { useListTools } from "./composables/useListTools.js";
 import { useWordDetail } from "./composables/useWordDetail.js";
 import { usePageContext } from "./pageContext.js";
-import { loadRouteData } from "./routeDataLoader.js";
-import { parseRoute, routeTitle as titleForRoute } from "./router.js";
+import { routeTitle as titleForRoute } from "./router.js";
 import { useShellContext } from "./shellContext.js";
 
-const route = ref(parseRoute());
 const data = ref(null);
-const loading = ref(false);
-const error = ref("");
 const { shellContext, refreshShellContext } = useShellContext();
+const { route, loading, error, setError, go, loadRoute, onPopState } = useAppRouteController({
+  data,
+  refreshShellContext,
+  getRouteLoaders: () => ({
+    resetWordTools,
+    setWordEdit,
+    setUploadOptionsFromCards,
+    loadUploadOptions,
+    resetImportForm,
+    loadBooklearner,
+  }),
+});
 
 const routeTitle = computed(() => titleForRoute(route.value, data.value));
-
-function setError(message) {
-  error.value = message;
-}
-
-function go(path) {
-  history.pushState(null, "", path);
-  route.value = parseRoute();
-  loadRoute();
-}
 
 const importPreview = useImportPreview({ data, route, go, loadRoute, setError });
 const { resetImportForm } = importPreview;
@@ -43,40 +42,6 @@ const listTools = useListTools({ data, go, loadRoute });
 const { setUploadOptionsFromCards, loadUploadOptions } = listTools;
 
 const pageContext = usePageContext({ route, data, go, importPreview, wordDetail, booklearner, listTools });
-
-function onPopState() {
-  route.value = parseRoute();
-  loadRoute();
-}
-
-async function loadRoute() {
-  if (route.value.name === "challenge") {
-    data.value = null;
-    error.value = "";
-    refreshShellContext();
-    return;
-  }
-
-  loading.value = true;
-  error.value = "";
-  try {
-    await loadRouteData({
-      route: route.value,
-      data,
-      resetWordTools,
-      setWordEdit,
-      setUploadOptionsFromCards,
-      loadUploadOptions,
-      resetImportForm,
-      loadBooklearner,
-    });
-  } catch (err) {
-    error.value = err.message || "页面数据加载失败";
-  } finally {
-    loading.value = false;
-    refreshShellContext();
-  }
-}
 
 function onKeydown(event) {
   handleWordKeydown(event, route.value);
