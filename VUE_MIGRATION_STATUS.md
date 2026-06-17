@@ -38,12 +38,13 @@
   - `f67a080`：拆分 `useListDetailTools.js` 的列表重命名、删除和图片同步 action helper。
   - `e218ce6`：拆分 `WordCard.vue` 的媒体和挑战统计子组件，并修复卡片中文乱码。
   - `3afc0c3`：拆分 `ListDetailHeader.vue` 的标题编辑和单词数量子组件。
-  - 待提交：拆分 `AppSidebar.vue` 的单个导航链接子组件。
+  - `4dfb1fd`：拆分 `AppSidebar.vue` 的单个导航链接子组件。
+  - 待提交：拆分 `ImportPreviewTable.vue` 的表头和数据行子组件。
 
 ## 正在进行
 
-- 当前推进区域：应用侧边栏。
-- 当前已改到：`AppSidebar.vue` 已瘦身，新增 `SidebarNavLink.vue` 承担单个导航链接、active 状态和计数徽标显示。
+- 当前推进区域：导入预览表格。
+- 当前已改到：`ImportPreviewTable.vue` 已瘦身，新增 `ImportPreviewTableHead.vue` 和 `ImportPreviewTableRow.vue` 承担表头列选择和行选择/单元格显示。
 - 当前轮状态：本地 `npm run build`、`py -3 -m py_compile app\main.py`、Node UTF-8 乱码扫描已通过；等待提交、推送、部署和线上验证。
 
 ## 下一批改哪里
@@ -56,8 +57,9 @@
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDetailActions.js`。
 - `frontend/src/app/components/WordCard.vue`：已拆出媒体和挑战统计子组件。
 - `frontend/src/app/components/ListDetailHeader.vue`：已拆出 `ListTitleEditor.vue`。
-- `frontend/src/app/components/AppSidebar.vue`：本轮已拆出 `SidebarNavLink.vue`，提交部署后可从候选中移除。
-- `frontend/src/app/components/ImportPreviewTable.vue` 和 `frontend/src/app/forms/importPreviewFormState.js`：导入预览已拆一轮，后续只做低风险细化。
+- `frontend/src/app/components/AppSidebar.vue`：已拆出 `SidebarNavLink.vue`。
+- `frontend/src/app/components/ImportPreviewTable.vue`：本轮已拆出表头和行组件，提交部署后可从候选中移除。
+- `frontend/src/app/forms/importPreviewFormState.js`：导入预览表单状态已拆一轮，后续只做低风险细化。
 - 旧逻辑边界扫描目前主要命中预期项：`vue_app.html` shell、`app/main.py` 的 Vue shell 返回、Vue/浏览器事件监听、构建产物中的打包代码。
 
 ## 每轮轻量流程
