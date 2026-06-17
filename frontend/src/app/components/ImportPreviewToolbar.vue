@@ -28,8 +28,11 @@ defineProps({
 </script>
 
 <template>
-  <div class="import-toolbar">
-    <label>单词表名称 <input v-model="importForm.word_list_name" required></label>
+  <div class="import-toolbar" role="group" aria-label="导入预览工具栏">
+    <label>
+      单词表名称
+      <input v-model="importForm.word_list_name" required>
+    </label>
     <label>
       Sheet
       <select
@@ -37,7 +40,7 @@ defineProps({
         :value="preview.sheet_name"
         @change="changePreviewSheet($event.target.value)"
       >
-        <option v-for="sheet in preview.sheet_names" :key="sheet" :value="sheet">{{ sheet }}</option>
+        <option v-for="name in preview.sheet_names" :key="name" :value="name">{{ name }}</option>
       </select>
       <input v-else :value="preview.sheet_name || 'Sheet1'" disabled>
     </label>
