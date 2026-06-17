@@ -448,13 +448,6 @@ def challenge_page(
     return vue_shell(request, db, f"challenge/{word_list_id}")
 
 
-@app.get("/vue", response_class=HTMLResponse)
-@app.get("/vue/{vue_path:path}", response_class=HTMLResponse)
-def vue_app_page(vue_path: str = "", request: Request = None, db: Session = Depends(get_db)):
-    target = f"/{vue_path.strip('/')}" if vue_path else "/"
-    return RedirectResponse(url=target, status_code=301)
-
-
 @app.get("/api/vue/home")
 def vue_home_api(db: Session = Depends(get_db)):
     today = date.today()

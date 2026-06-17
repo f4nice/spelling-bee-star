@@ -1,5 +1,5 @@
 export function parseRoute(pathname = window.location.pathname) {
-  const path = pathname.replace(/^\/vue\/?/, "").replace(/\/$/, "");
+  const path = pathname.replace(/\/$/, "").replace(/^\//, "");
   const parts = path ? path.split("/") : [];
   if (!parts.length) return { name: "home", params: {} };
   if (parts[0] === "lists" && parts[1]) return { name: "listDetail", params: { id: Number(parts[1]) } };
