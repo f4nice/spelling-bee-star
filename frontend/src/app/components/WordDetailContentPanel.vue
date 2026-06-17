@@ -1,6 +1,6 @@
 <script setup>
 import WordAudioPanel from "./WordAudioPanel.vue";
-import WordDefinitionList from "./WordDefinitionList.vue";
+import WordDetailDefinitionPanel from "./WordDetailDefinitionPanel.vue";
 import WordDetailHeading from "./WordDetailHeading.vue";
 import WordStudyNav from "./WordStudyNav.vue";
 
@@ -82,7 +82,6 @@ defineProps({
       :save-recording="saveRecording"
     />
 
-    <WordDefinitionList :data="data" :word-edit="wordEdit" :save-word-field="saveWordField" />
-    <div v-if="data.word.enrichment_error" class="error-box">{{ data.word.enrichment_error }}</div>
+    <WordDetailDefinitionPanel :data="data" :word-edit="wordEdit" :save-word-field="saveWordField" />
   </article>
 </template>
