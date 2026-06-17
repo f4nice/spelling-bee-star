@@ -1,4 +1,5 @@
 import { onMounted, ref } from 'vue';
+import { buildChallengeAnswerForm } from './challengeAnswerForm.js';
 
 export function useChallengeSession(wordListId) {
   const initialParams = new URLSearchParams(window.location.search);
@@ -27,14 +28,7 @@ export function useChallengeSession(wordListId) {
     if (!spelling.value.trim() || submitting.value) return;
     submitting.value = true;
     errorMessage.value = '';
-    const form = new FormData();
-    form.append('action', 'spell');
-    form.append('daily_count', String(state.value.today_challenge.daily_count));
-    form.append('start_count', String(state.value.today_challenge.start_count));
-    form.append('session_correct', String(state.value.today_challenge.correct));
-    form.append('session_wrong', String(state.value.today_challenge.wrong));
-    form.append('spelling', spelling.value);
-    if (state.value.wrong_date) form.append('wrong_date', state.value.wrong_date);
+    const form = buildChallengeAnswerForm({ state: state.value, spelling: spelling.value });
     try {
       const response = await fetch(`/api/challenge/${wordListId}/answer`, {
         method: 'POST',
