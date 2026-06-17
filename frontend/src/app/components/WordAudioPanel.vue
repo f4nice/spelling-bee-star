@@ -1,5 +1,5 @@
 <script setup>
-import WordAudioAccentPanel from "./WordAudioAccentPanel.vue";
+import WordAudioAccentList from "./WordAudioAccentList.vue";
 import WordRecorderPanel from "./WordRecorderPanel.vue";
 
 defineProps({
@@ -48,19 +48,15 @@ const accents = [
 </script>
 
 <template>
-  <div class="audio-row">
-    <WordAudioAccentPanel
-      v-for="accent in accents"
-      :key="accent.key"
-      :accent="accent"
-      :data="data"
-      :options="audioOptions[accent.key] || []"
-      :play-audio="playAudio"
-      :fetch-audio-options="fetchAudioOptions"
-      :start-recording="startRecording"
-      :choose-audio="chooseAudio"
-    />
-  </div>
+  <WordAudioAccentList
+    :data="data"
+    :audio-options="audioOptions"
+    :accents="accents"
+    :play-audio="playAudio"
+    :fetch-audio-options="fetchAudioOptions"
+    :start-recording="startRecording"
+    :choose-audio="chooseAudio"
+  />
 
   <WordRecorderPanel
     :recorder-state="recorderState"
