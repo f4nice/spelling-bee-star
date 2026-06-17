@@ -1,5 +1,8 @@
 <script setup>
 import { ref } from "vue";
+import WordImageCandidateGrid from "./WordImageCandidateGrid.vue";
+import WordImageFrame from "./WordImageFrame.vue";
+import WordImageTools from "./WordImageTools.vue";
 
 const props = defineProps({
   data: {
@@ -39,41 +42,21 @@ async function saveSelectedImage() {
 
 <template>
   <aside class="panel media-panel">
-    <div class="word-image-frame">
-      <img v-if="imageForWord(data.word)" :src="imageForWord(data.word)" :alt="data.word.word">
-      <div v-else class="image-fallback">{{ data.word.word.slice(0, 1).toUpperCase() }}</div>
-    </div>
+    <WordImageFrame :word="data.word" :image-url="imageForWord(data.word)" />
 
-    <div v-if="data.can_edit" class="media-tools" role="group" aria-label="单词图片工具">
-      <label>
-        上传图片
-        <input
-          type="file"
-          accept="image/*"
-          @change="selectedImageFile = $event.target.files[0] || null"
-        >
-      </label>
-      <button
-        type="button"
-        class="secondary-button"
-        :disabled="!selectedImageFile"
-        @click="saveSelectedImage"
-      >
-        保存图片
-      </button>
-      <button type="button" class="secondary-button" @click="findImages">网络找图</button>
-    </div>
+    <WordImageTools
+      v-if="data.can_edit"
+      :selected-image-file="selectedImageFile"
+      :find-images="findImages"
+      :save-selected-image="saveSelectedImage"
+      @select-image="selectedImageFile = $event"
+    />
 
-    <div v-if="imageCandidates.length" class="image-picker-grid inline-image-grid">
-      <button
-        v-for="(item, index) in imageCandidates"
-        :key="item.url || index"
-        type="button"
-        class="image-candidate-button"
-        @click="chooseNetworkImage(item.url)"
-      >
-        <img :src="item.url" :alt="`${data.word.word} 候选图 ${index + 1}`">
-      </button>
-    </div>
+    <WordImageCandidateGrid
+      v-if="imageCandidates.length"
+      :word="data.word"
+      :image-candidates="imageCandidates"
+      :choose-network-image="chooseNetworkImage"
+    />
   </aside>
 </template>
