@@ -34,20 +34,25 @@
   - `f80c5c3`：拆分导入预览工具栏 props、提交按钮和图片选择 helper。
   - `170514c`：拆分 `useImportPreviewForm.js` 的表单状态和 URL helper。
   - `cf3b750`：拆分 BookLearner Hero 动作区、精选书摘列表和 props helper。
+  - 待提交：拆分 `shellContext.js` 的默认值、JSON 解析和 DOM 文本读取 helper。
 
 ## 正在进行
 
-- 当前推进区域：Shell context。
-- 当前已改到：`BooklearnerHero.vue`、`BooklearnerHeroActions.vue`、`BooklearnerFeaturedQuotes.vue` 和对应 props helper。
-- 当前轮状态：`cf3b750` 已推送并部署；本地 build、`py_compile`、乱码扫描、线上 HTTP、临时 Playwright 控制台检查和服务日志验证均已通过。
+- 当前推进区域：收口扫描。
+- 当前已改到：`shellContext.js` 已瘦身，新增 `shellContextState.js` 承担默认 context、容错解析和 shell script 文本读取。
+- 当前轮状态：本地 `npm run build`、`py -3 -m py_compile app\main.py`、Node UTF-8 乱码扫描已通过；等待文档更新后提交、推送、部署和线上验证。
 
 ## 下一批改哪里
 
-优先按这个顺序做，除非当前检查发现更高风险问题：
+当前轻量计划队列已清空。下一步先完成本轮提交/部署，然后按“最终遗漏扫描”结果决定是否开启新一批小拆分。
 
-1. `frontend/src/app/shellContext.js`
-   - 目标：检查 shell context 默认值、解析、刷新逻辑是否还可拆。
-   - 方向：只抽清晰纯函数，不影响初始化时序。
+最终扫描已记录的后续可选候选：
+
+- `frontend/src/app/composables/useWordRecorder.js`：录音逻辑仍偏集中，后续可按 capture/state/actions 再拆。
+- `frontend/src/app/composables/useListDetailTools.js`：列表详情工具动作较多，可继续抽 API/action helper。
+- `frontend/src/app/components/WordCard.vue`、`ListDetailHeader.vue`、`AppSidebar.vue`：组件体量中等，暂未发现必须立即处理的旧模板逻辑。
+- `frontend/src/app/components/ImportPreviewTable.vue` 和 `frontend/src/app/forms/importPreviewFormState.js`：导入预览已拆一轮，后续只做低风险细化。
+- 旧逻辑边界扫描目前主要命中预期项：`vue_app.html` shell、`app/main.py` 的 Vue shell 返回、Vue/浏览器事件监听、构建产物中的打包代码。
 
 ## 每轮轻量流程
 

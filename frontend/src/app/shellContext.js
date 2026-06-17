@@ -1,28 +1,10 @@
 import { ref } from "vue";
 import { coreApiPaths } from "./coreApiPaths.js";
+import { parseShellContext, readShellContextElementText } from "./shellContextState.js";
 import { fetchJson } from "./utils.js";
 
-const DEFAULT_SHELL_CONTEXT = {
-  appName: "SpeakEasy",
-  dailyQuote: null,
-  wrongWordCount: 0,
-  sidebarChallenges: [],
-};
-
-function defaultShellContext() {
-  return { ...DEFAULT_SHELL_CONTEXT, sidebarChallenges: [] };
-}
-
 export function readShellContext() {
-  const element = document.getElementById("speakeasy-shell-context");
-  if (!element?.textContent) {
-    return defaultShellContext();
-  }
-  try {
-    return JSON.parse(element.textContent);
-  } catch {
-    return defaultShellContext();
-  }
+  return parseShellContext(readShellContextElementText());
 }
 
 export function useShellContext() {
