@@ -1,3 +1,4 @@
+import { buildAppFeatureRouteLoaders } from "../appFeatureRouteLoaders.js";
 import { useBooklearner } from "./useBooklearner.js";
 import { useImportPreview } from "./useImportPreview.js";
 import { useListTools } from "./useListTools.js";
@@ -15,13 +16,6 @@ export function useAppFeatureModules({ data, route, go, loadRoute, setError }) {
     booklearner,
     listTools,
     handleWordKeydown: wordDetail.handleWordKeydown,
-    routeLoaders: {
-      resetWordTools: wordDetail.resetWordTools,
-      setWordEdit: wordDetail.setWordEdit,
-      setUploadOptionsFromCards: listTools.setUploadOptionsFromCards,
-      loadUploadOptions: listTools.loadUploadOptions,
-      resetImportForm: importPreview.resetImportForm,
-      loadBooklearner: booklearner.loadBooklearner,
-    },
+    routeLoaders: buildAppFeatureRouteLoaders({ wordDetail, listTools, importPreview, booklearner }),
   };
 }

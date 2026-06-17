@@ -4,6 +4,12 @@ import ChallengeRouteOutlet from "./ChallengeRouteOutlet.vue";
 import CoreRouteOutlet from "./CoreRouteOutlet.vue";
 import ImportRouteOutlet from "./ImportRouteOutlet.vue";
 import WordDetailRoute from "./WordDetailRoute.vue";
+import {
+  isBooklearnerRoute,
+  isChallengeRoute,
+  isImportRoute,
+  isWordDetailRoute,
+} from "../pageOutletRoutes.js";
 
 defineProps({
   ctx: {
@@ -14,9 +20,9 @@ defineProps({
 </script>
 
 <template>
-  <ChallengeRouteOutlet v-if="ctx.route.name === 'challenge'" :route="ctx.route" />
-  <WordDetailRoute v-else-if="ctx.route.name === 'wordDetail' && ctx.data" :ctx="ctx" />
-  <ImportRouteOutlet v-else-if="(ctx.route.name === 'upload' || ctx.route.name === 'preview') && ctx.data" :ctx="ctx" />
-  <BooklearnerRouteOutlet v-else-if="ctx.route.name.startsWith('booklearner') && ctx.data" :ctx="ctx" />
+  <ChallengeRouteOutlet v-if="isChallengeRoute(ctx.route)" :route="ctx.route" />
+  <WordDetailRoute v-else-if="isWordDetailRoute(ctx.route) && ctx.data" :ctx="ctx" />
+  <ImportRouteOutlet v-else-if="isImportRoute(ctx.route) && ctx.data" :ctx="ctx" />
+  <BooklearnerRouteOutlet v-else-if="isBooklearnerRoute(ctx.route) && ctx.data" :ctx="ctx" />
   <CoreRouteOutlet v-else :ctx="ctx" />
 </template>
