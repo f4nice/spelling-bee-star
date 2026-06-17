@@ -21,26 +21,30 @@ defineProps({
 
 <template>
   <aside class="query-panel">
-    <form class="form active" @submit.prevent="analyzeBookQuery">
+    <div class="form active" role="group" aria-label="按书名分析">
       <label>书名或作者</label>
       <div class="input-row">
         <input v-model="book.query" placeholder="Pride and Prejudice">
-        <button type="submit">分析</button>
+        <button type="button" @click="analyzeBookQuery">分析</button>
       </div>
-    </form>
+    </div>
 
-    <form class="form active" @submit.prevent="analyzeBookText">
+    <div class="form active" role="group" aria-label="按正文分析">
       <label>书名</label>
       <input v-model="book.title">
       <label>作者</label>
       <input v-model="book.author">
       <label>书籍文件</label>
-      <input type="file" accept=".txt,.epub,text/plain,application/epub+zip" @change="book.file = $event.target.files[0]">
+      <input
+        type="file"
+        accept=".txt,.epub,text/plain,application/epub+zip"
+        @change="book.file = $event.target.files[0]"
+      >
       <button class="secondary-wide-button" type="button" @click="analyzeBookFile">分析文件</button>
       <label>书籍正文</label>
-      <textarea v-model="book.text"></textarea>
-      <button class="wide-button" type="submit">分析文本</button>
-    </form>
+      <textarea v-model="book.text" />
+      <button class="wide-button" type="button" @click="analyzeBookText">分析文本</button>
+    </div>
 
     <div v-if="book.notice" class="notice">{{ book.notice }}</div>
   </aside>
