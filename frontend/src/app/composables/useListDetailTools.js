@@ -1,5 +1,6 @@
 import { ref } from "vue";
 import { fetchJson } from "../utils.js";
+import { runListImageSyncJob } from "../listImageSyncJob.js";
 
 export function useListDetailTools({ data, go, loadRoute }) {
   const deleteListState = ref({ password: "", notice: "" });
@@ -27,16 +28,13 @@ export function useListDetailTools({ data, go, loadRoute }) {
   }
 
   async function syncListImages() {
-    const job = await fetchJson(`/api/vue/lists/${data.value.word_list.id}/sync-images/start`, { method: "POST" });
-    data.value.sync_job = job;
-    const timer = window.setInterval(async () => {
-      const next = await fetchJson(`/api/vue/lists/${data.value.word_list.id}/sync-images/${job.id}`);
-      data.value.sync_job = next;
-      if (["done", "failed"].includes(next.status)) {
-        window.clearInterval(timer);
-        await loadRoute();
-      }
-    }, 1200);
+    await runListImageSyncJob({
+      wordListId: data.value.word_list.id,
+      setJob: (job) => {
+        data.value.sync_job = job;
+      },
+      onComplete: loadRoute,
+    });
   }
 
   return {
