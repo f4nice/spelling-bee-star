@@ -12,12 +12,12 @@ defineProps({
     type: String,
     required: true,
   },
-  imageForWord: {
-    type: Function,
-    required: true,
+  imageUrl: {
+    type: String,
+    default: "",
   },
   fallbackLetter: {
-    type: Function,
+    type: String,
     required: true,
   },
 });
@@ -26,8 +26,8 @@ defineProps({
 <template>
   <a class="word-card" :href="href">
     <span class="word-index-badge">#{{ index + 1 }}</span>
-    <img v-if="imageForWord(word)" :src="word.image_url" :alt="word.word">
-    <div v-else class="image-fallback">{{ fallbackLetter(word) }}</div>
+    <img v-if="imageUrl" :src="imageUrl" :alt="word.word">
+    <div v-else class="image-fallback">{{ fallbackLetter }}</div>
     <div class="word-card-body">
       <div class="word-card-title">
         <strong>{{ word.word }}</strong>
@@ -36,7 +36,7 @@ defineProps({
           <span class="challenge-result-badge is-wrong">错 {{ word.challenge_stats.wrong }}</span>
         </span>
       </div>
-      <p>{{ word.chinese_definition || word.english_definition || '等待补全' }}</p>
+      <p>{{ word.chinese_definition || word.english_definition || "等待补全" }}</p>
     </div>
   </a>
 </template>
