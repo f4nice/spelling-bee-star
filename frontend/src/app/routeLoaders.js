@@ -1,29 +1,30 @@
 import { fetchJson } from "./utils.js";
+import { routeApiPaths } from "./routeApiPaths.js";
 
 export const routeLoaders = {
   async home({ data }) {
-    data.value = await fetchJson("/api/vue/home");
+    data.value = await fetchJson(routeApiPaths.home());
   },
 
   async lists({ data, setUploadOptionsFromCards }) {
-    data.value = await fetchJson("/api/vue/lists");
+    data.value = await fetchJson(routeApiPaths.lists());
     setUploadOptionsFromCards(data.value.cards);
   },
 
   async listDetail({ route, data }) {
-    data.value = await fetchJson(`/api/vue/lists/${route.params.id}`);
+    data.value = await fetchJson(routeApiPaths.listDetail(route));
   },
 
   async wrongWords({ data }) {
-    data.value = await fetchJson("/api/vue/wrong-words");
+    data.value = await fetchJson(routeApiPaths.wrongWords());
   },
 
   async challengeDay({ route, data }) {
-    data.value = await fetchJson(`/api/vue/challenge-calendar/${route.params.day}`);
+    data.value = await fetchJson(routeApiPaths.challengeDay(route));
   },
 
   async wordDetail({ route, data, setWordEdit }) {
-    data.value = await fetchJson(`/api/vue/words/${route.params.id}${window.location.search}`);
+    data.value = await fetchJson(routeApiPaths.wordDetail(route));
     setWordEdit(data.value.word);
   },
 
@@ -33,16 +34,16 @@ export const routeLoaders = {
   },
 
   async preview({ route, data, resetImportForm }) {
-    data.value = await fetchJson(`/api/vue/upload/preview/${route.params.id}${window.location.search}`);
+    data.value = await fetchJson(routeApiPaths.preview(route));
     resetImportForm();
   },
 
   async newspaper({ data }) {
-    data.value = await fetchJson("/api/vue/newspaper");
+    data.value = await fetchJson(routeApiPaths.newspaper());
   },
 
   async newspaperArticle({ route, data }) {
-    data.value = await fetchJson(`/api/vue/newspaper/${route.params.section}/${route.params.index}`);
+    data.value = await fetchJson(routeApiPaths.newspaperArticle(route));
   },
 };
 
