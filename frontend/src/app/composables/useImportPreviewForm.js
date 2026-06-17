@@ -3,9 +3,11 @@ import {
   buildImportPreviewFormState,
   buildPreviewSheetUrl,
   createImportPreviewFormState,
+} from "../forms/importPreviewFormState.js";
+import {
   getPreviewColumnSelection,
   getPreviewRowSelection,
-} from "../forms/importPreviewFormState.js";
+} from "../forms/importPreviewSelection.js";
 
 export function useImportPreviewForm({ data, route, loadRoute }) {
   const importForm = ref(createImportPreviewFormState());
