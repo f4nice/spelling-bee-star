@@ -1,20 +1,10 @@
 <script setup>
 import { ref } from "vue";
 
-const props = defineProps({
-  accent: {
-    type: Object,
-    required: true,
-  },
-  options: {
-    type: Array,
-    default: () => [],
-  },
-  chooseAudio: {
-    type: Function,
-    required: true,
-  },
-});
+import WordAudioOptionItem from "./WordAudioOptionItem.vue";
+import { wordAudioOptionListProps } from "../props/wordAudioOptionListProps.js";
+
+const props = defineProps(wordAudioOptionListProps);
 
 const choosingUrl = ref("");
 
@@ -31,17 +21,13 @@ async function chooseOption(url) {
 
 <template>
   <div class="audio-options">
-    <div v-for="option in options" :key="option.url" class="audio-option">
-      <strong>{{ option.label }}</strong>
-      <audio controls :src="option.url" />
-      <button
-        type="button"
-        class="secondary-button"
-        :disabled="Boolean(choosingUrl)"
-        @click="chooseOption(option.url)"
-      >
-        {{ choosingUrl === option.url ? "保存中..." : "选这个" }}
-      </button>
-    </div>
+    <WordAudioOptionItem
+      v-for="option in options"
+      :key="option.url"
+      :option="option"
+      :is-choosing="choosingUrl === option.url"
+      :is-disabled="Boolean(choosingUrl)"
+      @choose="chooseOption"
+    />
   </div>
 </template>

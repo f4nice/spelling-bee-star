@@ -30,34 +30,31 @@
   - `25b3b2c`：抽出通用 Excel 上传表单。
   - `74be5ef`：抽出批量图片上传表单、列表工具 props helper。
   - `cbef214`：拆分 `UploadExcelForm.vue` 的 page/card 字段组件，并同步新 Vite chunk。
+  - 待提交：拆分 `WordAudioOptionList.vue` 的候选项组件和 props helper。
 
 ## 正在进行
 
-- 当前推进区域：单词音频候选列表。
-- 当前已改到：`UploadExcelForm.vue`、`UploadExcelPageFields.vue`、`UploadExcelCardFields.vue`、`uploadExcelFormHandlers.js`。
-- 当前轮状态：`cbef214` 已推送并部署；本地 build、`py_compile`、乱码扫描、线上 HTTP、临时 Playwright 控制台检查、静态 chunk 检查和服务日志验证均已通过。
+- 当前推进区域：导入预览工具栏。
+- 当前已改到：`WordAudioOptionList.vue`、`WordAudioOptionItem.vue`、`wordAudioOptionListProps.js`、`wordAudioOptionItemProps.js`。
+- 当前轮状态：本地 build、`py_compile`、乱码扫描已通过；等待提交、推送、部署和线上验证。
 
 ## 下一批改哪里
 
 优先按这个顺序做，除非当前检查发现更高风险问题：
 
-1. `frontend/src/app/components/WordAudioOptionList.vue`
-   - 目标：继续拆单词音频候选列表。
-   - 方向：把候选项按钮/播放/选择逻辑拆成小组件或 props helper。
-
-2. `frontend/src/app/components/ImportPreviewToolbar.vue`
+1. `frontend/src/app/components/ImportPreviewToolbar.vue`
    - 目标：导入预览工具栏瘦身。
    - 方向：拆 sheet 控件、选择动作、提交按钮配置。
 
-3. `frontend/src/app/composables/useImportPreviewForm.js`
+2. `frontend/src/app/composables/useImportPreviewForm.js`
    - 目标：把 URL 构造、表单初始化、批量选择逻辑继续拆成 helper。
    - 方向：优先抽纯函数，降低 composable 内状态和派生逻辑混杂。
 
-4. `frontend/src/app/components/BooklearnerHero.vue`
+3. `frontend/src/app/components/BooklearnerHero.vue`
    - 目标：拆 BookLearner 顶部动作和空状态。
    - 方向：把操作按钮组或 quote list 状态拆成子组件。
 
-5. `frontend/src/app/shellContext.js`
+4. `frontend/src/app/shellContext.js`
    - 目标：检查 shell context 默认值、解析、刷新逻辑是否还可拆。
    - 方向：只抽清晰纯函数，不影响初始化时序。
 
