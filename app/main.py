@@ -840,39 +840,6 @@ def challenge_calendar_detail_page(day: str, request: Request, db: Session = Dep
     return vue_shell(request, db, f"challenge-calendar/{day}")
 
 
-@app.post("/challenge/{word_list_id}/answer")
-def challenge_answer(
-    word_list_id: int,
-    action: str = Form(default="known"),
-    daily_count: int = Form(default=20),
-    start_count: int = Form(default=0),
-    session_correct: int = Form(default=0),
-    session_wrong: int = Form(default=0),
-    spelling: str = Form(default=""),
-    wrong_date: str = Form(default=""),
-    db: Session = Depends(get_db),
-):
-    result = apply_challenge_answer(
-        db,
-        word_list_id=word_list_id,
-        action=action,
-        daily_count=daily_count,
-        start_count=start_count,
-        session_correct=session_correct,
-        session_wrong=session_wrong,
-        spelling=spelling,
-        wrong_date=wrong_date,
-    )
-    return RedirectResponse(
-        url=(
-            f"/challenge/{word_list_id}?daily_count={result['daily_count']}&start_count={result['start_count']}"
-            f"&session_correct={result['session_correct']}&session_wrong={result['session_wrong']}"
-            f"{'&wrong_date=' + result['wrong_date'].isoformat() if result['wrong_date'] else ''}"
-        ),
-        status_code=303,
-    )
-
-
 def apply_challenge_answer(
     db: Session,
     word_list_id: int,
