@@ -1,4 +1,6 @@
 <script setup>
+import { useAudioPlayback } from "../shared/useAudioPlayback.js";
+
 const props = defineProps({
   state: {
     type: Object,
@@ -15,16 +17,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:spelling", "submit", "strip-digits"]);
-
-function playAudio(id) {
-  const audio = document.getElementById(id);
-  if (!audio) return;
-  audio.load();
-  audio.currentTime = 0;
-  audio.play().catch(() => {
-    audio.controls = true;
-  });
-}
+const { playAudio } = useAudioPlayback();
 
 function submitAnswer() {
   if (!props.spelling.trim() || props.submitting) return;

@@ -1,6 +1,6 @@
 import { ref } from 'vue';
 import { fetchJson } from '../utils.js';
-import { useAudioPlayback } from './useAudioPlayback.js';
+import { useAudioPlayback } from '../../shared/useAudioPlayback.js';
 import { useWordRecorder } from './useWordRecorder.js';
 
 export function useWordAudio({ data, loadRoute }) {
