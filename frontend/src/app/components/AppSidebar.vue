@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from "vue";
-import { isSidebarNavItemActive, sidebarNavItems } from "../sidebarNav.js";
+import { buildSidebarNavItems } from "../sidebarNav.js";
 import SidebarChallengeProgress from "./SidebarChallengeProgress.vue";
 
 const props = defineProps({
@@ -18,13 +18,7 @@ const props = defineProps({
   },
 });
 
-const navItems = computed(() =>
-  sidebarNavItems.map((item) => ({
-    ...item,
-    active: isSidebarNavItemActive(item, props.route),
-    count: item.countKey ? props.shell[item.countKey] : undefined,
-  })),
-);
+const navItems = computed(() => buildSidebarNavItems({ route: props.route, shell: props.shell }));
 
 function navigate(path) {
   props.go(path);

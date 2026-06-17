@@ -10,3 +10,11 @@ export function isSidebarNavItemActive(item, route) {
   if (item.routes?.includes(route.name)) return true;
   return Boolean(item.routePrefix && route.name.startsWith(item.routePrefix));
 }
+
+export function buildSidebarNavItems({ route, shell }) {
+  return sidebarNavItems.map((item) => ({
+    ...item,
+    active: isSidebarNavItemActive(item, route),
+    count: item.countKey ? shell[item.countKey] : undefined,
+  }));
+}
