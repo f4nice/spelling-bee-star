@@ -17,7 +17,9 @@ defineEmits(["open-day"]);
     :disabled="!day.total"
     @click="day.total && $emit('open-day', day.date)"
   >
-    <span v-if="day.day" class="calendar-day-number">{{ day.day }}</span>
+    <span v-if="day.day" class="calendar-day-number">
+      <span>{{ day.day }}</span>
+    </span>
     <span v-if="day.total" class="calendar-total">
       <strong>{{ day.total }}</strong>
       <span>个</span>
