@@ -451,6 +451,56 @@ body {
   vertical-align: middle;
 }
 
+.batch-image-file-picker {
+  display: grid;
+  place-items: center;
+  flex: 1 1 180px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 5px 12px;
+  border: 1px dashed rgba(23, 129, 91, 0.45);
+  border-radius: 8px;
+  background: #f7fbf8;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.batch-image-file-picker:hover,
+.batch-image-file-picker:focus-within {
+  border-color: var(--accent);
+  background: #eef8f3;
+  box-shadow: 0 0 0 3px rgba(23, 129, 91, 0.08);
+}
+
+.batch-image-file-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.batch-image-file-picker span {
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.batch-image-file-picker small {
+  display: block;
+  max-width: 100%;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .lists-import-form > .list-picker-trigger,
 .batch-image-form > .list-picker-trigger {
   flex: 1 1 160px;
