@@ -1,14 +1,7 @@
 import { ref } from "vue";
-import {
-  deleteWordList,
-  LIST_DELETE_FALLBACK_ERROR,
-  renameWordList,
-} from "../listDetailActions.js";
-import {
-  createDeleteListState,
-  resetDeleteListState,
-  setDeleteListNotice,
-} from "../listDeleteState.js";
+import { renameWordList } from "../listDetailActions.js";
+import { deleteCurrentWordList } from "../listDeleteBinding.js";
+import { createDeleteListState } from "../listDeleteState.js";
 import { syncListImagesForDetail } from "../listImageSyncBinding.js";
 
 export function useListDetailTools({ data, go, loadRoute }) {
@@ -19,15 +12,7 @@ export function useListDetailTools({ data, go, loadRoute }) {
   }
 
   async function deleteList() {
-    const wordListId = data.value?.word_list?.id;
-    if (!wordListId || !deleteListState.value.password) return;
-    try {
-      await deleteWordList({ wordListId, password: deleteListState.value.password });
-      resetDeleteListState(deleteListState);
-      go("/lists");
-    } catch (error) {
-      setDeleteListNotice(deleteListState, error.message || LIST_DELETE_FALLBACK_ERROR);
-    }
+    await deleteCurrentWordList({ data, deleteListState, go });
   }
 
   async function syncListImages() {
