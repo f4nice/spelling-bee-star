@@ -48,12 +48,13 @@
   - `2908642`：拆分列表详情页单词网格组件。
   - `fae8976`：拆分 BookLearner 页面路由分支组件。
   - `04cb26e`：拆分单词表卡片封面和正文子组件。
-  - 待提交：拆分首页挑战日历标题组件。
+  - `be24c3e`：拆分首页挑战日历标题组件。
+  - 待提交：拆分列表路由出口的列表总览和列表详情分支组件。
 
 ## 正在进行
 
-- 当前推进区域：首页挑战日历。
-- 当前已改到：新增 `HomeChallengeCalendarHeading.vue`，把日历标题和月度统计从 `HomeChallengeCalendar.vue` 中拆出；收口小扫描未发现真实乱码或旧模板交互残留。
+- 当前推进区域：列表路由出口。
+- 当前已改到：新增 `ListOverviewRoute.vue` 和 `ListDetailRoute.vue`，把列表总览和列表详情页面分支从 `ListRouteOutlet.vue` 中拆出；父组件只保留路由分发。
 - 当前轮状态：本地 `npm run build`、`py -3 -m py_compile app\main.py`、Node UTF-8 乱码扫描已通过；等待提交、推送、部署和线上验证。
 
 ## 下一批改哪里
@@ -69,7 +70,8 @@
 - `frontend/src/app/pages/ListDetailPage.vue`：已抽出 `ListDetailWordGrid.vue`。
 - `frontend/src/app/pages/BooklearnerPage.vue`：已抽出 `BooklearnerRouteSections.vue`。
 - `frontend/src/app/components/WordListCard.vue`：已抽出封面和正文子组件。
-- `frontend/src/app/components/HomeChallengeCalendar.vue`：本轮已抽出 `HomeChallengeCalendarHeading.vue`，提交部署后可从候选中移除。
+- `frontend/src/app/components/HomeChallengeCalendar.vue`：已抽出 `HomeChallengeCalendarHeading.vue`。
+- `frontend/src/app/components/ListRouteOutlet.vue`：本轮已抽出 `ListOverviewRoute.vue` 和 `ListDetailRoute.vue`，提交部署后标记完成。
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDetailActions.js`。
 - `frontend/src/app/components/WordCard.vue`：已拆出媒体和挑战统计子组件。
 - `frontend/src/app/components/ListDetailHeader.vue`：已拆出 `ListTitleEditor.vue`。
