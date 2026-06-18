@@ -959,9 +959,11 @@ def challenge_payload(
     challenge_image_url = None
     masked_example = None
     if current_word:
+        us_audio_url = current_word.american_audio_url if is_local_audio_url(current_word.american_audio_url) else None
+        gb_audio_url = current_word.british_audio_url if is_local_audio_url(current_word.british_audio_url) else None
         challenge_audio_sources = {
-            "us": f"/words/{current_word.id}/audio?accent=us&v=2",
-            "gb": f"/words/{current_word.id}/audio?accent=gb&v=2",
+            "us": us_audio_url,
+            "gb": gb_audio_url,
         }
         challenge_image_url = f"/words/{current_word.id}/image-view" if current_word.image_url else None
         masked_example = mask_word_in_text(

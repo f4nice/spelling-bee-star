@@ -93,20 +93,28 @@ onBeforeUnmount(stopAutoStudy);
         <label>
           <span>美音</span>
           <audio
+            v-if="state.challenge_audio_sources?.us"
             id="challenge-audio-us"
             preload="auto"
             controls
             :src="state.challenge_audio_sources?.us"
           />
+          <button v-else type="button" class="secondary-button speech-player-button" @click="playCurrentAudio">
+            浏览器朗读
+          </button>
         </label>
         <label>
           <span>英音</span>
           <audio
+            v-if="state.challenge_audio_sources?.gb"
             id="challenge-audio-gb"
             preload="auto"
             controls
             :src="state.challenge_audio_sources?.gb"
           />
+          <button v-else type="button" class="secondary-button speech-player-button" @click="playBritishAudio">
+            浏览器朗读
+          </button>
         </label>
       </div>
 

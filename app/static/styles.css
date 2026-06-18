@@ -2269,6 +2269,11 @@ button.calendar-day:disabled {
   min-height: 38px;
 }
 
+.challenge-audio-row .speech-player-button {
+  justify-content: center;
+  height: 38px;
+}
+
 .challenge-audio-row label {
   display: grid;
   gap: 8px;
