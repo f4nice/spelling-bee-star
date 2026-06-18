@@ -2258,7 +2258,10 @@ button.calendar-day:disabled {
 }
 
 .challenge-audio-row audio {
-  display: none;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 38px;
 }
 
 .challenge-audio-row .secondary-button {
@@ -2268,7 +2271,8 @@ button.calendar-day:disabled {
 
 .challenge-audio-row label {
   display: grid;
-  gap: 6px;
+  gap: 8px;
+  min-width: 0;
   color: var(--muted);
   font-size: 13px;
   font-weight: 800;
@@ -2633,6 +2637,17 @@ button.calendar-day:disabled {
   font-size: 13px;
   font-weight: 900;
   text-align: right;
+}
+
+.challenge-auto-study-controls {
+  justify-content: flex-start;
+  padding-bottom: 4px;
+}
+
+.challenge-auto-study-controls label span {
+  min-width: 0;
+  color: var(--muted);
+  text-align: left;
 }
 
 .word-title-stack {
