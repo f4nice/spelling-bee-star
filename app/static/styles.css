@@ -451,6 +451,7 @@ body {
   vertical-align: middle;
 }
 
+.excel-file-picker,
 .batch-image-file-picker {
   display: grid;
   place-items: center;
@@ -467,6 +468,8 @@ body {
   transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
 
+.excel-file-picker:hover,
+.excel-file-picker:focus-within,
 .batch-image-file-picker:hover,
 .batch-image-file-picker:focus-within {
   border-color: var(--accent);
@@ -474,6 +477,7 @@ body {
   box-shadow: 0 0 0 3px rgba(23, 129, 91, 0.08);
 }
 
+.excel-file-picker input,
 .batch-image-file-picker input {
   position: absolute;
   width: 1px;
@@ -482,12 +486,14 @@ body {
   pointer-events: none;
 }
 
+.excel-file-picker span,
 .batch-image-file-picker span {
   font-size: 14px;
   font-weight: 900;
   line-height: 1.2;
 }
 
+.excel-file-picker small,
 .batch-image-file-picker small {
   display: block;
   max-width: 100%;
