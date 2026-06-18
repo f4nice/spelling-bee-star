@@ -1,13 +1,13 @@
 import { ref } from "vue";
 import {
   buildImportPreviewFormState,
-  buildPreviewSheetUrl,
   createImportPreviewFormState,
 } from "../forms/importPreviewFormState.js";
 import {
-  getPreviewColumnSelection,
-  getPreviewRowSelection,
-} from "../forms/importPreviewSelection.js";
+  applyAllPreviewColumns,
+  applyAllPreviewRows,
+  switchPreviewSheet,
+} from "../forms/importPreviewFormActions.js";
 
 export function useImportPreviewForm({ data, route, loadRoute }) {
   const importForm = ref(createImportPreviewFormState());
@@ -19,22 +19,21 @@ export function useImportPreviewForm({ data, route, loadRoute }) {
   }
 
   function setAllRows(checked) {
-    importForm.value.selected_rows = getPreviewRowSelection(data.value.preview, checked);
+    applyAllPreviewRows(importForm.value, data.value.preview, checked);
   }
 
   function setAllColumns(checked) {
-    importForm.value.selected_columns = getPreviewColumnSelection(data.value.preview, checked);
+    applyAllPreviewColumns(importForm.value, data.value.preview, checked);
   }
 
   async function changePreviewSheet(sheetName) {
-    const url = buildPreviewSheetUrl({
-      previewId: route.value.params.id,
-      preview: data.value.preview,
+    await switchPreviewSheet({
+      route: route.value,
+      data: data.value,
       importForm: importForm.value,
       sheetName,
+      loadRoute,
     });
-    history.replaceState(null, "", url);
-    await loadRoute();
   }
 
   return {
