@@ -76,12 +76,13 @@
   - `245b394`：拆分 BookLearner JSON 预览组件。
   - `a3dc645`：拆分单词音频面板绑定 helper。
   - `ab2539f`：拆分 BookLearner 分析执行 helper。
-  - 待提交：拆分 BookLearner 分析请求 task helper。
+  - `0039f0d`：拆分 BookLearner 分析请求 task helper。
+  - 待提交：拆分 BookLearner 分析动作绑定 helper。
 
 ## 正在进行
 
 - 当前推进区域：BookLearner 分析动作。
-- 当前已改到：新增 `booklearnerAnalysisTasks.js`，把书名、正文和文件三类分析请求 task 从 `useBooklearnerAnalysisActions.js` 中拆出；三个分析入口、提示流程和 API 请求保持不变。
+- 当前已改到：扩展 `booklearnerAnalysisRunner.js`，新增分析动作绑定 helper，把三个分析入口的 runner 配置从 `useBooklearnerAnalysisActions.js` 中拆出；提示流程、文件缺失保护和 API 请求保持不变。
 - 当前轮状态：等待本地构建、Python 编译、乱码扫描、提交、推送、部署和线上验证。
 
 ## 下一批改哪里
@@ -125,7 +126,8 @@
 - `frontend/src/app/components/BooklearnerDetailPanel.vue`、`BooklearnerResultPanel.vue`：已抽出 `BooklearnerJsonPreview.vue`。
 - `frontend/src/app/components/WordAudioPanel.vue`：已抽出 `wordAudioPanelBindings.js`。
 - `frontend/src/app/composables/useBooklearnerAnalysisActions.js`：已抽出 `booklearnerAnalysisRunner.js`。
-- `frontend/src/app/composables/useBooklearnerAnalysisActions.js`：本轮已抽出 `booklearnerAnalysisTasks.js`，提交部署后标记完成。
+- `frontend/src/app/composables/useBooklearnerAnalysisActions.js`：已抽出 `booklearnerAnalysisTasks.js`。
+- `frontend/src/app/composables/useBooklearnerAnalysisActions.js`：本轮已抽出分析动作绑定 helper，提交部署后标记完成。
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDetailActions.js`。
 - `frontend/src/app/components/WordCard.vue`：已拆出媒体和挑战统计子组件。
 - `frontend/src/app/components/ListDetailHeader.vue`：已拆出 `ListTitleEditor.vue`。

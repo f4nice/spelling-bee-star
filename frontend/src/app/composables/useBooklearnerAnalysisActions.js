@@ -1,4 +1,4 @@
-import { runBooklearnerAnalysis } from "../booklearnerAnalysisRunner.js";
+import { createBooklearnerAnalysisAction } from "../booklearnerAnalysisRunner.js";
 import {
   createBookFileAnalysisTask,
   createBookQueryAnalysisTask,
@@ -6,33 +6,27 @@ import {
 } from "../booklearnerAnalysisTasks.js";
 
 export function useBooklearnerAnalysisActions({ book, setNotice }) {
-  async function analyzeBookQuery() {
-    await runBooklearnerAnalysis({
-      book,
-      setNotice,
-      startMessage: "正在分析...",
-      task: createBookQueryAnalysisTask(book),
-    });
-  }
+  const analyzeBookQuery = createBooklearnerAnalysisAction({
+    book,
+    setNotice,
+    startMessage: "正在分析...",
+    taskFactory: createBookQueryAnalysisTask,
+  });
 
-  async function analyzeBookText() {
-    await runBooklearnerAnalysis({
-      book,
-      setNotice,
-      startMessage: "正在分析文本...",
-      task: createBookTextAnalysisTask(book),
-    });
-  }
+  const analyzeBookText = createBooklearnerAnalysisAction({
+    book,
+    setNotice,
+    startMessage: "正在分析文本...",
+    taskFactory: createBookTextAnalysisTask,
+  });
 
-  async function analyzeBookFile() {
-    if (!book.value.file) return;
-    await runBooklearnerAnalysis({
-      book,
-      setNotice,
-      startMessage: "正在分析文件...",
-      task: createBookFileAnalysisTask(book),
-    });
-  }
+  const analyzeBookFile = createBooklearnerAnalysisAction({
+    book,
+    setNotice,
+    startMessage: "正在分析文件...",
+    taskFactory: createBookFileAnalysisTask,
+    canRun: () => Boolean(book.value.file),
+  });
 
   return {
     analyzeBookQuery,
