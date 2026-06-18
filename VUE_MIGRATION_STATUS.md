@@ -56,12 +56,13 @@
   - `e24e5f8`：拆分单词定义字段的编辑/只读值组件。
   - `f77ae88`：拆分应用顶栏品牌链接和每日一句组件。
   - `93e4f4a`：拆分侧边栏导航列表组件。
-  - 待提交：拆分单词卡片正文组件。
+  - `d4ce2de`：拆分单词卡片正文组件。
+  - 待提交：拆分英文小报版块标题组件。
 
 ## 正在进行
 
-- 当前推进区域：单词卡片。
-- 当前已改到：新增 `WordCardBody.vue`，把单词标题、挑战统计和定义摘要从 `WordCard.vue` 中拆出；外层链接、序号和媒体展示保持不变。
+- 当前推进区域：英文小报版块。
+- 当前已改到：新增 `NewspaperSectionHeader.vue`，把版块标题和文章数量从 `NewspaperSection.vue` 中拆出；错误提示和文章卡片列表逻辑保持不变。
 - 当前轮状态：等待本地构建、Python 编译、乱码扫描、提交、推送、部署和线上验证。
 
 ## 下一批改哪里
@@ -85,7 +86,8 @@
 - `frontend/src/app/components/WordEditableDefinitionItem.vue`：已抽出 `WordEditableDefinitionValue.vue`。
 - `frontend/src/app/components/AppTopbar.vue`：已抽出 `AppBrandLink.vue` 和 `AppDailyQuote.vue`。
 - `frontend/src/app/components/AppSidebar.vue`：已抽出 `SidebarNavList.vue`。
-- `frontend/src/app/components/WordCard.vue`：本轮已抽出 `WordCardBody.vue`，提交部署后标记完成。
+- `frontend/src/app/components/WordCard.vue`：已抽出 `WordCardBody.vue`。
+- `frontend/src/app/components/NewspaperSection.vue`：本轮已抽出 `NewspaperSectionHeader.vue`，提交部署后标记完成。
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDetailActions.js`。
 - `frontend/src/app/components/WordCard.vue`：已拆出媒体和挑战统计子组件。
 - `frontend/src/app/components/ListDetailHeader.vue`：已拆出 `ListTitleEditor.vue`。

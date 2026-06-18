@@ -1,5 +1,6 @@
 <script setup>
 import NewspaperArticleCard from "./NewspaperArticleCard.vue";
+import NewspaperSectionHeader from "./NewspaperSectionHeader.vue";
 
 defineProps({
   section: {
@@ -15,10 +16,7 @@ defineProps({
 
 <template>
   <article class="panel newspaper-section">
-    <div class="newspaper-section-head">
-      <h2>{{ section.name }}</h2>
-      <span>{{ section.articles?.length || 0 }} articles</span>
-    </div>
+    <NewspaperSectionHeader :section="section" />
     <p v-if="section.error" class="newspaper-error">{{ section.error }}</p>
     <div v-else class="newspaper-list">
       <NewspaperArticleCard
