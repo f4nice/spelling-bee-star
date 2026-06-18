@@ -3,6 +3,7 @@
   --ink: #1c2430;
   --muted: #667085;
   --line: #d9ded6;
+  --border: #d9ded6;
   --panel: #ffffff;
   --accent: #1f7a5a;
   --accent-dark: #155f45;
@@ -291,6 +292,9 @@ body {
 
 .home-stat-card {
   display: grid;
+  grid-template-rows: auto auto auto;
+  align-content: center;
+  justify-items: start;
   gap: 6px;
   min-height: 118px;
   padding: 16px;
@@ -311,6 +315,7 @@ body {
 }
 
 .home-stat-card strong {
+  display: block;
   color: var(--ink);
   font-size: 28px;
   line-height: 1.1;
@@ -373,9 +378,11 @@ body {
   gap: 18px;
   align-items: stretch;
   margin-bottom: 22px;
+  padding: 18px;
 }
 
-.lists-tool-card {
+.lists-tool-card,
+.tool-card {
   display: grid;
   gap: 12px;
   align-content: start;
@@ -385,18 +392,23 @@ body {
   background: #fbfdfb;
 }
 
-.lists-import-heading {
+.lists-import-heading,
+.tool-card > div:first-child {
   display: grid;
   gap: 4px;
 }
 
 .lists-import-heading .section-kicker,
 .lists-import-heading h2,
-.lists-import-heading p {
+.lists-import-heading p,
+.tool-card .section-kicker,
+.tool-card h2,
+.tool-card p {
   margin: 0;
 }
 
-.lists-import-heading p:not(.section-kicker) {
+.lists-import-heading p:not(.section-kicker),
+.tool-card p:not(.section-kicker):not(.notice) {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.5;
@@ -1061,6 +1073,7 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  color: transparent;
 }
 
 .newspaper-card.lead .newspaper-card-image {
@@ -1161,6 +1174,7 @@ body {
   max-height: 460px;
   border-radius: 8px;
   object-fit: cover;
+  color: transparent;
 }
 
 .newspaper-article-body {
@@ -1787,6 +1801,10 @@ button:hover {
   color: var(--error);
 }
 
+.challenge-day-word > .challenge-day-status {
+  display: none;
+}
+
 .challenge-day-counts {
   display: flex;
   gap: 8px;
@@ -2130,7 +2148,7 @@ button.calendar-day {
 }
 
 button.home-stat-card {
-  display: block;
+  display: grid;
 }
 
 button.calendar-day:disabled {
@@ -2188,6 +2206,16 @@ button.calendar-day:disabled {
   align-items: stretch;
 }
 
+.challenge-word-card {
+  display: grid;
+  gap: 16px;
+}
+
+.challenge-word-prompt {
+  display: grid;
+  gap: 10px;
+}
+
 .challenge-word-media {
   overflow: hidden;
   border: 1px solid var(--line);
@@ -2227,6 +2255,15 @@ button.calendar-day:disabled {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.challenge-audio-row audio {
+  display: none;
+}
+
+.challenge-audio-row .secondary-button {
+  width: 100%;
+  min-height: 38px;
 }
 
 .challenge-audio-row label {
@@ -2274,6 +2311,33 @@ button.calendar-day:disabled {
   font-weight: 800;
 }
 
+.challenge-answer-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.challenge-spelling-input {
+  width: 100%;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: #fff;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.challenge-answer-panel .challenge-actions {
+  justify-content: flex-end;
+}
+
 .challenge-count {
   font-weight: 800;
 }
@@ -2311,7 +2375,8 @@ button.calendar-day:disabled {
   flex-wrap: wrap;
 }
 
-.detail-media {
+.detail-media,
+.word-image-frame {
   position: relative;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -2319,12 +2384,22 @@ button.calendar-day:disabled {
   background: var(--panel);
 }
 
-.detail-media-panel {
+.detail-media-panel,
+.media-panel {
   display: grid;
   gap: 12px;
+  padding: 12px;
 }
 
-.detail-media img {
+.detail-media img,
+.word-image-frame img {
+  display: block;
+  width: 100%;
+  height: 420px;
+  object-fit: cover;
+}
+
+.word-image-frame .image-fallback {
   height: 420px;
 }
 
@@ -2858,6 +2933,9 @@ dd {
 
 .wide-form {
   align-items: end;
+  padding: 18px;
+  gap: 14px;
+  overflow: visible;
 }
 
 .wide-form label,
@@ -2866,6 +2944,17 @@ dd {
   gap: 6px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.wide-form label {
+  flex: 1 1 190px;
+  min-width: 0;
+}
+
+.wide-form input,
+.wide-form select {
+  width: 100%;
+  min-height: 38px;
 }
 
 .rename-form {
@@ -3422,6 +3511,10 @@ select {
   }
 
   .spelling-form {
+    grid-template-columns: 1fr;
+  }
+
+  .challenge-answer-panel {
     grid-template-columns: 1fr;
   }
 
