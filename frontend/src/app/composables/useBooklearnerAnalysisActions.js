@@ -1,6 +1,6 @@
 import { fetchJson } from "../utils.js";
 import { booklearnerApiPaths } from "../booklearnerApiPaths.js";
-import { createBooklearnerFileAnalysisForm } from "../booklearnerForms.js";
+import { createBooklearnerFileAnalysisForm, createBooklearnerTextAnalysisRequest } from "../booklearnerForms.js";
 
 export function useBooklearnerAnalysisActions({ book, setNotice }) {
   async function analyzeBookQuery() {
@@ -11,11 +11,14 @@ export function useBooklearnerAnalysisActions({ book, setNotice }) {
 
   async function analyzeBookText() {
     setNotice("正在分析文本...");
-    book.value.result = await fetchJson(booklearnerApiPaths.analyzeText(), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ title: book.value.title, author: book.value.author, text: book.value.text }),
-    });
+    book.value.result = await fetchJson(
+      booklearnerApiPaths.analyzeText(),
+      createBooklearnerTextAnalysisRequest({
+        title: book.value.title,
+        author: book.value.author,
+        text: book.value.text,
+      }),
+    );
     setNotice("分析完成");
   }
 

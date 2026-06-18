@@ -67,12 +67,13 @@
   - `227a8d9`：拆分列表删除流程绑定 helper。
   - `16b4b3e`：拆分导入预览表单重置 helper。
   - `d56910f`：拆分 BookLearner 初始状态 helper。
-  - 待提交：拆分 BookLearner 文件分析表单 helper。
+  - `e3c3e59`：拆分 BookLearner 文件分析表单 helper。
+  - 待提交：拆分 BookLearner 正文分析请求 helper。
 
 ## 正在进行
 
 - 当前推进区域：BookLearner 分析动作。
-- 当前已改到：新增 `booklearnerForms.js`，把文件分析的 `FormData` 创建逻辑从 `useBooklearnerAnalysisActions.js` 中拆出；分析 API、提示文本和返回状态保持不变。
+- 当前已改到：在 `booklearnerForms.js` 中新增正文分析 request helper，把正文分析的 POST headers/body 结构从 `useBooklearnerAnalysisActions.js` 中拆出；分析 API、提示文本和返回状态保持不变。
 - 当前轮状态：等待本地构建、Python 编译、乱码扫描、提交、推送、部署和线上验证。
 
 ## 下一批改哪里
@@ -107,7 +108,8 @@
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDeleteBinding.js`。
 - `frontend/src/app/composables/useImportPreviewForm.js`：已抽出 `importPreviewFormReset.js`。
 - `frontend/src/app/composables/useBooklearner.js`：已抽出 `booklearnerState.js`。
-- `frontend/src/app/composables/useBooklearnerAnalysisActions.js`：本轮已抽出 `booklearnerForms.js`，提交部署后标记完成。
+- `frontend/src/app/composables/useBooklearnerAnalysisActions.js`：已抽出 `booklearnerForms.js` 的文件分析表单 helper。
+- `frontend/src/app/composables/useBooklearnerAnalysisActions.js`：本轮已抽出 `booklearnerForms.js` 的正文分析请求 helper，提交部署后标记完成。
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDetailActions.js`。
 - `frontend/src/app/components/WordCard.vue`：已拆出媒体和挑战统计子组件。
 - `frontend/src/app/components/ListDetailHeader.vue`：已拆出 `ListTitleEditor.vue`。
