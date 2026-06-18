@@ -59,12 +59,13 @@
   - `d4ce2de`：拆分单词卡片正文组件。
   - `0a392cc`：拆分英文小报版块标题组件。
   - `8474d57`：拆分列表图片同步摘要组件。
-  - 待提交：拆分列表详情删除提示组件。
+  - `7a26ee0`：拆分列表详情删除提示组件。
+  - 待提交：拆分 BookLearner 书名查询表单组件。
 
 ## 正在进行
 
-- 当前推进区域：列表详情头部。
-- 当前已改到：新增 `ListDeleteNotice.vue`，把删除/重命名反馈提示从 `ListDetailHeader.vue` 中拆出；标题编辑、动作按钮和删除状态来源保持不变。
+- 当前推进区域：BookLearner 查询面板。
+- 当前已改到：新增 `BooklearnerSearchForm.vue`，把书名/作者输入和分析按钮从 `BooklearnerSearchPanel.vue` 中拆出；查询 v-model 和分析回调保持不变。
 - 当前轮状态：等待本地构建、Python 编译、乱码扫描、提交、推送、部署和线上验证。
 
 ## 下一批改哪里
@@ -91,7 +92,8 @@
 - `frontend/src/app/components/WordCard.vue`：已抽出 `WordCardBody.vue`。
 - `frontend/src/app/components/NewspaperSection.vue`：已抽出 `NewspaperSectionHeader.vue`。
 - `frontend/src/app/components/ListImageSyncPanel.vue`：已抽出 `ListImageSyncSummary.vue`。
-- `frontend/src/app/components/ListDetailHeader.vue`：本轮已抽出 `ListDeleteNotice.vue`，提交部署后标记完成。
+- `frontend/src/app/components/ListDetailHeader.vue`：已抽出 `ListDeleteNotice.vue`。
+- `frontend/src/app/components/BooklearnerSearchPanel.vue`：本轮已抽出 `BooklearnerSearchForm.vue`，提交部署后标记完成。
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDetailActions.js`。
 - `frontend/src/app/components/WordCard.vue`：已拆出媒体和挑战统计子组件。
 - `frontend/src/app/components/ListDetailHeader.vue`：已拆出 `ListTitleEditor.vue`。
