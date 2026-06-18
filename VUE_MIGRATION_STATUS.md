@@ -64,12 +64,13 @@
   - `fd31f0f`：拆分导入预览表单行列选择和切换 sheet 动作 helper。
   - `5512dcb`：拆分列表删除状态 helper。
   - `2b4da4d`：拆分列表图片同步绑定 helper。
-  - 待提交：拆分列表删除流程绑定 helper。
+  - `227a8d9`：拆分列表删除流程绑定 helper。
+  - 待提交：拆分导入预览表单重置 helper。
 
 ## 正在进行
 
-- 当前推进区域：列表详情工具。
-- 当前已改到：新增 `listDeleteBinding.js`，把删除当前列表的 id/password 检查、成功重置跳转和失败 notice 写入从 `useListDetailTools.js` 中拆出；删除 API 和页面交互保持不变。
+- 当前推进区域：导入预览表单。
+- 当前已改到：新增 `importPreviewFormReset.js`，把根据 preview 重建导入表单状态的逻辑从 `useImportPreviewForm.js` 中拆出；表单初始值和 reset 对外 API 保持不变。
 - 当前轮状态：等待本地构建、Python 编译、乱码扫描、提交、推送、部署和线上验证。
 
 ## 下一批改哪里
@@ -101,7 +102,8 @@
 - `frontend/src/app/composables/useImportPreviewForm.js`：已抽出 `importPreviewFormActions.js`。
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDeleteState.js`。
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listImageSyncBinding.js`。
-- `frontend/src/app/composables/useListDetailTools.js`：本轮已抽出 `listDeleteBinding.js`，提交部署后标记完成。
+- `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDeleteBinding.js`。
+- `frontend/src/app/composables/useImportPreviewForm.js`：本轮已抽出 `importPreviewFormReset.js`，提交部署后标记完成。
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDetailActions.js`。
 - `frontend/src/app/components/WordCard.vue`：已拆出媒体和挑战统计子组件。
 - `frontend/src/app/components/ListDetailHeader.vue`：已拆出 `ListTitleEditor.vue`。

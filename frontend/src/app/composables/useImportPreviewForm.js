@@ -1,21 +1,17 @@
 import { ref } from "vue";
-import {
-  buildImportPreviewFormState,
-  createImportPreviewFormState,
-} from "../forms/importPreviewFormState.js";
+import { createImportPreviewFormState } from "../forms/importPreviewFormState.js";
 import {
   applyAllPreviewColumns,
   applyAllPreviewRows,
   switchPreviewSheet,
 } from "../forms/importPreviewFormActions.js";
+import { resetImportPreviewForm } from "../forms/importPreviewFormReset.js";
 
 export function useImportPreviewForm({ data, route, loadRoute }) {
   const importForm = ref(createImportPreviewFormState());
 
   function resetImportForm() {
-    const preview = data.value?.preview;
-    if (!preview) return;
-    importForm.value = buildImportPreviewFormState(preview);
+    resetImportPreviewForm(importForm, data);
   }
 
   function setAllRows(checked) {
