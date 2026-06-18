@@ -21,7 +21,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(["update:spelling", "submit", "strip-digits"]);
+const emit = defineEmits(["update:spelling", "submit"]);
 const { playAudio } = useAudioPlayback();
 const autoStudyInterval = ref(6);
 const isAutoStudying = ref(false);
@@ -142,7 +142,6 @@ onBeforeUnmount(stopAutoStudy);
         :submitting="submitting"
         @update:spelling="emit('update:spelling', $event)"
         @submit="emit('submit')"
-        @strip-digits="emit('strip-digits')"
       />
     </div>
   </article>

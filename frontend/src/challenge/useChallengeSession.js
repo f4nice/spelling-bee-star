@@ -44,10 +44,6 @@ export function useChallengeSession(wordListId) {
     }
   }
 
-  function stripDigits() {
-    spelling.value = spelling.value.replace(/[0-9]/g, '');
-  }
-
   onMounted(() => loadState());
 
   return {
@@ -57,6 +53,5 @@ export function useChallengeSession(wordListId) {
     submitting,
     errorMessage,
     submitSpelling,
-    stripDigits,
   };
 }

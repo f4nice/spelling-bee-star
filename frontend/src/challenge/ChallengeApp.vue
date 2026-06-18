@@ -14,7 +14,7 @@ const props = defineProps({
 });
 
 const wordListId = Number(props.wordListId || 0);
-const { state, spelling, loading, submitting, errorMessage, submitSpelling, stripDigits } = useChallengeSession(wordListId);
+const { state, spelling, loading, submitting, errorMessage, submitSpelling } = useChallengeSession(wordListId);
 </script>
 
 <template>
@@ -31,7 +31,6 @@ const { state, spelling, loading, submitting, errorMessage, submitSpelling, stri
         :state="state"
         :submitting="submitting"
         @submit="submitSpelling"
-        @strip-digits="stripDigits"
       />
       <ChallengeComplete v-else :state="state" :restart-url="restartChallengeUrl(wordListId)" />
     </template>
