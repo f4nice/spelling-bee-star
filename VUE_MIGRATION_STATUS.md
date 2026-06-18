@@ -82,12 +82,13 @@
   - `0f28f5a`：拆分单词录音保存动作 helper；已构建、编译、乱码扫描、推送、部署，并完成线上 HTTP/浏览器/日志验证。
   - `0c59179`：更新 Vue 迁移工作台，明确后续按文档推进、减少重复全量扫描。
   - `d8702e4`：拆分单词音频候选加载与选择保存绑定 helper；已构建、编译、乱码扫描、推送、部署，并完成线上 HTTP/浏览器/日志验证。
+  - `2e0482d`：更新 Vue 迁移候选队列，标记下一轮优先收束过期候选。
 
 ## 正在进行
 
-- 当前推进区域：候选队列收束与剩余真实热点确认。
-- 当前已改到：`useWordAudio.js` 已抽出 `wordAudioActions.js` 和 `wordAudioChoiceBindings.js`；当前轻量复核显示 `ChallengeDayWordCard.vue`、`WordEditableDefinitionFields.vue`、`ListDetailPage.vue` 等候选已足够薄，下一轮优先清理过期候选并只对仍有真实逻辑残留的文件下手。
-- 当前轮状态：上一轮 `d8702e4` 已完成并部署验证；等待下一轮按本文档继续推进。
+- 当前推进区域：单词录音 composable 的启动动作绑定。
+- 当前已改到：`wordRecorderActions.js` 继续接管录音启动动作，把 session 准备、状态写入、media recorder 引用回写和 start 调用从 `useWordRecorder.js` 抽出；保存动作已经在上一轮抽出，停止动作仍复用 session helper。
+- 当前轮状态：等待本地构建、Python 编译、乱码扫描、提交、推送、部署和线上验证。
 
 ## 下一批改哪里
 
@@ -96,7 +97,7 @@
 最终扫描已记录的后续可选候选：
 
 - `frontend/src/app/composables/useWordAudio.js`：已抽出 `wordAudioActions.js` 和 `wordAudioChoiceBindings.js`。
-- `frontend/src/app/composables/useWordRecorder.js`：已抽出 `wordRecorderSession.js` 和 `wordRecorderActions.js`。
+- `frontend/src/app/composables/useWordRecorder.js`：已抽出 `wordRecorderSession.js` 和 `wordRecorderActions.js`；本轮继续把启动动作并入 `wordRecorderActions.js`。
 - `frontend/src/app/components/ChallengeDayWordCard.vue`：已抽出正文组件和详情链接 helper。
 - `frontend/src/app/components/WordEditableDefinitionFields.vue`：已抽出 `wordDefinitionFields.js`。
 - `frontend/src/app/pages/ListDetailPage.vue`：已抽出 `ListDetailWordGrid.vue`。

@@ -1,22 +1,22 @@
 import { ref } from "vue";
-import { saveWordRecording } from "../wordRecorderActions.js";
+import { saveWordRecording, startWordRecording } from "../wordRecorderActions.js";
 import { createRecorderState } from "../wordRecorderState.js";
-import { prepareWordRecorderSession, stopWordRecorderSession } from "../wordRecorderSession.js";
+import { stopWordRecorderSession } from "../wordRecorderSession.js";
 
 export function useWordRecorder({ data, loadRoute }) {
   const recorderState = ref(createRecorderState());
   let mediaRecorder = null;
 
   async function startRecording(accent) {
-    const session = await prepareWordRecorderSession({
+    await startWordRecording({
       accent,
-      setReadyState: (state) => {
+      setRecorderState: (state) => {
         recorderState.value = state;
       },
+      setMediaRecorder: (recorder) => {
+        mediaRecorder = recorder;
+      },
     });
-    recorderState.value = session.state;
-    mediaRecorder = session.recorder;
-    if (session.canStart) mediaRecorder.start();
   }
 
   function stopRecording() {
