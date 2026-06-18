@@ -1,4 +1,7 @@
 <script setup>
+import WordImageActionButtons from "./WordImageActionButtons.vue";
+import WordImageUploadField from "./WordImageUploadField.vue";
+
 defineProps({
   selectedImageFile: {
     type: Object,
@@ -19,22 +22,11 @@ defineEmits(["select-image"]);
 
 <template>
   <div class="media-tools" role="group" aria-label="单词图片工具">
-    <label>
-      上传图片
-      <input
-        type="file"
-        accept="image/*"
-        @change="$emit('select-image', $event.target.files[0] || null)"
-      >
-    </label>
-    <button
-      type="button"
-      class="secondary-button"
-      :disabled="!selectedImageFile"
-      @click="saveSelectedImage"
-    >
-      保存图片
-    </button>
-    <button type="button" class="secondary-button" @click="findImages">网络找图</button>
+    <WordImageUploadField @select-image="$emit('select-image', $event)" />
+    <WordImageActionButtons
+      :selected-image-file="selectedImageFile"
+      :find-images="findImages"
+      :save-selected-image="saveSelectedImage"
+    />
   </div>
 </template>
