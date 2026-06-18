@@ -42,6 +42,12 @@ http://127.0.0.1:8000
 powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
 ```
 
+生产部署同样需要先设置 `SPEAKEASY_SSH_PASSWORD`：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\deploy-production.ps1
+```
+
 线上日志检查需要先设置 `SPEAKEASY_SSH_PASSWORD`，再运行：
 
 ```powershell

@@ -15,6 +15,7 @@
 - HTML shell：`app/templates/vue_app.html`
 - 验证脚本：`scripts/verify-release.ps1`
 - 线上日志检查脚本：`scripts/check-production-logs.ps1`
+- 生产部署脚本：`scripts/deploy-production.ps1`
 
 ## 页面覆盖
 
@@ -58,7 +59,7 @@
    - Python 入口或相关模块编译检查
    - 必要时做 HTTP 或浏览器验证
 5. 提交并推送 `main`。
-6. 部署到生产服务器。
+6. 运行 `powershell -ExecutionPolicy Bypass -File scripts\deploy-production.ps1` 部署到生产服务器。
 7. 线上检查：
    - 关键 URL 返回 200
    - 浏览器无明显 console error
@@ -82,4 +83,4 @@
 - 发现中文乱码时先用 UTF-8 读取确认，避免被 PowerShell 控制台编码误导。
 - 大改 Vue 组件前先看 `STYLE_GUIDE.md`，优先复用现有类名和 token。
 - 对新需求默认完成本地验证、Git 提交、推送、服务器部署和线上检查。
-- 后续把部署流程继续脚本化。
+- 后续继续把浏览器视觉巡检和常见页面回归检查脚本化。
