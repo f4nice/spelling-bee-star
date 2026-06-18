@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, ref, watch } from "vue";
 
 import ChallengeAnswerPanel from "./ChallengeAnswerPanel.vue";
+import SpeechAudioPlayer from "./SpeechAudioPlayer.vue";
 import ChallengeWordPrompt from "./ChallengeWordPrompt.vue";
 import { useAudioPlayback } from "../shared/useAudioPlayback.js";
 
@@ -24,14 +25,24 @@ const emit = defineEmits(["update:spelling", "submit", "strip-digits"]);
 const { playAudio } = useAudioPlayback();
 const autoStudyInterval = ref(6);
 const isAutoStudying = ref(false);
+const usSpeechPlayer = ref(null);
+const gbSpeechPlayer = ref(null);
 let autoStudyTimer = null;
 
 function playCurrentAudio() {
-  playAudio("challenge-audio-us", props.state.current_word?.word || "", "en-US");
+  if (props.state.challenge_audio_sources?.us) {
+    playAudio("challenge-audio-us", props.state.current_word?.word || "", "en-US");
+    return;
+  }
+  usSpeechPlayer.value?.play();
 }
 
 function playBritishAudio() {
-  playAudio("challenge-audio-gb", props.state.current_word?.word || "", "en-GB");
+  if (props.state.challenge_audio_sources?.gb) {
+    playAudio("challenge-audio-gb", props.state.current_word?.word || "", "en-GB");
+    return;
+  }
+  gbSpeechPlayer.value?.play();
 }
 
 function stopAutoStudy() {
@@ -99,9 +110,13 @@ onBeforeUnmount(stopAutoStudy);
             controls
             :src="state.challenge_audio_sources?.us"
           />
-          <button v-else type="button" class="secondary-button speech-player-button" @click="playCurrentAudio">
-            浏览器朗读
-          </button>
+          <SpeechAudioPlayer
+            v-else
+            ref="usSpeechPlayer"
+            :text="state.current_word.word"
+            lang="en-US"
+            label="美音"
+          />
         </label>
         <label>
           <span>英音</span>
@@ -112,9 +127,13 @@ onBeforeUnmount(stopAutoStudy);
             controls
             :src="state.challenge_audio_sources?.gb"
           />
-          <button v-else type="button" class="secondary-button speech-player-button" @click="playBritishAudio">
-            浏览器朗读
-          </button>
+          <SpeechAudioPlayer
+            v-else
+            ref="gbSpeechPlayer"
+            :text="state.current_word.word"
+            lang="en-GB"
+            label="英音"
+          />
         </label>
       </div>
 
