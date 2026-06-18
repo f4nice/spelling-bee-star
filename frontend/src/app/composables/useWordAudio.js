@@ -1,6 +1,6 @@
 import { ref } from "vue";
 import { useAudioPlayback } from "../../shared/useAudioPlayback.js";
-import { loadWordAudioOptions, saveWordAudioChoice } from "../wordAudioActions.js";
+import { chooseWordAudioOption, updateWordAudioOptions } from "../wordAudioChoiceBindings.js";
 import { useWordRecorder } from "./useWordRecorder.js";
 
 export function useWordAudio({ data, loadRoute }) {
@@ -18,12 +18,11 @@ export function useWordAudio({ data, loadRoute }) {
   }
 
   async function fetchAudioOptions(accent) {
-    audioOptions.value[accent] = await loadWordAudioOptions({ wordId: data.value.word.id, accent });
+    await updateWordAudioOptions({ wordId: data.value.word.id, audioOptions, accent });
   }
 
   async function chooseAudio(accent, url) {
-    await saveWordAudioChoice({ wordId: data.value.word.id, accent, url });
-    await loadRoute();
+    await chooseWordAudioOption({ wordId: data.value.word.id, accent, url, loadRoute });
   }
 
   return {
