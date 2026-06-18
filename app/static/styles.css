@@ -1,16 +1,27 @@
 :root {
-  --bg: #f6f7f4;
-  --ink: #1c2430;
-  --muted: #667085;
-  --line: #d9ded6;
-  --border: #d9ded6;
+  --bg: #f4f6f2;
+  --bg-soft: #eef3ef;
+  --ink: #17202c;
+  --muted: #617083;
+  --line: #d7ded5;
+  --border: #d7ded5;
   --panel: #ffffff;
-  --accent: #1f7a5a;
-  --accent-dark: #155f45;
-  --topbar: #2f3b46;
+  --panel-soft: #fbfdfb;
+  --accent: #1d7f5b;
+  --accent-dark: #126146;
+  --accent-soft: #e7f5ee;
+  --accent-tint: rgba(29, 127, 91, 0.12);
+  --topbar: #26343f;
   --topbar-text: #f8fafc;
   --warn: #a95c00;
   --error: #b42318;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 2px rgba(23, 32, 44, 0.04);
+  --shadow: 0 12px 32px rgba(23, 32, 44, 0.08);
+  --shadow-strong: 0 22px 60px rgba(23, 32, 44, 0.14);
+  --focus-ring: 0 0 0 3px rgba(29, 127, 91, 0.16);
 }
 
 * {
@@ -21,7 +32,11 @@ body {
   margin: 0;
   font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
   color: var(--ink);
-  background: var(--bg);
+  background:
+    radial-gradient(circle at top left, rgba(29, 127, 91, 0.08), transparent 340px),
+    linear-gradient(180deg, #f8faf7 0%, var(--bg) 48%, #eef2ed 100%);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 .shell-sidebar-toggle {
@@ -38,12 +53,12 @@ body {
   gap: 14px;
   min-height: 64px;
   padding: 12px 24px;
-  background: var(--topbar);
+  background: linear-gradient(135deg, #22313d 0%, var(--topbar) 58%, #304452 100%);
   color: var(--topbar-text);
   position: sticky;
   top: 0;
   z-index: 5;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06), 0 10px 28px rgba(23, 32, 44, 0.16);
 }
 
 .app-brand {
@@ -61,9 +76,10 @@ body {
   place-items: center;
   width: 38px;
   height: 38px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: #fff;
   overflow: hidden;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
 }
 
 .brand-mark img {
@@ -77,7 +93,8 @@ body {
   place-items: center;
   width: 40px;
   height: 40px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 9px;
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
   font-size: 22px;
@@ -108,7 +125,7 @@ body {
   grid-template-columns: 260px minmax(0, 1fr);
   gap: 24px;
   width: min(1480px, calc(100vw - 48px));
-  margin: 24px auto 56px;
+  margin: 24px auto 64px;
   transition: grid-template-columns 0.2s ease;
 }
 
@@ -125,15 +142,17 @@ body {
   flex-direction: column;
   gap: 8px;
   padding: 18px 14px;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.86);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px);
 }
 
 .side-nav a {
   display: block;
   padding: 11px 18px;
-  border-radius: 7px;
+  border-radius: var(--radius);
   color: var(--ink);
   font-size: 16px;
   font-weight: 800;
@@ -141,14 +160,14 @@ body {
 }
 
 .side-nav a:hover {
-  background: #edf4f0;
+  background: var(--accent-soft);
   color: var(--accent-dark);
 }
 
 .side-nav a.active {
   color: #fff;
-  background: var(--accent);
-  box-shadow: 0 10px 22px rgba(31, 122, 90, 0.18);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  box-shadow: 0 12px 26px rgba(29, 127, 91, 0.2);
 }
 
 .nav-count {
@@ -300,11 +319,13 @@ body {
   padding: 16px;
   color: inherit;
   text-decoration: none;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .home-stat-card:hover {
   border-color: rgba(31, 122, 90, 0.35);
-  box-shadow: 0 12px 30px rgba(28, 36, 48, 0.08);
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
 }
 
 .home-stat-card span,
@@ -358,7 +379,7 @@ body {
   width: 100%;
   min-height: 38px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 0 10px;
   background: #fff;
 }
@@ -366,10 +387,11 @@ body {
 .home-upload-form button {
   min-height: 38px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius);
   color: #fff;
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
   font-weight: 900;
+  box-shadow: 0 8px 18px rgba(29, 127, 91, 0.16);
 }
 
 .lists-tools-panel {
@@ -379,6 +401,7 @@ body {
   align-items: stretch;
   margin-bottom: 22px;
   padding: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(251, 253, 251, 0.92) 100%);
 }
 
 .lists-tool-card,
@@ -388,8 +411,9 @@ body {
   align-content: start;
   padding: 14px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fbfdfb;
+  border-radius: var(--radius-lg);
+  background: var(--panel-soft);
+  box-shadow: var(--shadow-sm);
 }
 
 .lists-import-heading,
@@ -460,8 +484,8 @@ body {
   min-height: 38px;
   padding: 5px 12px;
   border: 1px dashed rgba(23, 129, 91, 0.45);
-  border-radius: 8px;
-  background: #f7fbf8;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #fbfffc 0%, #f1faf5 100%);
   color: var(--ink);
   cursor: pointer;
   text-align: center;
@@ -474,7 +498,7 @@ body {
 .batch-image-file-picker:focus-within {
   border-color: var(--accent);
   background: #eef8f3;
-  box-shadow: 0 0 0 3px rgba(23, 129, 91, 0.08);
+  box-shadow: var(--focus-ring);
 }
 
 .excel-file-picker input,
@@ -569,10 +593,10 @@ body {
   max-height: min(720px, calc(100vh - 56px));
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   padding: 18px;
   background: var(--panel);
-  box-shadow: 0 24px 70px rgba(21, 31, 43, 0.28);
+  box-shadow: var(--shadow-strong);
 }
 
 .list-picker-head {
@@ -594,7 +618,7 @@ body {
   width: 100%;
   min-height: 42px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 0 12px;
   font: inherit;
 }
@@ -613,7 +637,7 @@ body {
   gap: 10px;
   min-height: 44px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 10px 12px;
   background: #fff;
   font-weight: 800;
@@ -621,7 +645,7 @@ body {
 
 .list-picker-option:hover {
   border-color: var(--accent);
-  background: #f7fbf9;
+  background: #f0f8f4;
 }
 
 .list-picker-option input {
@@ -1249,7 +1273,8 @@ body {
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .upload-panel {
@@ -1287,7 +1312,7 @@ input[type="file"] {
 input[type="text"] {
   height: 38px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 0 10px;
   color: var(--ink);
   background: #fff;
@@ -1295,16 +1320,26 @@ input[type="text"] {
 
 button {
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 10px 16px;
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
   color: #fff;
   font-weight: 700;
   cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 button:hover {
   background: var(--accent-dark);
+  box-shadow: 0 8px 18px rgba(29, 127, 91, 0.14);
+}
+
+button:disabled,
+button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.62;
+  box-shadow: none;
+  transform: none;
 }
 
 .danger-button {
@@ -1320,10 +1355,10 @@ button:hover {
   align-items: center;
   justify-content: center;
   min-height: 40px;
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 10px 16px;
   color: #fff;
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
   font-weight: 800;
   text-decoration: none;
 }
@@ -1339,10 +1374,10 @@ button:hover {
   justify-content: center;
   min-height: 38px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 9px 14px;
   color: var(--ink);
-  background: #fff;
+  background: rgba(255, 255, 255, 0.9);
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;
@@ -1350,7 +1385,18 @@ button:hover {
 
 .secondary-button:hover,
 .ghost-button:hover {
-  background: #f0f3ef;
+  border-color: rgba(29, 127, 91, 0.28);
+  background: var(--accent-soft);
+  box-shadow: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible,
+a:focus-visible {
+  outline: 0;
+  box-shadow: var(--focus-ring);
 }
 
 .word-grid {
@@ -1368,7 +1414,15 @@ button:hover {
   text-decoration: none;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.word-card:hover {
+  border-color: rgba(29, 127, 91, 0.28);
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
 }
 
 .word-index-badge {
@@ -1389,6 +1443,19 @@ button:hover {
 
 .list-card {
   min-height: 0;
+}
+
+.list-card .word-card-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 58px;
+  gap: 10px;
+}
+
+.list-card .word-card-title {
+  display: contents;
+  margin: 0;
 }
 
 .list-card-link {
@@ -1444,10 +1511,10 @@ button:hover {
   justify-content: center;
   min-height: 38px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 10px 14px;
   color: #fff;
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
   font-weight: 800;
   text-decoration: none;
   white-space: nowrap;
@@ -1497,12 +1564,12 @@ button:hover {
   display: grid;
   grid-template-rows: auto 1fr;
   gap: 8px;
-  min-height: 70px;
+  min-height: 76px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   padding: 9px;
-  background: #fff;
-  box-shadow: 0 1px 0 rgba(28, 36, 48, 0.03);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-sm);
   transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
 }
 
@@ -1514,19 +1581,21 @@ button:hover {
 
 .calendar-day.today {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(31, 122, 90, 0.1);
+  box-shadow: var(--focus-ring);
 }
 
 .calendar-day.has-records {
-  border-color: rgba(23, 129, 91, 0.24);
-  background: linear-gradient(180deg, #f3fbf7 0%, #e9f7f0 100%);
+  border-color: rgba(29, 127, 91, 0.26);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.84) 0%, rgba(231, 245, 238, 0.92) 100%),
+    radial-gradient(circle at top right, rgba(29, 127, 91, 0.14), transparent 70%);
   cursor: pointer;
 }
 
 .calendar-day.has-records:hover {
   border-color: var(--accent);
-  background: #e8f7ef;
-  box-shadow: 0 10px 24px rgba(28, 36, 48, 0.08);
+  background: #edf8f2;
+  box-shadow: var(--shadow);
   transform: translateY(-1px);
 }
 
@@ -1558,10 +1627,11 @@ button:hover {
   justify-self: start;
   align-self: end;
   gap: 3px;
-  padding: 4px 8px;
+  padding: 4px 9px;
   border-radius: 999px;
   color: var(--accent-dark);
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
   font-size: 12px;
   font-weight: 800;
   text-align: center;
@@ -1602,7 +1672,7 @@ button:hover {
 .calendar-detail-panel {
   margin-top: 14px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 14px;
   background: #fff;
 }
@@ -1630,7 +1700,7 @@ button:hover {
 
 .calendar-detail-heading button {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 7px 12px;
   background: #fff;
   color: var(--ink);
@@ -1649,7 +1719,7 @@ button:hover {
   gap: 8px;
   align-items: center;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 8px;
 }
 
@@ -1975,7 +2045,7 @@ button:hover {
   display: grid;
   place-items: center;
   height: 168px;
-  background: #e8ece7;
+  background: linear-gradient(135deg, #edf6f1 0%, #dfe9e2 100%);
   color: var(--accent-dark);
   font-size: 56px;
   font-weight: 800;
@@ -2008,6 +2078,7 @@ button:hover {
   display: grid;
   gap: 20px;
   padding: 24px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(251, 253, 251, 0.96) 100%);
 }
 
 .challenge-top {
@@ -2045,6 +2116,11 @@ button.calendar-day {
   cursor: pointer;
 }
 
+button.calendar-day {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.9);
+}
+
 .plain-card-button {
   display: block;
   padding: 0;
@@ -2057,8 +2133,8 @@ button.calendar-day {
 .booklearner-json {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.92);
   color: var(--ink);
   font: inherit;
   padding: 0.7rem 0.8rem;
@@ -2097,8 +2173,9 @@ button.calendar-day {
 .booklearner-page .query-panel,
 .booklearner-page .results > .panel {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--panel);
+  box-shadow: var(--shadow-sm);
 }
 
 .booklearner-page .quote-home-panel {
@@ -2171,9 +2248,10 @@ button.calendar-day {
   align-content: start;
   min-height: 150px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 14px;
-  background: #fff;
+  background: var(--panel-soft);
+  box-shadow: var(--shadow-sm);
 }
 
 .booklearner-page .quote-card p {
@@ -2291,8 +2369,9 @@ button.calendar-day:disabled {
 .challenge-word-media {
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: #fff;
+  box-shadow: var(--shadow-sm);
 }
 
 .challenge-word-media img {
@@ -2308,8 +2387,9 @@ button.calendar-day:disabled {
   gap: 16px;
   padding: 20px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fbfcfa;
+  border-radius: var(--radius-lg);
+  background: var(--panel-soft);
+  box-shadow: var(--shadow-sm);
 }
 
 .challenge-word-body h2,
@@ -2359,14 +2439,15 @@ button.calendar-day:disabled {
   padding: 5px 10px 5px 6px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: #f3f6f5;
+  background: linear-gradient(180deg, #ffffff 0%, #f3f7f5 100%);
   color: var(--ink);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 .speech-audio-player.is-playing {
-  border-color: rgba(23, 129, 91, 0.35);
-  background: #eef8f3;
+  border-color: rgba(29, 127, 91, 0.35);
+  background: var(--accent-soft);
+  box-shadow: var(--focus-ring);
 }
 
 .speech-audio-play {
@@ -2376,11 +2457,12 @@ button.calendar-day:disabled {
   height: 28px;
   border: 0;
   border-radius: 50%;
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
   color: #fff;
   cursor: pointer;
   font-size: 12px;
   line-height: 1;
+  box-shadow: 0 5px 12px rgba(29, 127, 91, 0.18);
 }
 
 .speech-audio-play:hover {
@@ -2393,7 +2475,7 @@ button.calendar-day:disabled {
   min-width: 52px;
   overflow: hidden;
   border-radius: 999px;
-  background: #dfe6e3;
+  background: #dfe8e3;
 }
 
 .speech-audio-track span {
@@ -2428,8 +2510,9 @@ button.calendar-day:disabled {
   align-items: end;
   padding: 14px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: #fff;
+  box-shadow: var(--shadow-sm);
 }
 
 .spelling-form label {
@@ -2444,7 +2527,7 @@ button.calendar-day:disabled {
   width: 100%;
   height: 44px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 0 12px;
   color: var(--ink);
   font-size: 20px;
@@ -2458,15 +2541,16 @@ button.calendar-day:disabled {
   align-items: end;
   padding: 14px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: #fff;
+  box-shadow: var(--shadow-sm);
 }
 
 .challenge-spelling-input {
   width: 100%;
   height: 44px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 0 12px;
   color: var(--ink);
   background: #fff;
@@ -2718,6 +2802,7 @@ button.calendar-day:disabled {
 
 .detail-panel {
   padding: 24px;
+  background: var(--panel-soft);
 }
 
 .detail-study-row {
@@ -2761,7 +2846,7 @@ button.calendar-day:disabled {
   width: 70px;
   height: 34px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 0 8px;
   color: var(--ink);
   font-weight: 900;
@@ -2805,7 +2890,7 @@ button.calendar-day:disabled {
 }
 
 .word-title-stack .title-alternate-edit:focus {
-  box-shadow: inset 0 -1px 0 rgba(23, 129, 91, 0.35);
+  box-shadow: inset 0 -1px 0 rgba(29, 127, 91, 0.35);
 }
 
 .title-alternate-text {
@@ -2880,8 +2965,9 @@ audio {
   align-items: center;
   padding: 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fbfcfa;
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+  box-shadow: var(--shadow-sm);
 }
 
 .audio-option strong {
@@ -2902,9 +2988,10 @@ audio {
   display: grid;
   gap: 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 12px;
-  background: #f8faf7;
+  background: var(--panel-soft);
+  box-shadow: var(--shadow-sm);
 }
 
 .record-audio-status {
@@ -2949,11 +3036,12 @@ dd {
   min-height: 104px;
   resize: vertical;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 10px 12px;
   color: var(--ink);
   font: inherit;
   line-height: 1.6;
+  background: #fff;
 }
 
 .definition-edit-actions {
@@ -2971,15 +3059,15 @@ dd {
 .inline-edit-text {
   min-height: 40px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 4px 6px;
   white-space: pre-wrap;
   cursor: text;
 }
 
 .inline-edit-text:hover {
-  border-color: var(--line);
-  background: #fbfcfa;
+  border-color: rgba(29, 127, 91, 0.24);
+  background: var(--accent-soft);
 }
 
 .inline-edit textarea {
@@ -2988,11 +3076,12 @@ dd {
   min-height: 104px;
   resize: vertical;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 10px 12px;
   color: var(--ink);
   font: inherit;
   line-height: 1.6;
+  background: #fff;
 }
 
 .inline-edit.is-editing .inline-edit-text {
