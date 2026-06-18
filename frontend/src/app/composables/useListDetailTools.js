@@ -5,9 +5,14 @@ import {
   renameWordList,
   syncWordListImages,
 } from "../listDetailActions.js";
+import {
+  createDeleteListState,
+  resetDeleteListState,
+  setDeleteListNotice,
+} from "../listDeleteState.js";
 
 export function useListDetailTools({ data, go, loadRoute }) {
-  const deleteListState = ref({ password: "", notice: "" });
+  const deleteListState = ref(createDeleteListState());
 
   async function renameList() {
     await renameWordList({ wordList: data.value.word_list });
@@ -18,10 +23,10 @@ export function useListDetailTools({ data, go, loadRoute }) {
     if (!wordListId || !deleteListState.value.password) return;
     try {
       await deleteWordList({ wordListId, password: deleteListState.value.password });
-      deleteListState.value = { password: "", notice: "" };
+      resetDeleteListState(deleteListState);
       go("/lists");
     } catch (error) {
-      deleteListState.value.notice = error.message || LIST_DELETE_FALLBACK_ERROR;
+      setDeleteListNotice(deleteListState, error.message || LIST_DELETE_FALLBACK_ERROR);
     }
   }
 
