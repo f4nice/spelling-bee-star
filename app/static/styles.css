@@ -2769,6 +2769,30 @@ button.calendar-day:disabled {
   gap: 6px;
 }
 
+.word-title-stack .title-alternate-edit {
+  min-height: 0;
+  resize: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--accent-dark);
+  line-height: 1.4;
+  box-shadow: none;
+}
+
+.word-title-stack .title-alternate-edit:focus {
+  box-shadow: inset 0 -1px 0 rgba(23, 129, 91, 0.35);
+}
+
+.title-alternate-text {
+  color: var(--accent-dark);
+  font-size: 16px;
+  font-weight: 700;
+  white-space: pre-wrap;
+}
+
 .phonetic {
   color: var(--accent-dark);
   font-size: 18px;
