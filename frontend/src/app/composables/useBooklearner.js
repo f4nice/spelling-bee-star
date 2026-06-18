@@ -1,20 +1,10 @@
 import { ref } from 'vue';
 import { useBooklearnerActions } from './useBooklearnerActions.js';
 import { useBooklearnerData } from './useBooklearnerData.js';
+import { createBooklearnerState } from '../booklearnerState.js';
 
 export function useBooklearner({ route, go }) {
-  const book = ref({
-    query: '',
-    title: '',
-    author: '',
-    text: '',
-    file: null,
-    result: null,
-    history: [],
-    featured: [],
-    suggestions: [],
-    notice: '',
-  });
+  const book = ref(createBooklearnerState());
 
   const { loadBooklearner } = useBooklearnerData({ book, route });
   const {
