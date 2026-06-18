@@ -91,33 +91,40 @@ async function exec(conn, command) {
   });
 }
 
-const deployCommand = [
-  "set -e",
-  `cd ${sh(config.remoteProjectPath)}`,
-  `backup_dir="${config.remoteProjectPath}/.codex-backups/$(date +%Y%m%d-%H%M%S)"`,
-  `mkdir -p "$backup_dir"`,
-  `tar --exclude='./.venv' --exclude='./uploads' --exclude='./.codex-backups' -czf "$backup_dir/code-before.tar.gz" .`,
-  `tar -xf ${sh(config.remoteArchivePath)} -C ${sh(config.remoteProjectPath)}`,
-  `chown -R root:root ${sh(config.remoteProjectPath)}`,
-  `chmod -R u+rwX,go+rX ${sh(config.remoteProjectPath)}`,
-  `systemctl restart ${sh(config.serviceName)}`,
-  "sleep 1",
-  `printf 'status=' && systemctl is-active ${sh(config.serviceName)}`,
-  "printf '\\n'",
-  `printf 'backup=' && echo "$backup_dir/code-before.tar.gz"`,
-  `printf 'commit=${config.commit}\\n'`,
-  `printf 'project_status=' && test -f PROJECT_STATUS.md && echo ok`,
-  `printf 'deploy_script=' && test -f scripts/deploy-production.ps1 && echo ok`,
-].join("\n");
+async function main() {
+  const deployCommand = [
+    "set -e",
+    `cd ${sh(config.remoteProjectPath)}`,
+    `backup_dir="${config.remoteProjectPath}/.codex-backups/$(date +%Y%m%d-%H%M%S)"`,
+    `mkdir -p "$backup_dir"`,
+    `tar --exclude='./.venv' --exclude='./uploads' --exclude='./.codex-backups' -czf "$backup_dir/code-before.tar.gz" .`,
+    `tar -xf ${sh(config.remoteArchivePath)} -C ${sh(config.remoteProjectPath)}`,
+    `chown -R root:root ${sh(config.remoteProjectPath)}`,
+    `chmod -R u+rwX,go+rX ${sh(config.remoteProjectPath)}`,
+    `systemctl restart ${sh(config.serviceName)}`,
+    "sleep 1",
+    `printf 'status=' && systemctl is-active ${sh(config.serviceName)}`,
+    "printf '\\n'",
+    `printf 'backup=' && echo "$backup_dir/code-before.tar.gz"`,
+    `printf 'commit=${config.commit}\\n'`,
+    `printf 'project_status=' && test -f PROJECT_STATUS.md && echo ok`,
+    `printf 'deploy_script=' && test -f scripts/deploy-production.ps1 && echo ok`,
+  ].join("\n");
 
-const conn = await connect();
-try {
-  await upload(conn);
-  const output = await exec(conn, deployCommand);
-  process.stdout.write(output);
-} finally {
-  conn.end();
+  const conn = await connect();
+  try {
+    await upload(conn);
+    const output = await exec(conn, deployCommand);
+    process.stdout.write(output);
+  } finally {
+    conn.end();
+  }
 }
+
+main().catch((err) => {
+  console.error(err.message || String(err));
+  process.exit(1);
+});
 '@
 
 $tempScript = Join-Path $env:TEMP "speakeasy-deploy-production.js"
