@@ -42,6 +42,12 @@ http://127.0.0.1:8000
 powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
 ```
 
+线上日志检查需要先设置 `SPEAKEASY_SSH_PASSWORD`，再运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\check-production-logs.ps1
+```
+
 ## 好词好句
 
 本项目已合并 BookLearner，二级目录为 `好词好句`。启动同一个服务后打开：

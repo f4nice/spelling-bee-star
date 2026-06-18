@@ -14,6 +14,7 @@
 - Vue 构建产物：`app/static/vue`
 - HTML shell：`app/templates/vue_app.html`
 - 验证脚本：`scripts/verify-release.ps1`
+- 线上日志检查脚本：`scripts/check-production-logs.ps1`
 
 ## 页面覆盖
 
@@ -61,6 +62,7 @@
 7. 线上检查：
    - 关键 URL 返回 200
    - 浏览器无明显 console error
+   - 运行 `powershell -ExecutionPolicy Bypass -File scripts\check-production-logs.ps1`
    - `spelling-bee-star.service` 日志无 `Traceback`、`ERROR`、`Exception`、500
 8. 如本轮改变了项目结构、样式规则、部署方式或下一步优先级，更新 Markdown。
 
@@ -80,4 +82,4 @@
 - 发现中文乱码时先用 UTF-8 读取确认，避免被 PowerShell 控制台编码误导。
 - 大改 Vue 组件前先看 `STYLE_GUIDE.md`，优先复用现有类名和 token。
 - 对新需求默认完成本地验证、Git 提交、推送、服务器部署和线上检查。
-- 后续把重复验证、部署和日志检查继续脚本化。
+- 后续把部署流程继续脚本化。
