@@ -1382,7 +1382,7 @@ button:hover {
 }
 
 .list-card {
-  min-height: 348px;
+  min-height: 0;
 }
 
 .list-card-link {
