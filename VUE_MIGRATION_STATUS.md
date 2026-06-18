@@ -74,12 +74,13 @@
   - `f7a6e8e`：拆分单词图片和刷新表单 helper。
   - `5bb2fb9`：拆分导入预览提交表单 helper。
   - `245b394`：拆分 BookLearner JSON 预览组件。
-  - 待提交：拆分单词音频面板绑定 helper。
+  - `a3dc645`：拆分单词音频面板绑定 helper。
+  - 待提交：拆分 BookLearner 分析执行 helper。
 
 ## 正在进行
 
-- 当前推进区域：单词详情音频面板。
-- 当前已改到：新增 `wordAudioPanelBindings.js`，把音频候选列表和录音面板的 props 转发逻辑从 `WordAudioPanel.vue` 中拆出；音频播放、候选加载和录音保存行为保持不变。
+- 当前推进区域：BookLearner 分析动作。
+- 当前已改到：新增 `booklearnerAnalysisRunner.js`，把分析动作中重复的开始提示、结果写入和完成提示流程从 `useBooklearnerAnalysisActions.js` 中拆出；三个分析入口和 API 请求保持不变。
 - 当前轮状态：等待本地构建、Python 编译、乱码扫描、提交、推送、部署和线上验证。
 
 ## 下一批改哪里
@@ -121,7 +122,8 @@
 - `frontend/src/app/composables/useWordDetailLifecycle.js`、`useWordImageActions.js`、`useWordImages.js`：已抽出 `wordImageForms.js`。
 - `frontend/src/app/composables/useImportPreviewSubmit.js`：已抽出 `forms/importPreviewSubmitForm.js`。
 - `frontend/src/app/components/BooklearnerDetailPanel.vue`、`BooklearnerResultPanel.vue`：已抽出 `BooklearnerJsonPreview.vue`。
-- `frontend/src/app/components/WordAudioPanel.vue`：本轮已抽出 `wordAudioPanelBindings.js`，提交部署后标记完成。
+- `frontend/src/app/components/WordAudioPanel.vue`：已抽出 `wordAudioPanelBindings.js`。
+- `frontend/src/app/composables/useBooklearnerAnalysisActions.js`：本轮已抽出 `booklearnerAnalysisRunner.js`，提交部署后标记完成。
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDetailActions.js`。
 - `frontend/src/app/components/WordCard.vue`：已拆出媒体和挑战统计子组件。
 - `frontend/src/app/components/ListDetailHeader.vue`：已拆出 `ListTitleEditor.vue`。
