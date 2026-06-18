@@ -79,12 +79,13 @@
   - `0039f0d`：拆分 BookLearner 分析请求 task helper。
   - `11e28cd`：拆分 BookLearner 分析动作绑定 helper。
   - `07a71ce`：拆分 BookLearner 正文来源字段组件。
+  - `0f28f5a`：拆分单词录音保存动作 helper；已构建、编译、乱码扫描、推送、部署，并完成线上 HTTP/浏览器/日志验证。
 
 ## 正在进行
 
-- 当前推进区域：单词录音 composable 的保存动作。
-- 当前已改到：新增 `wordRecorderActions.js`，把保存录音、保存后状态切换和重新加载路由从 `useWordRecorder.js` 中抽出；录音开始/停止与上传行为保持不变。
-- 当前轮状态：等待本地构建、Python 编译、乱码扫描、提交、推送、部署和线上验证。
+- 当前推进区域：单词音频 composable 的剩余动作绑定。
+- 当前已改到：`useWordRecorder.js` 已抽出 `wordRecorderSession.js` 和 `wordRecorderActions.js`；下一轮从 `useWordAudio.js` 的音频候选加载、选择保存绑定继续做低风险拆分。
+- 当前轮状态：上一轮 `0f28f5a` 已完成并部署验证；等待下一轮按本文档继续推进。
 
 ## 下一批改哪里
 
@@ -92,8 +93,8 @@
 
 最终扫描已记录的后续可选候选：
 
-- `frontend/src/app/composables/useWordRecorder.js`：已抽出 `wordRecorderSession.js`；本轮继续抽出 `wordRecorderActions.js`。
-- `frontend/src/app/composables/useWordAudio.js`：已抽出 `wordAudioActions.js`。
+- `frontend/src/app/composables/useWordAudio.js`：已抽出 `wordAudioActions.js`；下一轮优先拆薄音频候选加载/选择保存的组合绑定。
+- `frontend/src/app/composables/useWordRecorder.js`：已抽出 `wordRecorderSession.js` 和 `wordRecorderActions.js`。
 - `frontend/src/app/components/ChallengeDayWordCard.vue`：已抽出正文组件和详情链接 helper。
 - `frontend/src/app/components/WordEditableDefinitionFields.vue`：已抽出 `wordDefinitionFields.js`。
 - `frontend/src/app/pages/ListDetailPage.vue`：已抽出 `ListDetailWordGrid.vue`。
