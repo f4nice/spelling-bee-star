@@ -13,6 +13,7 @@
 - 全局样式入口：`app/static/styles.css`
 - Vue 构建产物：`app/static/vue`
 - HTML shell：`app/templates/vue_app.html`
+- 验证脚本：`scripts/verify-release.ps1`
 
 ## 页面覆盖
 
@@ -51,6 +52,7 @@
    - `git log -1 --oneline`
 3. 按当前用户反馈或优先级定点修改。
 4. 代码修改后验证：
+   - 优先运行 `powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1`
    - `npm run build`，工作目录 `frontend`
    - Python 入口或相关模块编译检查
    - 必要时做 HTTP 或浏览器验证
@@ -78,3 +80,4 @@
 - 发现中文乱码时先用 UTF-8 读取确认，避免被 PowerShell 控制台编码误导。
 - 大改 Vue 组件前先看 `STYLE_GUIDE.md`，优先复用现有类名和 token。
 - 对新需求默认完成本地验证、Git 提交、推送、服务器部署和线上检查。
+- 后续把重复验证、部署和日志检查继续脚本化。
