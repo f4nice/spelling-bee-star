@@ -1,6 +1,6 @@
 import { ref } from "vue";
-import { saveRecordedAudio } from "../wordRecorderApi.js";
-import { createRecorderState, createSavedRecorderState } from "../wordRecorderState.js";
+import { saveWordRecording } from "../wordRecorderActions.js";
+import { createRecorderState } from "../wordRecorderState.js";
 import { prepareWordRecorderSession, stopWordRecorderSession } from "../wordRecorderSession.js";
 
 export function useWordRecorder({ data, loadRoute }) {
@@ -24,10 +24,14 @@ export function useWordRecorder({ data, loadRoute }) {
   }
 
   async function saveRecording() {
-    if (!recorderState.value.blob) return;
-    await saveRecordedAudio({ wordId: data.value.word.id, recorderState: recorderState.value });
-    recorderState.value = createSavedRecorderState();
-    await loadRoute();
+    await saveWordRecording({
+      wordId: data.value.word.id,
+      recorderState: recorderState.value,
+      setRecorderState: (state) => {
+        recorderState.value = state;
+      },
+      loadRoute,
+    });
   }
 
   return {

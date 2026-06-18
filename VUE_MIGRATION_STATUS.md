@@ -78,12 +78,12 @@
   - `ab2539f`：拆分 BookLearner 分析执行 helper。
   - `0039f0d`：拆分 BookLearner 分析请求 task helper。
   - `11e28cd`：拆分 BookLearner 分析动作绑定 helper。
-  - 待提交：拆分 BookLearner 正文来源字段组件。
+  - `07a71ce`：拆分 BookLearner 正文来源字段组件。
 
 ## 正在进行
 
-- 当前推进区域：BookLearner 正文来源面板。
-- 当前已改到：新增 `BooklearnerFileSourceFields.vue` 和 `BooklearnerTextSourceFields.vue`，把书籍元信息/文件输入与正文输入从 `BooklearnerTextSourcePanel.vue` 中拆出；表单绑定和分析按钮行为保持不变。
+- 当前推进区域：单词录音 composable 的保存动作。
+- 当前已改到：新增 `wordRecorderActions.js`，把保存录音、保存后状态切换和重新加载路由从 `useWordRecorder.js` 中抽出；录音开始/停止与上传行为保持不变。
 - 当前轮状态：等待本地构建、Python 编译、乱码扫描、提交、推送、部署和线上验证。
 
 ## 下一批改哪里
@@ -92,7 +92,7 @@
 
 最终扫描已记录的后续可选候选：
 
-- `frontend/src/app/composables/useWordRecorder.js`：已抽出 `wordRecorderSession.js`。
+- `frontend/src/app/composables/useWordRecorder.js`：已抽出 `wordRecorderSession.js`；本轮继续抽出 `wordRecorderActions.js`。
 - `frontend/src/app/composables/useWordAudio.js`：已抽出 `wordAudioActions.js`。
 - `frontend/src/app/components/ChallengeDayWordCard.vue`：已抽出正文组件和详情链接 helper。
 - `frontend/src/app/components/WordEditableDefinitionFields.vue`：已抽出 `wordDefinitionFields.js`。
