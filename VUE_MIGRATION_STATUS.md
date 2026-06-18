@@ -86,12 +86,13 @@
   - `b1c4740`：拆分单词录音启动动作 helper；已构建、编译、乱码扫描、推送、部署，并完成线上 HTTP/浏览器/日志验证。
   - `76f9ac6`：更新录音迁移状态，记录候选队列清理作为下一步。
   - `cdeb01c`：拆分单词编辑快照和字段保存动作 helper；已构建、编译、乱码扫描、推送、部署，并完成线上 HTTP/浏览器/日志验证。
+  - `2c5d1e9`：更新单词编辑迁移状态，压缩剩余候选到导入预览和 BookLearner 分析动作。
 
 ## 正在进行
 
-- 当前推进区域：最终扫描前的少量真实热点复核。
-- 当前已改到：`useWordEditing.js` 已抽出 `wordEditingForms.js` 和 `wordEditingActions.js`；候选队列已拆成“仍需处理”和“已复核完成”，下一轮只复核 `useImportPreviewForm.js` 与 `useBooklearnerAnalysisActions.js` 两个真实候选。
-- 当前轮状态：上一轮 `cdeb01c` 已完成并部署验证；等待下一轮按本文档继续推进。
+- 当前推进区域：BookLearner 分析动作配置。
+- 当前已改到：新增 `booklearnerAnalysisActionConfigs.js`，把查询、正文、文件三个分析动作的提示语、任务工厂和运行条件从 `useBooklearnerAnalysisActions.js` 中抽成配置；`useImportPreviewForm.js` 复核后确认已是薄组合层。
+- 当前轮状态：等待本地构建、Python 编译、乱码扫描、提交、推送、部署和线上验证。
 
 ## 下一批改哪里
 
@@ -99,13 +100,13 @@
 
 仍需处理：
 
-- `frontend/src/app/composables/useImportPreviewForm.js`：已抽出 `importPreviewFormActions.js` 和 `importPreviewFormReset.js`，当前较薄，最终扫描时再判断是否还需动作绑定 helper。
-- `frontend/src/app/composables/useBooklearnerAnalysisActions.js`：已抽出 `booklearnerAnalysisRunner.js`、`booklearnerAnalysisTasks.js` 和分析动作绑定 helper，最终扫描时复核是否还有真实逻辑残留。
+- `frontend/src/app/composables/useBooklearnerAnalysisActions.js`：已抽出 `booklearnerAnalysisRunner.js`、`booklearnerAnalysisTasks.js` 和分析动作绑定 helper；本轮继续抽出 `booklearnerAnalysisActionConfigs.js`。
 
 已复核完成：
 
 - `frontend/src/app/composables/useWordAudio.js`：已抽出 `wordAudioActions.js` 和 `wordAudioChoiceBindings.js`。
 - `frontend/src/app/composables/useWordRecorder.js`：已抽出 `wordRecorderSession.js` 和 `wordRecorderActions.js`，启动/保存动作已外移。
+- `frontend/src/app/composables/useImportPreviewForm.js`：已抽出 `importPreviewFormActions.js` 和 `importPreviewFormReset.js`，复核后确认已是薄组合层。
 - `frontend/src/app/components/ChallengeDayWordCard.vue`：已抽出正文组件和详情链接 helper。
 - `frontend/src/app/components/WordEditableDefinitionFields.vue`：已抽出 `wordDefinitionFields.js`。
 - `frontend/src/app/pages/ListDetailPage.vue`：已抽出 `ListDetailWordGrid.vue`。
