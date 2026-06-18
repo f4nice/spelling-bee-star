@@ -1999,23 +1999,12 @@ button:hover {
 }
 
 .app-page-heading {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
+  display: block;
   margin-bottom: 16px;
 }
 
 .app-page-heading h1 {
   margin: 0;
-}
-
-.app-page-nav {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
 .plain-card-button,
@@ -3657,15 +3646,6 @@ select {
   }
 
   .challenge-top-actions {
-    justify-content: flex-start;
-  }
-
-  .app-page-heading {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .app-page-nav {
     justify-content: flex-start;
   }
 
