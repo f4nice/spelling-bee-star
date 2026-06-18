@@ -1,11 +1,5 @@
 <script setup>
-import WordEditableDefinitionValue from "./WordEditableDefinitionValue.vue";
-
 defineProps({
-  label: {
-    type: String,
-    required: true,
-  },
   field: {
     type: String,
     required: true,
@@ -30,14 +24,6 @@ defineProps({
 </script>
 
 <template>
-  <dt>{{ label }}</dt>
-  <dd>
-    <WordEditableDefinitionValue
-      :field="field"
-      :word="word"
-      :word-edit="wordEdit"
-      :can-edit="canEdit"
-      :save-word-field="saveWordField"
-    />
-  </dd>
+  <textarea v-if="canEdit" v-model="wordEdit[field]" @blur="saveWordField(field)"></textarea>
+  <span v-else>{{ word[field] || "暂无" }}</span>
 </template>
