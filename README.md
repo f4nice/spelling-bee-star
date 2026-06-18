@@ -30,6 +30,12 @@ python -m venv .venv
 http://127.0.0.1:8000
 ```
 
+## 项目维护文档
+
+- `PROJECT_STATUS.md`：当前目标、页面覆盖、验证和部署流程。
+- `STYLE_GUIDE.md`：Vue 化后的全局样式入口和视觉规则。
+- `VUE_MIGRATION_STATUS.md`：Vue 化迁移过程和历史拆分记录。
+
 ## 好词好句
 
 本项目已合并 BookLearner，二级目录为 `好词好句`。启动同一个服务后打开：
