@@ -50,13 +50,14 @@
   - `04cb26e`：拆分单词表卡片封面和正文子组件。
   - `be24c3e`：拆分首页挑战日历标题组件。
   - `78151ba`：拆分列表路由出口的列表总览和列表详情分支组件。
-  - 待提交：拆分单词图片工具栏的上传控件和动作按钮组件。
+  - `1fd5dc0`：拆分单词图片工具栏的上传控件和动作按钮组件。
+  - 待提交：拆分首页精选单词表标题和网格组件。
 
 ## 正在进行
 
-- 当前推进区域：单词图片工具栏。
-- 当前已改到：新增 `WordImageUploadField.vue` 和 `WordImageActionButtons.vue`，把上传控件、保存图片和网络找图按钮从 `WordImageTools.vue` 中拆出；事件名和调用函数保持不变。
-- 当前轮状态：本地 `npm run build`、`py -3 -m py_compile app\main.py`、Node UTF-8 乱码扫描已通过；等待提交、推送、部署和线上验证。
+- 当前推进区域：首页精选单词表。
+- 当前已改到：新增 `HomeFeaturedListsHeading.vue` 和 `HomeFeaturedListGrid.vue`，把首页精选单词表的标题操作区和卡片网格从 `HomeFeaturedLists.vue` 中拆出；跳转和卡片 props 保持不变。
+- 当前轮状态：等待本地构建、Python 编译、乱码扫描、提交、推送、部署和线上验证。
 
 ## 下一批改哪里
 
@@ -73,7 +74,8 @@
 - `frontend/src/app/components/WordListCard.vue`：已抽出封面和正文子组件。
 - `frontend/src/app/components/HomeChallengeCalendar.vue`：已抽出 `HomeChallengeCalendarHeading.vue`。
 - `frontend/src/app/components/ListRouteOutlet.vue`：已抽出 `ListOverviewRoute.vue` 和 `ListDetailRoute.vue`。
-- `frontend/src/app/components/WordImageTools.vue`：本轮已抽出 `WordImageUploadField.vue` 和 `WordImageActionButtons.vue`，提交部署后标记完成。
+- `frontend/src/app/components/WordImageTools.vue`：已抽出 `WordImageUploadField.vue` 和 `WordImageActionButtons.vue`。
+- `frontend/src/app/components/HomeFeaturedLists.vue`：本轮已抽出 `HomeFeaturedListsHeading.vue` 和 `HomeFeaturedListGrid.vue`，提交部署后标记完成。
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDetailActions.js`。
 - `frontend/src/app/components/WordCard.vue`：已拆出媒体和挑战统计子组件。
 - `frontend/src/app/components/ListDetailHeader.vue`：已拆出 `ListTitleEditor.vue`。
