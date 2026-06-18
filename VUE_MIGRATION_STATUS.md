@@ -62,12 +62,13 @@
   - `7a26ee0`：拆分列表详情删除提示组件。
   - `38ff6e7`：拆分 BookLearner 书名查询表单组件。
   - `fd31f0f`：拆分导入预览表单行列选择和切换 sheet 动作 helper。
-  - 待提交：拆分列表删除状态 helper。
+  - `5512dcb`：拆分列表删除状态 helper。
+  - 待提交：拆分列表图片同步绑定 helper。
 
 ## 正在进行
 
 - 当前推进区域：列表详情工具。
-- 当前已改到：新增 `listDeleteState.js`，把删除状态初始值、重置和错误提示写入从 `useListDetailTools.js` 中拆出；重命名、删除和图片同步行为保持不变。
+- 当前已改到：新增 `listImageSyncBinding.js`，把图片同步任务和 `data.value.sync_job` 写回绑定从 `useListDetailTools.js` 中拆出；同步任务行为和完成后刷新保持不变。
 - 当前轮状态：等待本地构建、Python 编译、乱码扫描、提交、推送、部署和线上验证。
 
 ## 下一批改哪里
@@ -97,7 +98,8 @@
 - `frontend/src/app/components/ListDetailHeader.vue`：已抽出 `ListDeleteNotice.vue`。
 - `frontend/src/app/components/BooklearnerSearchPanel.vue`：已抽出 `BooklearnerSearchForm.vue`。
 - `frontend/src/app/composables/useImportPreviewForm.js`：已抽出 `importPreviewFormActions.js`。
-- `frontend/src/app/composables/useListDetailTools.js`：本轮已抽出 `listDeleteState.js`，提交部署后标记完成。
+- `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDeleteState.js`。
+- `frontend/src/app/composables/useListDetailTools.js`：本轮已抽出 `listImageSyncBinding.js`，提交部署后标记完成。
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDetailActions.js`。
 - `frontend/src/app/components/WordCard.vue`：已拆出媒体和挑战统计子组件。
 - `frontend/src/app/components/ListDetailHeader.vue`：已拆出 `ListTitleEditor.vue`。

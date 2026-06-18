@@ -3,13 +3,13 @@ import {
   deleteWordList,
   LIST_DELETE_FALLBACK_ERROR,
   renameWordList,
-  syncWordListImages,
 } from "../listDetailActions.js";
 import {
   createDeleteListState,
   resetDeleteListState,
   setDeleteListNotice,
 } from "../listDeleteState.js";
+import { syncListImagesForDetail } from "../listImageSyncBinding.js";
 
 export function useListDetailTools({ data, go, loadRoute }) {
   const deleteListState = ref(createDeleteListState());
@@ -31,13 +31,7 @@ export function useListDetailTools({ data, go, loadRoute }) {
   }
 
   async function syncListImages() {
-    await syncWordListImages({
-      wordListId: data.value.word_list.id,
-      setJob: (job) => {
-        data.value.sync_job = job;
-      },
-      onComplete: loadRoute,
-    });
+    await syncListImagesForDetail({ data, loadRoute });
   }
 
   return {
