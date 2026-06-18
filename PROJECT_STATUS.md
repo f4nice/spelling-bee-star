@@ -14,6 +14,7 @@
 - Vue 构建产物：`app/static/vue`
 - HTML shell：`app/templates/vue_app.html`
 - 验证脚本：`scripts/verify-release.ps1`
+- Vue 覆盖检查脚本：`scripts/check-vue-coverage.ps1`
 - 线上日志检查脚本：`scripts/check-production-logs.ps1`
 - 生产部署脚本：`scripts/deploy-production.ps1`
 
@@ -55,6 +56,7 @@
 3. 按当前用户反馈或优先级定点修改。
 4. 代码修改后验证：
    - 优先运行 `powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1`
+   - Vue 页面/路由覆盖由 `scripts/check-vue-coverage.ps1` 在验证脚本中自动检查
    - `npm run build`，工作目录 `frontend`
    - Python 入口或相关模块编译检查
    - 必要时做 HTTP 或浏览器验证

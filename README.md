@@ -42,6 +42,12 @@ http://127.0.0.1:8000
 powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
 ```
 
+只检查 Vue 页面/路由覆盖：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\check-vue-coverage.ps1
+```
+
 生产部署同样需要先设置 `SPEAKEASY_SSH_PASSWORD`：
 
 ```powershell

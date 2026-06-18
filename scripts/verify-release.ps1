@@ -40,6 +40,10 @@ Invoke-Step "Python compile" {
     py -3 -m compileall -q (Join-Path $RepoRoot "app")
 }
 
+Invoke-Step "Vue coverage" {
+    & (Join-Path $PSScriptRoot "check-vue-coverage.ps1")
+}
+
 Invoke-Step "Markdown UTF-8 check" {
     $docs = @("README.md", "PROJECT_STATUS.md", "STYLE_GUIDE.md", "VUE_MIGRATION_STATUS.md")
     foreach ($doc in $docs) {
