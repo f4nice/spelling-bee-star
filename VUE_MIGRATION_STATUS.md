@@ -85,12 +85,13 @@
   - `2e0482d`：更新 Vue 迁移候选队列，标记下一轮优先收束过期候选。
   - `b1c4740`：拆分单词录音启动动作 helper；已构建、编译、乱码扫描、推送、部署，并完成线上 HTTP/浏览器/日志验证。
   - `76f9ac6`：更新录音迁移状态，记录候选队列清理作为下一步。
+  - `cdeb01c`：拆分单词编辑快照和字段保存动作 helper；已构建、编译、乱码扫描、推送、部署，并完成线上 HTTP/浏览器/日志验证。
 
 ## 正在进行
 
-- 当前推进区域：单词编辑 composable 与候选队列收束。
-- 当前已改到：新增 `wordEditingActions.js`，把单词编辑快照和字段保存 API 写回从 `useWordEditing.js` 中抽出；同时开始把候选队列拆成“仍需处理”和“已复核完成”。
-- 当前轮状态：等待本地构建、Python 编译、乱码扫描、提交、推送、部署和线上验证。
+- 当前推进区域：最终扫描前的少量真实热点复核。
+- 当前已改到：`useWordEditing.js` 已抽出 `wordEditingForms.js` 和 `wordEditingActions.js`；候选队列已拆成“仍需处理”和“已复核完成”，下一轮只复核 `useImportPreviewForm.js` 与 `useBooklearnerAnalysisActions.js` 两个真实候选。
+- 当前轮状态：上一轮 `cdeb01c` 已完成并部署验证；等待下一轮按本文档继续推进。
 
 ## 下一批改哪里
 
@@ -98,7 +99,6 @@
 
 仍需处理：
 
-- `frontend/src/app/composables/useWordEditing.js`：已抽出 `wordEditingForms.js`；本轮继续抽出 `wordEditingActions.js`。
 - `frontend/src/app/composables/useImportPreviewForm.js`：已抽出 `importPreviewFormActions.js` 和 `importPreviewFormReset.js`，当前较薄，最终扫描时再判断是否还需动作绑定 helper。
 - `frontend/src/app/composables/useBooklearnerAnalysisActions.js`：已抽出 `booklearnerAnalysisRunner.js`、`booklearnerAnalysisTasks.js` 和分析动作绑定 helper，最终扫描时复核是否还有真实逻辑残留。
 
@@ -131,6 +131,7 @@
 - `frontend/src/app/composables/useBooklearnerAnalysisActions.js`：已抽出 `booklearnerForms.js` 的文件分析表单 helper。
 - `frontend/src/app/composables/useBooklearnerAnalysisActions.js`：已抽出 `booklearnerForms.js` 的正文分析请求 helper。
 - `frontend/src/app/composables/useBooklearnerStorageActions.js`：已抽出 `booklearnerForms.js` 的存储请求 helper。
+- `frontend/src/app/composables/useWordEditing.js`：已抽出 `wordEditingForms.js` 和 `wordEditingActions.js`。
 - `frontend/src/app/composables/useWordDetailLifecycle.js`、`useWordImageActions.js`、`useWordImages.js`：已抽出 `wordImageForms.js`。
 - `frontend/src/app/composables/useImportPreviewSubmit.js`：已抽出 `forms/importPreviewSubmitForm.js`。
 - `frontend/src/app/components/BooklearnerDetailPanel.vue`、`BooklearnerResultPanel.vue`：已抽出 `BooklearnerJsonPreview.vue`。
