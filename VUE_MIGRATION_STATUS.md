@@ -88,12 +88,13 @@
   - `cdeb01c`：拆分单词编辑快照和字段保存动作 helper；已构建、编译、乱码扫描、推送、部署，并完成线上 HTTP/浏览器/日志验证。
   - `2c5d1e9`：更新单词编辑迁移状态，压缩剩余候选到导入预览和 BookLearner 分析动作。
   - `d6f32bc`：拆分 BookLearner 分析动作配置 helper；已构建、编译、扩展乱码扫描、推送、部署，并完成线上 HTTP/浏览器/日志验证。
+  - `f146830`：更新最终 Vue 扫描状态，准备执行全量遗漏扫描。
 
 ## 正在进行
 
-- 当前推进区域：最终遗漏扫描准备。
-- 当前已改到：`useBooklearnerAnalysisActions.js` 已抽出 `booklearnerAnalysisActionConfigs.js`；`useImportPreviewForm.js` 复核后确认已是薄组合层。“仍需处理”队列已清空，下一轮进入全量遗漏扫描。
-- 当前轮状态：上一轮 `d6f32bc` 已完成并部署验证；等待下一轮执行最终遗漏扫描。
+- 当前推进区域：最终遗漏扫描。
+- 当前已改到：已执行源码热点、旧模板/旧交互边界、后端 HTML 路由、静态目录、挑战页源码和 UTF-8 乱码扫描；HTML 页面路由均返回 `vue_shell()`，模板目录只剩 `base.html` 与 `vue_app.html`，静态目录未发现旧脚本交互，扫描命中的浏览器 API 均为 Vue 挂载、路由、音频播放或录音捕获边界。
+- 当前轮状态：等待本地构建、Python 编译、乱码扫描、提交、推送、部署和线上验证。
 
 ## 下一批改哪里
 
@@ -147,6 +148,14 @@
 - `frontend/src/app/components/ImportPreviewTable.vue`：已拆出表头和行组件。
 - `frontend/src/app/forms/importPreviewFormState.js`：已拆出行列选择 helper。
 - 旧逻辑边界扫描目前主要命中预期项：`vue_app.html` shell、`app/main.py` 的 Vue shell 返回、Vue/浏览器事件监听、构建产物中的打包代码。
+
+## 最终遗漏扫描结果
+
+- 源码热点：`frontend/src/app` 与 `frontend/src/challenge` 的大文件主要是薄组合层、props 定义或已拆分组件；未发现需要继续拆分的真实旧模板逻辑。
+- 旧模板：`app/templates` 只剩 `base.html` 与 `vue_app.html`，负责统一 shell、样式和 Vue 入口。
+- HTML 路由：`/`、BookLearner、英文小报、列表、上传、挑战、错词、挑战日历、单词详情、导入预览等 HTML 页面路由均返回 `vue_shell()` 或重定向到 Vue shell。
+- 旧交互边界：未发现 `x-data`、Alpine、`onclick=`、HTMX、静态目录旧脚本交互；源码命中的 `document`/`window`/事件监听均是 Vue 挂载、路由、音频播放、录音捕获或键盘导航边界。
+- 乱码：Node UTF-8 扩展扫描覆盖 `frontend/src/app`、`frontend/src/challenge`、`frontend/src/shared`、`app/templates` 与本文档，未发现真实中文 mojibake。
 
 ## 每轮轻量流程
 
