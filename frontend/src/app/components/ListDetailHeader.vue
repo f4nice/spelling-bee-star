@@ -1,4 +1,5 @@
 <script setup>
+import ListDeleteNotice from "./ListDeleteNotice.vue";
 import ListHeaderActions from "./ListHeaderActions.vue";
 import ListTitleEditor from "./ListTitleEditor.vue";
 
@@ -35,6 +36,6 @@ defineProps({
       :delete-list="deleteList"
       :go="go"
     />
-    <p v-if="deleteListState.notice" class="notice">{{ deleteListState.notice }}</p>
+    <ListDeleteNotice :notice="deleteListState.notice" />
   </section>
 </template>
