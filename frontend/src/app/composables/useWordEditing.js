@@ -1,6 +1,7 @@
 import { ref } from 'vue';
 import { fetchJson } from '../utils.js';
 import { wordApiPaths } from '../wordApiPaths.js';
+import { createWordFieldForm } from '../wordEditingForms.js';
 
 export function useWordEditing({ data }) {
   const wordEdit = ref({});
@@ -17,10 +18,7 @@ export function useWordEditing({ data }) {
 
   async function saveWordField(field) {
     wordSaving.value = field;
-    const form = new FormData();
-    form.append('edit_token', '1');
-    form.append('field', field);
-    form.append('value', wordEdit.value[field] || '');
+    const form = createWordFieldForm({ field, value: wordEdit.value[field] });
     try {
       const result = await fetchJson(wordApiPaths.field(data.value.word.id), { method: 'POST', body: form });
       data.value.word[field] = result.value;
