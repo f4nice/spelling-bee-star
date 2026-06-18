@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { buildSidebarNavItems } from "../sidebarNav.js";
 import SidebarChallengeProgress from "./SidebarChallengeProgress.vue";
-import SidebarNavLink from "./SidebarNavLink.vue";
+import SidebarNavList from "./SidebarNavList.vue";
 
 const props = defineProps({
   route: {
@@ -29,12 +29,7 @@ function navigate(path) {
 <template>
   <aside class="sidebar">
     <nav class="side-nav" aria-label="主导航">
-      <SidebarNavLink
-        v-for="item in navItems"
-        :key="item.path"
-        :item="item"
-        :navigate="navigate"
-      />
+      <SidebarNavList :items="navItems" :navigate="navigate" />
       <SidebarChallengeProgress :challenges="shell.sidebarChallenges" :navigate="navigate" />
     </nav>
   </aside>

@@ -54,12 +54,13 @@
   - `5989f98`：拆分首页精选单词表标题和网格组件。
   - `f40d684`：拆分单词详情标题栈和标题动作组件。
   - `e24e5f8`：拆分单词定义字段的编辑/只读值组件。
-  - 待提交：拆分应用顶栏品牌链接和每日一句组件。
+  - `f77ae88`：拆分应用顶栏品牌链接和每日一句组件。
+  - 待提交：拆分侧边栏导航列表组件。
 
 ## 正在进行
 
-- 当前推进区域：应用 Shell 顶栏。
-- 当前已改到：新增 `AppBrandLink.vue` 和 `AppDailyQuote.vue`，把品牌首页入口、Logo 和每日一句从 `AppTopbar.vue` 中拆出；侧边栏开关、跳转函数和 quote fallback 保持不变。
+- 当前推进区域：应用 Shell 侧边栏。
+- 当前已改到：新增 `SidebarNavList.vue`，把导航链接循环从 `AppSidebar.vue` 中拆出；导航项派生、active 状态和跳转函数保持不变。
 - 当前轮状态：等待本地构建、Python 编译、乱码扫描、提交、推送、部署和线上验证。
 
 ## 下一批改哪里
@@ -81,7 +82,8 @@
 - `frontend/src/app/components/HomeFeaturedLists.vue`：已抽出 `HomeFeaturedListsHeading.vue` 和 `HomeFeaturedListGrid.vue`。
 - `frontend/src/app/components/WordDetailHeading.vue`：已抽出 `WordDetailTitleStack.vue` 和 `WordDetailHeadingActions.vue`。
 - `frontend/src/app/components/WordEditableDefinitionItem.vue`：已抽出 `WordEditableDefinitionValue.vue`。
-- `frontend/src/app/components/AppTopbar.vue`：本轮已抽出 `AppBrandLink.vue` 和 `AppDailyQuote.vue`，提交部署后标记完成。
+- `frontend/src/app/components/AppTopbar.vue`：已抽出 `AppBrandLink.vue` 和 `AppDailyQuote.vue`。
+- `frontend/src/app/components/AppSidebar.vue`：本轮已抽出 `SidebarNavList.vue`，提交部署后标记完成。
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDetailActions.js`。
 - `frontend/src/app/components/WordCard.vue`：已拆出媒体和挑战统计子组件。
 - `frontend/src/app/components/ListDetailHeader.vue`：已拆出 `ListTitleEditor.vue`。
