@@ -1,4 +1,6 @@
 <script setup>
+import BooklearnerJsonPreview from "./BooklearnerJsonPreview.vue";
+
 defineProps({
   result: {
     type: Object,
@@ -21,6 +23,6 @@ defineProps({
     <p>{{ result.book?.author || result.author }}</p>
     <button type="button" @click="saveBookAnalysis">保存</button>
     <button type="button" class="secondary-button" @click="createBookWordList">生成单词表</button>
-    <pre class="booklearner-json">{{ JSON.stringify(result, null, 2) }}</pre>
+    <BooklearnerJsonPreview :value="result" />
   </div>
 </template>

@@ -72,12 +72,13 @@
   - `f50947d`：拆分 BookLearner 存储请求 helper。
   - `d70ec20`：拆分单词字段保存表单 helper。
   - `f7a6e8e`：拆分单词图片和刷新表单 helper。
-  - 待提交：拆分导入预览提交表单 helper。
+  - `5bb2fb9`：拆分导入预览提交表单 helper。
+  - 待提交：拆分 BookLearner JSON 预览组件。
 
 ## 正在进行
 
-- 当前推进区域：导入预览提交动作。
-- 当前已改到：新增 `forms/importPreviewSubmitForm.js`，把导入预览提交的 `FormData` 创建逻辑从 `useImportPreviewSubmit.js` 中拆出；校验、提交 API 和跳转保持不变。
+- 当前推进区域：BookLearner 结果展示组件。
+- 当前已改到：新增 `BooklearnerJsonPreview.vue`，把详情和分析结果面板中的 JSON 预览渲染从模板表达式中拆出；展示内容和按钮行为保持不变。
 - 当前轮状态：等待本地构建、Python 编译、乱码扫描、提交、推送、部署和线上验证。
 
 ## 下一批改哪里
@@ -117,7 +118,8 @@
 - `frontend/src/app/composables/useBooklearnerStorageActions.js`：已抽出 `booklearnerForms.js` 的存储请求 helper。
 - `frontend/src/app/composables/useWordEditing.js`：已抽出 `wordEditingForms.js`。
 - `frontend/src/app/composables/useWordDetailLifecycle.js`、`useWordImageActions.js`、`useWordImages.js`：已抽出 `wordImageForms.js`。
-- `frontend/src/app/composables/useImportPreviewSubmit.js`：本轮已抽出 `forms/importPreviewSubmitForm.js`，提交部署后标记完成。
+- `frontend/src/app/composables/useImportPreviewSubmit.js`：已抽出 `forms/importPreviewSubmitForm.js`。
+- `frontend/src/app/components/BooklearnerDetailPanel.vue`、`BooklearnerResultPanel.vue`：本轮已抽出 `BooklearnerJsonPreview.vue`，提交部署后标记完成。
 - `frontend/src/app/composables/useListDetailTools.js`：已抽出 `listDetailActions.js`。
 - `frontend/src/app/components/WordCard.vue`：已拆出媒体和挑战统计子组件。
 - `frontend/src/app/components/ListDetailHeader.vue`：已拆出 `ListTitleEditor.vue`。
