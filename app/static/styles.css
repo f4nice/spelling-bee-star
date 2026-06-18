@@ -1998,6 +1998,137 @@ button.calendar-day {
   white-space: pre-wrap;
 }
 
+.booklearner-page {
+  display: grid;
+  gap: 18px;
+}
+
+.booklearner-page .quote-home-panel,
+.booklearner-page .query-panel,
+.booklearner-page .results > .panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.booklearner-page .quote-home-panel {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.booklearner-page .quote-home-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.booklearner-page .quote-home-head h1,
+.booklearner-page .quote-home-head p {
+  margin: 0;
+}
+
+.booklearner-page .quote-home-head h1 {
+  margin-bottom: 6px;
+  font-size: 28px;
+}
+
+.booklearner-page .quote-home-head p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.booklearner-page .quote-head-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.booklearner-page .quote-more-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 14px;
+  background: #fff;
+  color: var(--accent-dark);
+  font-weight: 800;
+}
+
+.booklearner-page .quote-upload-link {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.booklearner-page .featured-quotes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.booklearner-page .featured-quotes-list {
+  grid-template-columns: 1fr;
+}
+
+.booklearner-page .quote-card {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-height: 150px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+}
+
+.booklearner-page .quote-card p {
+  margin: 0;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.booklearner-page .quote-card strong {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.booklearner-page .book-workspace {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.booklearner-page .query-panel,
+.booklearner-page .results > .panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.booklearner-page .form {
+  display: grid;
+  gap: 10px;
+}
+
+.booklearner-page .input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.booklearner-page textarea {
+  min-height: 180px;
+  resize: vertical;
+}
+
 button.home-stat-card {
   display: block;
 }
