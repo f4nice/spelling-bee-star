@@ -1,6 +1,6 @@
 <script setup>
+import WordCardBody from "./WordCardBody.vue";
 import WordCardMedia from "./WordCardMedia.vue";
-import WordChallengeStats from "./WordChallengeStats.vue";
 
 defineProps({
   word: {
@@ -30,12 +30,6 @@ defineProps({
   <a class="word-card" :href="href">
     <span class="word-index-badge">#{{ index + 1 }}</span>
     <WordCardMedia :word="word" :image-url="imageUrl" :fallback-letter="fallbackLetter" />
-    <div class="word-card-body">
-      <div class="word-card-title">
-        <strong>{{ word.word }}</strong>
-        <WordChallengeStats :stats="word.challenge_stats" />
-      </div>
-      <p>{{ word.chinese_definition || word.english_definition || "等待补全" }}</p>
-    </div>
+    <WordCardBody :word="word" />
   </a>
 </template>
