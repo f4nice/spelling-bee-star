@@ -13,7 +13,7 @@ defineProps({
 
 <template>
   <div class="challenge-complete">
-    <h2>{{ state.today_challenge.all_complete ? '太棒了，整组都拿下了' : '今日目标完成了' }}</h2>
+    <h2>{{ state.today_challenge.all_complete ? "太棒了，整组都拿下了" : "今日目标完成了" }}</h2>
     <div class="challenge-result-grid">
       <div><span>本次挑战</span><strong>{{ state.today_challenge.answered }} / {{ state.today_challenge.total }}</strong></div>
       <div><span>答对</span><strong class="result-correct">{{ state.today_challenge.correct }}</strong></div>

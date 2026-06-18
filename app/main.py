@@ -817,7 +817,16 @@ def challenge_answer_api(
     }
     if result["wrong_date"]:
         query["wrong_date"] = result["wrong_date"].isoformat()
-    return {"ok": True, "query": query}
+    next_state = challenge_payload(
+        db,
+        word_list_id=word_list_id,
+        daily_count=result["daily_count"],
+        start_count=result["start_count"],
+        session_correct=result["session_correct"],
+        session_wrong=result["session_wrong"],
+        wrong_date=result["wrong_date"].isoformat() if result["wrong_date"] else None,
+    )
+    return {"ok": True, "query": query, "state": next_state}
 
 
 @app.get("/wrong-words", response_class=HTMLResponse)

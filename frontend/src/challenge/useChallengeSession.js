@@ -10,8 +10,8 @@ export function useChallengeSession(wordListId) {
   const submitting = ref(false);
   const errorMessage = ref('');
 
-  async function loadState(params = initialParams) {
-    loading.value = true;
+  async function loadState(params = initialParams, { showLoading = true } = {}) {
+    if (showLoading) loading.value = true;
     errorMessage.value = '';
     try {
       state.value = await fetchChallengeState(wordListId, params);
@@ -31,7 +31,12 @@ export function useChallengeSession(wordListId) {
       const result = await postChallengeAnswer({ wordListId, state: state.value, spelling: spelling.value });
       const nextParams = paramsFromChallengeResult(result);
       replaceChallengeParams(nextParams);
-      await loadState(nextParams);
+      if (result.state) {
+        state.value = result.state;
+        spelling.value = '';
+      } else {
+        await loadState(nextParams, { showLoading: false });
+      }
     } catch (error) {
       errorMessage.value = error.message || challengeMessages.submitFailed;
     } finally {
