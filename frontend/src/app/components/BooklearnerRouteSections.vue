@@ -15,10 +15,10 @@ defineProps([
 </script>
 
 <template>
-  <BooklearnerHistoryGrid v-if="route.name !== 'booklearnerUpload'" :book="book" :go="go" />
   <BooklearnerDetailPanel
     v-if="route.name === 'booklearnerDetail'"
     :book="book"
     :create-book-word-list="createBookWordList"
   />
+  <BooklearnerHistoryGrid v-if="route.name !== 'booklearnerUpload'" :book="book" :go="go" />
 </template>
