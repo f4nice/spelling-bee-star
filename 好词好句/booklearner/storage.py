@@ -106,14 +106,14 @@ def list_recent_analyses(limit: int = 20) -> list[dict[str, Any]]:
         cursor = connection.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT id, query_text, status, title, authors_text, source_name, created_at
+            SELECT id, query_text, status, title, authors_text, source_name, result_json, created_at
             FROM analyses
             ORDER BY created_at DESC
             LIMIT %s
             """,
             (max(1, min(limit, 100)),),
         )
-        return [_serialize_row(row) for row in cursor.fetchall()]
+        return [_recent_analysis_from_row(row) for row in cursor.fetchall()]
     except Exception:
         return []
     finally:
@@ -455,6 +455,18 @@ def _close_cursor_connection(cursor: Any, connection: Any) -> None:
 
 def _serialize_row(row: dict[str, Any]) -> dict[str, Any]:
     return {key: _serialize_value(value) for key, value in row.items()}
+
+
+def _recent_analysis_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    item = _serialize_row({key: value for key, value in row.items() if key != "result_json"})
+    result = _json_value(row.get("result_json"))
+    book = result.get("book") if isinstance(result, dict) else {}
+    if isinstance(book, dict):
+        item["title"] = book.get("title") or item.get("title")
+        item["authors_text"] = _authors_text(book.get("authors")) or item.get("authors_text")
+        item["coverUrl"] = book.get("coverUrl") or book.get("cover_url")
+    item["coverSeed"] = sum(ord(char) for char in str(item.get("title") or item.get("query_text") or "")) % 6
+    return item
 
 
 def _serialize_value(value: Any) -> Any:

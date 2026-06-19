@@ -2382,6 +2382,96 @@ button.calendar-day {
   font-size: 13px;
 }
 
+.book-history-link {
+  height: 100%;
+}
+
+.book-history-cover {
+  background: #eef5f0;
+}
+
+.book-history-cover-fallback {
+  position: relative;
+  display: grid;
+  align-content: end;
+  height: 168px;
+  overflow: hidden;
+  padding: 18px;
+  color: #fff;
+  background:
+    linear-gradient(135deg, rgba(18, 35, 47, 0.2), rgba(18, 35, 47, 0.72)),
+    linear-gradient(135deg, #1d7f5b, #8bbfa9);
+}
+
+.book-history-cover-fallback::before,
+.book-history-cover-fallback::after {
+  content: "";
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+}
+
+.book-history-cover-fallback::before {
+  inset: 18px 28px auto auto;
+  width: 80px;
+  height: 80px;
+}
+
+.book-history-cover-fallback::after {
+  right: -34px;
+  bottom: -38px;
+  width: 130px;
+  height: 130px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.book-history-cover-fallback span {
+  position: relative;
+  z-index: 1;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.book-history-cover-fallback strong {
+  position: relative;
+  z-index: 1;
+  margin-top: 8px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 56px;
+  line-height: 0.9;
+}
+
+.book-history-cover-fallback.cover-seed-1 {
+  background:
+    linear-gradient(135deg, rgba(18, 35, 47, 0.18), rgba(18, 35, 47, 0.7)),
+    linear-gradient(135deg, #5f7ea8, #d08f7d);
+}
+
+.book-history-cover-fallback.cover-seed-2 {
+  background:
+    linear-gradient(135deg, rgba(18, 35, 47, 0.18), rgba(18, 35, 47, 0.72)),
+    linear-gradient(135deg, #8a6f4d, #d6b25e);
+}
+
+.book-history-cover-fallback.cover-seed-3 {
+  background:
+    linear-gradient(135deg, rgba(18, 35, 47, 0.2), rgba(18, 35, 47, 0.7)),
+    linear-gradient(135deg, #147a7e, #98c5d2);
+}
+
+.book-history-cover-fallback.cover-seed-4 {
+  background:
+    linear-gradient(135deg, rgba(18, 35, 47, 0.2), rgba(18, 35, 47, 0.74)),
+    linear-gradient(135deg, #7d5a8c, #c398c9);
+}
+
+.book-history-cover-fallback.cover-seed-5 {
+  background:
+    linear-gradient(135deg, rgba(18, 35, 47, 0.18), rgba(18, 35, 47, 0.72)),
+    linear-gradient(135deg, #7f5b4a, #d3a16f);
+}
+
 .booklearner-page .book-workspace {
   display: grid;
   grid-template-columns: 360px minmax(0, 1fr);
