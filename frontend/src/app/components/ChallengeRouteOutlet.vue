@@ -14,6 +14,6 @@ const wordListId = computed(() => Number(props.route.params.id || 0));
 
 <template>
   <div id="speakeasy-challenge-app" :data-word-list-id="route.params.id">
-    <ChallengeApp :word-list-id="wordListId" />
+    <ChallengeApp :key="wordListId" :word-list-id="wordListId" />
   </div>
 </template>
