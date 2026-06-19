@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { nextTick, ref, watch } from "vue";
 
 import ChallengeAnswerPanel from "./ChallengeAnswerPanel.vue";
 import SpeechAudioPlayer from "./SpeechAudioPlayer.vue";
@@ -23,11 +23,8 @@ const props = defineProps({
 
 const emit = defineEmits(["update:spelling", "submit"]);
 const { playAudio } = useAudioPlayback();
-const autoStudyInterval = ref(6);
-const isAutoStudying = ref(false);
 const usSpeechPlayer = ref(null);
 const gbSpeechPlayer = ref(null);
-let autoStudyTimer = null;
 
 function playCurrentAudio() {
   if (props.state.challenge_audio_sources?.us) {
@@ -45,24 +42,6 @@ function playBritishAudio() {
   gbSpeechPlayer.value?.play();
 }
 
-function stopAutoStudy() {
-  if (autoStudyTimer) {
-    window.clearInterval(autoStudyTimer);
-    autoStudyTimer = null;
-  }
-  isAutoStudying.value = false;
-}
-
-function startAutoStudy() {
-  stopAutoStudy();
-  isAutoStudying.value = true;
-  playCurrentAudio();
-  autoStudyTimer = window.setInterval(
-    playCurrentAudio,
-    Math.max(Number(autoStudyInterval.value) || 1, 1) * 1000,
-  );
-}
-
 watch(
   () => props.state.current_word?.id,
   async (wordId) => {
@@ -72,8 +51,6 @@ watch(
   },
   { immediate: true },
 );
-
-onBeforeUnmount(stopAutoStudy);
 </script>
 
 <template>
@@ -84,20 +61,6 @@ onBeforeUnmount(stopAutoStudy);
     </div>
 
     <div class="challenge-word-body">
-      <div class="auto-study-controls challenge-auto-study-controls">
-        <label>
-          <span>间隔</span>
-          <input v-model.number="autoStudyInterval" type="number" min="1" max="60">
-          <span>秒</span>
-        </label>
-        <button type="button" class="secondary-button" :disabled="isAutoStudying" @click="startAutoStudy">
-          自动学习
-        </button>
-        <button type="button" class="secondary-button" :disabled="!isAutoStudying" @click="stopAutoStudy">
-          停止
-        </button>
-      </div>
-
       <ChallengeWordPrompt :word="state.current_word" :masked-example="state.masked_example" />
 
       <div class="challenge-audio-row">
