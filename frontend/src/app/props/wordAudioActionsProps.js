@@ -19,8 +19,4 @@ export const wordAudioActionsProps = {
     type: Function,
     required: true,
   },
-  startRecording: {
-    type: Function,
-    required: true,
-  },
 };

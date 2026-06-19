@@ -27,6 +27,10 @@ export const wordAudioPanelProps = {
     type: Function,
     required: true,
   },
+  uploadAudio: {
+    type: Function,
+    required: true,
+  },
   stopRecording: {
     type: Function,
     required: true,

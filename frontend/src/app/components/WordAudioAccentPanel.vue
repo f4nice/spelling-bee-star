@@ -1,27 +1,34 @@
 <script setup>
+import { ref } from "vue";
+
 import { wordAudioAccentPanelProps } from "../props/wordAudioAccentPanelProps.js";
 import WordAudioActions from "./WordAudioActions.vue";
-import WordAudioOptionList from "./WordAudioOptionList.vue";
+import WordAudioManagerModal from "./WordAudioManagerModal.vue";
 
 defineProps(wordAudioAccentPanelProps);
+
+const showManager = ref(false);
 </script>
 
 <template>
-  <label>
-    {{ accent.label }}
+  <div class="audio-accent-panel">
+    <span>{{ accent.label }}</span>
     <WordAudioActions
       :accent="accent"
       :audio-src="data.audio_sources[accent.key]"
       :can-edit="data.can_edit"
       :play-audio="playAudio"
       :fetch-audio-options="fetchAudioOptions"
-      :start-recording="startRecording"
+      @manage-audio="showManager = true"
     />
-    <WordAudioOptionList
-      v-if="options.length"
+    <WordAudioManagerModal
+      v-if="showManager"
       :accent="accent"
       :options="options"
+      :fetch-audio-options="fetchAudioOptions"
       :choose-audio="chooseAudio"
+      :upload-audio="uploadAudio"
+      @close="showManager = false"
     />
-  </label>
+  </div>
 </template>

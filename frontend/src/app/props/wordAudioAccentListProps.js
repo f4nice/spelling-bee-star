@@ -27,4 +27,8 @@ export const wordAudioAccentListProps = {
     type: Function,
     required: true,
   },
+  uploadAudio: {
+    type: Function,
+    required: true,
+  },
 };

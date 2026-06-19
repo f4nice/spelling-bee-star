@@ -1,6 +1,6 @@
 import { ref } from "vue";
 import { useAudioPlayback } from "../../shared/useAudioPlayback.js";
-import { chooseWordAudioOption, updateWordAudioOptions } from "../wordAudioChoiceBindings.js";
+import { chooseWordAudioOption, updateWordAudioOptions, uploadWordAudioOption } from "../wordAudioChoiceBindings.js";
 import { useWordRecorder } from "./useWordRecorder.js";
 
 export function useWordAudio({ data, loadRoute }) {
@@ -25,6 +25,10 @@ export function useWordAudio({ data, loadRoute }) {
     await chooseWordAudioOption({ wordId: data.value.word.id, accent, url, loadRoute });
   }
 
+  async function uploadAudio(accent, file) {
+    await uploadWordAudioOption({ wordId: data.value.word.id, accent, file, loadRoute });
+  }
+
   return {
     audioOptions,
     recorderState,
@@ -32,6 +36,7 @@ export function useWordAudio({ data, loadRoute }) {
     playAudio,
     fetchAudioOptions,
     chooseAudio,
+    uploadAudio,
     startRecording,
     stopRecording,
     saveRecording,

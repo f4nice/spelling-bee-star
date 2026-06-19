@@ -20,6 +20,7 @@ export function buildWordDetailPageProps(ctx) {
       fetchAudioOptions: ctx.fetchAudioOptions,
       startRecording: ctx.startRecording,
       chooseAudio: ctx.chooseAudio,
+      uploadAudio: ctx.uploadAudio,
       stopRecording: ctx.stopRecording,
       saveRecording: ctx.saveRecording,
     },

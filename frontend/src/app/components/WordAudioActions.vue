@@ -1,13 +1,8 @@
 <script setup>
-import { useLoadingAction } from "../composables/useLoadingAction.js";
 import { wordAudioActionsProps } from "../props/wordAudioActionsProps.js";
-import { wordAudioActionLabels } from "../wordAudioActionLabels.js";
 
-const props = defineProps(wordAudioActionsProps);
-
-const { loading: loadingOptions, run: loadOptions } = useLoadingAction(() =>
-  props.fetchAudioOptions(props.accent.key),
-);
+defineProps(wordAudioActionsProps);
+defineEmits(["manage-audio"]);
 </script>
 
 <template>
@@ -20,13 +15,9 @@ const { loading: loadingOptions, run: loadOptions } = useLoadingAction(() =>
       v-if="canEdit"
       type="button"
       class="secondary-button"
-      :disabled="loadingOptions"
-      @click="loadOptions"
+      @click="$emit('manage-audio')"
     >
-      {{ loadingOptions ? wordAudioActionLabels.loadingOptions : wordAudioActionLabels.reloadOptions }}
-    </button>
-    <button v-if="canEdit" type="button" class="secondary-button" @click="startRecording(accent.key)">
-      {{ wordAudioActionLabels.recordSource }}
+      音频管理
     </button>
   </div>
 </template>

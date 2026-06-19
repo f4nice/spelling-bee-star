@@ -27,4 +27,8 @@ export const wordAudioAccentPanelProps = {
     type: Function,
     required: true,
   },
+  uploadAudio: {
+    type: Function,
+    required: true,
+  },
 };

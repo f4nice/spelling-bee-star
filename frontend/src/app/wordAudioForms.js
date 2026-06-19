@@ -10,3 +10,9 @@ export function createAudioChoiceForm(accent, url) {
   form.append("audio_url", url);
   return form;
 }
+
+export function createUploadedAudioForm(accent, file) {
+  const form = createAudioOptionsForm(accent);
+  form.append("audio_file", file, file.name || `uploaded-${accent}.webm`);
+  return form;
+}

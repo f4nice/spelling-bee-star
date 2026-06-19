@@ -19,6 +19,13 @@
 - 生产部署脚本：`scripts/deploy-production.ps1`
 - 固定验证 URL 清单：`scripts/verification-urls.json`
 
+## 当前功能记录
+
+- 单词详情页音频区使用 `WordAudioManagerModal.vue` 管理音源：入口按钮为“音频管理”。
+- 音频管理弹窗包含三个区块：重新获取候选音源并试听保存、录制音频占位入口、上传本地音频并预览后保存。
+- 候选音源保存走 `/api/vue/words/{word_id}/audio-choice`，上传音频保存走 `/api/vue/words/{word_id}/recorded-audio`。
+- 录制音频完整流程尚未接入弹窗，当前保留禁用入口，后续优先复用既有录音 API 和播放器样式。
+
 ## 页面覆盖
 
 已由 Vue shell 承载的主要页面：
@@ -78,6 +85,7 @@
 
 - 继续根据真实页面反馈修复 Vue 化后的样式变形。
 - 保持挑战页音频、自动学习、拼写提交、错误复盘数据链路稳定。
+- 继续完善单词详情音频弹窗里的录音流程，并保证上传后可预览、可回放。
 - 发现中文乱码时先用 UTF-8 读取确认，避免被 PowerShell 控制台编码误导。
 - 大改 Vue 组件前先看 `STYLE_GUIDE.md`，优先复用现有类名和 token。
 - 对新需求默认完成本地验证、Git 提交、推送、服务器部署和线上检查。

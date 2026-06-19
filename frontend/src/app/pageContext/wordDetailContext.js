@@ -12,6 +12,7 @@ export function buildWordDetailContext(wordDetail) {
     playAudio: wordDetail.playAudio,
     fetchAudioOptions: wordDetail.fetchAudioOptions,
     chooseAudio: wordDetail.chooseAudio,
+    uploadAudio: wordDetail.uploadAudio,
     startRecording: wordDetail.startRecording,
     stopRecording: wordDetail.stopRecording,
     saveRecording: wordDetail.saveRecording,
