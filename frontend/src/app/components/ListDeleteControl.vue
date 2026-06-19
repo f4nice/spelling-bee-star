@@ -1,4 +1,9 @@
 <script setup>
+import { ref } from "vue";
+import { Eye, EyeOff } from "lucide-vue-next";
+
+const showPassword = ref(false);
+
 defineProps({
   deleteListState: {
     type: Object,
@@ -13,7 +18,24 @@ defineProps({
 
 <template>
   <div class="delete-list-form" role="group" aria-label="删除单词表">
-    <input v-model="deleteListState.password" type="password" placeholder="删除密码" required>
+    <label class="delete-password-field">
+      <input
+        v-model="deleteListState.password"
+        :type="showPassword ? 'text' : 'password'"
+        placeholder="删除密码"
+        required
+      >
+      <button
+        class="password-toggle-button"
+        type="button"
+        :aria-label="showPassword ? '隐藏删除密码' : '显示删除密码'"
+        :title="showPassword ? '隐藏删除密码' : '显示删除密码'"
+        @click="showPassword = !showPassword"
+      >
+        <EyeOff v-if="showPassword" :size="18" aria-hidden="true" />
+        <Eye v-else :size="18" aria-hidden="true" />
+      </button>
+    </label>
     <button class="danger-button" type="button" @click="deleteList">删除</button>
   </div>
 </template>
