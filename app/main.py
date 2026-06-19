@@ -842,7 +842,7 @@ def challenge_answer_api(
         session_wrong=result["session_wrong"],
         wrong_date=result["wrong_date"].isoformat() if result["wrong_date"] else None,
     )
-    return {"ok": True, "query": query, "state": next_state}
+    return {"ok": True, "query": query, "state": next_state, "answer": result.get("answer")}
 
 
 @app.get("/wrong-words", response_class=HTMLResponse)
@@ -877,6 +877,7 @@ def apply_challenge_answer(
     progress = get_or_create_challenge_progress(db, word_list_id)
     total = len(words)
     wrong_date_value = parse_wrong_date(wrong_date)
+    answer_feedback = None
 
     if action == "reset":
         progress.current_index = 0
@@ -889,6 +890,12 @@ def apply_challenge_answer(
             typed = normalize_spelling_answer(spelling)
             expected = spelling_answer_options(current_word)
             action = "known" if typed in expected else "wrong"
+            answer_feedback = {
+                "is_correct": action == "known",
+                "typed": spelling,
+                "correct_spelling": current_word.word,
+                "accepted_spellings": sorted(expected),
+            }
             record_spelling_attempt(
                 db,
                 word=current_word,
@@ -933,6 +940,7 @@ def apply_challenge_answer(
         "session_correct": session_correct,
         "session_wrong": session_wrong,
         "wrong_date": wrong_date_value,
+        "answer": answer_feedback,
     }
 
 

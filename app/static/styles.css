@@ -2717,6 +2717,63 @@ button.calendar-day:disabled {
   justify-content: flex-end;
 }
 
+.challenge-answer-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(18, 29, 43, 0.46);
+  backdrop-filter: blur(4px);
+}
+
+.challenge-answer-modal {
+  position: relative;
+  display: grid;
+  width: min(560px, 100%);
+  min-height: 320px;
+  gap: 14px;
+  padding: 34px 34px 92px;
+  border: 1px solid rgba(178, 56, 56, 0.18);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(18, 29, 43, 0.24);
+}
+
+.challenge-answer-modal h2 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 22px;
+}
+
+.challenge-correct-answer {
+  display: block;
+  color: #0f5138;
+  font-size: clamp(46px, 8vw, 78px);
+  line-height: 1;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.challenge-typed-answer {
+  margin: 0;
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.challenge-typed-answer span {
+  color: #b42318;
+}
+
+.challenge-answer-confirm {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  min-width: 128px;
+}
+
 .challenge-count {
   font-weight: 800;
 }

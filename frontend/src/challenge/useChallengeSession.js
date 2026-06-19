@@ -9,10 +9,25 @@ export function useChallengeSession(wordListId) {
   const loading = ref(true);
   const submitting = ref(false);
   const errorMessage = ref('');
+  const wrongAnswer = ref(null);
+  let pendingChallengeResult = null;
+
+  function applyChallengeResult(result) {
+    const nextParams = paramsFromChallengeResult(result);
+    replaceChallengeParams(nextParams);
+    if (result.state) {
+      state.value = result.state;
+      spelling.value = '';
+      return;
+    }
+    return loadState(nextParams, { showLoading: false });
+  }
 
   async function loadState(params = initialParams, { showLoading = true } = {}) {
     if (showLoading) loading.value = true;
     errorMessage.value = '';
+    wrongAnswer.value = null;
+    pendingChallengeResult = null;
     try {
       state.value = await fetchChallengeState(wordListId, params);
       spelling.value = '';
@@ -29,19 +44,25 @@ export function useChallengeSession(wordListId) {
     errorMessage.value = '';
     try {
       const result = await postChallengeAnswer({ wordListId, state: state.value, spelling: spelling.value });
-      const nextParams = paramsFromChallengeResult(result);
-      replaceChallengeParams(nextParams);
-      if (result.state) {
-        state.value = result.state;
-        spelling.value = '';
-      } else {
-        await loadState(nextParams, { showLoading: false });
+      if (result.answer && result.answer.is_correct === false) {
+        pendingChallengeResult = result;
+        wrongAnswer.value = result.answer;
+        return;
       }
+      await applyChallengeResult(result);
     } catch (error) {
       errorMessage.value = error.message || challengeMessages.submitFailed;
     } finally {
       submitting.value = false;
     }
+  }
+
+  async function acknowledgeWrongAnswer() {
+    if (!pendingChallengeResult) return;
+    const result = pendingChallengeResult;
+    pendingChallengeResult = null;
+    wrongAnswer.value = null;
+    await applyChallengeResult(result);
   }
 
   onMounted(() => loadState());
@@ -52,6 +73,8 @@ export function useChallengeSession(wordListId) {
     loading,
     submitting,
     errorMessage,
+    wrongAnswer,
     submitSpelling,
+    acknowledgeWrongAnswer,
   };
 }

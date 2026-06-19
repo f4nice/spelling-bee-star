@@ -3,6 +3,7 @@ import ChallengeComplete from "./ChallengeComplete.vue";
 import ChallengeHeader from "./ChallengeHeader.vue";
 import ChallengeStats from "./ChallengeStats.vue";
 import ChallengeWordCard from "./ChallengeWordCard.vue";
+import ChallengeWrongAnswerModal from "./ChallengeWrongAnswerModal.vue";
 import { restartChallengeUrl } from "./challengeRouteState.js";
 import { useChallengeSession } from "./useChallengeSession.js";
 
@@ -14,7 +15,16 @@ const props = defineProps({
 });
 
 const wordListId = Number(props.wordListId || 0);
-const { state, spelling, loading, submitting, errorMessage, submitSpelling } = useChallengeSession(wordListId);
+const {
+  state,
+  spelling,
+  loading,
+  submitting,
+  errorMessage,
+  wrongAnswer,
+  submitSpelling,
+  acknowledgeWrongAnswer,
+} = useChallengeSession(wordListId);
 </script>
 
 <template>
@@ -33,6 +43,11 @@ const { state, spelling, loading, submitting, errorMessage, submitSpelling } = u
         @submit="submitSpelling"
       />
       <ChallengeComplete v-else :state="state" :restart-url="restartChallengeUrl(wordListId)" />
+      <ChallengeWrongAnswerModal
+        v-if="wrongAnswer"
+        :answer="wrongAnswer"
+        @confirm="acknowledgeWrongAnswer"
+      />
     </template>
   </section>
 </template>
