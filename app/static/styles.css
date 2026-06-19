@@ -2871,6 +2871,27 @@ button.calendar-day:disabled {
   text-align: left;
 }
 
+.word-study-controls {
+  justify-content: flex-start;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.word-study-controls label span {
+  min-width: 0;
+  color: var(--muted);
+  text-align: left;
+}
+
+.word-study-controls .auto-study-status {
+  min-width: 110px;
+  color: var(--accent-dark);
+  text-align: left;
+}
+
 .word-title-stack {
   display: grid;
   gap: 6px;
