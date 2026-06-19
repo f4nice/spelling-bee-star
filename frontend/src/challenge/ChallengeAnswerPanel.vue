@@ -15,6 +15,18 @@ const props = defineProps({
 const emit = defineEmits(["update:spelling", "submit"]);
 const spellingInput = ref(null);
 
+function sanitizeEnglishSpelling(value) {
+  return String(value || "").replace(/[^A-Za-z\s'-]/g, "");
+}
+
+function updateSpelling(event) {
+  const sanitized = sanitizeEnglishSpelling(event.target.value);
+  if (event.target.value !== sanitized) {
+    event.target.value = sanitized;
+  }
+  emit("update:spelling", sanitized);
+}
+
 function submitAnswer() {
   if (!props.spelling.trim() || props.submitting) return;
   emit("submit");
@@ -46,7 +58,7 @@ watch(
       autocapitalize="off"
       spellcheck="false"
       placeholder="输入英文拼写"
-      @input="emit('update:spelling', $event.target.value)"
+      @input="updateSpelling"
       @keydown.enter.prevent="submitAnswer"
     >
     <div class="challenge-actions">
