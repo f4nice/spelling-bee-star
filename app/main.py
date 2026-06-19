@@ -86,6 +86,19 @@ app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
+@app.middleware("http")
+async def add_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/static/") or path.startswith("/media/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif path == "/tts" or re.fullmatch(r"/words/\d+/(tts|audio)", path):
+        response.headers["Cache-Control"] = "public, max-age=2592000"
+    elif re.fullmatch(r"/words/\d+/image-view", path):
+        response.headers["Cache-Control"] = "public, max-age=600"
+    return response
+
+
 def static_asset_version() -> str:
     assets = [
         BASE_DIR / "static" / "styles.css",
@@ -2555,7 +2568,7 @@ async def tts_audio(word: str = Query(..., min_length=1, max_length=80), accent:
                     return Response(
                         content=response.content,
                         media_type=response.headers.get("content-type", "audio/mpeg"),
-                        headers={"Cache-Control": "no-store"},
+                        headers={"Cache-Control": "public, max-age=2592000"},
                     )
                 if response.content and fallback_response is None:
                     fallback_response = response
@@ -2566,7 +2579,7 @@ async def tts_audio(word: str = Query(..., min_length=1, max_length=80), accent:
             return Response(
                 content=fallback_response.content,
                 media_type=fallback_response.headers.get("content-type", "audio/mpeg"),
-                headers={"Cache-Control": "no-store"},
+                headers={"Cache-Control": "public, max-age=2592000"},
             )
 
     raise HTTPException(status_code=502, detail=f"朗读音频暂不可用: {last_error}")

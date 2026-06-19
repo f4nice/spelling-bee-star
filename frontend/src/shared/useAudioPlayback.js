@@ -13,7 +13,7 @@ export function useAudioPlayback() {
       speakFallback(fallbackText, lang);
       return;
     }
-    audio.load();
+    if (!audio.readyState) audio.load();
     audio.currentTime = 0;
     audio.play().catch(() => {
       audio.controls = true;

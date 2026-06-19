@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { fetchJson } from "../utils.js";
 
 const STORAGE_KEY = "speakeasy.wordAutoStudy";
 
@@ -60,6 +61,27 @@ function goNext() {
   window.location.href = nextWordUrl.value;
 }
 
+async function prefetchNextWord() {
+  try {
+    const nextUrl = new URL(nextWordUrl.value, window.location.origin);
+    const apiUrl = `/api/vue${nextUrl.pathname}${nextUrl.search}`;
+    const payload = await fetchJson(apiUrl);
+    if (payload?.word?.image_url) {
+      const image = new Image();
+      image.src = payload.word.image_url;
+    }
+    Object.values(payload?.audio_sources || {}).filter(Boolean).forEach((url) => {
+      const link = document.createElement("link");
+      link.rel = "prefetch";
+      link.as = "audio";
+      link.href = url;
+      document.head.appendChild(link);
+    });
+  } catch {
+    // Prefetch is opportunistic; normal navigation still works if it fails.
+  }
+}
+
 function scheduleNext() {
   clearTimers();
   const seconds = Math.max(Number(intervalSeconds.value) || 1, 1);
@@ -86,6 +108,7 @@ function stopAutoStudy() {
 onMounted(() => {
   const stored = readStoredState();
   if (stored.intervalSeconds) intervalSeconds.value = stored.intervalSeconds;
+  prefetchNextWord();
   if (stored.active) {
     isAutoStudying.value = true;
     scheduleNext();
