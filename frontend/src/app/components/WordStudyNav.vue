@@ -13,6 +13,10 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  playAudio: {
+    type: Function,
+    required: true,
+  },
 });
 
 const intervalSeconds = ref(6);
@@ -20,6 +24,7 @@ const isAutoStudying = ref(false);
 const remainingSeconds = ref(0);
 let timerId = null;
 let countdownId = null;
+let audioReplayIds = [];
 
 const previousWordUrl = computed(() => props.wordNavUrl(props.data.navigation.previous_word_id));
 const nextWordUrl = computed(() => props.wordNavUrl(props.data.navigation.next_word_id));
@@ -55,6 +60,8 @@ function clearTimers() {
     window.clearInterval(countdownId);
     countdownId = null;
   }
+  audioReplayIds.forEach((id) => window.clearTimeout(id));
+  audioReplayIds = [];
 }
 
 function goNext() {
@@ -92,10 +99,30 @@ function scheduleNext() {
   timerId = window.setTimeout(goNext, seconds * 1000);
 }
 
+function playCurrentWord() {
+  const audioSources = props.data.audio_sources || {};
+  const word = props.data.word?.word || "";
+  if (audioSources.us) {
+    props.playAudio("audio-us", word, "en-US");
+    return;
+  }
+  if (audioSources.gb) {
+    props.playAudio("audio-gb", word, "en-GB");
+    return;
+  }
+  props.playAudio("audio-us", word, "en-US");
+}
+
+function playCurrentWordTwice() {
+  playCurrentWord();
+  audioReplayIds.push(window.setTimeout(playCurrentWord, 1200));
+}
+
 function startAutoStudy() {
   isAutoStudying.value = true;
   writeStoredState(true);
   scheduleNext();
+  playCurrentWordTwice();
 }
 
 function stopAutoStudy() {
@@ -112,6 +139,7 @@ onMounted(() => {
   if (stored.active) {
     isAutoStudying.value = true;
     scheduleNext();
+    playCurrentWordTwice();
   }
 });
 
