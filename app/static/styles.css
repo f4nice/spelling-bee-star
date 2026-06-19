@@ -4403,15 +4403,14 @@ dd {
 
 .delete-list-form {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) auto;
+  grid-template-columns: 190px 38px auto;
   gap: 8px;
   align-items: center;
 }
 
 .delete-password-field {
-  position: relative;
   display: block;
-  min-width: 160px;
+  min-width: 0;
 }
 
 .delete-list-form .delete-password-field input {
@@ -4419,20 +4418,16 @@ dd {
   height: 38px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 0 42px 0 10px;
+  padding: 0 10px;
 }
 
 .password-toggle-button {
-  position: absolute;
-  top: 50%;
-  right: 5px;
-  z-index: 2;
   display: inline-flex;
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   align-items: center;
   justify-content: center;
-  border: 0;
+  border: 1px solid rgba(29, 127, 91, 0.22);
   border-radius: 6px;
   color: var(--accent-dark);
   background: #eef8f3;

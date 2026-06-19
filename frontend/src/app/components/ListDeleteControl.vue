@@ -25,17 +25,17 @@ defineProps({
         placeholder="删除密码"
         required
       >
-      <button
-        class="password-toggle-button"
-        type="button"
-        :aria-label="showPassword ? '隐藏删除密码' : '显示删除密码'"
-        :title="showPassword ? '隐藏删除密码' : '显示删除密码'"
-        @click="showPassword = !showPassword"
-      >
-        <EyeOff v-if="showPassword" :size="18" aria-hidden="true" />
-        <Eye v-else :size="18" aria-hidden="true" />
-      </button>
     </label>
+    <button
+      class="password-toggle-button"
+      type="button"
+      :aria-label="showPassword ? '隐藏删除密码' : '显示删除密码'"
+      :title="showPassword ? '隐藏删除密码' : '显示删除密码'"
+      @click="showPassword = !showPassword"
+    >
+      <EyeOff v-if="showPassword" :size="18" aria-hidden="true" />
+      <Eye v-else :size="18" aria-hidden="true" />
+    </button>
     <button class="danger-button" type="button" @click="deleteList">删除</button>
   </div>
 </template>
