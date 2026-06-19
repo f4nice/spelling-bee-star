@@ -11,7 +11,7 @@ export function useBooklearnerData({ book, route }) {
       return;
     }
 
-    const limit = route.value.name === 'booklearnerQuotes' ? 40 : 12;
+    const limit = route.value.name === 'booklearnerQuotes' ? 80 : 40;
     book.value.featured = (await fetchJson(booklearnerApiPaths.featured({ limit }))).items || [];
   }
 

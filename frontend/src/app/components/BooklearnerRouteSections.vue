@@ -1,6 +1,6 @@
 <script setup>
 import BooklearnerDetailPanel from "./BooklearnerDetailPanel.vue";
-import BooklearnerHistoryGrid from "./BooklearnerHistoryGrid.vue";
+import BooklearnerQuoteFeed from "./BooklearnerQuoteFeed.vue";
 
 defineProps([
   "route",
@@ -17,8 +17,15 @@ defineProps([
 <template>
   <BooklearnerDetailPanel
     v-if="route.name === 'booklearnerDetail'"
+    :route="route"
     :book="book"
+    :go="go"
     :create-book-word-list="createBookWordList"
   />
-  <BooklearnerHistoryGrid v-if="route.name !== 'booklearnerUpload'" :book="book" :go="go" />
+  <BooklearnerQuoteFeed
+    v-else-if="route.name !== 'booklearnerUpload'"
+    :route="route"
+    :book="book"
+    :go="go"
+  />
 </template>

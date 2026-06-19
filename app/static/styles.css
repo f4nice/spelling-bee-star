@@ -2382,6 +2382,271 @@ button.calendar-day {
   font-size: 13px;
 }
 
+.booklearner-heading-panel {
+  margin-bottom: 16px;
+}
+
+.book-quote-feed {
+  display: grid;
+  gap: 14px;
+}
+
+.book-quote-feed-head,
+.book-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 16px;
+}
+
+.book-quote-feed-head h2,
+.book-section-head h3 {
+  margin: 4px 0 0;
+}
+
+.book-quote-list {
+  display: grid;
+  border-top: 1px solid var(--line);
+}
+
+.book-quote-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) minmax(190px, 0.35fr);
+  gap: 12px;
+  align-items: start;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 14px 4px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.book-quote-row:hover {
+  background: #f8fbf9;
+}
+
+.book-quote-mark {
+  color: var(--accent);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 0.9;
+}
+
+.book-quote-text {
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.book-quote-source {
+  display: grid;
+  gap: 4px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.book-quote-source span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.book-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+.book-detail-main {
+  display: grid;
+  gap: 20px;
+}
+
+.book-detail-hero {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.book-detail-cover {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: #eef5f0;
+  box-shadow: var(--shadow-sm);
+}
+
+.book-detail-cover img,
+.book-detail-cover .book-history-cover-fallback {
+  width: 100%;
+  height: 260px;
+  object-fit: cover;
+}
+
+.book-detail-info {
+  display: grid;
+  gap: 12px;
+}
+
+.book-detail-info h2 {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.12;
+}
+
+.book-detail-info p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.book-related-section,
+.book-quotes-section,
+.book-vocabulary-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.book-related-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.book-related-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  color: inherit;
+  background: var(--panel-soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.book-related-card:hover {
+  border-color: rgba(29, 127, 91, 0.35);
+}
+
+.book-related-card img,
+.book-related-card > span {
+  width: 100%;
+  height: 92px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #e9f8f1;
+}
+
+.book-related-card > span {
+  display: grid;
+  place-items: center;
+  color: var(--accent-dark);
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.book-related-card strong {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.book-detail-quote-list {
+  display: grid;
+  gap: 10px;
+}
+
+.book-detail-quote {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
+.book-detail-quote.is-current {
+  border-color: rgba(29, 127, 91, 0.42);
+  background: #f1fbf6;
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.book-detail-quote span {
+  color: var(--accent-dark);
+  font-weight: 900;
+}
+
+.book-detail-quote p {
+  margin: 0;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.book-detail-quote small {
+  grid-column: 2;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.book-vocabulary-panel {
+  position: sticky;
+  top: 82px;
+}
+
+.book-vocabulary-list {
+  display: grid;
+  gap: 10px;
+  max-height: calc(100vh - 180px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.book-vocabulary-card {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+}
+
+.book-vocabulary-card strong {
+  color: var(--ink);
+  font-size: 17px;
+}
+
+.book-vocabulary-card span {
+  width: max-content;
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--accent-dark);
+  background: #e9f8f1;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.book-vocabulary-card p,
+.book-vocabulary-card small {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.book-vocabulary-card small {
+  color: #56667a;
+}
+
 .book-history-link {
   height: 100%;
 }
@@ -2638,6 +2903,30 @@ button.calendar-day {
 
   .book-detail-summary {
     display: grid;
+  }
+
+  .book-quote-row {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .book-quote-source {
+    grid-column: 2;
+  }
+
+  .book-detail-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .book-detail-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .book-vocabulary-panel {
+    position: static;
+  }
+
+  .book-vocabulary-list {
+    max-height: none;
   }
 }
 
