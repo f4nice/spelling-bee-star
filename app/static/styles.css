@@ -1466,8 +1466,11 @@ a:focus-visible {
 
 .challenge-card-actions {
   display: grid;
-  gap: 10px;
-  padding: 0 14px 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding: 12px 14px 14px;
 }
 
 .mini-progress {
@@ -1476,6 +1479,38 @@ a:focus-visible {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
+}
+
+.mini-progress-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mini-progress-heading strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.mini-progress p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.mini-progress > div:last-of-type {
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: #e4ebe5;
+}
+
+.mini-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-dark) 100%);
 }
 
 .challenge-start-form {
@@ -3709,6 +3744,14 @@ select {
   .lists-import-form,
   .batch-image-form {
     grid-template-columns: 1fr;
+  }
+
+  .challenge-card-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .challenge-button {
+    width: 100%;
   }
 
   .upload-panel,

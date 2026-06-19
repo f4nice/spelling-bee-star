@@ -30,6 +30,7 @@ defineProps([
       :card="card"
       :fallback-letter="fallbackLetter"
       :go="go"
+      show-challenge
     />
   </section>
 </template>
