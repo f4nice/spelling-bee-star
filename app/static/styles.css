@@ -1843,15 +1843,42 @@ a:focus-visible {
   background: var(--panel);
   color: inherit;
   text-align: left;
-  cursor: pointer;
+  cursor: default;
   font: inherit;
 }
 
-.challenge-day-filter:hover,
 .challenge-day-filter.active {
   border-color: var(--accent);
   background: #eef8f3;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.challenge-day-stat-number {
+  width: max-content;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1.1;
+  cursor: pointer;
+}
+
+.challenge-day-stat-number:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.challenge-day-wrong-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.challenge-day-start-button {
+  min-height: 34px;
+  padding: 7px 12px;
 }
 
 .challenge-day-stats span {

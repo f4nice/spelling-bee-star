@@ -1187,11 +1187,13 @@ def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
             "\u9519\u8bef\u5355\u8bcd\u5df2\u4ece\u5f53\u65e5\u751f\u8bcd\u672c\u6062\u590d\uff1b"
             "\u4e4b\u540e\u65b0\u7684\u6311\u6218\u4f1a\u81ea\u52a8\u5b8c\u6574\u8bb0\u5f55\u6bcf\u4e2a\u5355\u8bcd\u3002"
         )
+    wrong_word_list = get_wrong_word_list(db, challenge_date)
     return {
         "date": challenge_date.isoformat(),
         "total": correct + wrong,
         "correct": correct,
         "wrong": wrong,
+        "wrong_word_list_id": wrong_word_list.id if wrong_word_list else None,
         "words": words,
         "has_detail_rows": bool(detail_rows),
         "recovery_note": recovery_note,

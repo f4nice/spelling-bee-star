@@ -25,6 +25,16 @@ const filteredWords = computed(() => {
   return (props.data.words || []).filter((item) => item.status === activeFilter.value);
 });
 
+const wrongChallengeUrl = computed(() => {
+  if (!props.data.wrong_word_list_id || !props.data.wrong) return "";
+  const params = new URLSearchParams({
+    daily_count: String(props.data.wrong),
+    start_count: "0",
+    wrong_date: props.data.date,
+  });
+  return `/challenge/${props.data.wrong_word_list_id}?${params.toString()}`;
+});
+
 function setFilter(filter) {
   activeFilter.value = activeFilter.value === filter ? "all" : filter;
 }
@@ -35,6 +45,7 @@ function setFilter(filter) {
     :correct="data.correct"
     :wrong="data.wrong"
     :active-filter="activeFilter"
+    :wrong-challenge-url="wrongChallengeUrl"
     :go="go"
     @filter="setFilter"
   />
