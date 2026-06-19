@@ -1363,6 +1363,22 @@ button[disabled] {
   text-decoration: none;
 }
 
+.primary-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border: 0;
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  box-shadow: 0 12px 24px rgba(29, 127, 91, 0.18);
+  font-weight: 900;
+  text-decoration: none;
+  cursor: pointer;
+}
+
 .primary-link:hover {
   background: var(--accent-dark);
 }
@@ -2178,8 +2194,72 @@ a:focus-visible {
   margin-bottom: 16px;
 }
 
+.lists-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .app-page-heading h1 {
   margin: 0;
+}
+
+.lists-create-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 42;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(21, 31, 43, 0.56);
+}
+
+.lists-create-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(960px, 100%);
+  max-height: min(760px, calc(100vh - 56px));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 24px 70px rgba(21, 31, 43, 0.28);
+}
+
+.lists-create-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding: 18px;
+}
+
+.lists-create-heading h2,
+.lists-create-heading p {
+  margin: 0;
+}
+
+.lists-create-heading h2 {
+  font-size: 24px;
+}
+
+.lists-create-heading p:not(.section-kicker) {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.lists-create-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+}
+
+.lists-create-body .lists-tools-panel {
+  margin: 0;
+  box-shadow: none;
 }
 
 .plain-card-button,
@@ -3947,7 +4027,8 @@ select {
   .home-hero,
   .home-main-grid,
   .home-section-head,
-  .list-page-heading {
+  .list-page-heading,
+  .lists-page-heading {
     align-items: stretch;
     grid-template-columns: 1fr;
     flex-direction: column;
@@ -3963,6 +4044,15 @@ select {
   .lists-import-form,
   .batch-image-form {
     grid-template-columns: 1fr;
+  }
+
+  .lists-create-backdrop {
+    align-items: stretch;
+    padding: 14px;
+  }
+
+  .lists-create-heading {
+    flex-direction: column;
   }
 
   .challenge-card-actions {
