@@ -4425,7 +4425,8 @@ dd {
 .password-toggle-button {
   position: absolute;
   top: 50%;
-  right: 4px;
+  right: 5px;
+  z-index: 2;
   display: inline-flex;
   width: 32px;
   height: 32px;
@@ -4433,15 +4434,20 @@ dd {
   justify-content: center;
   border: 0;
   border-radius: 6px;
-  color: var(--muted);
-  background: transparent;
+  color: var(--accent-dark);
+  background: #eef8f3;
   cursor: pointer;
+}
+
+.password-toggle-button svg {
+  display: block;
+  stroke-width: 2.4;
 }
 
 .password-toggle-button:hover,
 .password-toggle-button:focus-visible {
-  color: var(--green);
-  background: #eef8f3;
+  color: #fff;
+  background: var(--accent);
 }
 
 .password-toggle-button:focus-visible {
