@@ -42,6 +42,7 @@ watch(
 <template>
   <section class="booklearner-page">
     <BooklearnerHero
+      v-if="route.name !== 'booklearnerDetail'"
       :route="route"
       :book="book"
       :go="go"
