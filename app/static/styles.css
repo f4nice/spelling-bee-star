@@ -2430,6 +2430,9 @@ button.calendar-day {
 .book-quote-feed-head h2,
 .book-section-head h3 {
   margin: 4px 0 0;
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1.2;
 }
 
 .book-quote-list {
@@ -2486,53 +2489,64 @@ button.calendar-day {
 
 .book-detail-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
   align-items: start;
 }
 
 .book-detail-main {
   display: grid;
-  gap: 20px;
+  gap: 22px;
+  padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(249, 252, 249, 0.98));
 }
 
 .book-detail-hero {
   display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 22px;
+  align-items: stretch;
+  border: 1px solid rgba(29, 127, 91, 0.14);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  background: #fbfdfb;
+  box-shadow: var(--shadow-sm);
 }
 
 .book-detail-cover {
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(18, 35, 47, 0.08);
   border-radius: var(--radius-lg);
-  background: #eef5f0;
-  box-shadow: var(--shadow-sm);
+  background: #edf5ef;
+  box-shadow: 0 16px 34px rgba(23, 32, 44, 0.12);
 }
 
 .book-detail-cover img,
 .book-detail-cover .book-history-cover-fallback {
   width: 100%;
-  height: 260px;
+  height: 292px;
   object-fit: cover;
 }
 
 .book-detail-info {
   display: grid;
-  gap: 12px;
+  align-content: center;
+  gap: 14px;
+  min-width: 0;
 }
 
 .book-detail-info h2 {
   margin: 0;
-  font-size: 34px;
+  color: var(--ink);
+  font-size: 38px;
   line-height: 1.12;
 }
 
 .book-detail-info p {
   margin: 0;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 800;
 }
 
@@ -2540,36 +2554,40 @@ button.calendar-day {
 .book-quotes-section,
 .book-vocabulary-panel {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .book-related-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
 }
 
 .book-related-card {
   display: grid;
-  gap: 8px;
+  gap: 9px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px;
+  border-radius: var(--radius-lg);
+  padding: 9px;
   color: inherit;
-  background: var(--panel-soft);
+  background: #fff;
   text-align: left;
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
 
 .book-related-card:hover {
   border-color: rgba(29, 127, 91, 0.35);
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
 }
 
 .book-related-card img,
 .book-related-card > span {
   width: 100%;
-  height: 92px;
-  border-radius: 6px;
+  height: 106px;
+  border-radius: 8px;
   object-fit: cover;
   background: #e9f8f1;
 }
@@ -2589,27 +2607,36 @@ button.calendar-day {
 
 .book-detail-quote-list {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .book-detail-quote {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
-  gap: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 12px;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 14px;
+  border: 1px solid rgba(18, 35, 47, 0.1);
+  border-radius: var(--radius-lg);
+  padding: 15px 16px;
   background: #fff;
+  box-shadow: var(--shadow-sm);
 }
 
 .book-detail-quote.is-current {
-  border-color: rgba(29, 127, 91, 0.42);
-  background: #f1fbf6;
-  box-shadow: inset 4px 0 0 var(--accent);
+  border-color: rgba(29, 127, 91, 0.46);
+  background: linear-gradient(180deg, #f3fbf7, #fff);
+  box-shadow:
+    inset 5px 0 0 var(--accent),
+    0 16px 34px rgba(29, 127, 91, 0.1);
 }
 
 .book-detail-quote span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 999px;
   color: var(--accent-dark);
+  background: #e9f8f1;
   font-weight: 900;
 }
 
@@ -2617,8 +2644,8 @@ button.calendar-day {
   margin: 0;
   color: var(--ink);
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 17px;
-  line-height: 1.55;
+  font-size: 18px;
+  line-height: 1.62;
 }
 
 .book-detail-quote small {
@@ -2630,11 +2657,14 @@ button.calendar-day {
 .book-vocabulary-panel {
   position: sticky;
   top: 82px;
+  padding: 16px;
+  background:
+    linear-gradient(180deg, rgba(251, 253, 251, 0.98), rgba(255, 255, 255, 0.98));
 }
 
 .book-vocabulary-list {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   max-height: calc(100vh - 180px);
   overflow: auto;
   padding-right: 2px;
@@ -2642,16 +2672,18 @@ button.calendar-day {
 
 .book-vocabulary-card {
   display: grid;
-  gap: 6px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px;
+  gap: 8px;
+  border: 1px solid rgba(18, 35, 47, 0.1);
+  border-radius: var(--radius-lg);
+  padding: 12px;
   background: #fff;
+  box-shadow: var(--shadow-sm);
 }
 
 .book-vocabulary-card strong {
   color: var(--ink);
-  font-size: 17px;
+  font-size: 18px;
+  line-height: 1.2;
 }
 
 .book-vocabulary-card span {
@@ -2909,11 +2941,12 @@ button.calendar-day {
 
 .book-detail-stats span {
   border-radius: 999px;
-  padding: 5px 10px;
+  padding: 6px 11px;
   color: var(--accent-dark);
-  background: #e9f8f1;
+  background: #e8f7f0;
   font-size: 13px;
   font-weight: 900;
+  box-shadow: inset 0 0 0 1px rgba(29, 127, 91, 0.08);
 }
 
 @media (max-width: 900px) {
