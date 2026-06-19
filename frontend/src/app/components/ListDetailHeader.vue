@@ -29,7 +29,12 @@ defineProps({
 
 <template>
   <section class="panel upload-panel">
-    <ListTitleEditor :word-list="data.word_list" :word-count="data.words.length" />
+    <ListTitleEditor
+      :word-list="data.word_list"
+      :word-count="data.words.length"
+      :rename-list="renameList"
+      :go="go"
+    />
     <ListHeaderActions
       :delete-list-state="deleteListState"
       :rename-list="renameList"

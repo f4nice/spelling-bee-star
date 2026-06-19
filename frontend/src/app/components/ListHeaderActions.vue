@@ -23,8 +23,6 @@ defineProps({
 
 <template>
   <div class="list-actions">
-    <button class="secondary-button" type="button" @click="renameList">保存名称</button>
-    <button class="ghost-button compact-button" type="button" @click="go('/upload')">继续导入</button>
     <ListDeleteControl :delete-list-state="deleteListState" :delete-list="deleteList" />
   </div>
 </template>
