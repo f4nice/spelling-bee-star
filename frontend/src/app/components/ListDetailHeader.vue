@@ -20,7 +20,7 @@ defineProps({
     type: Function,
     required: true,
   },
-  go: {
+  openImportModal: {
     type: Function,
     required: true,
   },
@@ -33,13 +33,12 @@ defineProps({
       :word-list="data.word_list"
       :word-count="data.words.length"
       :rename-list="renameList"
-      :go="go"
+      :open-import-modal="openImportModal"
     />
     <ListHeaderActions
       :delete-list-state="deleteListState"
       :rename-list="renameList"
       :delete-list="deleteList"
-      :go="go"
     />
     <ListDeleteNotice :notice="deleteListState.notice" />
   </section>

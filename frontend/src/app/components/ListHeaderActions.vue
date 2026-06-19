@@ -14,10 +14,6 @@ defineProps({
     type: Function,
     required: true,
   },
-  go: {
-    type: Function,
-    required: true,
-  },
 });
 </script>
 

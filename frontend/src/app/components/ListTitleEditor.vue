@@ -14,7 +14,7 @@ const props = defineProps({
     type: Function,
     required: true,
   },
-  go: {
+  openImportModal: {
     type: Function,
     required: true,
   },
@@ -49,7 +49,7 @@ async function saveTitle() {
     >
     <div class="word-list-meta">
       <p>{{ wordCount }} 个单词</p>
-      <button class="ghost-button compact-button" type="button" @click="go('/upload')">继续导入</button>
+      <button class="ghost-button compact-button" type="button" @click="openImportModal">继续导入</button>
     </div>
   </div>
 </template>
