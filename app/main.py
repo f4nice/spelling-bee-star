@@ -550,10 +550,13 @@ def vue_wrong_words_api(db: Session = Depends(get_db)):
     groups: dict[str, dict[str, Any]] = {}
     for wrong_word, word in wrong_rows:
         day = (wrong_word.wrong_date or date.today()).isoformat()
-        group = groups.setdefault(day, {"date": day, "count": 0, "wrong_total": 0, "words": []})
+        group = groups.setdefault(day, {"date": day, "count": 0, "wrong_total": 0, "cover_word": None, "words": []})
         group["count"] += 1
         group["wrong_total"] += wrong_word.wrong_count
-        group["words"].append({"word": serialize_word(word), "wrong_count": wrong_word.wrong_count})
+        serialized_word = serialize_word(word)
+        if not group["cover_word"] or (not group["cover_word"].get("image_url") and serialized_word.get("image_url")):
+            group["cover_word"] = serialized_word
+        group["words"].append({"word": serialized_word, "wrong_count": wrong_word.wrong_count})
     return {"groups": list(groups.values())}
 
 

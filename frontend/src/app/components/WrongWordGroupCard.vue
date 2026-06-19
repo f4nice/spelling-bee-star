@@ -18,7 +18,8 @@ defineProps({
       type="button"
       @click="go(`/challenge-calendar/${group.date}`)"
     >
-      <div class="image-fallback">×</div>
+      <img v-if="group.cover_word?.image_url" :src="group.cover_word.image_url" :alt="group.date">
+      <div v-else class="image-fallback">错</div>
       <div class="word-card-body">
         <div class="word-card-title">
           <strong>{{ group.date }}</strong>
