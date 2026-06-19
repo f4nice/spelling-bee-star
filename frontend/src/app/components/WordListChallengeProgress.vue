@@ -47,10 +47,6 @@ function startChallenge() {
         <strong>{{ progressText }}</strong>
       </div>
       <div><i :style="{ width: `${card.challenge.percent}%` }"></i></div>
-      <p>
-        已挑战 {{ card.challenge.completed }} 个，
-        共 {{ card.challenge.total }} 个
-      </p>
     </div>
     <form class="challenge-start-form" @submit.prevent="startChallenge">
       <label>

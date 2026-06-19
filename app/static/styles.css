@@ -1447,7 +1447,7 @@ a:focus-visible {
 
 .list-card .word-card-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   min-height: 58px;
   gap: 10px;
@@ -1456,6 +1456,20 @@ a:focus-visible {
 .list-card .word-card-title {
   display: contents;
   margin: 0;
+}
+
+.challenge-summary-badge {
+  justify-self: end;
+  overflow: hidden;
+  max-width: 150px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: var(--accent-dark);
+  background: #e9f8f1;
+  font-size: 12px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .list-card-link {
