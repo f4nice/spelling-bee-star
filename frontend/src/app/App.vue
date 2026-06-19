@@ -9,7 +9,8 @@ const { shellContext, route, routeTitle, loading, error, go, pageContext } = use
 
 const hidePageHeader = computed(() => {
   const hiddenRoutes = ["challenge", "lists", "listDetail", "wrongWords", "newspaper", "newspaperArticle"];
-  return hiddenRoutes.includes(route.name) || route.name.startsWith("booklearner");
+  const routeName = route.value?.name || "";
+  return hiddenRoutes.includes(routeName) || routeName.startsWith("booklearner");
 });
 </script>
 
