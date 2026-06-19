@@ -11,4 +11,8 @@ export const booklearnerHeroProps = {
     type: Function,
     required: true,
   },
+  openUploadModal: {
+    type: Function,
+    required: true,
+  },
 };

@@ -13,7 +13,7 @@ defineProps(booklearnerHeroProps);
         <h1>好词好句</h1>
         <p>从书籍学习记录里整理短句、难词和阅读关注点。</p>
       </div>
-      <BooklearnerHeroActions :go="go" />
+      <BooklearnerHeroActions :go="go" :open-upload-modal="openUploadModal" />
     </div>
 
     <BooklearnerFeaturedQuotes :route="route" :book="book" />

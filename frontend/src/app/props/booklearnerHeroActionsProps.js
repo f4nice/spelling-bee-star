@@ -3,4 +3,8 @@ export const booklearnerHeroActionsProps = {
     type: Function,
     required: true,
   },
+  openUploadModal: {
+    type: Function,
+    required: true,
+  },
 };

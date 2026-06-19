@@ -2502,6 +2502,145 @@ button.calendar-day {
   resize: vertical;
 }
 
+.book-upload-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(18, 35, 47, 0.48);
+  backdrop-filter: blur(6px);
+}
+
+.book-upload-modal {
+  width: min(980px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: 0 24px 80px rgba(18, 35, 47, 0.24);
+}
+
+.book-upload-modal-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding: 18px 20px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+}
+
+.book-upload-modal-head h2 {
+  margin: 4px 0 0;
+  font-size: 28px;
+}
+
+.book-upload-modal .book-workspace {
+  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
+  padding: 18px;
+}
+
+.book-file-picker {
+  display: grid;
+  gap: 4px;
+  border: 1px dashed rgba(29, 127, 91, 0.42);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--accent-dark);
+  background: #f8fffb;
+  text-align: center;
+  cursor: pointer;
+}
+
+.book-file-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.book-file-picker span {
+  font-weight: 900;
+}
+
+.book-file-picker small {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.book-detail-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.book-detail-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 18px;
+}
+
+.book-detail-summary h2 {
+  margin: 4px 0 6px;
+  font-size: 28px;
+}
+
+.book-detail-summary p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.book-detail-create-button {
+  width: auto;
+  min-width: 150px;
+}
+
+.book-detail-create-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.book-detail-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.book-detail-stats span {
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: var(--accent-dark);
+  background: #e9f8f1;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+@media (max-width: 900px) {
+  .book-upload-modal {
+    width: calc(100vw - 24px);
+  }
+
+  .book-upload-modal-backdrop {
+    padding: 12px;
+  }
+
+  .book-upload-modal .book-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .book-detail-summary {
+    display: grid;
+  }
+}
+
 button.home-stat-card {
   display: grid;
 }
