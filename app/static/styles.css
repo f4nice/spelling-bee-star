@@ -3425,6 +3425,26 @@ dd {
   background: var(--accent-soft);
 }
 
+.definition-inline-edit {
+  width: 100%;
+}
+
+.definition-display-text {
+  display: block;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  color: var(--ink);
+  line-height: 1.65;
+  cursor: text;
+}
+
+.definition-display-text:hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent-dark);
+}
+
 .inline-edit textarea {
   display: none;
   width: 100%;
