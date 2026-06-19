@@ -42,6 +42,8 @@ http://127.0.0.1:8000
 powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
 ```
 
+HTTP 冒烟检查的路径维护在 `scripts/verification-urls.json`。
+
 只检查 Vue 页面/路由覆盖：
 
 ```powershell

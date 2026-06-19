@@ -9,6 +9,7 @@ Set-StrictMode -Version Latest
 
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $FrontendRoot = Join-Path $RepoRoot "frontend"
+$VerificationUrlsPath = Join-Path $PSScriptRoot "verification-urls.json"
 
 function Invoke-Step {
     param(
@@ -59,15 +60,12 @@ Invoke-Step "Markdown UTF-8 check" {
 
 if (-not $SkipHttp) {
     Invoke-Step "HTTP smoke checks" {
+        if (-not (Test-Path $VerificationUrlsPath)) {
+            throw "Missing verification URL list: $VerificationUrlsPath"
+        }
+
         $base = $BaseUrl.TrimEnd("/")
-        $paths = @(
-            "/",
-            "/lists",
-            "/words/1?edit=1&list_id=24",
-            "/challenge/24",
-            "/booklearner",
-            "/challenge-calendar/2026-06-16"
-        )
+        $paths = Get-Content -LiteralPath $VerificationUrlsPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
         foreach ($path in $paths) {
             $url = "$base$path"

@@ -17,6 +17,7 @@
 - Vue 覆盖检查脚本：`scripts/check-vue-coverage.ps1`
 - 线上日志检查脚本：`scripts/check-production-logs.ps1`
 - 生产部署脚本：`scripts/deploy-production.ps1`
+- 固定验证 URL 清单：`scripts/verification-urls.json`
 
 ## 页面覆盖
 
@@ -71,12 +72,7 @@
 
 ## 固定验证 URL
 
-- `/`
-- `/lists`
-- `/words/1?edit=1&list_id=24`
-- `/challenge/24`
-- `/booklearner`
-- `/challenge-calendar/2026-06-16`
+固定 HTTP 冒烟检查 URL 维护在 `scripts/verification-urls.json`，`scripts/verify-release.ps1` 会自动读取这份清单。
 
 ## 下一步优先级
 
