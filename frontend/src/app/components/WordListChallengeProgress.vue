@@ -12,11 +12,6 @@ const props = defineProps({
   },
 });
 
-const progressText = computed(() => {
-  const challenge = props.card.challenge || {};
-  return `${challenge.completed || 0} / ${challenge.total || props.card.count || 0}`;
-});
-
 const remainingCount = computed(() => {
   const challenge = props.card.challenge || {};
   const total = Number(challenge.total || props.card.count || 0);
@@ -41,13 +36,6 @@ function startChallenge() {
 
 <template>
   <div class="challenge-card-actions">
-    <div class="mini-progress">
-      <div class="mini-progress-heading">
-        <span>挑战进度</span>
-        <strong>{{ progressText }}</strong>
-      </div>
-      <div><i :style="{ width: `${card.challenge.percent}%` }"></i></div>
-    </div>
     <form class="challenge-start-form" @submit.prevent="startChallenge">
       <label>
         <span>挑战几个</span>

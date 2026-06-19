@@ -228,7 +228,6 @@ body {
 }
 
 .sidebar-progress,
-.mini-progress div,
 .challenge-large-progress {
   overflow: hidden;
   height: 8px;
@@ -237,7 +236,6 @@ body {
 }
 
 .sidebar-progress i,
-.mini-progress i,
 .challenge-large-progress span {
   display: block;
   height: 100%;
@@ -1496,51 +1494,11 @@ a:focus-visible {
 
 .challenge-card-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  justify-content: end;
   align-items: end;
   gap: 12px;
   border-top: 1px solid var(--line);
   padding: 12px 14px 14px;
-}
-
-.mini-progress {
-  display: grid;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.mini-progress-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.mini-progress-heading strong {
-  color: var(--ink);
-  font-size: 13px;
-}
-
-.mini-progress p {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.mini-progress > div:last-of-type {
-  overflow: hidden;
-  height: 8px;
-  border-radius: 999px;
-  background: #e4ebe5;
-}
-
-.mini-progress i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-dark) 100%);
 }
 
 .challenge-start-form {
