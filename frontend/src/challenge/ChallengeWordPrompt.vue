@@ -14,21 +14,27 @@ defineProps({
 <template>
   <div class="challenge-word-prompt">
     <p class="section-kicker">当前单词</p>
-    <h2>{{ word.chinese_definition || word.english_definition || "听音拼写" }}</h2>
-    <p v-if="word.phonetic" class="phonetic">{{ word.phonetic }}</p>
-    <dl class="definition-list compact challenge-hints">
-      <template v-if="word.part_of_speech">
-        <dt>词性</dt>
-        <dd>{{ word.part_of_speech }}</dd>
-      </template>
-      <template v-if="word.english_definition">
-        <dt>英文定义</dt>
-        <dd>{{ word.english_definition }}</dd>
-      </template>
-      <template v-if="maskedExample || word.english_example">
-        <dt>英文例句</dt>
-        <dd>{{ maskedExample || word.english_example }}</dd>
-      </template>
-    </dl>
+    <div class="challenge-prompt-list">
+      <div class="challenge-prompt-item">
+        <span class="challenge-prompt-label">音标</span>
+        <strong class="challenge-prompt-value phonetic">{{ word.phonetic || "暂无" }}</strong>
+      </div>
+      <div class="challenge-prompt-item">
+        <span class="challenge-prompt-label">词性</span>
+        <strong class="challenge-prompt-value">{{ word.part_of_speech || "暂无" }}</strong>
+      </div>
+      <div class="challenge-prompt-item is-highlight">
+        <span class="challenge-prompt-label">英文定义</span>
+        <strong class="challenge-prompt-value">{{ word.english_definition || "暂无" }}</strong>
+      </div>
+      <div class="challenge-prompt-item">
+        <span class="challenge-prompt-label">中文定义</span>
+        <strong class="challenge-prompt-value">{{ word.chinese_definition || "暂无" }}</strong>
+      </div>
+      <div class="challenge-prompt-item">
+        <span class="challenge-prompt-label">英文例句</span>
+        <strong class="challenge-prompt-value">{{ maskedExample || word.english_example || "暂无" }}</strong>
+      </div>
+    </div>
   </div>
 </template>
