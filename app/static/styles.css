@@ -2111,8 +2111,8 @@ a:focus-visible {
 
 .challenge-panel {
   display: grid;
-  gap: 20px;
-  padding: 24px;
+  gap: 14px;
+  padding: 18px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(251, 253, 251, 0.96) 100%);
 }
 
@@ -2121,6 +2121,34 @@ a:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.challenge-top h1 {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.05;
+}
+
+.challenge-top-summary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+  text-align: right;
+  flex-wrap: wrap;
+}
+
+.challenge-top-summary strong {
+  color: var(--ink);
+  font-size: 18px;
 }
 
 .challenge-top-actions {
@@ -2347,13 +2375,13 @@ button.calendar-day:disabled {
 .challenge-stats {
   display: grid;
   grid-template-columns: repeat(5, minmax(110px, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .challenge-stats div,
 .challenge-result-grid div {
-  min-height: 58px;
-  padding: 10px 12px;
+  min-height: 50px;
+  padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
@@ -2370,9 +2398,9 @@ button.calendar-day:disabled {
 .challenge-stats strong,
 .challenge-result-grid strong {
   display: block;
-  margin-top: 4px;
+  margin-top: 2px;
   color: var(--ink);
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1.1;
 }
 

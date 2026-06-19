@@ -1,4 +1,6 @@
 <script setup>
+import { nextTick, onMounted, ref, watch } from "vue";
+
 const props = defineProps({
   spelling: {
     type: String,
@@ -11,16 +13,33 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:spelling", "submit"]);
+const spellingInput = ref(null);
 
 function submitAnswer() {
   if (!props.spelling.trim() || props.submitting) return;
   emit("submit");
 }
+
+function focusInput() {
+  spellingInput.value?.focus();
+}
+
+onMounted(() => {
+  nextTick(focusInput);
+});
+
+watch(
+  () => props.spelling,
+  (value) => {
+    if (value === "") nextTick(focusInput);
+  },
+);
 </script>
 
 <template>
   <div class="challenge-answer-panel" role="group" aria-label="拼写答案">
     <input
+      ref="spellingInput"
       :value="spelling"
       class="challenge-spelling-input"
       autocomplete="off"
