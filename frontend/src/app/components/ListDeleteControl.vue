@@ -33,8 +33,8 @@ defineProps({
       :title="showPassword ? '隐藏删除密码' : '显示删除密码'"
       @click="showPassword = !showPassword"
     >
-      <EyeOff v-if="showPassword" :size="18" aria-hidden="true" />
-      <Eye v-else :size="18" aria-hidden="true" />
+      <EyeOff v-if="showPassword" class="password-toggle-icon" :size="24" aria-hidden="true" />
+      <Eye v-else class="password-toggle-icon" :size="24" aria-hidden="true" />
     </button>
     <button class="danger-button" type="button" @click="deleteList">删除</button>
   </div>

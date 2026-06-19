@@ -4403,7 +4403,7 @@ dd {
 
 .delete-list-form {
   display: grid;
-  grid-template-columns: 190px 38px auto;
+  grid-template-columns: 180px 44px auto;
   gap: 8px;
   align-items: center;
 }
@@ -4423,7 +4423,7 @@ dd {
 
 .password-toggle-button {
   display: inline-flex;
-  width: 38px;
+  width: 44px;
   height: 38px;
   align-items: center;
   justify-content: center;
@@ -4434,9 +4434,13 @@ dd {
   cursor: pointer;
 }
 
-.password-toggle-button svg {
+.password-toggle-button svg,
+.password-toggle-icon {
   display: block;
-  stroke-width: 2.4;
+  width: 24px;
+  height: 24px;
+  stroke: currentColor;
+  stroke-width: 2.8;
 }
 
 .password-toggle-button:hover,
