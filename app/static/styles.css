@@ -2812,6 +2812,10 @@ button.calendar-day:disabled {
   padding: 12px;
 }
 
+.image-manager-trigger {
+  width: 100%;
+}
+
 .detail-media img,
 .word-image-frame img {
   display: block;
@@ -2900,6 +2904,162 @@ button.calendar-day:disabled {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+}
+
+.image-candidate-button {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0;
+  background: #fff;
+  cursor: pointer;
+}
+
+.image-candidate-button:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(31, 122, 90, 0.14);
+}
+
+.image-candidate-button img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+
+.word-image-manager-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 42;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(21, 31, 43, 0.56);
+}
+
+.word-image-manager-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(920px, 100%);
+  max-height: min(780px, calc(100vh - 56px));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 24px 70px rgba(21, 31, 43, 0.28);
+}
+
+.word-image-manager-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding: 18px;
+}
+
+.word-image-manager-heading h2,
+.word-image-manager-heading p {
+  margin: 0;
+}
+
+.word-image-manager-heading h2 {
+  font-size: 24px;
+}
+
+.word-image-manager-heading p:not(.section-kicker),
+.word-image-manager-section p,
+.word-image-manager-empty {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.word-image-manager-body {
+  display: grid;
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+}
+
+.word-image-manager-section {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: var(--panel-soft);
+}
+
+.word-image-manager-section h3,
+.word-image-manager-section p {
+  margin: 0;
+}
+
+.word-image-manager-section h3 {
+  font-size: 18px;
+}
+
+.word-image-manager-section-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.word-image-manager-preview,
+.word-image-upload-preview {
+  width: 100%;
+  max-height: 260px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  object-fit: contain;
+  background: #fff;
+}
+
+.word-image-manager-preview.image-fallback {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+}
+
+.image-upload-picker {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: center;
+  border: 1px dashed rgba(29, 127, 91, 0.42);
+  border-radius: var(--radius);
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.image-upload-picker input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.image-upload-picker span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  color: #fff;
+  background: var(--accent);
+  font-weight: 900;
+}
+
+.image-upload-picker strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .image-picker-option {
@@ -4073,6 +4233,20 @@ select {
 
   .lists-create-heading {
     flex-direction: column;
+  }
+
+  .word-image-manager-backdrop {
+    align-items: stretch;
+    padding: 14px;
+  }
+
+  .word-image-manager-heading,
+  .word-image-manager-section-head {
+    flex-direction: column;
+  }
+
+  .image-picker-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .challenge-card-actions {

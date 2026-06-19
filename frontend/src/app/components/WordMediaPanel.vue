@@ -1,34 +1,52 @@
 <script setup>
+import { ref } from "vue";
 import { useSelectedWordImage } from "../composables/useSelectedWordImage.js";
 import { wordMediaPanelProps } from "../props/wordMediaPanelProps.js";
-import WordImageCandidateGrid from "./WordImageCandidateGrid.vue";
 import WordImageFrame from "./WordImageFrame.vue";
-import WordImageTools from "./WordImageTools.vue";
+import WordImageManagerModal from "./WordImageManagerModal.vue";
 
 const props = defineProps(wordMediaPanelProps);
+const isImageModalOpen = ref(false);
 
 const { selectedImageFile, selectImageFile, saveSelectedImage } = useSelectedWordImage({
   uploadWordImage: props.uploadWordImage,
 });
+
+async function saveUploadedImage() {
+  await saveSelectedImage();
+  isImageModalOpen.value = false;
+}
+
+async function chooseNetworkImageAndClose(url) {
+  await props.chooseNetworkImage(url);
+  isImageModalOpen.value = false;
+}
 </script>
 
 <template>
   <aside class="panel media-panel">
     <WordImageFrame :word="data.word" :image-url="imageForWord(data.word)" />
 
-    <WordImageTools
+    <button
       v-if="data.can_edit"
-      :selected-image-file="selectedImageFile"
-      :find-images="findImages"
-      :save-selected-image="saveSelectedImage"
-      @select-image="selectImageFile"
-    />
+      class="secondary-button image-manager-trigger"
+      type="button"
+      @click="isImageModalOpen = true"
+    >
+      修改图片
+    </button>
 
-    <WordImageCandidateGrid
-      v-if="imageCandidates.length"
+    <WordImageManagerModal
+      v-if="isImageModalOpen"
       :word="data.word"
+      :image-url="imageForWord(data.word)"
+      :selected-image-file="selectedImageFile"
       :image-candidates="imageCandidates"
-      :choose-network-image="chooseNetworkImage"
+      :find-images="findImages"
+      :save-selected-image="saveUploadedImage"
+      :choose-network-image="chooseNetworkImageAndClose"
+      @select-image="selectImageFile"
+      @close="isImageModalOpen = false"
     />
   </aside>
 </template>
