@@ -1484,12 +1484,19 @@ async def word_audio_options(
         raise HTTPException(status_code=404, detail="Word not found")
 
     options = []
+    current_audio_url = word.british_audio_url if accent == "gb" else word.american_audio_url
+    if is_local_audio_url(current_audio_url):
+        options.append({
+            "label": "当前英式音源" if accent == "gb" else "当前美式音源",
+            "url": current_audio_url,
+        })
+
     for candidate in await audio_candidates_with_dictionary(word.word, accent):
         try:
             local_url = await store_audio_candidate(word.word, accent, candidate["key"], candidate["url"], AUDIO_DIR)
         except Exception:
             local_url = None
-        if local_url:
+        if local_url and all(option["url"] != local_url for option in options):
             options.append({"label": candidate["label"], "url": local_url})
 
     if not options:

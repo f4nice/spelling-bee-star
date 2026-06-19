@@ -5,6 +5,7 @@ import { createAudioChoiceForm, createAudioOptionsForm, createUploadedAudioForm 
 export async function loadWordAudioOptions({ wordId, accent }) {
   const form = createAudioOptionsForm(accent);
   const result = await fetchJson(wordApiPaths.audioOptions(wordId), { method: "POST", body: form });
+  if (result.error) throw new Error(result.error);
   return result.options || [];
 }
 
