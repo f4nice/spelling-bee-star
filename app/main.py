@@ -1917,7 +1917,7 @@ def page_context(request: Request, db: Session, extra: dict | None = None) -> di
         "daily_quote": get_daily_quote(db),
         "sidebar_challenges": sidebar_challenge_progress(db),
         "wrong_word_count": wrong_word_count(db),
-        "version_matrix": load_version_matrix(),
+        "version_matrix": ensure_version_matrix_file(),
         "static_version": static_asset_version(),
     }
     context["shell_context"] = serialize_shell_context(context)
@@ -1937,7 +1937,7 @@ def serialize_shell_context(context: dict[str, Any]) -> dict[str, Any]:
         if daily_quote
         else None,
         "wrongWordCount": context.get("wrong_word_count", 0),
-        "versionMatrix": context.get("version_matrix") or load_version_matrix(),
+        "versionMatrix": context.get("version_matrix") or ensure_version_matrix_file(),
         "sidebarChallenges": [
             {
                 "id": item["list"].id,
