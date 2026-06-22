@@ -20,6 +20,7 @@
 - 固定验证 URL 清单：`scripts/verification-urls.json`
 - 版本矩阵默认模板：`VERSION_MATRIX.default.json`
 - 运行时版本矩阵：`uploads/version_matrix.json`，首次启动从默认模板生成并补机器码；部署不会覆盖这个运行时文件。
+- 上传运行目录：生产服务使用 `spellingbee` 用户；部署脚本会保留 `uploads/` 并把它归还给 `spellingbee:spellingbee`，避免 Excel 预览、图片、音频上传写入失败。
 
 ## 当前功能记录
 
@@ -31,6 +32,7 @@
 - 2026-06-19：`/lists/{id}` 列表详情页去掉全局标题条；列表名称默认文本显示，双击编辑，失焦/回车保存；“保存名称”按钮移除，“继续导入”放到单词数量右侧。
 - 2026-06-19：好词好句、英文小报、我的生词本相关路由去掉全局 `SpeakEasy + 页面名` 标题条，保留页面内部内容标题。
 - 2026-06-22：新增全站版本矩阵。左侧栏展示按模块划分的版本矩阵，公共页脚展示版本号和机器码，上传/导入/书籍上传等公共区域展示同源版本戳；版本号以后优先维护 `uploads/version_matrix.json`，不要直接改构建产物。
+- 2026-06-22：修复单词表弹层上传操作。Excel 上传和批量图片上传现在有上传中与错误提示；部署时会自动修复生产 `uploads/` 权限，防止预览 JSON 或图片写入被拒绝。
 - 单词详情页音频区使用 `WordAudioManagerModal.vue` 管理音源：入口按钮为“音频管理”。
 - 音频管理弹窗包含三个区块：重新获取候选音源并试听保存、录制音频占位入口、上传本地音频并预览后保存。
 - 候选音源保存走 `/api/vue/words/{word_id}/audio-choice`，上传音频保存走 `/api/vue/words/{word_id}/recorded-audio`。

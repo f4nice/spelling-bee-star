@@ -101,6 +101,7 @@ async function main() {
     `tar -xf ${sh(config.remoteArchivePath)} -C ${sh(config.remoteProjectPath)}`,
     `chown -R root:root ${sh(config.remoteProjectPath)}`,
     `chmod -R u+rwX,go+rX ${sh(config.remoteProjectPath)}`,
+    `if id spellingbee >/dev/null 2>&1; then mkdir -p uploads/previews uploads/images uploads/audio uploads/book-covers && chown -R spellingbee:spellingbee uploads && chmod -R u+rwX,go+rX uploads; fi`,
     `systemctl restart ${sh(config.serviceName)}`,
     "sleep 1",
     `printf 'status=' && systemctl is-active ${sh(config.serviceName)}`,
