@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { buildSidebarNavItems } from "../sidebarNav.js";
 import SidebarChallengeProgress from "./SidebarChallengeProgress.vue";
 import SidebarNavList from "./SidebarNavList.vue";
+import VersionMatrix from "./VersionMatrix.vue";
 
 const props = defineProps({
   route: {
@@ -31,6 +32,7 @@ function navigate(path) {
     <nav class="side-nav" aria-label="主导航">
       <SidebarNavList :items="navItems" :navigate="navigate" />
       <SidebarChallengeProgress :challenges="shell.sidebarChallenges" :navigate="navigate" />
+      <VersionMatrix :version="shell.versionMatrix" />
     </nav>
   </aside>
 </template>

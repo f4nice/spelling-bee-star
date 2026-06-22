@@ -70,6 +70,8 @@ MEDIA_DIR = BASE_DIR.parent / "uploads"
 IMAGE_DIR = MEDIA_DIR / "images"
 AUDIO_DIR = MEDIA_DIR / "audio"
 BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
+VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
+DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
 IMAGE_SYNC_LOCK = Lock()
@@ -108,6 +110,81 @@ def static_asset_version() -> str:
     return str(max(mtimes)) if mtimes else str(int(datetime.utcnow().timestamp()))
 
 
+def default_version_matrix() -> dict[str, Any]:
+    fallback = {
+        "version": "v0.1.0",
+        "releaseName": "Vue 全站版",
+        "machineCode": "",
+        "footerText": settings.app_name,
+        "modules": [],
+    }
+    if not DEFAULT_VERSION_MATRIX_PATH.exists():
+        return fallback
+    try:
+        data = json.loads(DEFAULT_VERSION_MATRIX_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return fallback
+    return data if isinstance(data, dict) else fallback
+
+
+def normalize_version_matrix(data: dict[str, Any]) -> dict[str, Any]:
+    matrix = dict(data)
+    machine_code = str(matrix.get("machineCode") or "").strip()
+    if not machine_code:
+        machine_code = f"MC-{uuid4().hex[:8].upper()}"
+    modules = matrix.get("modules")
+    if not isinstance(modules, list):
+        modules = []
+    matrix["version"] = str(matrix.get("version") or "v0.1.0").strip()
+    matrix["releaseName"] = str(matrix.get("releaseName") or "Vue 全站版").strip()
+    matrix["machineCode"] = machine_code
+    matrix["footerText"] = str(matrix.get("footerText") or settings.app_name).strip()
+    matrix["modules"] = [
+        {
+            "label": str(item.get("label") or "").strip(),
+            "version": str(item.get("version") or "").strip(),
+            "status": str(item.get("status") or "").strip(),
+        }
+        for item in modules
+        if isinstance(item, dict) and str(item.get("label") or "").strip()
+    ]
+    return matrix
+
+
+def ensure_version_matrix_file() -> dict[str, Any]:
+    raw_data = default_version_matrix()
+    if VERSION_MATRIX_PATH.exists():
+        try:
+            loaded = json.loads(VERSION_MATRIX_PATH.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                raw_data = loaded
+        except (OSError, json.JSONDecodeError):
+            pass
+    matrix = normalize_version_matrix(raw_data)
+    if VERSION_MATRIX_PATH.exists() and str(raw_data.get("machineCode") or "").strip():
+        return matrix
+    try:
+        VERSION_MATRIX_PATH.write_text(
+            json.dumps(matrix, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+    return matrix
+
+
+def load_version_matrix() -> dict[str, Any]:
+    source = VERSION_MATRIX_PATH if VERSION_MATRIX_PATH.exists() else DEFAULT_VERSION_MATRIX_PATH
+    if source.exists():
+        try:
+            data = json.loads(source.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return normalize_version_matrix(data)
+        except (OSError, json.JSONDecodeError):
+            pass
+    return normalize_version_matrix(default_version_matrix())
+
+
 def vue_shell(request: Request, db: Session, vue_path: str = ""):
     return templates.TemplateResponse("vue_app.html", page_context(request, db, {"vue_path": vue_path}))
 
@@ -125,6 +202,7 @@ def startup() -> None:
     IMAGE_DIR.mkdir(parents=True, exist_ok=True)
     AUDIO_DIR.mkdir(parents=True, exist_ok=True)
     BOOK_COVER_DIR.mkdir(parents=True, exist_ok=True)
+    ensure_version_matrix_file()
     with SessionLocal() as db:
         seed_daily_quotes(db)
         ensure_default_word_list(db)
@@ -1839,6 +1917,7 @@ def page_context(request: Request, db: Session, extra: dict | None = None) -> di
         "daily_quote": get_daily_quote(db),
         "sidebar_challenges": sidebar_challenge_progress(db),
         "wrong_word_count": wrong_word_count(db),
+        "version_matrix": load_version_matrix(),
         "static_version": static_asset_version(),
     }
     context["shell_context"] = serialize_shell_context(context)
@@ -1858,6 +1937,7 @@ def serialize_shell_context(context: dict[str, Any]) -> dict[str, Any]:
         if daily_quote
         else None,
         "wrongWordCount": context.get("wrong_word_count", 0),
+        "versionMatrix": context.get("version_matrix") or load_version_matrix(),
         "sidebarChallenges": [
             {
                 "id": item["list"].id,

@@ -1,5 +1,6 @@
 <script setup>
 import BooklearnerUploadWorkspace from "./BooklearnerUploadWorkspace.vue";
+import VersionStamp from "./VersionStamp.vue";
 
 defineProps({
   book: {
@@ -50,6 +51,7 @@ defineEmits(["close"]);
         :save-book-analysis="saveBookAnalysis"
         :create-book-word-list="createBookWordList"
       />
+      <VersionStamp label="书籍上传" />
     </section>
   </div>
 </template>

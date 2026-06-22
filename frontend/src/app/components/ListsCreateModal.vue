@@ -1,4 +1,6 @@
 <script setup>
+import VersionStamp from "./VersionStamp.vue";
+
 defineProps({
   kicker: {
     type: String,
@@ -29,6 +31,7 @@ defineProps({
       <div class="lists-create-body">
         <slot />
       </div>
+      <VersionStamp label="单词表工具" />
     </section>
   </div>
 </template>

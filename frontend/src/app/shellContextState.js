@@ -3,6 +3,13 @@ const DEFAULT_SHELL_CONTEXT = {
   dailyQuote: null,
   wrongWordCount: 0,
   sidebarChallenges: [],
+  versionMatrix: {
+    version: "v0.1.0",
+    releaseName: "Vue 全站版",
+    machineCode: "",
+    footerText: "SpeakEasy",
+    modules: [],
+  },
 };
 
 export function defaultShellContext() {

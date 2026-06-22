@@ -18,6 +18,8 @@
 - 线上日志检查脚本：`scripts/check-production-logs.ps1`
 - 生产部署脚本：`scripts/deploy-production.ps1`
 - 固定验证 URL 清单：`scripts/verification-urls.json`
+- 版本矩阵默认模板：`VERSION_MATRIX.default.json`
+- 运行时版本矩阵：`uploads/version_matrix.json`，首次启动从默认模板生成并补机器码；部署不会覆盖这个运行时文件。
 
 ## 当前功能记录
 
@@ -28,6 +30,7 @@
 - 2026-06-19：`/lists` 单词表卡片下方去掉“挑战进度”文本和进度条，只保留“挑战几个”输入框与“开始挑战”按钮。
 - 2026-06-19：`/lists/{id}` 列表详情页去掉全局标题条；列表名称默认文本显示，双击编辑，失焦/回车保存；“保存名称”按钮移除，“继续导入”放到单词数量右侧。
 - 2026-06-19：好词好句、英文小报、我的生词本相关路由去掉全局 `SpeakEasy + 页面名` 标题条，保留页面内部内容标题。
+- 2026-06-22：新增全站版本矩阵。左侧栏展示按模块划分的版本矩阵，公共页脚展示版本号和机器码，上传/导入/书籍上传等公共区域展示同源版本戳；版本号以后优先维护 `uploads/version_matrix.json`，不要直接改构建产物。
 - 单词详情页音频区使用 `WordAudioManagerModal.vue` 管理音源：入口按钮为“音频管理”。
 - 音频管理弹窗包含三个区块：重新获取候选音源并试听保存、录制音频占位入口、上传本地音频并预览后保存。
 - 候选音源保存走 `/api/vue/words/{word_id}/audio-choice`，上传音频保存走 `/api/vue/words/{word_id}/recorded-audio`。

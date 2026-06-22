@@ -1,0 +1,15 @@
+{
+  "version": "v0.1.0",
+  "releaseName": "Vue 全站版",
+  "machineCode": "",
+  "footerText": "SpeakEasy",
+  "modules": [
+    { "label": "首页", "version": "v0.1", "status": "稳定" },
+    { "label": "我的单词表", "version": "v0.1", "status": "稳定" },
+    { "label": "英文小报", "version": "v0.1", "status": "可用" },
+    { "label": "好词好句", "version": "v0.1", "status": "优化中" },
+    { "label": "我的生词本", "version": "v0.1", "status": "可用" },
+    { "label": "挑战进度", "version": "v0.1", "status": "可用" },
+    { "label": "上传导入", "version": "v0.1", "status": "可用" }
+  ]
+}

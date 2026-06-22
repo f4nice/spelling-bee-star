@@ -1,0 +1,21 @@
+<script setup>
+import { computed } from "vue";
+import { normalizeVersionMatrix } from "../versionInfo.js";
+
+const props = defineProps({
+  version: {
+    type: Object,
+    default: null,
+  },
+});
+
+const matrix = computed(() => normalizeVersionMatrix(props.version));
+</script>
+
+<template>
+  <footer class="app-footer">
+    <span>{{ matrix.footerText }}</span>
+    <span>{{ matrix.version }}</span>
+    <span v-if="matrix.machineCode">机器码 {{ matrix.machineCode }}</span>
+  </footer>
+</template>

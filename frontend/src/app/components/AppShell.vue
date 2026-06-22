@@ -1,4 +1,5 @@
 <script setup>
+import AppFooter from "./AppFooter.vue";
 import AppSidebar from "./AppSidebar.vue";
 import AppTopbar from "./AppTopbar.vue";
 
@@ -31,6 +32,7 @@ defineProps({
 
     <main class="shell" :aria-label="routeTitle">
       <slot />
+      <AppFooter :version="shell.versionMatrix" />
     </main>
   </div>
 </template>
