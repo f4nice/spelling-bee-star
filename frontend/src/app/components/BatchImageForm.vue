@@ -12,6 +12,11 @@ const selectedImageLabel = computed(() => {
 
 function setImageFiles(event) {
   props.batchImageState.image_files = Array.from(event.target.files || []);
+  props.batchImageState.notice = "";
+}
+
+function handleSubmit() {
+  props.submitBatchImages();
 }
 </script>
 
@@ -34,6 +39,8 @@ function setImageFiles(event) {
       <span>选择图片</span>
       <small>{{ selectedImageLabel }}</small>
     </label>
-    <button type="button" @click="submitBatchImages">上传图片</button>
+    <button type="button" :disabled="batchImageState.isUploading" @click="handleSubmit">
+      {{ batchImageState.isUploading ? "上传中..." : "上传图片" }}
+    </button>
   </div>
 </template>

@@ -2,7 +2,16 @@
 import { setUploadFormFile } from "../forms/uploadExcelFormHandlers.js";
 import { uploadExcelFormProps } from "../props/uploadExcelFormProps.js";
 
-defineProps(uploadExcelFormProps);
+const props = defineProps(uploadExcelFormProps);
+
+function chooseFile(event) {
+  setUploadFormFile(props.uploadForm, event);
+  props.uploadForm.notice = "";
+}
+
+function handleSubmit() {
+  props.submitUpload();
+}
 </script>
 
 <template>
@@ -23,8 +32,11 @@ defineProps(uploadExcelFormProps);
       type="file"
       accept=".xlsx,.xlsm,.xltx,.xltm"
       required
-      @change="setUploadFormFile(uploadForm, $event)"
+      @change="chooseFile"
     >
   </label>
-  <button type="button" @click="submitUpload">上传预览</button>
+  <button type="button" :disabled="uploadForm.isUploading" @click="handleSubmit">
+    {{ uploadForm.isUploading ? "上传中..." : "上传预览" }}
+  </button>
+  <p v-if="uploadForm.notice" class="notice">{{ uploadForm.notice }}</p>
 </template>
