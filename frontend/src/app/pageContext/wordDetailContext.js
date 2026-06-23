@@ -9,6 +9,7 @@ export function buildWordDetailContext(wordDetail) {
     uploadWordImage: wordDetail.uploadWordImage,
     findImages: wordDetail.findImages,
     chooseNetworkImage: wordDetail.chooseNetworkImage,
+    generateAiImage: wordDetail.generateAiImage,
     playAudio: wordDetail.playAudio,
     fetchAudioOptions: wordDetail.fetchAudioOptions,
     chooseAudio: wordDetail.chooseAudio,
