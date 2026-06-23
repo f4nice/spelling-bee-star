@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import VersionStamp from "./VersionStamp.vue";
 
 const props = defineProps({
@@ -37,6 +37,7 @@ const generatingGender = ref("");
 const selectedFile = ref(null);
 const previewUrl = ref("");
 const pendingAudio = ref(null);
+const previewAudio = ref(null);
 const notice = ref("");
 
 const selectedFileName = computed(() => selectedFile.value?.name || "未选择音频文件");
@@ -55,6 +56,19 @@ function clearPreviewUrl() {
 function setPendingAudio(source) {
   if (source.type !== "upload") clearPreviewUrl();
   pendingAudio.value = source;
+}
+
+async function playPendingAudio() {
+  await nextTick();
+  const player = previewAudio.value;
+  if (!player) return false;
+  try {
+    player.currentTime = 0;
+    await player.play();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function selectUploadFile(event) {
@@ -125,7 +139,10 @@ async function generateAiSource(voiceGender) {
       url: result.audio_url,
       label: `${aiButtonLabel.value} · ${voiceLabel}`,
     });
-    notice.value = "AI 音频已生成，先在上方播放器试听，确认后保存。";
+    const played = await playPendingAudio();
+    notice.value = played
+      ? "AI 音频已生成并自动播放，确认后保存。"
+      : "AI 音频已生成，浏览器未自动播放时可点上方播放器试听，确认后保存。";
   } catch (error) {
     notice.value = error.message || "AI 朗读生成失败";
   } finally {
@@ -170,7 +187,7 @@ onBeforeUnmount(clearPreviewUrl);
               {{ savingSelection ? "保存中..." : "保存当前音频" }}
             </button>
           </div>
-          <audio v-if="pendingAudio?.url" controls :src="pendingAudio.url" />
+          <audio v-if="pendingAudio?.url" ref="previewAudio" controls :src="pendingAudio.url" />
           <p v-else class="audio-manager-empty">先从下方选择、上传或生成一个音频。</p>
         </section>
 
