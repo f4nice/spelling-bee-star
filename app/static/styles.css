@@ -1209,6 +1209,7 @@ body {
   border-top: 1px solid var(--line);
   color: inherit;
   text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .newspaper-card.has-image {
@@ -1222,9 +1223,31 @@ body {
   border-top: 0;
 }
 
-.newspaper-card:hover h3 {
-  color: var(--accent-dark);
+.newspaper-card:hover,
+.newspaper-card:focus-visible {
+  border-radius: 10px;
+  background: #1f3b48;
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(31, 59, 72, 0.16);
+}
+
+.newspaper-card:hover h3,
+.newspaper-card:focus-visible h3 {
+  color: #fff;
   text-decoration: underline;
+}
+
+.newspaper-card:hover p,
+.newspaper-card:hover small,
+.newspaper-card:focus-visible p,
+.newspaper-card:focus-visible small {
+  color: rgba(255, 255, 255, 0.84);
+}
+
+.newspaper-card:hover .newspaper-card-meta span,
+.newspaper-card:focus-visible .newspaper-card-meta span {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
 }
 
 .newspaper-card.lead {
