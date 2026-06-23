@@ -27,6 +27,5 @@ const modules = computed(() => matrix.value.modules || []);
         <em>{{ item.status }}</em>
       </div>
     </div>
-    <p v-if="matrix.machineCode" class="version-machine">机器码 {{ matrix.machineCode }}</p>
   </section>
 </template>

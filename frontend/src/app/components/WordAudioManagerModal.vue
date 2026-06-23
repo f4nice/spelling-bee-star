@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import VersionStamp from "./VersionStamp.vue";
 
 const props = defineProps({
   accent: {
@@ -31,11 +32,11 @@ const props = defineProps({
 const emit = defineEmits(["close"]);
 
 const loadingOptions = ref(false);
-const choosingUrl = ref("");
-const savingUpload = ref(false);
-const generatingAi = ref(false);
+const savingSelection = ref(false);
+const generatingGender = ref("");
 const selectedFile = ref(null);
 const previewUrl = ref("");
+const pendingAudio = ref(null);
 const notice = ref("");
 
 const selectedFileName = computed(() => selectedFile.value?.name || "未选择音频文件");
@@ -43,16 +44,32 @@ const aiButtonLabel = computed(() => {
   const accentName = props.accent.key === "gb" ? "英式" : "美式";
   return `生成${accentName} AI 朗读`;
 });
+const pendingAudioLabel = computed(() => pendingAudio.value?.label || "还没有选择试听音频");
+const canSavePendingAudio = computed(() => Boolean(pendingAudio.value?.url || pendingAudio.value?.file));
 
 function clearPreviewUrl() {
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
   previewUrl.value = "";
 }
 
+function setPendingAudio(source) {
+  if (source.type !== "upload") clearPreviewUrl();
+  pendingAudio.value = source;
+}
+
 function selectUploadFile(event) {
   clearPreviewUrl();
   selectedFile.value = event.target.files?.[0] || null;
-  if (selectedFile.value) previewUrl.value = URL.createObjectURL(selectedFile.value);
+  if (selectedFile.value) {
+    previewUrl.value = URL.createObjectURL(selectedFile.value);
+    setPendingAudio({
+      type: "upload",
+      file: selectedFile.value,
+      url: previewUrl.value,
+      label: `上传音频 · ${selectedFile.value.name}`,
+    });
+    notice.value = "已放入上方播放器，可以试听后保存。";
+  }
 }
 
 async function refreshOptions() {
@@ -68,50 +85,57 @@ async function refreshOptions() {
   }
 }
 
-async function chooseOption(url) {
-  if (!url || choosingUrl.value) return;
-  choosingUrl.value = url;
+function previewOption(option) {
+  if (!option?.url) return;
+  setPendingAudio({
+    type: "url",
+    url: option.url,
+    label: option.label || "候选音源",
+  });
+  notice.value = "已放入上方播放器，可以试听后保存。";
+}
+
+async function saveCurrentAudio() {
+  if (!pendingAudio.value || savingSelection.value) return;
+  savingSelection.value = true;
   notice.value = "";
   try {
-    await props.chooseAudio(props.accent.key, url);
+    if (pendingAudio.value.type === "upload") {
+      await props.uploadAudio(props.accent.key, pendingAudio.value.file);
+    } else {
+      await props.chooseAudio(props.accent.key, pendingAudio.value.url);
+    }
     emit("close");
   } catch (error) {
-    notice.value = error.message || "保存音源失败";
+    notice.value = error.message || "保存音频失败";
   } finally {
-    choosingUrl.value = "";
+    savingSelection.value = false;
   }
 }
 
-async function saveUpload() {
-  if (!selectedFile.value || savingUpload.value) return;
-  savingUpload.value = true;
+async function generateAiSource(voiceGender) {
+  if (generatingGender.value) return;
+  generatingGender.value = voiceGender;
   notice.value = "";
   try {
-    await props.uploadAudio(props.accent.key, selectedFile.value);
-    emit("close");
-  } catch (error) {
-    notice.value = error.message || "上传音频失败";
-  } finally {
-    savingUpload.value = false;
-  }
-}
-
-async function generateAiSource() {
-  if (generatingAi.value) return;
-  generatingAi.value = true;
-  notice.value = "";
-  try {
-    await props.generateAiAudio(props.accent.key);
-    emit("close");
+    const result = await props.generateAiAudio(props.accent.key, voiceGender);
+    const voiceLabel = voiceGender === "male" ? "男声" : "女声";
+    setPendingAudio({
+      type: "url",
+      url: result.audio_url,
+      label: `${aiButtonLabel.value} · ${voiceLabel}`,
+    });
+    notice.value = "AI 音频已生成，先在上方播放器试听，确认后保存。";
   } catch (error) {
     notice.value = error.message || "AI 朗读生成失败";
   } finally {
-    generatingAi.value = false;
+    generatingGender.value = "";
   }
 }
 
 watch(() => props.accent.key, () => {
   selectedFile.value = null;
+  pendingAudio.value = null;
   notice.value = "";
   clearPreviewUrl();
 });
@@ -131,6 +155,25 @@ onBeforeUnmount(clearPreviewUrl);
       </header>
 
       <div class="audio-manager-body">
+        <section class="audio-manager-section audio-manager-preview">
+          <div class="audio-manager-section-head">
+            <div>
+              <h3>当前试听音频</h3>
+              <p>{{ pendingAudioLabel }}</p>
+            </div>
+            <button
+              class="challenge-button"
+              type="button"
+              :disabled="!canSavePendingAudio || savingSelection"
+              @click="saveCurrentAudio"
+            >
+              {{ savingSelection ? "保存中..." : "保存当前音频" }}
+            </button>
+          </div>
+          <audio v-if="pendingAudio?.url" controls :src="pendingAudio.url" />
+          <p v-else class="audio-manager-empty">先从下方选择、上传或生成一个音频。</p>
+        </section>
+
         <section class="audio-manager-section">
           <div class="audio-manager-section-head">
             <div>
@@ -144,14 +187,12 @@ onBeforeUnmount(clearPreviewUrl);
           <div v-if="options.length" class="audio-manager-options">
             <article v-for="option in options" :key="option.url" class="audio-manager-option">
               <strong>{{ option.label }}</strong>
-              <audio controls :src="option.url" />
               <button
                 class="secondary-button"
                 type="button"
-                :disabled="Boolean(choosingUrl)"
-                @click="chooseOption(option.url)"
+                @click="previewOption(option)"
               >
-                {{ choosingUrl === option.url ? "保存中..." : "保存这个" }}
+                放入试听
               </button>
             </article>
           </div>
@@ -164,9 +205,24 @@ onBeforeUnmount(clearPreviewUrl);
               <h3>AI 朗读</h3>
               <p>生成后会保存为当前单词的{{ accent.label }}音频，以后直接用播放器播放。</p>
             </div>
-            <button class="secondary-button" type="button" :disabled="generatingAi" @click="generateAiSource">
-              {{ generatingAi ? "生成中..." : aiButtonLabel }}
-            </button>
+            <div class="audio-manager-button-group">
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="Boolean(generatingGender)"
+                @click="generateAiSource('female')"
+              >
+                {{ generatingGender === "female" ? "生成中..." : `${aiButtonLabel} · 女声` }}
+              </button>
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="Boolean(generatingGender)"
+                @click="generateAiSource('male')"
+              >
+                {{ generatingGender === "male" ? "生成中..." : `${aiButtonLabel} · 男声` }}
+              </button>
+            </div>
           </div>
         </section>
 
@@ -192,18 +248,10 @@ onBeforeUnmount(clearPreviewUrl);
             <span>选择音频</span>
             <strong>{{ selectedFileName }}</strong>
           </label>
-          <audio v-if="previewUrl" controls :src="previewUrl" />
-          <button
-            class="challenge-button audio-manager-save"
-            type="button"
-            :disabled="!selectedFile || savingUpload"
-            @click="saveUpload"
-          >
-            {{ savingUpload ? "保存中..." : "保存上传音频" }}
-          </button>
         </section>
 
         <p v-if="notice" class="audio-manager-notice">{{ notice }}</p>
+        <VersionStamp label="音频管理" />
       </div>
     </section>
   </div>

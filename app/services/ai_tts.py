@@ -107,6 +107,7 @@ async def generate_openai_word_audio(
     voice: str,
     word: str,
     accent: str,
+    voice_gender: str,
     audio_dir: Path,
 ) -> str:
     if not api_key:
@@ -130,9 +131,29 @@ async def generate_openai_word_audio(
         raise RuntimeError("AI 朗读返回的音频太短，请稍后重试。")
 
     audio_dir.mkdir(parents=True, exist_ok=True)
-    target = audio_dir / f"{_safe_word_slug(word)}-{accent}-ai-{uuid4().hex[:8]}.mp3"
+    target = audio_dir / f"{_safe_word_slug(word)}-{accent}-{voice_gender}-ai-{uuid4().hex[:8]}.mp3"
     target.write_bytes(content)
     return f"/media/audio/{target.name}"
+
+
+def _choose_aliyun_voice(
+    *,
+    accent: str,
+    voice_gender: str,
+    voice_us: str,
+    voice_gb: str,
+    voice_us_female: str,
+    voice_us_male: str,
+    voice_gb_female: str,
+    voice_gb_male: str,
+) -> str:
+    if accent == "gb":
+        if voice_gender == "male":
+            return voice_gb_male or voice_gb or "arthur"
+        return voice_gb_female or voice_gb or "mary"
+    if voice_gender == "male":
+        return voice_us_male or voice_us or "john"
+    return voice_us_female or voice_us or "sarah"
 
 
 async def generate_aliyun_word_audio(
@@ -146,11 +167,16 @@ async def generate_aliyun_word_audio(
     gateway: str,
     word: str,
     accent: str,
+    voice_gender: str,
     audio_dir: Path,
     audio_format: str,
     sample_rate: int,
     voice_us: str,
     voice_gb: str,
+    voice_us_female: str,
+    voice_us_male: str,
+    voice_gb_female: str,
+    voice_gb_male: str,
     volume: int,
     speech_rate: int,
     pitch_rate: int,
@@ -179,7 +205,16 @@ async def generate_aliyun_word_audio(
         "speech_rate": speech_rate,
         "pitch_rate": pitch_rate,
     }
-    voice = voice_gb if accent == "gb" else voice_us
+    voice = _choose_aliyun_voice(
+        accent=accent,
+        voice_gender=voice_gender,
+        voice_us=voice_us,
+        voice_gb=voice_gb,
+        voice_us_female=voice_us_female,
+        voice_us_male=voice_us_male,
+        voice_gb_female=voice_gb_female,
+        voice_gb_male=voice_gb_male,
+    )
     if voice:
         params["voice"] = voice
 
@@ -196,7 +231,7 @@ async def generate_aliyun_word_audio(
         raise RuntimeError("阿里云语音合成返回的音频太短，请稍后重试。")
 
     audio_dir.mkdir(parents=True, exist_ok=True)
-    target = audio_dir / f"{_safe_word_slug(word)}-{accent}-aliyun-{uuid4().hex[:8]}.{normalized_format}"
+    target = audio_dir / f"{_safe_word_slug(word)}-{accent}-{voice_gender}-aliyun-{uuid4().hex[:8]}.{normalized_format}"
     target.write_bytes(content)
     return f"/media/audio/{target.name}"
 
@@ -208,6 +243,7 @@ async def generate_word_ai_audio(
     model: str,
     word: str,
     accent: str,
+    voice_gender: str = "female",
     audio_dir: Path,
     voice_us: str,
     voice_gb: str,
@@ -222,6 +258,10 @@ async def generate_word_ai_audio(
     aliyun_sample_rate: int = 16000,
     aliyun_voice_us: str = "",
     aliyun_voice_gb: str = "",
+    aliyun_voice_us_female: str = "",
+    aliyun_voice_us_male: str = "",
+    aliyun_voice_gb_female: str = "",
+    aliyun_voice_gb_male: str = "",
     aliyun_volume: int = 50,
     aliyun_speech_rate: int = 0,
     aliyun_pitch_rate: int = 0,
@@ -233,6 +273,7 @@ async def generate_word_ai_audio(
             voice=voice_gb if accent == "gb" else voice_us,
             word=word,
             accent=accent,
+            voice_gender=voice_gender,
             audio_dir=audio_dir,
         )
     if provider == "aliyun":
@@ -246,11 +287,16 @@ async def generate_word_ai_audio(
             gateway=aliyun_gateway,
             word=word,
             accent=accent,
+            voice_gender=voice_gender,
             audio_dir=audio_dir,
             audio_format=aliyun_format,
             sample_rate=aliyun_sample_rate,
             voice_us=aliyun_voice_us,
             voice_gb=aliyun_voice_gb,
+            voice_us_female=aliyun_voice_us_female,
+            voice_us_male=aliyun_voice_us_male,
+            voice_gb_female=aliyun_voice_gb_female,
+            voice_gb_male=aliyun_voice_gb_male,
             volume=aliyun_volume,
             speech_rate=aliyun_speech_rate,
             pitch_rate=aliyun_pitch_rate,

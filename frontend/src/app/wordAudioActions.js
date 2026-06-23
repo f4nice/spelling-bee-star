@@ -1,6 +1,6 @@
 import { fetchJson } from "./utils.js";
 import { wordApiPaths } from "./wordApiPaths.js";
-import { createAudioChoiceForm, createAudioOptionsForm, createUploadedAudioForm } from "./wordAudioForms.js";
+import { createAiAudioForm, createAudioChoiceForm, createAudioOptionsForm, createUploadedAudioForm } from "./wordAudioForms.js";
 
 export async function loadWordAudioOptions({ wordId, accent }) {
   const form = createAudioOptionsForm(accent);
@@ -19,7 +19,7 @@ export async function saveUploadedWordAudio({ wordId, accent, file }) {
   await fetchJson(wordApiPaths.recordedAudio(wordId), { method: "POST", body: form });
 }
 
-export async function generateAiWordAudio({ wordId, accent }) {
-  const form = createAudioOptionsForm(accent);
-  await fetchJson(wordApiPaths.aiAudio(wordId), { method: "POST", body: form });
+export async function generateAiWordAudio({ wordId, accent, voiceGender = "female" }) {
+  const form = createAiAudioForm(accent, voiceGender);
+  return fetchJson(wordApiPaths.aiAudio(wordId), { method: "POST", body: form });
 }

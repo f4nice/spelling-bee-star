@@ -34,8 +34,8 @@ export function useWordAudio({ data, loadRoute }) {
     await uploadWordAudioOption({ wordId: data.value.word.id, accent, file, loadRoute });
   }
 
-  async function generateAiAudio(accent) {
-    await generateWordAiAudioOption({ wordId: data.value.word.id, accent, loadRoute });
+  async function generateAiAudio(accent, voiceGender = "female") {
+    return generateWordAiAudioOption({ wordId: data.value.word.id, accent, voiceGender, loadRoute });
   }
 
   return {

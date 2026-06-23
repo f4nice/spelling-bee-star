@@ -29,8 +29,12 @@ class Settings(BaseSettings):
     aliyun_tts_gateway: str = "https://nls-gateway-cn-shanghai.aliyuncs.com/stream/v1/tts"
     aliyun_tts_format: str = "mp3"
     aliyun_tts_sample_rate: int = 16000
-    aliyun_tts_voice_us: str = ""
-    aliyun_tts_voice_gb: str = ""
+    aliyun_tts_voice_us: str = "sarah"
+    aliyun_tts_voice_gb: str = "mary"
+    aliyun_tts_voice_us_female: str = "sarah"
+    aliyun_tts_voice_us_male: str = "john"
+    aliyun_tts_voice_gb_female: str = "mary"
+    aliyun_tts_voice_gb_male: str = "arthur"
     aliyun_tts_volume: int = 50
     aliyun_tts_speech_rate: int = 0
     aliyun_tts_pitch_rate: int = 0

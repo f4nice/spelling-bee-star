@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from "vue";
+import { versionForLabel } from "../pageVersion.js";
 import { readVersionMatrix } from "../versionInfo.js";
 
 const props = defineProps({
@@ -10,12 +11,12 @@ const props = defineProps({
 });
 
 const version = computed(() => readVersionMatrix());
+const moduleVersion = computed(() => versionForLabel(version.value, props.label));
 </script>
 
 <template>
   <div class="version-stamp" aria-label="版本信息">
     <span>{{ label }}</span>
-    <strong>{{ version.version }}</strong>
-    <small v-if="version.machineCode">{{ version.machineCode }}</small>
+    <strong>{{ moduleVersion }}</strong>
   </div>
 </template>

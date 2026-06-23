@@ -7,6 +7,10 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  pageVersion: {
+    type: Object,
+    default: null,
+  },
 });
 
 const matrix = computed(() => normalizeVersionMatrix(props.version));
@@ -16,6 +20,6 @@ const matrix = computed(() => normalizeVersionMatrix(props.version));
   <footer class="app-footer">
     <span>{{ matrix.footerText }}</span>
     <span>{{ matrix.version }}</span>
-    <span v-if="matrix.machineCode">机器码 {{ matrix.machineCode }}</span>
+    <span v-if="pageVersion">{{ pageVersion.text }}</span>
   </footer>
 </template>

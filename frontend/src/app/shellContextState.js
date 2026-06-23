@@ -4,9 +4,9 @@ const DEFAULT_SHELL_CONTEXT = {
   wrongWordCount: 0,
   sidebarChallenges: [],
   versionMatrix: {
-    version: "v0.1.0",
+    version: "BIZ-REL-20260624-001",
     releaseName: "Vue 全站版",
-    machineCode: "",
+    pageVersion: "v20260624.0",
     footerText: "SpeakEasy",
     modules: [],
   },

@@ -4217,6 +4217,22 @@ audio {
   font-size: 13px;
 }
 
+.audio-manager-preview {
+  border-color: rgba(18, 128, 89, 0.28);
+  background: #f6fffb;
+}
+
+.audio-manager-preview audio {
+  width: 100%;
+}
+
+.audio-manager-button-group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .audio-manager-options {
   display: grid;
   gap: 10px;
@@ -4224,7 +4240,7 @@ audio {
 
 .audio-manager-option {
   display: grid;
-  grid-template-columns: 120px minmax(220px, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   border: 1px solid var(--line);

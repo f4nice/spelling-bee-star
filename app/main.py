@@ -74,6 +74,9 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260624-001"
+DEFAULT_PAGE_VERSION = "v20260624.0"
+LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
 IMAGE_SYNC_LOCK = Lock()
 CACHE_REFRESHING: set[str] = set()
@@ -113,9 +116,9 @@ def static_asset_version() -> str:
 
 def default_version_matrix() -> dict[str, Any]:
     fallback = {
-        "version": "v0.1.0",
+        "version": DEFAULT_RELEASE_VERSION,
         "releaseName": "Vue 全站版",
-        "machineCode": "",
+        "pageVersion": DEFAULT_PAGE_VERSION,
         "footerText": settings.app_name,
         "modules": [],
     }
@@ -130,26 +133,36 @@ def default_version_matrix() -> dict[str, Any]:
 
 def normalize_version_matrix(data: dict[str, Any]) -> dict[str, Any]:
     matrix = dict(data)
-    machine_code = str(matrix.get("machineCode") or "").strip()
-    if not machine_code:
-        machine_code = f"MC-{uuid4().hex[:8].upper()}"
     modules = matrix.get("modules")
     if not isinstance(modules, list):
         modules = []
-    matrix["version"] = str(matrix.get("version") or "v0.1.0").strip()
+    matrix["version"] = normalize_version_number(str(matrix.get("version") or "").strip())
     matrix["releaseName"] = str(matrix.get("releaseName") or "Vue 全站版").strip()
-    matrix["machineCode"] = machine_code
+    matrix["pageVersion"] = normalize_page_version(str(matrix.get("pageVersion") or "").strip())
+    matrix.pop(LEGACY_MACHINE_CODE_FIELD, None)
     matrix["footerText"] = str(matrix.get("footerText") or settings.app_name).strip()
     matrix["modules"] = [
         {
             "label": str(item.get("label") or "").strip(),
-            "version": str(item.get("version") or "").strip(),
+            "version": normalize_page_version(str(item.get("version") or "").strip()),
             "status": str(item.get("status") or "").strip(),
         }
         for item in modules
         if isinstance(item, dict) and str(item.get("label") or "").strip()
     ]
     return matrix
+
+
+def normalize_version_number(version: str) -> str:
+    if not version or version in {"v0.1", "v0.1.0"} or re.fullmatch(r"v\d{8}\.\d+", version):
+        return DEFAULT_RELEASE_VERSION
+    return version
+
+
+def normalize_page_version(version: str) -> str:
+    if not version or version in {"v0.1", "v0.1.0"}:
+        return DEFAULT_PAGE_VERSION
+    return version
 
 
 def ensure_version_matrix_file() -> dict[str, Any]:
@@ -162,15 +175,27 @@ def ensure_version_matrix_file() -> dict[str, Any]:
         except (OSError, json.JSONDecodeError):
             pass
     matrix = normalize_version_matrix(raw_data)
-    if VERSION_MATRIX_PATH.exists() and str(raw_data.get("machineCode") or "").strip():
-        return matrix
-    try:
-        VERSION_MATRIX_PATH.write_text(
-            json.dumps(matrix, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-    except OSError:
-        pass
+    old_style_version = str(raw_data.get("version") or "").strip() in {"", "v0.1", "v0.1.0"}
+    page_version = str(raw_data.get("pageVersion") or "").strip()
+    old_style_page_version = page_version in {"", "v0.1", "v0.1.0"}
+    old_style_modules = any(
+        isinstance(item, dict) and str(item.get("version") or "").strip() in {"", "v0.1", "v0.1.0"}
+        for item in (raw_data.get("modules") if isinstance(raw_data.get("modules"), list) else [])
+    )
+    if (
+        not VERSION_MATRIX_PATH.exists()
+        or LEGACY_MACHINE_CODE_FIELD in raw_data
+        or old_style_version
+        or old_style_page_version
+        or old_style_modules
+    ):
+        try:
+            VERSION_MATRIX_PATH.write_text(
+                json.dumps(matrix, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
     return matrix
 
 
@@ -1671,12 +1696,16 @@ async def word_recorded_audio(
 async def word_ai_audio(
     word_id: int,
     accent: str = Form(...),
+    voice_gender: str = Form(default="female"),
+    commit: str = Form(default="1"),
     edit_token: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
     require_word_write_access(edit_token)
     if accent not in {"us", "gb"}:
         raise HTTPException(status_code=400, detail="Invalid accent")
+    if voice_gender not in {"female", "male"}:
+        raise HTTPException(status_code=400, detail="Invalid voice gender")
 
     word = db.get(Word, word_id)
     if not word:
@@ -1689,6 +1718,7 @@ async def word_ai_audio(
             model=settings.openai_tts_model,
             word=word.word,
             accent=accent,
+            voice_gender=voice_gender,
             audio_dir=AUDIO_DIR,
             voice_us=settings.openai_tts_voice_us,
             voice_gb=settings.openai_tts_voice_gb,
@@ -1703,6 +1733,10 @@ async def word_ai_audio(
             aliyun_sample_rate=settings.aliyun_tts_sample_rate,
             aliyun_voice_us=settings.aliyun_tts_voice_us,
             aliyun_voice_gb=settings.aliyun_tts_voice_gb,
+            aliyun_voice_us_female=settings.aliyun_tts_voice_us_female,
+            aliyun_voice_us_male=settings.aliyun_tts_voice_us_male,
+            aliyun_voice_gb_female=settings.aliyun_tts_voice_gb_female,
+            aliyun_voice_gb_male=settings.aliyun_tts_voice_gb_male,
             aliyun_volume=settings.aliyun_tts_volume,
             aliyun_speech_rate=settings.aliyun_tts_speech_rate,
             aliyun_pitch_rate=settings.aliyun_tts_pitch_rate,
@@ -1718,16 +1752,25 @@ async def word_ai_audio(
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"AI 朗读失败: {exc}") from exc
 
-    if accent == "gb":
-        word.british_audio_url = audio_url
-        word.british_audio_locked = True
-    else:
-        word.american_audio_url = audio_url
-        word.american_audio_locked = True
-    word.enrichment_error = None
-    db.add(word)
-    db.commit()
-    return {"ok": True, "word": word.word, "accent": accent, "audio_url": audio_url}
+    should_commit = commit not in {"0", "false", "False", "no"}
+    if should_commit:
+        if accent == "gb":
+            word.british_audio_url = audio_url
+            word.british_audio_locked = True
+        else:
+            word.american_audio_url = audio_url
+            word.american_audio_locked = True
+        word.enrichment_error = None
+        db.add(word)
+        db.commit()
+    return {
+        "ok": True,
+        "word": word.word,
+        "accent": accent,
+        "voice_gender": voice_gender,
+        "committed": should_commit,
+        "audio_url": audio_url,
+    }
 
 
 @app.get("/words/{word_id}", response_class=HTMLResponse)

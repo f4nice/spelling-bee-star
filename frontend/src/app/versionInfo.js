@@ -10,7 +10,7 @@ export function normalizeVersionMatrix(matrix) {
   return {
     version: source.version || fallback.version,
     releaseName: source.releaseName || fallback.releaseName,
-    machineCode: source.machineCode || fallback.machineCode,
+    pageVersion: source.pageVersion || fallback.pageVersion,
     footerText: source.footerText || fallback.footerText,
     modules: Array.isArray(source.modules) ? source.modules : [],
   };
