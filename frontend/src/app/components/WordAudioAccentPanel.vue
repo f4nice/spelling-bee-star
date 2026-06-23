@@ -28,6 +28,7 @@ const showManager = ref(false);
       :fetch-audio-options="fetchAudioOptions"
       :choose-audio="chooseAudio"
       :upload-audio="uploadAudio"
+      :generate-ai-audio="generateAiAudio"
       @close="showManager = false"
     />
   </div>

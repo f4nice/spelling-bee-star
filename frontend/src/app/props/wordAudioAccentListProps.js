@@ -31,4 +31,8 @@ export const wordAudioAccentListProps = {
     type: Function,
     required: true,
   },
+  generateAiAudio: {
+    type: Function,
+    required: true,
+  },
 };

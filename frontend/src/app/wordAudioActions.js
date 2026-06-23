@@ -18,3 +18,8 @@ export async function saveUploadedWordAudio({ wordId, accent, file }) {
   const form = createUploadedAudioForm(accent, file);
   await fetchJson(wordApiPaths.recordedAudio(wordId), { method: "POST", body: form });
 }
+
+export async function generateAiWordAudio({ wordId, accent }) {
+  const form = createAudioOptionsForm(accent);
+  await fetchJson(wordApiPaths.aiAudio(wordId), { method: "POST", body: form });
+}

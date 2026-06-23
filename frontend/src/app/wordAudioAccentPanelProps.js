@@ -7,5 +7,7 @@ export function buildWordAudioAccentPanelProps(props, accent) {
     fetchAudioOptions: props.fetchAudioOptions,
     startRecording: props.startRecording,
     chooseAudio: props.chooseAudio,
+    uploadAudio: props.uploadAudio,
+    generateAiAudio: props.generateAiAudio,
   };
 }

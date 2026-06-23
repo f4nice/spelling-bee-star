@@ -8,6 +8,7 @@ export function buildWordAudioAccentListProps(props, accents) {
     startRecording: props.startRecording,
     chooseAudio: props.chooseAudio,
     uploadAudio: props.uploadAudio,
+    generateAiAudio: props.generateAiAudio,
   };
 }
 

@@ -22,6 +22,10 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  generateAiAudio: {
+    type: Function,
+    required: true,
+  },
 });
 
 const emit = defineEmits(["close"]);
@@ -29,6 +33,7 @@ const emit = defineEmits(["close"]);
 const loadingOptions = ref(false);
 const choosingUrl = ref("");
 const savingUpload = ref(false);
+const generatingAi = ref(false);
 const selectedFile = ref(null);
 const previewUrl = ref("");
 const notice = ref("");
@@ -87,6 +92,20 @@ async function saveUpload() {
   }
 }
 
+async function generateAiSource() {
+  if (generatingAi.value) return;
+  generatingAi.value = true;
+  notice.value = "";
+  try {
+    await props.generateAiAudio(props.accent.key);
+    emit("close");
+  } catch (error) {
+    notice.value = error.message || "AI 朗读生成失败";
+  } finally {
+    generatingAi.value = false;
+  }
+}
+
 watch(() => props.accent.key, () => {
   selectedFile.value = null;
   notice.value = "";
@@ -133,6 +152,18 @@ onBeforeUnmount(clearPreviewUrl);
             </article>
           </div>
           <p v-else class="audio-manager-empty">还没有候选音频，点击重新获取音源。</p>
+        </section>
+
+        <section class="audio-manager-section">
+          <div class="audio-manager-section-head">
+            <div>
+              <h3>AI 朗读</h3>
+              <p>生成后会保存为当前单词的{{ accent.label }}音频，以后直接用播放器播放。</p>
+            </div>
+            <button class="secondary-button" type="button" :disabled="generatingAi" @click="generateAiSource">
+              {{ generatingAi ? "生成中..." : "生成 AI 朗读" }}
+            </button>
+          </div>
         </section>
 
         <section class="audio-manager-section">

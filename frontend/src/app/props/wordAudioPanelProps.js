@@ -31,6 +31,10 @@ export const wordAudioPanelProps = {
     type: Function,
     required: true,
   },
+  generateAiAudio: {
+    type: Function,
+    required: true,
+  },
   stopRecording: {
     type: Function,
     required: true,

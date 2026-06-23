@@ -21,6 +21,7 @@ export function buildWordDetailPageProps(ctx) {
       startRecording: ctx.startRecording,
       chooseAudio: ctx.chooseAudio,
       uploadAudio: ctx.uploadAudio,
+      generateAiAudio: ctx.generateAiAudio,
       stopRecording: ctx.stopRecording,
       saveRecording: ctx.saveRecording,
     },

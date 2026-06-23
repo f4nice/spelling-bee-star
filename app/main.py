@@ -40,6 +40,7 @@ from app.services.enrichment import enrich_word
 from app.services.excel_importer import parse_preview_from_excel, parse_words_from_preview
 from app.services.audio_storage import audio_candidates_with_dictionary, is_local_audio_url, store_audio_candidate
 from app.services.ai_image_generation import generate_word_image
+from app.services.ai_tts import generate_word_ai_audio
 from app.services.chinadaily import get_chinadaily_article, load_chinadaily_articles
 from app.services.image_storage import is_local_media_url, remove_local_image, store_uploaded_word_image, store_word_image
 from app.services.images import ImageClient
@@ -1653,6 +1654,55 @@ async def word_recorded_audio(
     target = AUDIO_DIR / f"{safe_word}-{accent}-recorded-{uuid4().hex[:8]}{suffix}"
     target.write_bytes(content)
     audio_url = f"/media/audio/{target.name}"
+
+    if accent == "gb":
+        word.british_audio_url = audio_url
+        word.british_audio_locked = True
+    else:
+        word.american_audio_url = audio_url
+        word.american_audio_locked = True
+    word.enrichment_error = None
+    db.add(word)
+    db.commit()
+    return {"ok": True, "word": word.word, "accent": accent, "audio_url": audio_url}
+
+
+@app.post("/api/vue/words/{word_id}/ai-audio")
+async def word_ai_audio(
+    word_id: int,
+    accent: str = Form(...),
+    edit_token: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    require_word_write_access(edit_token)
+    if accent not in {"us", "gb"}:
+        raise HTTPException(status_code=400, detail="Invalid accent")
+
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+
+    try:
+        audio_url = await generate_word_ai_audio(
+            provider=settings.ai_tts_provider,
+            api_key=settings.openai_api_key,
+            model=settings.openai_tts_model,
+            word=word.word,
+            accent=accent,
+            audio_dir=AUDIO_DIR,
+            voice_us=settings.openai_tts_voice_us,
+            voice_gb=settings.openai_tts_voice_gb,
+        )
+    except RuntimeError as exc:
+        detail = str(exc)
+        if "not configured" in detail:
+            raise HTTPException(status_code=400, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=f"AI 朗读失败: {detail}") from exc
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text[:400] if exc.response is not None else str(exc)
+        raise HTTPException(status_code=502, detail=f"AI 朗读失败: {detail}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AI 朗读失败: {exc}") from exc
 
     if accent == "gb":
         word.british_audio_url = audio_url
