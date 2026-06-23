@@ -149,11 +149,11 @@ def _choose_aliyun_voice(
 ) -> str:
     if accent == "gb":
         if voice_gender == "male":
-            return voice_gb_male or voice_gb or "arthur"
-        return voice_gb_female or voice_gb or "mary"
+            return voice_gb_male or voice_gb or "david"
+        return voice_gb_female or voice_gb or "beth"
     if voice_gender == "male":
-        return voice_us_male or voice_us or "john"
-    return voice_us_female or voice_us or "sarah"
+        return voice_us_male or voice_us or "brian"
+    return voice_us_female or voice_us or "betty"
 
 
 async def generate_aliyun_word_audio(
