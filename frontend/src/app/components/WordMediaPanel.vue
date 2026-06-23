@@ -22,8 +22,11 @@ async function chooseNetworkImageAndClose(url) {
   isImageModalOpen.value = false;
 }
 
-async function generateAiImage(option) {
-  return props.generateAiImage(option);
+async function generateAiImage(option, controls = {}) {
+  if (typeof props.generateAiImage !== "function") {
+    throw new Error("AI 做图方法未加载，请刷新页面后重试。");
+  }
+  return props.generateAiImage(option, controls);
 }
 </script>
 
