@@ -220,7 +220,6 @@ onBeforeUnmount(clearPreviewUrl);
           <div class="audio-manager-section-head">
             <div>
               <h3>AI 朗读</h3>
-              <p>生成后会保存为当前单词的{{ accent.label }}音频，以后直接用播放器播放。</p>
             </div>
             <div class="audio-manager-button-group">
               <button
