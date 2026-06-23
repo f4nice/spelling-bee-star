@@ -23,4 +23,8 @@ export const wordMediaPanelProps = {
     type: Function,
     required: true,
   },
+  generateAiImage: {
+    type: Function,
+    required: true,
+  },
 };

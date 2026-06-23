@@ -2148,6 +2148,32 @@ a:focus-visible {
   margin-bottom: 8px;
 }
 
+.word-card-title-main {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.word-card-title-main strong {
+  min-width: 0;
+}
+
+.word-audio-badge {
+  display: inline-grid;
+  width: 21px;
+  height: 21px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(29, 127, 91, 0.2);
+  border-radius: 999px;
+  color: var(--accent-dark);
+  background: #e4f6ee;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .status {
   flex: 0 0 auto;
   border-radius: 999px;
@@ -3762,6 +3788,99 @@ button.calendar-day:disabled {
   align-items: start;
   justify-content: space-between;
   gap: 14px;
+}
+
+.ai-image-model-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ai-image-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ai-image-form-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ai-image-form-grid input,
+.ai-image-form-grid select {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+}
+
+.ai-image-candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ai-image-candidate {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+  color: var(--ink);
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ai-image-candidate.selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(29, 127, 91, 0.13);
+}
+
+.ai-image-candidate img {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #fff;
+}
+
+.ai-image-candidate span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-image-preview {
+  display: grid;
+  gap: 10px;
+}
+
+.ai-image-preview img {
+  width: 100%;
+  max-height: 300px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  object-fit: contain;
+  background: #fff;
+}
+
+@media (max-width: 760px) {
+  .ai-image-form-grid,
+  .ai-image-candidate-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .word-image-manager-preview,

@@ -12,6 +12,7 @@ export function createWordDetailToolContext({ editing, images, audio, navigation
     uploadWordImage: images.uploadWordImage,
     findImages: images.findImages,
     chooseNetworkImage: images.chooseNetworkImage,
+    generateAiImage: images.generateAiImage,
     playAudio: audio.playAudio,
     fetchAudioOptions: audio.fetchAudioOptions,
     chooseAudio: audio.chooseAudio,

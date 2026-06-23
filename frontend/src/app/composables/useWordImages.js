@@ -6,7 +6,7 @@ import { createWordEditTokenForm } from '../wordImageForms.js';
 
 export function useWordImages({ data, loadRoute }) {
   const imageCandidates = ref([]);
-  const { uploadWordImage, chooseNetworkImage } = useWordImageActions({ data, loadRoute });
+  const { uploadWordImage, chooseNetworkImage, generateAiImage } = useWordImageActions({ data, loadRoute });
 
   function resetImageTools() {
     imageCandidates.value = [];
@@ -24,5 +24,6 @@ export function useWordImages({ data, loadRoute }) {
     uploadWordImage,
     findImages,
     chooseNetworkImage,
+    generateAiImage,
   };
 }

@@ -21,6 +21,10 @@ async function chooseNetworkImageAndClose(url) {
   await props.chooseNetworkImage(url);
   isImageModalOpen.value = false;
 }
+
+async function generateAiImage(option) {
+  return props.generateAiImage(option);
+}
 </script>
 
 <template>
@@ -45,6 +49,7 @@ async function chooseNetworkImageAndClose(url) {
       :find-images="findImages"
       :save-selected-image="saveUploadedImage"
       :choose-network-image="chooseNetworkImageAndClose"
+      :generate-ai-image="generateAiImage"
       @select-image="selectImageFile"
       @close="isImageModalOpen = false"
     />

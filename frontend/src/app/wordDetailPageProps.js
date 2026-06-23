@@ -7,6 +7,7 @@ export function buildWordDetailPageProps(ctx) {
       uploadWordImage: ctx.uploadWordImage,
       findImages: ctx.findImages,
       chooseNetworkImage: ctx.chooseNetworkImage,
+      generateAiImage: ctx.generateAiImage,
     },
     contentPanel: {
       data: ctx.data,

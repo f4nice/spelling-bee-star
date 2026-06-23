@@ -13,9 +13,14 @@ class Settings(BaseSettings):
     libretranslate_api_key: str = ""
     image_provider: str = "wikimedia"
     list_delete_password: str = "841108"
-    ai_image_provider: str = "tencent_hunyuan"
+    ai_image_provider: str = "dashscope"
     openai_api_key: str = ""
     openai_image_model: str = "gpt-image-1"
+    dashscope_api_key: str = ""
+    dashscope_image_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
+    dashscope_task_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/tasks"
+    dashscope_image_poll_seconds: float = 2.0
+    dashscope_image_timeout_seconds: int = 180
     ai_tts_provider: str = "openai"
     openai_tts_model: str = "gpt-4o-mini-tts"
     openai_tts_voice_us: str = "alloy"

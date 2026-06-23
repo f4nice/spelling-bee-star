@@ -74,7 +74,7 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260624-001"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260624-002"
 DEFAULT_PAGE_VERSION = "v20260624.0"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
@@ -690,6 +690,11 @@ def vue_word_detail_api(
         db.refresh(word)
     encoded_word = quote_plus(word.word)
     nav = word_navigation_context(db, word.id, list_id)
+    audio_version = str(int(datetime.utcnow().timestamp()))
+    us_audio_source = word.american_audio_url if is_local_audio_url(word.american_audio_url) else f"/tts?word={encoded_word}&accent=us&v=2"
+    gb_audio_source = word.british_audio_url if is_local_audio_url(word.british_audio_url) else f"/tts?word={encoded_word}&accent=gb&v=2"
+    us_separator = "&" if "?" in us_audio_source else "?"
+    gb_separator = "&" if "?" in gb_audio_source else "?"
     return {
         "word": {
             **serialize_word(word),
@@ -703,8 +708,8 @@ def vue_word_detail_api(
         },
         "can_edit": edit == 1,
         "audio_sources": {
-            "us": word.american_audio_url if is_local_audio_url(word.american_audio_url) else f"/tts?word={encoded_word}&accent=us&v=2",
-            "gb": word.british_audio_url if is_local_audio_url(word.british_audio_url) else f"/tts?word={encoded_word}&accent=gb&v=2",
+            "us": f"{us_audio_source}{us_separator}av={audio_version}",
+            "gb": f"{gb_audio_source}{gb_separator}av={audio_version}",
         },
         "navigation": nav,
     }
@@ -1147,6 +1152,7 @@ def serialize_challenge_word(word: Word | None) -> dict[str, Any] | None:
 
 
 def serialize_word(word: Word) -> dict[str, Any]:
+    has_audio = is_local_audio_url(word.american_audio_url) or is_local_audio_url(word.british_audio_url)
     return {
         "id": word.id,
         "word": word.word,
@@ -1156,6 +1162,7 @@ def serialize_word(word: Word) -> dict[str, Any]:
         "chinese_definition": word.chinese_definition,
         "english_example": word.english_example,
         "image_url": word.image_url,
+        "has_audio": has_audio,
     }
 
 
@@ -1405,27 +1412,53 @@ async def replace_word_image(
 async def generate_ai_word_image(
     word_id: int,
     edit_token: str = Form(default=""),
+    provider: str = Form(default=""),
+    model: str = Form(default=""),
+    theme: str = Form(default=""),
+    style: str = Form(default=""),
+    meaning: str = Form(default=""),
+    commit: str = Form(default="1"),
     db: Session = Depends(get_db),
 ):
     require_word_write_access(edit_token)
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
+    selected_provider = (provider or settings.ai_image_provider).strip()
+    selected_model = (model or "").strip()
+    selected_openai_model = settings.openai_image_model
+    selected_tencent_action = settings.tencent_hunyuan_image_action
+    selected_dashscope_model = selected_model or "wan2.7-image-pro"
+    if selected_provider == "openai" and selected_model:
+        selected_openai_model = selected_model
+    elif selected_provider == "dashscope" and selected_model:
+        selected_dashscope_model = selected_model
+    elif selected_provider == "tencent_hunyuan" and selected_model:
+        selected_tencent_action = selected_model
+
     previous_url = word.image_url
     try:
         content = await generate_word_image(
-            provider=settings.ai_image_provider,
+            provider=selected_provider,
             word=word.word,
             english_definition=word.english_definition,
-            chinese_definition=word.chinese_definition,
+            chinese_definition=meaning or word.chinese_definition,
+            theme=theme,
+            style=style,
             openai_api_key=settings.openai_api_key,
-            openai_model=settings.openai_image_model,
+            openai_model=selected_openai_model,
+            dashscope_api_key=settings.dashscope_api_key,
+            dashscope_endpoint=settings.dashscope_image_endpoint,
+            dashscope_task_endpoint=settings.dashscope_task_endpoint,
+            dashscope_poll_seconds=settings.dashscope_image_poll_seconds,
+            dashscope_timeout_seconds=settings.dashscope_image_timeout_seconds,
+            dashscope_model=selected_dashscope_model,
             tencent_secret_id=settings.tencentcloud_secret_id,
             tencent_secret_key=settings.tencentcloud_secret_key,
             tencent_region=settings.tencentcloud_region,
-            tencent_action=settings.tencent_hunyuan_image_action,
+            tencent_action=selected_tencent_action,
         )
-        word.image_url = store_uploaded_word_image(word.word, content, IMAGE_DIR)
+        image_url = store_uploaded_word_image(word.word, content, IMAGE_DIR)
     except RuntimeError as exc:
         detail = str(exc)
         if "not configured" in detail:
@@ -1437,13 +1470,27 @@ async def generate_ai_word_image(
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"AI 生图失败: {exc}") from exc
 
-    word.image_locked = True
-    word.enrichment_error = None
-    db.add(word)
-    db.commit()
-    if previous_url != word.image_url:
-        remove_local_image(previous_url, IMAGE_DIR)
-    return {"ok": True, "word": word.word, "image_url": word.image_url}
+    should_commit = commit not in {"0", "false", "False", "no"}
+    if should_commit:
+        word.image_url = image_url
+        word.image_locked = True
+        word.enrichment_error = None
+        db.add(word)
+        db.commit()
+        if previous_url != word.image_url:
+            remove_local_image(previous_url, IMAGE_DIR)
+    return {
+        "ok": True,
+        "word": word.word,
+        "image_url": image_url,
+        "provider": selected_provider,
+        "model": selected_openai_model
+        if selected_provider == "openai"
+        else selected_dashscope_model
+        if selected_provider == "dashscope"
+        else selected_tencent_action,
+        "committed": should_commit,
+    }
 
 
 @app.post("/api/vue/words/{word_id}/image-candidates")

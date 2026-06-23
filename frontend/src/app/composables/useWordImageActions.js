@@ -1,6 +1,6 @@
 import { fetchJson } from "../utils.js";
 import { wordApiPaths } from "../wordApiPaths.js";
-import { createWordImageUploadForm, createWordNetworkImageForm } from "../wordImageForms.js";
+import { createWordAiImageForm, createWordImageUploadForm, createWordNetworkImageForm } from "../wordImageForms.js";
 
 export function useWordImageActions({ data, loadRoute }) {
   async function uploadWordImage(file) {
@@ -15,8 +15,14 @@ export function useWordImageActions({ data, loadRoute }) {
     await loadRoute();
   }
 
+    async function generateAiImage(option, controls = {}) {
+      const form = createWordAiImageForm(option, controls);
+      return fetchJson(wordApiPaths.aiImage(data.value.word.id), { method: "POST", body: form });
+    }
+
   return {
     uploadWordImage,
     chooseNetworkImage,
+    generateAiImage,
   };
 }
