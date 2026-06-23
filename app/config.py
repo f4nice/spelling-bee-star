@@ -20,6 +20,16 @@ class Settings(BaseSettings):
     openai_tts_model: str = "gpt-4o-mini-tts"
     openai_tts_voice_us: str = "alloy"
     openai_tts_voice_gb: str = "alloy"
+    aliyun_nls_appkey: str = ""
+    aliyun_nls_token: str = ""
+    aliyun_tts_gateway: str = "https://nls-gateway-cn-shanghai.aliyuncs.com/stream/v1/tts"
+    aliyun_tts_format: str = "mp3"
+    aliyun_tts_sample_rate: int = 16000
+    aliyun_tts_voice_us: str = ""
+    aliyun_tts_voice_gb: str = ""
+    aliyun_tts_volume: int = 50
+    aliyun_tts_speech_rate: int = 0
+    aliyun_tts_pitch_rate: int = 0
     tencentcloud_secret_id: str = ""
     tencentcloud_secret_key: str = ""
     tencentcloud_region: str = "ap-guangzhou"

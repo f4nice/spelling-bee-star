@@ -1692,6 +1692,16 @@ async def word_ai_audio(
             audio_dir=AUDIO_DIR,
             voice_us=settings.openai_tts_voice_us,
             voice_gb=settings.openai_tts_voice_gb,
+            aliyun_appkey=settings.aliyun_nls_appkey,
+            aliyun_token=settings.aliyun_nls_token,
+            aliyun_gateway=settings.aliyun_tts_gateway,
+            aliyun_format=settings.aliyun_tts_format,
+            aliyun_sample_rate=settings.aliyun_tts_sample_rate,
+            aliyun_voice_us=settings.aliyun_tts_voice_us,
+            aliyun_voice_gb=settings.aliyun_tts_voice_gb,
+            aliyun_volume=settings.aliyun_tts_volume,
+            aliyun_speech_rate=settings.aliyun_tts_speech_rate,
+            aliyun_pitch_rate=settings.aliyun_tts_pitch_rate,
         )
     except RuntimeError as exc:
         detail = str(exc)

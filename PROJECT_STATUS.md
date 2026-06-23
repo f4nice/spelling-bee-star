@@ -36,7 +36,7 @@
 - 单词详情页音频区使用 `WordAudioManagerModal.vue` 管理音源：入口按钮为“音频管理”。
 - 音频管理弹窗包含四个区块：重新获取候选音源并试听保存、AI 朗读生成并保存为美音/英音、录制音频占位入口、上传本地音频并预览后保存。
 - 候选音源保存走 `/api/vue/words/{word_id}/audio-choice`，上传音频保存走 `/api/vue/words/{word_id}/recorded-audio`。
-- AI 朗读保存走 `/api/vue/words/{word_id}/ai-audio`，默认 OpenAI Speech 配置：`AI_TTS_PROVIDER`、`OPENAI_API_KEY`、`OPENAI_TTS_MODEL`、`OPENAI_TTS_VOICE_US`、`OPENAI_TTS_VOICE_GB`。
+- AI 朗读保存走 `/api/vue/words/{word_id}/ai-audio`，支持 `AI_TTS_PROVIDER=openai` 或 `aliyun`。OpenAI 配置：`OPENAI_API_KEY`、`OPENAI_TTS_MODEL`、`OPENAI_TTS_VOICE_US`、`OPENAI_TTS_VOICE_GB`；阿里云智能语音交互配置：`ALIYUN_NLS_APPKEY`、`ALIYUN_NLS_TOKEN`、`ALIYUN_TTS_GATEWAY`、`ALIYUN_TTS_FORMAT`、`ALIYUN_TTS_SAMPLE_RATE`、`ALIYUN_TTS_VOICE_US`、`ALIYUN_TTS_VOICE_GB`。
 - 录制音频完整流程尚未接入弹窗，当前保留禁用入口，后续优先复用既有录音 API 和播放器样式。
 - 列表详情页的单词卡片图片使用自适应完整显示，避免文字图或方图被固定裁切。
 
