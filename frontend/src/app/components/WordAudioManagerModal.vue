@@ -39,6 +39,10 @@ const previewUrl = ref("");
 const notice = ref("");
 
 const selectedFileName = computed(() => selectedFile.value?.name || "未选择音频文件");
+const aiButtonLabel = computed(() => {
+  const accentName = props.accent.key === "gb" ? "英式" : "美式";
+  return `生成${accentName} AI 朗读`;
+});
 
 function clearPreviewUrl() {
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
@@ -161,7 +165,7 @@ onBeforeUnmount(clearPreviewUrl);
               <p>生成后会保存为当前单词的{{ accent.label }}音频，以后直接用播放器播放。</p>
             </div>
             <button class="secondary-button" type="button" :disabled="generatingAi" @click="generateAiSource">
-              {{ generatingAi ? "生成中..." : "生成 AI 朗读" }}
+              {{ generatingAi ? "生成中..." : aiButtonLabel }}
             </button>
           </div>
         </section>
