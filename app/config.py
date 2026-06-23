@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     openai_tts_voice_gb: str = "alloy"
     aliyun_nls_appkey: str = ""
     aliyun_nls_token: str = ""
+    aliyun_access_key_id: str = ""
+    aliyun_access_key_secret: str = ""
+    aliyun_token_region: str = "cn-shanghai"
+    aliyun_token_endpoint: str = "https://nls-meta.cn-shanghai.aliyuncs.com/"
     aliyun_tts_gateway: str = "https://nls-gateway-cn-shanghai.aliyuncs.com/stream/v1/tts"
     aliyun_tts_format: str = "mp3"
     aliyun_tts_sample_rate: int = 16000

@@ -1,5 +1,12 @@
+import base64
+from datetime import datetime, timezone
+import hmac
+import hashlib
 import re
 from pathlib import Path
+from time import time
+from typing import Any
+from urllib.parse import quote
 from uuid import uuid4
 
 import httpx
@@ -7,10 +14,78 @@ import httpx
 
 OPENAI_SPEECH_URL = "https://api.openai.com/v1/audio/speech"
 SUPPORTED_AUDIO_FORMATS = {"mp3", "wav", "pcm"}
+ALIYUN_TOKEN_ACTION = "CreateToken"
+ALIYUN_TOKEN_VERSION = "2019-02-28"
+_ALIYUN_TOKEN_CACHE: dict[str, Any] = {"id": "", "expire_time": 0}
 
 
 def _safe_word_slug(word: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]+", "-", word.lower()).strip("-") or "word"
+
+
+def _percent_encode(value: str) -> str:
+    return quote(str(value), safe="~")
+
+
+def _aliyun_token_signature(params: dict[str, str], access_key_secret: str) -> str:
+    canonicalized_query = "&".join(
+        f"{_percent_encode(key)}={_percent_encode(params[key])}"
+        for key in sorted(params)
+    )
+    string_to_sign = f"GET&%2F&{_percent_encode(canonicalized_query)}"
+    digest = hmac.new(
+        f"{access_key_secret}&".encode("utf-8"),
+        string_to_sign.encode("utf-8"),
+        hashlib.sha1,
+    ).digest()
+    return base64.b64encode(digest).decode("utf-8")
+
+
+async def fetch_aliyun_nls_token(
+    *,
+    access_key_id: str,
+    access_key_secret: str,
+    region: str,
+    endpoint: str,
+) -> str:
+    if not access_key_id:
+        raise RuntimeError("ALIYUN_ACCESS_KEY_ID is not configured on the server.")
+    if not access_key_secret:
+        raise RuntimeError("ALIYUN_ACCESS_KEY_SECRET is not configured on the server.")
+
+    cached_id = _ALIYUN_TOKEN_CACHE.get("id") or ""
+    cached_expire_time = int(_ALIYUN_TOKEN_CACHE.get("expire_time") or 0)
+    if cached_id and cached_expire_time - int(time()) > 300:
+        return cached_id
+
+    params = {
+        "AccessKeyId": access_key_id,
+        "Action": ALIYUN_TOKEN_ACTION,
+        "Version": ALIYUN_TOKEN_VERSION,
+        "Timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "Format": "JSON",
+        "RegionId": region,
+        "SignatureMethod": "HMAC-SHA1",
+        "SignatureVersion": "1.0",
+        "SignatureNonce": uuid4().hex,
+    }
+    params["Signature"] = _aliyun_token_signature(params, access_key_secret)
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.get(endpoint, params=params)
+        response.raise_for_status()
+        payload = response.json()
+
+    token = payload.get("Token") or {}
+    token_id = token.get("Id") or ""
+    expire_time = int(token.get("ExpireTime") or 0)
+    if not token_id:
+        message = payload.get("Message") or payload.get("Code") or str(payload)[:400]
+        raise RuntimeError(f"阿里云 Token 获取失败: {message}")
+
+    _ALIYUN_TOKEN_CACHE["id"] = token_id
+    _ALIYUN_TOKEN_CACHE["expire_time"] = expire_time
+    return token_id
 
 
 def _accent_instruction(accent: str) -> str:
@@ -64,6 +139,10 @@ async def generate_aliyun_word_audio(
     *,
     appkey: str,
     token: str,
+    access_key_id: str,
+    access_key_secret: str,
+    token_region: str,
+    token_endpoint: str,
     gateway: str,
     word: str,
     accent: str,
@@ -79,7 +158,12 @@ async def generate_aliyun_word_audio(
     if not appkey:
         raise RuntimeError("ALIYUN_NLS_APPKEY is not configured on the server.")
     if not token:
-        raise RuntimeError("ALIYUN_NLS_TOKEN is not configured on the server.")
+        token = await fetch_aliyun_nls_token(
+            access_key_id=access_key_id,
+            access_key_secret=access_key_secret,
+            region=token_region,
+            endpoint=token_endpoint,
+        )
 
     normalized_format = (audio_format or "mp3").lower()
     if normalized_format not in SUPPORTED_AUDIO_FORMATS:
@@ -129,6 +213,10 @@ async def generate_word_ai_audio(
     voice_gb: str,
     aliyun_appkey: str = "",
     aliyun_token: str = "",
+    aliyun_access_key_id: str = "",
+    aliyun_access_key_secret: str = "",
+    aliyun_token_region: str = "cn-shanghai",
+    aliyun_token_endpoint: str = "https://nls-meta.cn-shanghai.aliyuncs.com/",
     aliyun_gateway: str = "https://nls-gateway-cn-shanghai.aliyuncs.com/stream/v1/tts",
     aliyun_format: str = "mp3",
     aliyun_sample_rate: int = 16000,
@@ -151,6 +239,10 @@ async def generate_word_ai_audio(
         return await generate_aliyun_word_audio(
             appkey=aliyun_appkey,
             token=aliyun_token,
+            access_key_id=aliyun_access_key_id,
+            access_key_secret=aliyun_access_key_secret,
+            token_region=aliyun_token_region,
+            token_endpoint=aliyun_token_endpoint,
             gateway=aliyun_gateway,
             word=word,
             accent=accent,
