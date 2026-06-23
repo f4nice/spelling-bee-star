@@ -27,6 +27,5 @@ defineProps({
       :can-edit="data.can_edit"
       :save-word-field="saveWordField"
     />
-    <WordStaticDefinitionItem label="来源" :value="data.word.source" />
   </dl>
 </template>
