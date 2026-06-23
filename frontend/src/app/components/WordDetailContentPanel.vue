@@ -26,6 +26,8 @@ defineProps(wordDetailContentPanelProps);
       :fetch-audio-options="fetchAudioOptions"
       :start-recording="startRecording"
       :choose-audio="chooseAudio"
+      :upload-audio="uploadAudio"
+      :generate-ai-audio="generateAiAudio"
       :stop-recording="stopRecording"
       :save-recording="saveRecording"
     />
