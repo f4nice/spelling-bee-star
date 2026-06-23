@@ -3543,6 +3543,12 @@ button.calendar-day:disabled {
   background: var(--panel);
 }
 
+.word-image-frame {
+  display: grid;
+  place-items: center;
+  min-height: 280px;
+}
+
 .detail-media-panel,
 .media-panel {
   display: grid;
@@ -3560,6 +3566,13 @@ button.calendar-day:disabled {
   width: 100%;
   height: 420px;
   object-fit: cover;
+}
+
+.word-image-frame img {
+  width: 100%;
+  height: auto;
+  max-height: min(68vh, 560px);
+  object-fit: contain;
 }
 
 .word-image-frame .image-fallback {
