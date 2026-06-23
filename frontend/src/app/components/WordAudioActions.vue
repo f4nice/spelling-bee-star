@@ -10,7 +10,7 @@ defineEmits(["manage-audio"]);
     <button type="button" class="secondary-button" @click="playAudio(`audio-${accent.key}`)">
       {{ accent.actionLabel }}
     </button>
-    <audio :id="`audio-${accent.key}`" controls preload="none" :src="audioSrc" />
+    <audio :id="`audio-${accent.key}`" controls preload="metadata" :src="audioSrc" />
     <button
       v-if="canEdit"
       type="button"
