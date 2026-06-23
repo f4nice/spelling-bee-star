@@ -33,7 +33,7 @@ async function chooseNetworkImageAndClose(url) {
       type="button"
       @click="isImageModalOpen = true"
     >
-      修改图片
+      图片管理
     </button>
 
     <WordImageManagerModal

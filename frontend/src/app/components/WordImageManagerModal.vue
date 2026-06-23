@@ -83,7 +83,7 @@ async function saveUpload() {
       <header class="word-image-manager-heading">
         <div>
           <p class="section-kicker">Image</p>
-          <h2 id="wordImageManagerTitle">修改图片</h2>
+          <h2 id="wordImageManagerTitle">图片管理</h2>
           <p>上传自己的图片，或从网络候选图里选择一张保存为当前单词图片。</p>
         </div>
         <button class="secondary-button compact-button" type="button" @click="emit('close')">关闭</button>
