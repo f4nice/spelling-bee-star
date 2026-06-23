@@ -19,5 +19,4 @@ defineProps({
 
 <template>
   <WordDefinitionList :data="data" :word-edit="wordEdit" :save-word-field="saveWordField" />
-  <div v-if="data.word.enrichment_error" class="error-box">{{ data.word.enrichment_error }}</div>
 </template>
