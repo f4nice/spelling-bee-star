@@ -19,7 +19,6 @@ defineProps({
     :submit-upload="ctx.submitUpload"
     :rename-list="ctx.renameList"
     :delete-list="ctx.deleteList"
-    :sync-list-images="ctx.syncListImages"
     :word-detail-url="ctx.wordDetailUrl"
     :image-for-word="ctx.imageForWord"
     :fallback-letter="ctx.fallbackLetter"

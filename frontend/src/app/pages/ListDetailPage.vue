@@ -14,7 +14,6 @@ const props = defineProps([
   "submitUpload",
   "renameList",
   "deleteList",
-  "syncListImages",
   "wordDetailUrl",
   "imageForWord",
   "fallbackLetter",

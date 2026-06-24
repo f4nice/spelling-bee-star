@@ -4861,7 +4861,7 @@ dd {
 }
 
 .image-sync-panel {
-  display: grid;
+  display: none !important;
   grid-template-columns: minmax(220px, 1fr) minmax(180px, 320px) auto;
   align-items: center;
   gap: 14px;
