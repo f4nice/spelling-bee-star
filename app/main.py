@@ -74,7 +74,7 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260624-003"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260624-005"
 DEFAULT_PAGE_VERSION = "v20260624.0"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
@@ -688,13 +688,8 @@ def vue_word_detail_api(
         db.add(word)
         db.commit()
         db.refresh(word)
-    encoded_word = quote_plus(word.word)
     nav = word_navigation_context(db, word.id, list_id)
     audio_version = str(int(datetime.utcnow().timestamp()))
-    us_audio_source = word.american_audio_url if is_local_audio_url(word.american_audio_url) else f"/tts?word={encoded_word}&accent=us&v=2"
-    gb_audio_source = word.british_audio_url if is_local_audio_url(word.british_audio_url) else f"/tts?word={encoded_word}&accent=gb&v=2"
-    us_separator = "&" if "?" in us_audio_source else "?"
-    gb_separator = "&" if "?" in gb_audio_source else "?"
     return {
         "word": {
             **serialize_word(word),
@@ -708,11 +703,20 @@ def vue_word_detail_api(
         },
         "can_edit": edit == 1,
         "audio_sources": {
-            "us": f"{us_audio_source}{us_separator}av={audio_version}",
-            "gb": f"{gb_audio_source}{gb_separator}av={audio_version}",
+            "us": word_audio_source(word, "us", audio_version),
+            "gb": word_audio_source(word, "gb", audio_version),
         },
         "navigation": nav,
     }
+
+
+def word_audio_source(word: Word, accent: str, audio_version: str | None = None) -> str:
+    audio_url = word.british_audio_url if accent == "gb" else word.american_audio_url
+    source = audio_url if is_local_audio_url(audio_url) else f"/tts?word={quote_plus(word.word)}&accent={accent}&v=2"
+    if audio_version:
+        separator = "&" if "?" in source else "?"
+        return f"{source}{separator}av={audio_version}"
+    return source
 
 
 @app.post("/api/vue/words/{word_id}/field")
@@ -1092,11 +1096,10 @@ def challenge_payload(
     challenge_image_url = None
     masked_example = None
     if current_word:
-        us_audio_url = current_word.american_audio_url if is_local_audio_url(current_word.american_audio_url) else None
-        gb_audio_url = current_word.british_audio_url if is_local_audio_url(current_word.british_audio_url) else None
+        audio_version = str(int(datetime.utcnow().timestamp()))
         challenge_audio_sources = {
-            "us": us_audio_url,
-            "gb": gb_audio_url,
+            "us": word_audio_source(current_word, "us", audio_version),
+            "gb": word_audio_source(current_word, "gb", audio_version),
         }
         challenge_image_url = f"/words/{current_word.id}/image-view" if current_word.image_url else None
         masked_example = mask_word_in_text(

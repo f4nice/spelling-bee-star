@@ -58,6 +58,21 @@ const aiImageModels = [
 ];
 
 const selectedFileName = computed(() => props.selectedImageFile?.name || "还没有选择图片");
+const replacementPreview = computed(() => {
+  if (previewUrl.value) {
+    return {
+      imageUrl: previewUrl.value,
+      label: "上传图片",
+    };
+  }
+  if (aiPreview.value?.imageUrl) {
+    return {
+      imageUrl: aiPreview.value.imageUrl,
+      label: `AI 做图 · ${aiPreview.value.label}`,
+    };
+  }
+  return null;
+});
 const aiControls = computed(() => ({
   theme: aiTheme.value,
   style: aiStyle.value,
@@ -162,13 +177,28 @@ async function saveAiPreview() {
       </header>
 
       <div class="word-image-manager-body">
-        <section class="word-image-manager-section">
-          <div>
-            <h3>当前图片</h3>
-            <p>{{ word.word }}</p>
+        <section class="word-image-manager-section word-image-compare-section">
+          <div class="word-image-compare-card">
+            <div>
+              <h3>当前图片</h3>
+              <p>{{ word.word }}</p>
+            </div>
+            <img v-if="imageUrl" class="word-image-manager-preview" :src="imageUrl" :alt="word.word">
+            <div v-else class="image-fallback word-image-manager-preview">{{ word.word.slice(0, 1).toUpperCase() }}</div>
           </div>
-          <img v-if="imageUrl" class="word-image-manager-preview" :src="imageUrl" :alt="word.word">
-          <div v-else class="image-fallback word-image-manager-preview">{{ word.word.slice(0, 1).toUpperCase() }}</div>
+          <div class="word-image-compare-card is-replacement">
+            <div>
+              <h3>准备替换</h3>
+              <p>{{ replacementPreview?.label || "先选择上传图或 AI 候选图" }}</p>
+            </div>
+            <img
+              v-if="replacementPreview?.imageUrl"
+              class="word-image-manager-preview"
+              :src="replacementPreview.imageUrl"
+              :alt="`${word.word} 准备替换图片`"
+            >
+            <div v-else class="word-image-manager-preview word-image-replacement-empty">等待选择图片</div>
+          </div>
         </section>
 
         <section class="word-image-manager-section">
@@ -177,6 +207,14 @@ async function saveAiPreview() {
               <h3>上传图片</h3>
               <p>先选择图片预览，确认后点击保存。</p>
             </div>
+            <button
+              class="challenge-button image-upload-save-button"
+              type="button"
+              :disabled="!selectedImageFile || isSavingUpload"
+              @click="saveUpload"
+            >
+              {{ isSavingUpload ? "保存中..." : "保存上传图片" }}
+            </button>
           </div>
           <label class="image-upload-picker">
             <input
@@ -187,15 +225,6 @@ async function saveAiPreview() {
             <span>选择图片</span>
             <strong>{{ selectedFileName }}</strong>
           </label>
-          <img v-if="previewUrl" class="word-image-upload-preview" :src="previewUrl" alt="上传预览">
-          <button
-            class="challenge-button"
-            type="button"
-            :disabled="!selectedImageFile || isSavingUpload"
-            @click="saveUpload"
-          >
-            {{ isSavingUpload ? "保存中..." : "保存上传图片" }}
-          </button>
         </section>
 
         <section class="word-image-manager-section">

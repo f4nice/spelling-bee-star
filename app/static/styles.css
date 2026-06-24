@@ -3876,11 +3876,41 @@ button.calendar-day:disabled {
   font-size: 18px;
 }
 
+.word-image-compare-section {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  background: #fbfcfa;
+}
+
+.word-image-compare-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.word-image-compare-card.is-replacement {
+  border-left: 1px solid var(--line);
+  padding-left: 14px;
+}
+
+.word-image-replacement-empty {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  color: var(--muted);
+  font-weight: 900;
+}
+
 .word-image-manager-section-head {
   display: flex;
   align-items: start;
   justify-content: space-between;
   gap: 14px;
+}
+
+.image-upload-save-button {
+  width: auto;
+  min-width: 150px;
+  white-space: nowrap;
 }
 
 .ai-image-model-actions {
@@ -5266,6 +5296,21 @@ select {
   .word-image-manager-heading,
   .word-image-manager-section-head {
     flex-direction: column;
+  }
+
+  .word-image-compare-section {
+    grid-template-columns: 1fr;
+  }
+
+  .word-image-compare-card.is-replacement {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+    padding-top: 14px;
+    padding-left: 0;
+  }
+
+  .image-upload-save-button {
+    width: 100%;
   }
 
   .image-picker-grid {
