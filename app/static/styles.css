@@ -3830,7 +3830,7 @@ button.calendar-day:disabled {
   justify-content: space-between;
   gap: 16px;
   border-bottom: 1px solid var(--line);
-  padding: 18px;
+  padding: 14px 18px;
 }
 
 .word-image-manager-heading h2,
@@ -3839,23 +3839,23 @@ button.calendar-day:disabled {
 }
 
 .word-image-manager-heading h2 {
-  font-size: 24px;
+  font-size: 22px;
 }
 
 .word-image-manager-heading p:not(.section-kicker),
 .word-image-manager-section p,
 .word-image-manager-empty {
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .word-image-manager-body {
   display: grid;
-  gap: 14px;
+  gap: 12px;
   min-height: 0;
   overflow: auto;
-  padding: 18px;
+  padding: 14px 18px 18px;
 }
 
 .word-image-manager-section {
@@ -3863,7 +3863,7 @@ button.calendar-day:disabled {
   gap: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 14px;
+  padding: 12px;
   background: var(--panel-soft);
 }
 
@@ -3873,7 +3873,7 @@ button.calendar-day:disabled {
 }
 
 .word-image-manager-section h3 {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .word-image-compare-section {
@@ -3883,8 +3883,9 @@ button.calendar-day:disabled {
 
 .word-image-compare-card {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
+  align-content: start;
 }
 
 .word-image-compare-card.is-replacement {
@@ -3902,22 +3903,25 @@ button.calendar-day:disabled {
 
 .word-image-manager-section-head {
   display: flex;
-  align-items: start;
+  align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
 }
 
-.image-upload-save-button {
-  width: auto;
-  min-width: 150px;
-  white-space: nowrap;
+.word-image-save-replacement {
+  width: 100%;
 }
 
 .ai-image-model-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
+}
+
+.ai-image-model-actions .secondary-button {
+  padding: 8px 10px;
+  font-size: 12px;
 }
 
 .ai-image-form-grid {
@@ -5309,7 +5313,7 @@ select {
     padding-left: 0;
   }
 
-  .image-upload-save-button {
+  .word-image-save-replacement {
     width: 100%;
   }
 

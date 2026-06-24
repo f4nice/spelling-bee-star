@@ -8,7 +8,7 @@ defineProps({
     type: Array,
     required: true,
   },
-  chooseNetworkImage: {
+  selectImageCandidate: {
     type: Function,
     required: true,
   },
@@ -22,7 +22,7 @@ defineProps({
       :key="item.url || index"
       type="button"
       class="image-candidate-button"
-      @click="chooseNetworkImage(item.url)"
+      @click="selectImageCandidate(item)"
     >
       <img :src="item.url" :alt="`${word.word} 候选图 ${index + 1}`">
     </button>

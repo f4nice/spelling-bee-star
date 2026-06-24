@@ -42,9 +42,9 @@ const emit = defineEmits(["close", "select-image"]);
 
 const previewUrl = ref("");
 const isFinding = ref(false);
-const isSavingUpload = ref(false);
+const isSavingReplacement = ref(false);
 const generatingAiModel = ref("");
-const aiPreview = ref(null);
+const selectedReplacement = ref(null);
 const aiCandidates = ref([]);
 const aiNotice = ref("");
 const aiTheme = ref("");
@@ -59,19 +59,8 @@ const aiImageModels = [
 
 const selectedFileName = computed(() => props.selectedImageFile?.name || "还没有选择图片");
 const replacementPreview = computed(() => {
-  if (previewUrl.value) {
-    return {
-      imageUrl: previewUrl.value,
-      label: "上传图片",
-    };
-  }
-  if (aiPreview.value?.imageUrl) {
-    return {
-      imageUrl: aiPreview.value.imageUrl,
-      label: `AI 做图 · ${aiPreview.value.label}`,
-    };
-  }
-  return null;
+  if (!selectedReplacement.value) return null;
+  return selectedReplacement.value;
 });
 const aiControls = computed(() => ({
   theme: aiTheme.value,
@@ -88,7 +77,16 @@ watch(
   () => props.selectedImageFile,
   (file) => {
     clearPreview();
-    if (file) previewUrl.value = URL.createObjectURL(file);
+    if (file) {
+      previewUrl.value = URL.createObjectURL(file);
+      selectedReplacement.value = {
+        type: "upload",
+        imageUrl: previewUrl.value,
+        label: "上传图片",
+      };
+    } else if (selectedReplacement.value?.type === "upload") {
+      selectedReplacement.value = null;
+    }
   },
   { immediate: true },
 );
@@ -98,7 +96,7 @@ watch(
   (word) => {
     aiMeaning.value = word?.chinese_definition || "";
     aiCandidates.value = [];
-    aiPreview.value = null;
+    selectedReplacement.value = null;
     aiNotice.value = "";
   },
   { immediate: true },
@@ -115,14 +113,39 @@ async function runFindImages() {
   }
 }
 
-async function saveUpload() {
-  if (!props.selectedImageFile) return;
-  isSavingUpload.value = true;
+async function saveReplacement() {
+  if (!selectedReplacement.value) return;
+  isSavingReplacement.value = true;
   try {
-    await props.saveSelectedImage();
+    if (selectedReplacement.value.type === "upload") {
+      if (!props.selectedImageFile) return;
+      await props.saveSelectedImage();
+      return;
+    }
+    if (selectedReplacement.value.imageUrl) {
+      await props.chooseNetworkImage(selectedReplacement.value.imageUrl);
+    }
   } finally {
-    isSavingUpload.value = false;
+    isSavingReplacement.value = false;
   }
+}
+
+function selectAiCandidate(candidate) {
+  selectedReplacement.value = {
+    type: "ai",
+    imageUrl: candidate.imageUrl,
+    label: `AI 做图 · ${candidate.label}`,
+    key: candidate.key,
+  };
+  aiNotice.value = "已放入准备替换，确认后点击保存。";
+}
+
+function selectNetworkCandidate(candidate) {
+  selectedReplacement.value = {
+    type: "network",
+    imageUrl: candidate.url,
+    label: "网络选图",
+  };
 }
 
 async function generateAiCandidate(option) {
@@ -136,12 +159,11 @@ async function generateAiCandidate(option) {
       imageUrl: result.image_url,
       model: result.model || option.model,
     };
-    aiPreview.value = candidate;
     aiCandidates.value = [
       candidate,
       ...aiCandidates.value.filter((item) => item.key !== option.key),
     ];
-    aiNotice.value = "已生成候选图，确认后保存。";
+    aiNotice.value = "已生成候选图，点击图片放入准备替换。";
   } catch (error) {
     aiNotice.value = error.message || "AI 做图失败";
   } finally {
@@ -152,15 +174,9 @@ async function generateAiCandidate(option) {
 async function generateAllAiCandidates() {
   if (generatingAiModel.value) return;
   aiCandidates.value = [];
-  aiPreview.value = null;
   for (const option of aiImageModels) {
     await generateAiCandidate(option);
   }
-}
-
-async function saveAiPreview() {
-  if (!aiPreview.value?.imageUrl) return;
-  await props.chooseNetworkImage(aiPreview.value.imageUrl);
 }
 </script>
 
@@ -171,7 +187,6 @@ async function saveAiPreview() {
         <div>
           <p class="section-kicker">Image</p>
           <h2 id="wordImageManagerTitle">图片管理</h2>
-          <p>上传自己的图片，或从网络候选图里选择一张保存为当前单词图片。</p>
         </div>
         <button class="secondary-button compact-button" type="button" @click="emit('close')">关闭</button>
       </header>
@@ -189,7 +204,7 @@ async function saveAiPreview() {
           <div class="word-image-compare-card is-replacement">
             <div>
               <h3>准备替换</h3>
-              <p>{{ replacementPreview?.label || "先选择上传图或 AI 候选图" }}</p>
+              <p>{{ replacementPreview?.label || "等待选择" }}</p>
             </div>
             <img
               v-if="replacementPreview?.imageUrl"
@@ -198,6 +213,14 @@ async function saveAiPreview() {
               :alt="`${word.word} 准备替换图片`"
             >
             <div v-else class="word-image-manager-preview word-image-replacement-empty">等待选择图片</div>
+            <button
+              class="challenge-button word-image-save-replacement"
+              type="button"
+              :disabled="!replacementPreview || isSavingReplacement"
+              @click="saveReplacement"
+            >
+              {{ isSavingReplacement ? "保存中..." : "保存" }}
+            </button>
           </div>
         </section>
 
@@ -205,16 +228,7 @@ async function saveAiPreview() {
           <div class="word-image-manager-section-head">
             <div>
               <h3>上传图片</h3>
-              <p>先选择图片预览，确认后点击保存。</p>
             </div>
-            <button
-              class="challenge-button image-upload-save-button"
-              type="button"
-              :disabled="!selectedImageFile || isSavingUpload"
-              @click="saveUpload"
-            >
-              {{ isSavingUpload ? "保存中..." : "保存上传图片" }}
-            </button>
           </div>
           <label class="image-upload-picker">
             <input
@@ -241,7 +255,7 @@ async function saveAiPreview() {
                 :disabled="Boolean(generatingAiModel)"
                 @click="generateAiCandidate(option)"
               >
-                {{ generatingAiModel === option.key ? "生成中..." : option.label }}
+                {{ generatingAiModel === option.key ? "生成中..." : option.model }}
               </button>
               <button
                 class="secondary-button"
@@ -278,16 +292,12 @@ async function saveAiPreview() {
               :key="candidate.key"
               class="ai-image-candidate"
               type="button"
-              :class="{ selected: aiPreview?.key === candidate.key }"
-              @click="aiPreview = candidate"
+              :class="{ selected: selectedReplacement?.type === 'ai' && selectedReplacement?.key === candidate.key }"
+              @click="selectAiCandidate(candidate)"
             >
               <img :src="candidate.imageUrl" :alt="`${word.word} ${candidate.label}`">
-              <span>{{ candidate.label }}</span>
+              <span>{{ candidate.model }}</span>
             </button>
-          </div>
-          <div v-if="aiPreview?.imageUrl" class="ai-image-preview">
-            <img :src="aiPreview.imageUrl" :alt="`${word.word} AI 候选图`">
-            <button class="challenge-button" type="button" @click="saveAiPreview">保存 AI 图片</button>
           </div>
           <p v-if="aiNotice" class="word-image-manager-empty">{{ aiNotice }}</p>
         </section>
@@ -296,7 +306,6 @@ async function saveAiPreview() {
           <div class="word-image-manager-section-head">
             <div>
               <h3>网络找图</h3>
-              <p>获取候选图后，点击喜欢的图片即可保存。</p>
             </div>
             <button class="secondary-button" type="button" :disabled="isFinding" @click="runFindImages">
               {{ isFinding ? "查找中..." : "网络找图" }}
@@ -306,9 +315,9 @@ async function saveAiPreview() {
             v-if="imageCandidates.length"
             :word="word"
             :image-candidates="imageCandidates"
-            :choose-network-image="chooseNetworkImage"
+            :select-image-candidate="selectNetworkCandidate"
           />
-          <p v-else class="word-image-manager-empty">还没有候选图片，点击网络找图开始查找。</p>
+          <p v-else class="word-image-manager-empty">暂无候选图</p>
         </section>
         <VersionStamp label="图片管理" />
       </div>
