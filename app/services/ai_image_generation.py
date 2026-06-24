@@ -34,10 +34,12 @@ def build_word_image_prompt(
 ) -> str:
     selected_theme = (theme or "").strip()
     selected_style = (style or "").strip()
+    selected_meaning = _short_meaning(chinese_definition) or (chinese_definition or "").strip()
     prompt_parts = [
         "A clear educational square background image for an English vocabulary learning app.",
-        f"Vocabulary word: {word}.",
-        "Show the concrete meaning or a memorable visual metaphor for this word.",
+        f"Visual concept: {selected_meaning or word}.",
+        "Use the visual concept as the primary subject.",
+        f"The English vocabulary word is {word}, but it is metadata only and must not appear as text.",
         "Child-safe, clean, bright, centered main subject, high quality.",
         "Generate a pure picture background only.",
         "Do not include any text, letters, Chinese characters, captions, signs, labels, book pages, logos, watermarks, UI elements, or typography in the image.",
@@ -70,6 +72,8 @@ def _load_font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont | Ima
         "C:/Windows/Fonts/simhei.ttf",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc" if bold else "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc" if bold else "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     ]
     for path in candidates:

@@ -1,5 +1,5 @@
 {
-  "version": "BIZ-REL-20260624-008",
+  "version": "BIZ-REL-20260624-009",
   "releaseName": "Vue 全站版",
   "pageVersion": "v20260624.0",
   "footerText": "SpeakEasy",
@@ -12,6 +12,6 @@
     { "label": "挑战进度", "version": "v20260624.1", "status": "可用" },
     { "label": "上传导入", "version": "v20260624.0", "status": "可用" },
     { "label": "音频管理", "version": "v20260624.0", "status": "可用" },
-    { "label": "图片管理", "version": "v20260624.4", "status": "可用" }
+    { "label": "图片管理", "version": "v20260624.5", "status": "可用" }
   ]
 }

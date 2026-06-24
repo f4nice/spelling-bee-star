@@ -3896,7 +3896,6 @@ button.calendar-day:disabled {
 .word-image-replacement-empty {
   display: grid;
   place-items: center;
-  min-height: 180px;
   color: var(--muted);
   font-weight: 900;
 }
@@ -4026,6 +4025,11 @@ button.calendar-day:disabled {
   border-radius: 8px;
   object-fit: contain;
   background: #fff;
+}
+
+.word-image-compare-section .word-image-manager-preview {
+  height: 250px;
+  max-height: none;
 }
 
 .word-image-manager-preview.image-fallback {
