@@ -189,6 +189,18 @@ def normalize_page_version(version: str) -> str:
     return version
 
 
+def release_version_sort_key(version: str) -> tuple[int, int]:
+    match = re.fullmatch(r"BIZ-REL-(\d{8})-(\d{3})", version.strip())
+    if not match:
+        return (0, 0)
+    return (int(match.group(1)), int(match.group(2)))
+
+
+def is_default_release_newer(matrix: dict[str, Any]) -> bool:
+    current_version = normalize_version_number(str(matrix.get("version") or "").strip())
+    return release_version_sort_key(DEFAULT_RELEASE_VERSION) > release_version_sort_key(current_version)
+
+
 def ensure_version_matrix_file() -> dict[str, Any]:
     raw_data = default_version_matrix()
     if VERSION_MATRIX_PATH.exists():
@@ -206,12 +218,16 @@ def ensure_version_matrix_file() -> dict[str, Any]:
         isinstance(item, dict) and str(item.get("version") or "").strip() in {"", "v0.1", "v0.1.0"}
         for item in (raw_data.get("modules") if isinstance(raw_data.get("modules"), list) else [])
     )
+    default_release_newer = is_default_release_newer(raw_data)
+    if default_release_newer:
+        matrix = normalize_version_matrix(default_version_matrix())
     if (
         not VERSION_MATRIX_PATH.exists()
         or LEGACY_MACHINE_CODE_FIELD in raw_data
         or old_style_version
         or old_style_page_version
         or old_style_modules
+        or default_release_newer
     ):
         try:
             VERSION_MATRIX_PATH.write_text(
