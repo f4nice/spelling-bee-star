@@ -1628,6 +1628,22 @@ a:focus-visible {
   transform: translateY(-1px);
 }
 
+.list-card:hover .plain-card-button {
+  background: var(--accent);
+  color: #fff;
+}
+
+.list-card:hover .challenge-summary-badge {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.list-card:hover .word-audio-badge {
+  border-color: rgba(255, 255, 255, 0.36);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+}
+
 .word-index-badge {
   position: absolute;
   top: 10px;

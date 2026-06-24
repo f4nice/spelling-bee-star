@@ -14,7 +14,7 @@ defineProps({
     <div class="word-card-title">
       <span class="word-card-title-main">
         <strong>{{ word.word }}</strong>
-        <span v-if="word.has_audio" class="word-audio-badge" title="已有音频" aria-label="已有音频">🔊</span>
+        <span v-if="word.has_playable_audio" class="word-audio-badge" title="可朗读" aria-label="可朗读">🔊</span>
       </span>
       <WordChallengeStats :stats="word.challenge_stats" />
     </div>

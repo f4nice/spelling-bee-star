@@ -74,7 +74,7 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260624-012"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260624-013"
 DEFAULT_PAGE_VERSION = "v20260624.0"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
@@ -1180,6 +1180,7 @@ def serialize_challenge_word(word: Word | None) -> dict[str, Any] | None:
 
 def serialize_word(word: Word) -> dict[str, Any]:
     has_audio = is_local_audio_url(word.american_audio_url) or is_local_audio_url(word.british_audio_url)
+    has_playable_audio = has_audio or bool((word.word or "").strip())
     return {
         "id": word.id,
         "word": word.word,
@@ -1190,6 +1191,7 @@ def serialize_word(word: Word) -> dict[str, Any]:
         "english_example": word.english_example,
         "image_url": word.image_url,
         "has_audio": has_audio,
+        "has_playable_audio": has_playable_audio,
     }
 
 
