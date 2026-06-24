@@ -20,6 +20,8 @@ DASHSCOPE_IMAGE_MODELS = {
     "qwen-image-2.0-pro",
     "wan2.6-t2i",
 }
+DASHSCOPE_ASYNC_IMAGE_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation"
+DASHSCOPE_MULTIMODAL_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
 
 
 def build_word_image_prompt(
@@ -290,6 +292,20 @@ def _dashscope_image_url(data: dict) -> str:
     output = data.get("output") if isinstance(data, dict) else {}
     if not isinstance(output, dict):
         return ""
+    choices = output.get("choices")
+    if isinstance(choices, list) and choices:
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
+            content = ((choice.get("message") or {}).get("content") or [])
+            if not isinstance(content, list):
+                continue
+            for item in content:
+                if not isinstance(item, dict):
+                    continue
+                url = item.get("image") or item.get("url") or item.get("image_url")
+                if url:
+                    return str(url)
     for key in ("results", "images"):
         items = output.get(key)
         if isinstance(items, list) and items:
@@ -301,6 +317,70 @@ def _dashscope_image_url(data: dict) -> str:
         if output.get(key):
             return str(output[key])
     return ""
+
+
+def _dashscope_endpoint_for_model(model: str, configured_endpoint: str) -> str:
+    endpoint = (configured_endpoint or "").strip()
+    if model == "wan2.7-image-pro":
+        if "image-generation/generation" in endpoint:
+            return endpoint
+        return DASHSCOPE_ASYNC_IMAGE_ENDPOINT
+    if "multimodal-generation/generation" in endpoint:
+        return endpoint
+    return DASHSCOPE_MULTIMODAL_ENDPOINT
+
+
+def _dashscope_payload_for_model(model: str, prompt: str) -> tuple[dict, bool]:
+    message_input = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [{"text": prompt}],
+            }
+        ]
+    }
+    if model == "wan2.7-image-pro":
+        return (
+            {
+                "model": model,
+                "input": message_input,
+                "parameters": {
+                    "size": "1024*1024",
+                    "n": 1,
+                    "watermark": False,
+                },
+            },
+            True,
+        )
+    if model == "wan2.6-t2i":
+        return (
+            {
+                "model": model,
+                "input": message_input,
+                "parameters": {
+                    "size": "1280*1280",
+                    "n": 1,
+                    "prompt_extend": True,
+                    "watermark": False,
+                    "negative_prompt": "text, letters, caption, watermark, logo, blurry, distorted words",
+                },
+            },
+            False,
+        )
+    return (
+        {
+            "model": model,
+            "input": message_input,
+            "parameters": {
+                "size": "2048*2048",
+                "n": 1,
+                "prompt_extend": True,
+                "watermark": False,
+                "negative_prompt": "Low resolution, low quality, blurry, watermark, logo, distorted text, malformed objects.",
+            },
+        },
+        False,
+    )
 
 
 async def generate_dashscope_word_image(
@@ -327,24 +407,16 @@ async def generate_dashscope_word_image(
         theme=theme,
         style=style,
     )
-    payload = {
-        "model": selected_model,
-        "input": {
-            "prompt": prompt,
-            "negative_prompt": "text, letters, caption, watermark, logo, blurry, distorted words",
-        },
-        "parameters": {
-            "size": "1024*1024",
-            "n": 1,
-        },
-    }
+    payload, is_async = _dashscope_payload_for_model(selected_model, prompt)
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "X-DashScope-Async": "enable",
     }
+    if is_async:
+        headers["X-DashScope-Async"] = "enable"
+    request_endpoint = _dashscope_endpoint_for_model(selected_model, endpoint)
     async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=True) as client:
-        response = await client.post(endpoint, headers=headers, json=payload)
+        response = await client.post(request_endpoint, headers=headers, json=payload)
         response.raise_for_status()
         data = response.json()
         task_id = ((data.get("output") or {}).get("task_id") or data.get("task_id") or "").strip()
