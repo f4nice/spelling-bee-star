@@ -3947,6 +3947,12 @@ button.calendar-day:disabled {
   font-size: 12px;
 }
 
+.ai-image-model-actions .ai-image-generate-button {
+  min-width: 96px;
+  padding: 8px 14px;
+  font-size: 12px;
+}
+
 .ai-image-form-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

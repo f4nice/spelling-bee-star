@@ -278,12 +278,12 @@ async function generateAllAiCandidates() {
                 {{ isGeneratingModel(option.key) ? "生成中..." : option.model }}
               </button>
               <button
-                class="secondary-button"
+                class="challenge-button ai-image-generate-button"
                 type="button"
                 :disabled="isGeneratingAi"
                 @click="generateAllAiCandidates"
               >
-                {{ isGeneratingAi ? "生成中..." : "三张对比" }}
+                {{ isGeneratingAi ? "生成中..." : "生成图片" }}
               </button>
             </div>
           </div>
