@@ -101,6 +101,7 @@ async function main() {
     `tar -xf ${sh(config.remoteArchivePath)} -C ${sh(config.remoteProjectPath)}`,
     `chown -R root:root ${sh(config.remoteProjectPath)}`,
     `chmod -R u+rwX,go+rX ${sh(config.remoteProjectPath)}`,
+    `service_user="$(systemctl show ${sh(config.serviceName)} -p User --value 2>/dev/null || true)"; if [ -f .env ]; then if [ -n "$service_user" ] && id "$service_user" >/dev/null 2>&1; then chown root:"$service_user" .env && chmod 640 .env; else chown root:root .env && chmod 600 .env; fi; fi`,
     `if id spellingbee >/dev/null 2>&1; then mkdir -p uploads/previews uploads/images uploads/audio uploads/book-covers && chown -R spellingbee:spellingbee uploads && chmod -R u+rwX,go+rX uploads; fi`,
     `systemctl restart ${sh(config.serviceName)}`,
     "sleep 1",
