@@ -3,7 +3,6 @@ import { ref } from "vue";
 
 import ListDetailHeader from "../components/ListDetailHeader.vue";
 import ListDetailWordGrid from "../components/ListDetailWordGrid.vue";
-import ListImageSyncPanel from "../components/ListImageSyncPanel.vue";
 import ListImportToolCard from "../components/ListImportToolCard.vue";
 import ListsCreateModal from "../components/ListsCreateModal.vue";
 
@@ -57,7 +56,6 @@ function openImportModal() {
       :submit-upload="submitUpload"
     />
   </ListsCreateModal>
-  <ListImageSyncPanel :sync-job="data.sync_job" :sync-list-images="syncListImages" />
   <ListDetailWordGrid
     :data="data"
     :word-detail-url="wordDetailUrl"
