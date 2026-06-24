@@ -213,16 +213,19 @@ async function generateAllAiCandidates() {
               :alt="`${word.word} 准备替换图片`"
             >
             <div v-else class="word-image-manager-preview word-image-replacement-empty">等待选择图片</div>
-            <button
-              class="challenge-button word-image-save-replacement"
-              type="button"
-              :disabled="!replacementPreview || isSavingReplacement"
-              @click="saveReplacement"
-            >
-              {{ isSavingReplacement ? "保存中..." : "保存" }}
-            </button>
           </div>
         </section>
+
+        <div class="word-image-save-bar">
+          <button
+            class="challenge-button word-image-save-replacement"
+            type="button"
+            :disabled="!replacementPreview || isSavingReplacement"
+            @click="saveReplacement"
+          >
+            {{ isSavingReplacement ? "保存中..." : "保存" }}
+          </button>
+        </div>
 
         <section class="word-image-manager-section">
           <div class="word-image-manager-section-head">

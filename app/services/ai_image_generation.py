@@ -39,7 +39,9 @@ def build_word_image_prompt(
         f"Vocabulary word: {word}.",
         "Show the concrete meaning or a memorable visual metaphor for this word.",
         "Child-safe, clean, bright, centered main subject, high quality.",
-        "No text, no letters, no captions, no watermark, no logo, no UI elements.",
+        "Generate a pure picture background only.",
+        "Do not include any text, letters, Chinese characters, captions, signs, labels, book pages, logos, watermarks, UI elements, or typography in the image.",
+        "Leave all wording to be added later by the application.",
     ]
     if selected_theme:
         prompt_parts.append(f"Theme: {selected_theme}.")
@@ -116,18 +118,13 @@ def compose_word_card_image(
         outline=(17, 103, 79, 96),
         width=4,
     )
-    word_text = str(word or "").strip()
     meaning_text = _short_meaning(chinese_definition)
-    word_font = _fit_font(word_text, 820, 96, bold=True)
-    meaning_font = _fit_font(meaning_text, 820, 52, bold=True)
-
-    word_bbox = draw.textbbox((0, 0), word_text, font=word_font)
-    word_x = (1024 - (word_bbox[2] - word_bbox[0])) // 2
-    draw.text((word_x, 742), word_text, font=word_font, fill=(16, 93, 76, 255))
     if meaning_text:
+        meaning_font = _fit_font(meaning_text, 820, 82, bold=True)
         meaning_bbox = draw.textbbox((0, 0), meaning_text, font=meaning_font)
         meaning_x = (1024 - (meaning_bbox[2] - meaning_bbox[0])) // 2
-        draw.text((meaning_x, 852), meaning_text, font=meaning_font, fill=(31, 41, 55, 255))
+        meaning_y = 1024 - panel_height - 52 + ((panel_height - (meaning_bbox[3] - meaning_bbox[1])) // 2) - 8
+        draw.text((meaning_x, meaning_y), meaning_text, font=meaning_font, fill=(16, 93, 76, 255))
 
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
     output = BytesIO()

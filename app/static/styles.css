@@ -3912,6 +3912,14 @@ button.calendar-day:disabled {
   width: 100%;
 }
 
+.word-image-save-bar {
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  background: #fff;
+}
+
 .ai-image-model-actions {
   display: flex;
   flex-wrap: wrap;
