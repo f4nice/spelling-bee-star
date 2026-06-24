@@ -74,10 +74,34 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260624-009"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260624-011"
 DEFAULT_PAGE_VERSION = "v20260624.0"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
+
+
+def is_ai_quota_error(detail: str) -> bool:
+    lowered = (detail or "").lower()
+    keywords = [
+        "quota",
+        "insufficient",
+        "balance",
+        "billing",
+        "payment",
+        "arrear",
+        "throttl",
+        "rate limit",
+        "too many requests",
+        "exceed",
+        "limited",
+        "余额",
+        "额度",
+        "欠费",
+        "限流",
+        "超限",
+        "用量",
+    ]
+    return any(keyword in lowered for keyword in keywords)
 IMAGE_SYNC_LOCK = Lock()
 CACHE_REFRESHING: set[str] = set()
 CACHE_REFRESH_LOCK = Lock()
@@ -1466,9 +1490,13 @@ async def generate_ai_word_image(
         detail = str(exc)
         if "not configured" in detail:
             raise HTTPException(status_code=400, detail=detail) from exc
+        if is_ai_quota_error(detail):
+            raise HTTPException(status_code=402, detail="额度已经用完") from exc
         raise HTTPException(status_code=502, detail=f"AI 生图失败: {detail}") from exc
     except httpx.HTTPStatusError as exc:
         detail = exc.response.text[:400] if exc.response is not None else str(exc)
+        if is_ai_quota_error(detail):
+            raise HTTPException(status_code=402, detail="额度已经用完") from exc
         raise HTTPException(status_code=502, detail=f"AI 生图失败: {detail}") from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"AI 生图失败: {exc}") from exc

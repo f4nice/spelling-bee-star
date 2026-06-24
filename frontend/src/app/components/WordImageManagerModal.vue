@@ -43,7 +43,7 @@ const emit = defineEmits(["close", "select-image"]);
 const previewUrl = ref("");
 const isFinding = ref(false);
 const isSavingReplacement = ref(false);
-const generatingAiModel = ref("");
+const generatingAiModels = ref([]);
 const selectedReplacement = ref(null);
 const aiCandidates = ref([]);
 const aiNotice = ref("");
@@ -67,6 +67,21 @@ const aiControls = computed(() => ({
   style: aiStyle.value,
   meaning: aiMeaning.value,
 }));
+const isGeneratingAi = computed(() => generatingAiModels.value.length > 0);
+
+function isGeneratingModel(key) {
+  return generatingAiModels.value.includes(key);
+}
+
+function beginGeneratingModel(key) {
+  if (!isGeneratingModel(key)) {
+    generatingAiModels.value = [...generatingAiModels.value, key];
+  }
+}
+
+function endGeneratingModel(key) {
+  generatingAiModels.value = generatingAiModels.value.filter((item) => item !== key);
+}
 
 function clearPreview() {
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
@@ -149,9 +164,8 @@ function selectNetworkCandidate(candidate) {
 }
 
 async function generateAiCandidate(option) {
-  if (generatingAiModel.value) return;
-  generatingAiModel.value = option.key;
-  aiNotice.value = "";
+  if (isGeneratingModel(option.key)) return null;
+  beginGeneratingModel(option.key);
   try {
     const result = await props.generateAiImage(option, aiControls.value);
     const candidate = {
@@ -164,19 +178,22 @@ async function generateAiCandidate(option) {
       ...aiCandidates.value.filter((item) => item.key !== option.key),
     ];
     aiNotice.value = "已生成候选图，点击图片放入准备替换。";
+    return candidate;
   } catch (error) {
     aiNotice.value = error.message || "AI 做图失败";
+    return null;
   } finally {
-    generatingAiModel.value = "";
+    endGeneratingModel(option.key);
   }
 }
 
 async function generateAllAiCandidates() {
-  if (generatingAiModel.value) return;
+  if (isGeneratingAi.value) return;
   aiCandidates.value = [];
-  for (const option of aiImageModels) {
-    await generateAiCandidate(option);
-  }
+  aiNotice.value = "三张图片生成中...";
+  const results = await Promise.allSettled(aiImageModels.map((option) => generateAiCandidate(option)));
+  const successCount = results.filter((result) => result.status === "fulfilled" && result.value).length;
+  aiNotice.value = successCount ? `已生成 ${successCount} 张候选图，点击图片放入准备替换。` : "AI 做图失败";
 }
 </script>
 
@@ -255,18 +272,18 @@ async function generateAllAiCandidates() {
                 :key="option.key"
                 class="secondary-button"
                 type="button"
-                :disabled="Boolean(generatingAiModel)"
+                :disabled="isGeneratingModel(option.key)"
                 @click="generateAiCandidate(option)"
               >
-                {{ generatingAiModel === option.key ? "生成中..." : option.model }}
+                {{ isGeneratingModel(option.key) ? "生成中..." : option.model }}
               </button>
               <button
                 class="secondary-button"
                 type="button"
-                :disabled="Boolean(generatingAiModel)"
+                :disabled="isGeneratingAi"
                 @click="generateAllAiCandidates"
               >
-                三张对比
+                {{ isGeneratingAi ? "生成中..." : "三张对比" }}
               </button>
             </div>
           </div>

@@ -4,6 +4,9 @@ import hashlib
 import hmac
 from io import BytesIO
 import json
+import os
+from pathlib import Path
+import subprocess
 import time
 from urllib.parse import urlparse
 
@@ -22,6 +25,17 @@ DASHSCOPE_IMAGE_MODELS = {
 }
 DASHSCOPE_ASYNC_IMAGE_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation"
 DASHSCOPE_MULTIMODAL_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+CHINESE_FONT_PATHS = [
+    "C:/Windows/Fonts/msyh.ttc",
+    "C:/Windows/Fonts/msyhbd.ttc",
+    "C:/Windows/Fonts/simhei.ttf",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+]
 
 
 def build_word_image_prompt(
@@ -84,6 +98,31 @@ def _load_font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont | Ima
     return ImageFont.load_default()
 
 
+def _has_chinese_font() -> bool:
+    return any(Path(path).exists() for path in CHINESE_FONT_PATHS)
+
+
+def ensure_chinese_font() -> None:
+    if _has_chinese_font() or os.name == "nt":
+        return
+    if hasattr(os, "geteuid") and os.geteuid() != 0:
+        return
+    apt_get = "/usr/bin/apt-get"
+    if not Path(apt_get).exists():
+        return
+    try:
+        subprocess.run([apt_get, "update", "-qq"], check=False, timeout=60, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(
+            [apt_get, "install", "-y", "-qq", "fontconfig", "fonts-wqy-microhei"],
+            check=False,
+            timeout=180,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return
+
+
 def _fit_font(text: str, max_width: int, start_size: int, *, bold: bool = False) -> ImageFont.ImageFont:
     size = start_size
     while size >= 24:
@@ -101,6 +140,7 @@ def compose_word_card_image(
     word: str,
     chinese_definition: str | None = None,
 ) -> bytes:
+    ensure_chinese_font()
     image = Image.open(BytesIO(image_bytes)).convert("RGB")
     image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
     canvas = Image.new("RGB", (1024, 1024), (244, 248, 245))
@@ -110,25 +150,22 @@ def compose_word_card_image(
 
     overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
-    panel_height = 230
-    draw.rounded_rectangle(
-        (54, 1024 - panel_height - 52, 970, 972),
-        radius=34,
-        fill=(255, 255, 255, 218),
-    )
-    draw.rounded_rectangle(
-        (54, 1024 - panel_height - 52, 970, 972),
-        radius=34,
-        outline=(17, 103, 79, 96),
-        width=4,
-    )
     meaning_text = _short_meaning(chinese_definition)
     if meaning_text:
-        meaning_font = _fit_font(meaning_text, 820, 82, bold=True)
+        meaning_font = _fit_font(meaning_text, 860, 92, bold=True)
         meaning_bbox = draw.textbbox((0, 0), meaning_text, font=meaning_font)
         meaning_x = (1024 - (meaning_bbox[2] - meaning_bbox[0])) // 2
-        meaning_y = 1024 - panel_height - 52 + ((panel_height - (meaning_bbox[3] - meaning_bbox[1])) // 2) - 8
-        draw.text((meaning_x, meaning_y), meaning_text, font=meaning_font, fill=(16, 93, 76, 255))
+        meaning_y = 1024 - (meaning_bbox[3] - meaning_bbox[1]) - 118
+        for dx, dy in [(0, 8), (0, 10), (4, 10)]:
+            draw.text((meaning_x + dx, meaning_y + dy), meaning_text, font=meaning_font, fill=(0, 0, 0, 92))
+        draw.text(
+            (meaning_x, meaning_y),
+            meaning_text,
+            font=meaning_font,
+            fill=(17, 103, 79, 255),
+            stroke_width=5,
+            stroke_fill=(255, 255, 255, 238),
+        )
 
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
     output = BytesIO()
