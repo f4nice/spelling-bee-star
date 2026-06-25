@@ -74,7 +74,7 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260625-001"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260625-002"
 DEFAULT_PAGE_VERSION = "v20260624.0"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
@@ -2769,14 +2769,20 @@ def challenge_state(db: Session, word_list: WordList) -> dict:
 
 def challenged_word_count_for_list(db: Session, word_list_id: int, total: int | None = None) -> int:
     word_ids = select(WordListItem.word_id).where(WordListItem.word_list_id == word_list_id)
-    count = db.scalar(
+    daily_count = db.scalar(
         select(func.count(func.distinct(ChallengeDailyWord.word_id)))
         .where(ChallengeDailyWord.word_id.in_(word_ids))
         .where(or_(ChallengeDailyWord.word_list_id == word_list_id, ChallengeDailyWord.word_list_id.is_(None)))
     ) or 0
+    attempt_count = db.scalar(
+        select(func.count(func.distinct(ChallengeSpellingAttempt.word_id)))
+        .where(ChallengeSpellingAttempt.word_id.in_(word_ids))
+        .where(or_(ChallengeSpellingAttempt.word_list_id == word_list_id, ChallengeSpellingAttempt.word_list_id.is_(None)))
+    ) or 0
+    count = max(int(daily_count), int(attempt_count))
     if total is not None:
-        return min(int(count), total)
-    return int(count)
+        return min(count, total)
+    return count
 
 
 def challenge_counts_for_words(db: Session, word_ids: list[int]) -> dict[int, dict[str, int]]:
