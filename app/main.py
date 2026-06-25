@@ -77,7 +77,7 @@ settings = get_settings()
 DEFAULT_RELEASE_VERSION = "BIZ-REL-20260626-002"
 DEFAULT_PAGE_VERSION = "v20260624.0"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
-PUBLIC_ASSET_DIR = BASE_DIR / "static" / "generated-assets"
+PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
 
 
@@ -1532,7 +1532,7 @@ async def generate_public_asset_image(
         "ok": True,
         "name": clean_name,
         "model": selected_model,
-        "image_url": f"/static/generated-assets/{filename}",
+        "image_url": f"/media/generated-assets/{filename}",
     }
 
 
