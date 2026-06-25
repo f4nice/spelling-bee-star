@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request,
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import delete, func, inspect, select, text
+from sqlalchemy import delete, func, inspect, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -74,7 +74,7 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260624-014"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260625-001"
 DEFAULT_PAGE_VERSION = "v20260624.0"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
@@ -1063,8 +1063,8 @@ def apply_challenge_answer(
         if action == "known":
             if current_word:
                 clear_wrong_word_if_passed(db, current_word.id, wrong_date_value)
-            progress.completed_count = min(progress.completed_count + 1, total)
         if action in {"known", "wrong"}:
+            progress.completed_count = min(progress.completed_count + 1, total)
             if action == "known":
                 session_correct += 1
             else:
@@ -1114,7 +1114,10 @@ def challenge_payload(
     words = get_words_for_list(db, word_list_id)
     progress = get_or_create_challenge_progress(db, word_list_id)
     total = len(words)
-    progress.completed_count = min(progress.completed_count, total)
+    progress.completed_count = min(
+        max(progress.completed_count, challenged_word_count_for_list(db, word_list_id, total)),
+        total,
+    )
     progress.current_index = min(progress.current_index, max(total - 1, 0))
     db.add(progress)
     db.commit()
@@ -2751,7 +2754,10 @@ def challenge_state(db: Session, word_list: WordList) -> dict:
         select(func.count(WordListItem.id)).where(WordListItem.word_list_id == word_list.id)
     ) or 0
     progress = db.scalar(select(ChallengeProgress).where(ChallengeProgress.word_list_id == word_list.id))
-    completed = min(progress.completed_count if progress else 0, total)
+    completed = min(
+        max(progress.completed_count if progress else 0, challenged_word_count_for_list(db, word_list.id, total)),
+        total,
+    )
     percent = round((completed / total) * 100) if total else 0
     return {
         "completed": completed,
@@ -2759,6 +2765,18 @@ def challenge_state(db: Session, word_list: WordList) -> dict:
         "percent": percent,
         "is_complete": bool(total and completed >= total),
     }
+
+
+def challenged_word_count_for_list(db: Session, word_list_id: int, total: int | None = None) -> int:
+    word_ids = select(WordListItem.word_id).where(WordListItem.word_list_id == word_list_id)
+    count = db.scalar(
+        select(func.count(func.distinct(ChallengeDailyWord.word_id)))
+        .where(ChallengeDailyWord.word_id.in_(word_ids))
+        .where(or_(ChallengeDailyWord.word_list_id == word_list_id, ChallengeDailyWord.word_list_id.is_(None)))
+    ) or 0
+    if total is not None:
+        return min(int(count), total)
+    return int(count)
 
 
 def challenge_counts_for_words(db: Session, word_ids: list[int]) -> dict[int, dict[str, int]]:
