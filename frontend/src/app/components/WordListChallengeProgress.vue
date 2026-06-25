@@ -63,18 +63,20 @@ function startChallenge() {
         <span class="challenge-crown" aria-hidden="true">♛</span>
         <strong>X{{ completedRoundCount }}</strong>
       </div>
-      <label>
-        <span>挑战几个</span>
-        <input
-          v-model.number="challengeCount"
-          type="number"
-          min="1"
-          :max="Math.max(remainingCount || card.count || 1, 1)"
-        >
-      </label>
-      <button class="challenge-button" type="submit">
-        {{ isChallengeComplete ? "再次挑战" : "开始挑战" }}
-      </button>
+      <div class="challenge-start-fields">
+        <label>
+          <span>挑战几个</span>
+          <input
+            v-model.number="challengeCount"
+            type="number"
+            min="1"
+            :max="Math.max(remainingCount || card.count || 1, 1)"
+          >
+        </label>
+        <button class="challenge-button" type="submit">
+          {{ isChallengeComplete ? "再次挑战" : "开始挑战" }}
+        </button>
+      </div>
     </form>
   </div>
 </template>
@@ -84,39 +86,68 @@ function startChallenge() {
   gap: 10px;
 }
 
+.challenge-start-form {
+  width: 100%;
+  grid-template-columns: minmax(88px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.challenge-start-fields {
+  display: grid;
+  grid-template-columns: minmax(54px, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
 .challenge-round-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 40px;
-  min-width: 72px;
-  padding: 8px 12px;
+  gap: 8px;
+  min-height: 52px;
+  min-width: 88px;
+  padding: 10px 14px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #fff7d6, #fde68a);
-  color: #92400e;
+  background:
+    radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.85), transparent 28%),
+    linear-gradient(135deg, #fff3b0 0%, #f7c948 48%, #c98712 100%);
+  color: #6f3f00;
   font-weight: 900;
   box-shadow:
-    inset 0 0 0 1px rgba(245, 158, 11, 0.28),
-    0 10px 22px rgba(146, 64, 14, 0.12);
+    inset 0 0 0 1px rgba(180, 83, 9, 0.2),
+    0 12px 24px rgba(180, 83, 9, 0.22);
 }
 
 .challenge-round-badge strong {
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
   letter-spacing: 0;
 }
 
 .challenge-crown {
-  font-size: 18px;
+  font-size: 28px;
   line-height: 1;
+  color: #fbbf24;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.75),
+    0 2px 6px rgba(120, 53, 15, 0.28);
 }
 
 .challenge-round-badge.is-complete {
-  background: linear-gradient(135deg, #fef3c7, #bbf7d0);
-  color: #047857;
+  background:
+    radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.86), transparent 28%),
+    linear-gradient(135deg, #fff7ad 0%, #facc15 46%, #16a34a 100%);
+  color: #064e3b;
   box-shadow:
-    inset 0 0 0 1px rgba(16, 185, 129, 0.25),
-    0 10px 24px rgba(4, 120, 87, 0.14);
+    inset 0 0 0 1px rgba(16, 185, 129, 0.22),
+    0 12px 26px rgba(4, 120, 87, 0.18);
+}
+
+@media (max-width: 720px) {
+  .challenge-start-form,
+  .challenge-start-fields {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
