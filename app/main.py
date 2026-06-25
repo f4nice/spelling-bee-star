@@ -74,7 +74,7 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260625-002"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260625-003"
 DEFAULT_PAGE_VERSION = "v20260624.0"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
@@ -717,6 +717,8 @@ def vue_word_detail_api(
     word_id: int,
     edit: int = Query(default=0),
     list_id: int | None = Query(default=None),
+    challenge_day: str | None = Query(default=None),
+    challenge_status: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     word = db.get(Word, word_id)
@@ -728,7 +730,7 @@ def vue_word_detail_api(
         db.add(word)
         db.commit()
         db.refresh(word)
-    nav = word_navigation_context(db, word.id, list_id)
+    nav = word_navigation_context(db, word.id, list_id, challenge_day, challenge_status)
     audio_version = str(int(datetime.utcnow().timestamp()))
     return {
         "word": {
@@ -942,6 +944,7 @@ def challenge_state_api(
     session_correct: int = Query(default=0, ge=0),
     session_wrong: int = Query(default=0, ge=0),
     wrong_date: str | None = Query(default=None),
+    restart: bool = Query(default=False),
     db: Session = Depends(get_db),
 ):
     return challenge_payload(
@@ -952,6 +955,7 @@ def challenge_state_api(
         session_correct=session_correct,
         session_wrong=session_wrong,
         wrong_date=wrong_date,
+        restart=restart,
     )
 
 
@@ -1105,6 +1109,7 @@ def challenge_payload(
     session_correct: int,
     session_wrong: int,
     wrong_date: str | None,
+    restart: bool = False,
 ) -> dict[str, Any]:
     word_list = db.get(WordList, word_list_id)
     if not word_list:
@@ -1114,11 +1119,16 @@ def challenge_payload(
     words = get_words_for_list(db, word_list_id)
     progress = get_or_create_challenge_progress(db, word_list_id)
     total = len(words)
-    progress.completed_count = min(
-        max(progress.completed_count, challenged_word_count_for_list(db, word_list_id, total)),
-        total,
-    )
-    progress.current_index = min(progress.current_index, max(total - 1, 0))
+    if restart:
+        restart_index = min(max(start_count or 0, 0), max(total - 1, 0))
+        progress.completed_count = restart_index
+        progress.current_index = restart_index
+    else:
+        progress.completed_count = min(
+            max(progress.completed_count, challenged_word_count_for_list(db, word_list_id, total)),
+            total,
+        )
+        progress.current_index = min(progress.current_index, max(total - 1, 0))
     db.add(progress)
     db.commit()
 
@@ -2803,7 +2813,38 @@ def challenge_counts_for_words(db: Session, word_ids: list[int]) -> dict[int, di
     }
 
 
-def word_navigation_context(db: Session, word_id: int, list_id: int | None = None) -> dict:
+def word_navigation_context(
+    db: Session,
+    word_id: int,
+    list_id: int | None = None,
+    challenge_day: str | None = None,
+    challenge_status: str | None = None,
+) -> dict:
+    challenge_date = parse_wrong_date(challenge_day)
+    if challenge_date:
+        day_query = (
+            select(Word.id)
+            .join(ChallengeDailyWord, ChallengeDailyWord.word_id == Word.id)
+            .where(ChallengeDailyWord.challenge_date == challenge_date)
+        )
+        if challenge_status in {"correct", "wrong"}:
+            day_query = day_query.where(ChallengeDailyWord.last_result == challenge_status)
+        day_word_ids = db.scalars(
+            day_query.order_by(ChallengeDailyWord.updated_at.asc(), ChallengeDailyWord.id.asc())
+        ).all()
+        if word_id in day_word_ids:
+            current_index = list(day_word_ids).index(word_id)
+            previous_index = current_index - 1
+            next_index = current_index + 1
+            previous_word_id = day_word_ids[previous_index] if previous_index >= 0 else day_word_ids[current_index]
+            next_word_id = day_word_ids[next_index] if next_index < len(day_word_ids) else day_word_ids[current_index]
+            return {
+                "list_id": list_id,
+                "index": current_index + 1,
+                "previous_word_id": previous_word_id,
+                "next_word_id": next_word_id,
+            }
+
     if list_id:
         linked = db.scalar(
             select(WordListItem.id)

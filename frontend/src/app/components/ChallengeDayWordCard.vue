@@ -13,6 +13,10 @@ defineProps({
     type: Function,
     required: true,
   },
+  day: {
+    type: String,
+    default: "",
+  },
 });
 </script>
 
@@ -20,7 +24,7 @@ defineProps({
   <a
     class="panel challenge-day-word"
     :class="item.status === 'correct' ? 'is-correct' : 'is-wrong'"
-    :href="challengeDayWordUrl(item)"
+    :href="challengeDayWordUrl(item, day)"
   >
     <ChallengeDayWordResult :item="item" />
     <ChallengeDayWordMedia :item="item" :fallback-letter="fallbackLetter" />

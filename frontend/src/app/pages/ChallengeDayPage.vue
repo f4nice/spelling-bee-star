@@ -57,6 +57,7 @@ function setFilter(filter) {
       v-for="item in filteredWords"
       :key="`${item.id}-${item.status}`"
       :item="item"
+      :day="data.date"
       :fallback-letter="fallbackLetter"
     />
     <p v-if="!filteredWords.length" class="empty-state challenge-day-filter-empty">
