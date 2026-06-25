@@ -39,7 +39,7 @@ from app.models import (
 from app.services.enrichment import enrich_word
 from app.services.excel_importer import parse_preview_from_excel, parse_words_from_preview
 from app.services.audio_storage import audio_candidates_with_dictionary, is_local_audio_url, store_audio_candidate
-from app.services.ai_image_generation import generate_word_image
+from app.services.ai_image_generation import generate_dashscope_prompt_image, generate_word_image
 from app.services.ai_tts import generate_word_ai_audio
 from app.services.chinadaily import get_chinadaily_article, load_chinadaily_articles
 from app.services.image_storage import is_local_media_url, remove_local_image, store_uploaded_word_image, store_word_image
@@ -74,9 +74,10 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260626-001"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260626-002"
 DEFAULT_PAGE_VERSION = "v20260624.0"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
+PUBLIC_ASSET_DIR = BASE_DIR / "static" / "generated-assets"
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
 
 
@@ -102,6 +103,22 @@ def is_ai_quota_error(detail: str) -> bool:
         "用量",
     ]
     return any(keyword in lowered for keyword in keywords)
+
+
+def public_asset_extension(content: bytes) -> str:
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if content.startswith(b"\xff\xd8"):
+        return ".jpg"
+    if content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        return ".webp"
+    return ".png"
+
+
+def public_asset_slug(value: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9_-]+", "-", value.lower()).strip("-") or "asset"
+
+
 IMAGE_SYNC_LOCK = Lock()
 CACHE_REFRESHING: set[str] = set()
 CACHE_REFRESH_LOCK = Lock()
@@ -110,6 +127,7 @@ MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 BOOK_COVER_DIR.mkdir(parents=True, exist_ok=True)
+PUBLIC_ASSET_DIR.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title=settings.app_name)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
@@ -1464,6 +1482,58 @@ async def replace_word_image(
     if previous_url != word.image_url:
         remove_local_image(previous_url, IMAGE_DIR)
     return {"ok": True, "word": word.word, "image_url": word.image_url}
+
+
+@app.post("/api/vue/public-assets/ai-image")
+async def generate_public_asset_image(
+    edit_token: str = Form(default=""),
+    name: str = Form(...),
+    prompt: str = Form(...),
+    model: str = Form(default="wan2.7-image-pro"),
+):
+    require_word_write_access(edit_token)
+    selected_model = (model or "wan2.7-image-pro").strip()
+    clean_name = " ".join((name or "").split())[:80]
+    clean_prompt = " ".join((prompt or "").split())
+    if not clean_name:
+        raise HTTPException(status_code=400, detail="公共图片名称不能为空")
+    if len(clean_prompt) < 8:
+        raise HTTPException(status_code=400, detail="公共图片提示词太短")
+    try:
+        content = await generate_dashscope_prompt_image(
+            api_key=settings.dashscope_api_key,
+            endpoint=settings.dashscope_image_endpoint,
+            task_endpoint=settings.dashscope_task_endpoint,
+            poll_seconds=settings.dashscope_image_poll_seconds,
+            timeout_seconds=settings.dashscope_image_timeout_seconds,
+            model=selected_model,
+            prompt=clean_prompt,
+        )
+    except RuntimeError as exc:
+        detail = str(exc)
+        if "not configured" in detail:
+            raise HTTPException(status_code=400, detail=detail) from exc
+        if is_ai_quota_error(detail):
+            raise HTTPException(status_code=402, detail="额度已经用完") from exc
+        raise HTTPException(status_code=502, detail=f"公共图片生成失败: {detail}") from exc
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text[:400] if exc.response is not None else str(exc)
+        if is_ai_quota_error(detail):
+            raise HTTPException(status_code=402, detail="额度已经用完") from exc
+        raise HTTPException(status_code=502, detail=f"公共图片生成失败: {detail}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"公共图片生成失败: {exc}") from exc
+
+    suffix = public_asset_extension(content)
+    filename = f"{public_asset_slug(clean_name)}-{uuid4().hex[:8]}{suffix}"
+    target = PUBLIC_ASSET_DIR / filename
+    target.write_bytes(content)
+    return {
+        "ok": True,
+        "name": clean_name,
+        "model": selected_model,
+        "image_url": f"/static/generated-assets/{filename}",
+    }
 
 
 @app.post("/api/vue/words/{word_id}/ai-image")

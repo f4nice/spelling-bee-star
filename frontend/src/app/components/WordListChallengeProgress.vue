@@ -27,6 +27,7 @@ const initialChallengeCount = computed(() => {
 });
 
 const challengeCount = ref(initialChallengeCount.value);
+const crownImageUrl = "/static/icons/challenge-crown.png";
 
 const isChallengeComplete = computed(() => {
   const challenge = props.card.challenge || {};
@@ -60,7 +61,7 @@ function startChallenge() {
         :class="{ 'is-complete': isChallengeComplete }"
         title="挑战次数"
       >
-        <span class="challenge-crown" aria-hidden="true">♛</span>
+        <img class="challenge-crown-image" :src="crownImageUrl" alt="" aria-hidden="true">
         <strong>X{{ completedRoundCount }}</strong>
       </div>
       <div class="challenge-start-fields">
@@ -88,7 +89,7 @@ function startChallenge() {
 
 .challenge-start-form {
   width: 100%;
-  grid-template-columns: minmax(88px, auto) minmax(0, 1fr);
+  grid-template-columns: 104px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
 }
@@ -104,10 +105,11 @@ function startChallenge() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 52px;
-  min-width: 88px;
-  padding: 10px 14px;
+  justify-self: center;
+  gap: 6px;
+  min-height: 64px;
+  min-width: 96px;
+  padding: 8px 12px;
   border-radius: 999px;
   background:
     radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.85), transparent 28%),
@@ -125,13 +127,14 @@ function startChallenge() {
   letter-spacing: 0;
 }
 
-.challenge-crown {
-  font-size: 28px;
-  line-height: 1;
-  color: #fbbf24;
-  text-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.75),
-    0 2px 6px rgba(120, 53, 15, 0.28);
+.challenge-crown-image {
+  width: 46px;
+  height: 46px;
+  display: block;
+  object-fit: contain;
+  border-radius: 50%;
+  mix-blend-mode: multiply;
+  filter: drop-shadow(0 3px 5px rgba(120, 53, 15, 0.24));
 }
 
 .challenge-round-badge.is-complete {

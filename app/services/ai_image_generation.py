@@ -435,9 +435,6 @@ async def generate_dashscope_word_image(
     theme: str | None = None,
     style: str | None = None,
 ) -> bytes:
-    if not api_key:
-        raise RuntimeError("DASHSCOPE_API_KEY is not configured on the server.")
-    selected_model = model if model in DASHSCOPE_IMAGE_MODELS else "wan2.7-image-pro"
     prompt = build_word_image_prompt(
         word=word,
         english_definition=english_definition,
@@ -445,6 +442,35 @@ async def generate_dashscope_word_image(
         theme=theme,
         style=style,
     )
+    image_content = await generate_dashscope_prompt_image(
+        api_key=api_key,
+        endpoint=endpoint,
+        task_endpoint=task_endpoint,
+        poll_seconds=poll_seconds,
+        timeout_seconds=timeout_seconds,
+        model=model,
+        prompt=prompt,
+    )
+    return compose_word_card_image(
+        image_content,
+        word=word,
+        chinese_definition=chinese_definition,
+    )
+
+
+async def generate_dashscope_prompt_image(
+    *,
+    api_key: str,
+    endpoint: str,
+    task_endpoint: str,
+    poll_seconds: float,
+    timeout_seconds: int,
+    model: str,
+    prompt: str,
+) -> bytes:
+    if not api_key:
+        raise RuntimeError("DASHSCOPE_API_KEY is not configured on the server.")
+    selected_model = model if model in DASHSCOPE_IMAGE_MODELS else "wan2.7-image-pro"
     payload, is_async = _dashscope_payload_for_model(selected_model, prompt)
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -474,11 +500,7 @@ async def generate_dashscope_word_image(
             raise RuntimeError("DashScope image API did not return an image URL.")
         image_response = await client.get(image_url)
         image_response.raise_for_status()
-        return compose_word_card_image(
-            image_response.content,
-            word=word,
-            chinese_definition=chinese_definition,
-        )
+        return image_response.content
 
 
 async def asyncio_sleep(seconds: float) -> None:
