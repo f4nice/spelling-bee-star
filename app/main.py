@@ -74,7 +74,7 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260626-002"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260626-003"
 DEFAULT_PAGE_VERSION = "v20260624.0"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2960,7 +2960,12 @@ def word_navigation_context(
 
 def sidebar_challenge_progress(db: Session) -> list[dict]:
     word_lists = regular_word_lists(db)
-    return [{"list": word_list, "challenge": challenge_state(db, word_list)} for word_list in word_lists]
+    items = []
+    for word_list in word_lists:
+        state = challenge_state(db, word_list)
+        if 0 < state["completed"] < state["total"]:
+            items.append({"list": word_list, "challenge": state})
+    return items
 
 
 async def enrich_word_ids(word_ids: list[int]) -> None:
