@@ -92,7 +92,7 @@ function startChallenge() {
 
 .challenge-start-form {
   width: 100%;
-  grid-template-columns: 88px minmax(0, 1fr);
+  grid-template-columns: 108px minmax(0, 1fr);
   align-items: center;
   gap: 14px;
 }
@@ -130,10 +130,10 @@ function startChallenge() {
   align-items: center;
   justify-content: center;
   justify-self: start;
-  width: 80px;
-  height: 80px;
+  width: 100px;
+  height: 100px;
   padding: 0;
-  border-radius: 20px;
+  border-radius: 24px;
   background:
     radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.85), transparent 28%),
     linear-gradient(135deg, #fff3b0 0%, #f7c948 48%, #c98712 100%);
@@ -146,11 +146,11 @@ function startChallenge() {
 }
 
 .challenge-crown-image {
-  width: 80px;
-  height: 80px;
+  width: 100px;
+  height: 100px;
   display: block;
   object-fit: cover;
-  border-radius: 18px;
+  border-radius: 22px;
   mix-blend-mode: multiply;
   filter: drop-shadow(0 3px 5px rgba(120, 53, 15, 0.24));
 }
