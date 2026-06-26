@@ -19,10 +19,13 @@ const remainingCount = computed(() => {
   return Math.max(total - completed, 0);
 });
 
-const initialChallengeCount = computed(() => {
+const totalCount = computed(() => {
   const challenge = props.card.challenge || {};
-  const total = Number(challenge.total || props.card.count || 1);
-  const available = remainingCount.value > 0 ? remainingCount.value : total;
+  return Math.max(Number(challenge.total || props.card.count || 1), 1);
+});
+
+const initialChallengeCount = computed(() => {
+  const available = remainingCount.value > 0 ? remainingCount.value : totalCount.value;
   return Math.min(20, Math.max(available, 1));
 });
 
@@ -35,9 +38,7 @@ const isChallengeComplete = computed(() => {
 });
 
 const normalizedChallengeCount = computed(() => {
-  const fallbackMax = Math.max(remainingCount.value || props.card.count || 1, 1);
-  const max = Math.max(remainingCount.value || fallbackMax, 1);
-  return Math.min(Math.max(Number(challengeCount.value) || 1, 1), max);
+  return Math.min(Math.max(Number(challengeCount.value) || 1, 1), totalCount.value);
 });
 
 function startChallenge() {
@@ -59,7 +60,7 @@ function startChallenge() {
           v-model.number="challengeCount"
           type="number"
           min="1"
-          :max="Math.max(remainingCount || card.count || 1, 1)"
+          :max="totalCount"
         >
       </label>
       <button class="challenge-button" type="submit">
