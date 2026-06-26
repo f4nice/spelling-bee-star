@@ -27,7 +27,7 @@ defineProps({
   <article class="word-card list-card">
     <button class="list-card-link plain-card-button" type="button" @click="go(`/lists/${card.list.id}`)">
       <WordListCardMedia :card="card" :fallback-letter="fallbackLetter" />
-      <WordListCardBody :card="card" />
+      <WordListCardBody :card="card" :show-challenge="showChallenge" />
     </button>
 
     <WordListChallengeProgress v-if="showChallenge" :card="card" :go="go" />
