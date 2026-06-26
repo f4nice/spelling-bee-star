@@ -62,9 +62,12 @@ function startChallenge() {
         title="挑战次数"
       >
         <img class="challenge-crown-image" :src="crownImageUrl" alt="" aria-hidden="true">
-        <strong>X{{ completedRoundCount }}</strong>
       </div>
       <div class="challenge-start-fields">
+        <div class="challenge-round-count">
+          <span>挑战次数</span>
+          <strong>X{{ completedRoundCount }}</strong>
+        </div>
         <label>
           <span>挑战几个</span>
           <input
@@ -89,9 +92,9 @@ function startChallenge() {
 
 .challenge-start-form {
   width: 100%;
-  grid-template-columns: 104px minmax(0, 1fr);
+  grid-template-columns: 88px minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .challenge-start-fields {
@@ -101,16 +104,36 @@ function startChallenge() {
   gap: 8px;
 }
 
+.challenge-round-count {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: #475569;
+  font-weight: 800;
+}
+
+.challenge-round-count span {
+  font-size: 13px;
+}
+
+.challenge-round-count strong {
+  color: #8a4b05;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
 .challenge-round-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  justify-self: center;
-  gap: 6px;
-  min-height: 64px;
-  min-width: 96px;
-  padding: 8px 12px;
-  border-radius: 999px;
+  justify-self: start;
+  width: 80px;
+  height: 80px;
+  padding: 0;
+  border-radius: 20px;
   background:
     radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.85), transparent 28%),
     linear-gradient(135deg, #fff3b0 0%, #f7c948 48%, #c98712 100%);
@@ -119,20 +142,15 @@ function startChallenge() {
   box-shadow:
     inset 0 0 0 1px rgba(180, 83, 9, 0.2),
     0 12px 24px rgba(180, 83, 9, 0.22);
-}
-
-.challenge-round-badge strong {
-  font-size: 20px;
-  line-height: 1;
-  letter-spacing: 0;
+  overflow: hidden;
 }
 
 .challenge-crown-image {
-  width: 46px;
-  height: 46px;
+  width: 80px;
+  height: 80px;
   display: block;
-  object-fit: contain;
-  border-radius: 50%;
+  object-fit: cover;
+  border-radius: 18px;
   mix-blend-mode: multiply;
   filter: drop-shadow(0 3px 5px rgba(120, 53, 15, 0.24));
 }
