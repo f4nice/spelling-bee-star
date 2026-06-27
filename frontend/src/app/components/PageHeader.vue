@@ -39,7 +39,7 @@ function goBackToList(event) {
 
 <template>
   <section class="panel app-page-heading">
-    <div>
+    <div class="page-heading-title">
       <p class="section-kicker">SpeakEasy</p>
       <h1>{{ routeTitle }}</h1>
     </div>
@@ -62,9 +62,30 @@ function goBackToList(event) {
   gap: 16px;
 }
 
+.page-heading-title {
+  min-width: 0;
+}
+
 .page-heading-return-button {
   flex: 0 0 auto;
+  margin-left: auto;
+  border-color: rgba(16, 128, 91, 0.32);
+  background: #eaf7f1;
+  color: #0b6f4c;
   text-decoration: none;
   white-space: nowrap;
+}
+
+.page-heading-return-button:hover,
+.page-heading-return-button:focus-visible {
+  border-color: #0f7f59;
+  background: #0f7f59;
+  color: #fff;
+}
+
+@media (max-width: 720px) {
+  .app-page-heading {
+    align-items: flex-start;
+  }
 }
 </style>
