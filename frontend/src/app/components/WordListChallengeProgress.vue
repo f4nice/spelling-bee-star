@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 
 const props = defineProps({
   card: {
@@ -24,12 +24,22 @@ const totalCount = computed(() => {
   return Math.max(Number(challenge.total || props.card.count || 1), 1);
 });
 
+const maxChallengeCount = computed(() => Math.min(totalCount.value, 500));
+
 const initialChallengeCount = computed(() => {
-  const available = remainingCount.value > 0 ? remainingCount.value : totalCount.value;
-  return Math.min(20, Math.max(available, 1));
+  const remaining = remainingCount.value > 0 ? remainingCount.value : maxChallengeCount.value;
+  return Math.min(remaining, maxChallengeCount.value);
 });
 
 const challengeCount = ref(initialChallengeCount.value);
+
+watch(
+  initialChallengeCount,
+  (value) => {
+    challengeCount.value = value;
+  },
+  { immediate: true }
+);
 
 const isChallengeComplete = computed(() => {
   const challenge = props.card.challenge || {};
@@ -37,8 +47,10 @@ const isChallengeComplete = computed(() => {
   return total > 0 && remainingCount.value <= 0;
 });
 
+const hasCompletedRounds = computed(() => Number(props.card.challenge?.completed_rounds || 0) > 0);
+
 const normalizedChallengeCount = computed(() => {
-  return Math.min(Math.max(Number(challengeCount.value) || 1, 1), totalCount.value);
+  return Math.min(Math.max(Number(challengeCount.value) || 1, 1), maxChallengeCount.value);
 });
 
 function startChallenge() {
@@ -60,11 +72,11 @@ function startChallenge() {
           v-model.number="challengeCount"
           type="number"
           min="1"
-          :max="totalCount"
+          :max="maxChallengeCount"
         >
       </label>
       <button class="challenge-button" type="submit">
-        {{ isChallengeComplete ? "再次挑战" : "开始挑战" }}
+        {{ hasCompletedRounds ? "再次挑战" : "开始挑战" }}
       </button>
     </form>
   </div>

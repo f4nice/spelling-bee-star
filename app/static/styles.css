@@ -5263,6 +5263,13 @@ select {
   background: #fff;
 }
 
+.preview-table-note {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .preview-table th,
 .preview-table td {
   min-width: 120px;

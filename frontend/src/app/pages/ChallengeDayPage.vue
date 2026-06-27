@@ -31,6 +31,7 @@ const wrongChallengeUrl = computed(() => {
     daily_count: String(props.data.wrong),
     start_count: "0",
     wrong_date: props.data.date,
+    restart: "1",
   });
   return `/challenge/${props.data.wrong_word_list_id}?${params.toString()}`;
 });

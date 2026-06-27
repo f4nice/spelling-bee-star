@@ -74,7 +74,7 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260626-009"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260627-002"
 DEFAULT_PAGE_VERSION = "v20260624.0"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -685,19 +685,20 @@ def vue_list_detail_api(word_list_id: int, db: Session = Depends(get_db)):
         select(Word)
         .join(WordListItem, WordListItem.word_id == Word.id)
         .where(WordListItem.word_list_id == word_list_id)
-        .order_by(Word.word.asc())
+        .order_by(WordListItem.id.asc())
     ).all()
     stats = challenge_counts_for_words(db, [word.id for word in words])
     return {
-        "word_list": {"id": word_list.id, "name": word_list.name},
+        "word_list": {"id": word_list.id, "name": word_list.name, "sequence_offset": word_list.sequence_offset},
         "challenge": challenge_state(db, word_list),
         "words": [
             {
                 **serialize_word(word),
+                "display_index": word_list.sequence_offset + index + 1,
                 "detail_url": f"/words/{word.id}?edit=1&list_id={word_list.id}",
                 "challenge_stats": stats.get(word.id, {"correct": 0, "wrong": 0}),
             }
-            for word in words
+            for index, word in enumerate(words)
         ],
     }
 
@@ -749,6 +750,9 @@ def vue_word_detail_api(
         db.commit()
         db.refresh(word)
     nav = word_navigation_context(db, word.id, list_id, challenge_day, challenge_status)
+    nav_word_list = db.get(WordList, nav.get("list_id")) if nav.get("list_id") else None
+    if nav_word_list:
+        nav["word_list_name"] = nav_word_list.name
     audio_version = str(int(datetime.utcnow().timestamp()))
     return {
         "word": {
@@ -926,17 +930,40 @@ async def vue_import_preview(
     if not path.exists():
         raise HTTPException(status_code=404, detail="预览已过期，请重新上传 Excel")
     preview = json.loads(path.read_text(encoding="utf-8"))
-    target_list = get_or_create_word_list(db, word_list_id, word_list_name)
+    selected_preview_rows = set(selected_rows) or {
+        int(row.get("index", 0)) for row in preview.get("rows", [])
+    }
+    selected_preview_columns = set(selected_columns) or set(preview.get("columns", []))
     if not word_columns:
         word_columns = preview.get("inferred_word_columns") or [preview.get("inferred_word_column")]
         word_columns = [column for column in word_columns if column]
     rows = parse_words_from_preview(
         preview=preview,
-        selected_row_indexes=set(selected_rows),
-        selected_columns=set(selected_columns),
+        selected_row_indexes=selected_preview_rows,
+        selected_columns=selected_preview_columns,
         word_columns=word_columns,
     )
-    word_ids = import_rows(rows, db, target_list)
+    chunk_size = 500
+    base_name = clean_list_name(word_list_name)
+    word_ids: list[int] = []
+    split_lists: list[WordList] = []
+    if len(rows) > chunk_size:
+        for chunk_index in range(0, len(rows), chunk_size):
+            chunk_number = (chunk_index // chunk_size) + 1
+            chunk_list = get_or_create_word_list_by_name(db, f"{base_name}-{chunk_number}")
+            chunk_list.sequence_offset = chunk_index
+            db.add(chunk_list)
+            db.commit()
+            split_lists.append(chunk_list)
+            word_ids.extend(import_rows(rows[chunk_index : chunk_index + chunk_size], db, chunk_list))
+        target_list = split_lists[0]
+    else:
+        target_list = get_or_create_word_list(db, word_list_id, base_name)
+        if not word_list_id:
+            target_list.sequence_offset = 0
+            db.add(target_list)
+            db.commit()
+        word_ids = import_rows(rows, db, target_list)
     image_result = {"matched": 0, "unmatched": 0, "failed": 0}
     if image_files:
         imported_words = [word for word_id in word_ids if (word := db.get(Word, word_id))]
@@ -950,6 +977,10 @@ async def vue_import_preview(
         "word_list_id": target_list.id,
         "word_list_name": target_list.name,
         "count": len(word_ids),
+        "split_word_lists": [
+            {"id": word_list.id, "name": word_list.name, "sequence_offset": word_list.sequence_offset}
+            for word_list in split_lists
+        ],
         "image_result": image_result,
     }
 
@@ -1142,8 +1173,13 @@ def challenge_payload(
         progress.completed_count = restart_index
         progress.current_index = restart_index
     else:
+        historical_completed = (
+            challenged_word_count_for_list(db, word_list_id, total)
+            if not progress.completed_rounds
+            else 0
+        )
         progress.completed_count = min(
-            max(progress.completed_count, challenged_word_count_for_list(db, word_list_id, total)),
+            max(progress.completed_count, historical_completed),
             total,
         )
         progress.current_index = min(progress.current_index, max(total - 1, 0))
@@ -1201,6 +1237,7 @@ def challenge_payload(
         "progress": {
             "current_index": progress.current_index,
             "completed_count": progress.completed_count,
+            "completed_rounds": progress.completed_rounds,
         },
         "challenge": state,
         "today_challenge": today_challenge,
@@ -2337,6 +2374,12 @@ def ensure_schema_columns() -> None:
     missing_string_columns = [column for column in ("part_of_speech",) if column not in word_columns]
     table_names = set(inspector.get_table_names())
     wrong_columns = {column["name"] for column in inspector.get_columns("wrong_words")} if "wrong_words" in table_names else set()
+    word_list_columns = {column["name"] for column in inspector.get_columns("word_lists")} if "word_lists" in table_names else set()
+    challenge_progress_columns = (
+        {column["name"] for column in inspector.get_columns("challenge_progress")}
+        if "challenge_progress" in table_names
+        else set()
+    )
 
     with engine.begin() as connection:
         for column in missing_boolean_columns:
@@ -2345,6 +2388,10 @@ def ensure_schema_columns() -> None:
             connection.execute(text(f"ALTER TABLE words ADD COLUMN {column} TEXT NULL"))
         for column in missing_string_columns:
             connection.execute(text(f"ALTER TABLE words ADD COLUMN {column} VARCHAR(120) NULL"))
+        if "word_lists" in table_names and "sequence_offset" not in word_list_columns:
+            connection.execute(text("ALTER TABLE word_lists ADD COLUMN sequence_offset INTEGER NOT NULL DEFAULT 0"))
+        if "challenge_progress" in table_names and "completed_rounds" not in challenge_progress_columns:
+            connection.execute(text("ALTER TABLE challenge_progress ADD COLUMN completed_rounds INTEGER NOT NULL DEFAULT 0"))
         if "wrong_words" in table_names and "wrong_date" not in wrong_columns:
             if dialect == "mysql":
                 connection.execute(text("ALTER TABLE wrong_words ADD COLUMN wrong_date DATE NULL"))
@@ -2402,6 +2449,19 @@ def get_or_create_word_list(db: Session, word_list_id: str, name: str) -> WordLi
     return word_list
 
 
+def get_or_create_word_list_by_name(db: Session, name: str) -> WordList:
+    cleaned_name = clean_list_name(name)
+    word_list = db.scalar(
+        select(WordList).where(WordList.name == cleaned_name).order_by(WordList.id.asc()).limit(1)
+    )
+    if not word_list:
+        word_list = WordList(name=cleaned_name)
+        db.add(word_list)
+        db.commit()
+        db.refresh(word_list)
+    return word_list
+
+
 def link_word_to_list(db: Session, word_list_id: int, word_id: int) -> None:
     existing = db.scalar(
         select(WordListItem).where(
@@ -2448,7 +2508,7 @@ def word_list_card(db: Session, word_list: WordList) -> dict:
 
 
 def get_words_for_list(db: Session, word_list_id: int, order_by_created: bool = False) -> list[Word]:
-    order_column = Word.created_at.desc() if order_by_created else Word.word.asc()
+    order_column = Word.created_at.desc() if order_by_created else WordListItem.id.asc()
     return db.scalars(
         select(Word)
         .join(WordListItem, WordListItem.word_id == Word.id)
@@ -2646,14 +2706,6 @@ def clear_wrong_word_if_passed(db: Session, word_id: int, wrong_date: date | Non
             WrongWord.wrong_date == wrong_date,
         )
     )
-    word_list = get_wrong_word_list(db, wrong_date)
-    if word_list:
-        db.execute(
-            delete(WordListItem).where(
-                WordListItem.word_list_id == word_list.id,
-                WordListItem.word_id == word_id,
-            )
-        )
 
 
 def wrong_word_count(db: Session) -> int:
@@ -2834,16 +2886,37 @@ def challenge_state(db: Session, word_list: WordList) -> dict:
         select(func.count(WordListItem.id)).where(WordListItem.word_list_id == word_list.id)
     ) or 0
     progress = db.scalar(select(ChallengeProgress).where(ChallengeProgress.word_list_id == word_list.id))
+    created_progress = False
+    if not progress and total:
+        progress = ChallengeProgress(word_list_id=word_list.id, current_index=0, completed_count=0, completed_rounds=0)
+        db.add(progress)
+        db.flush()
+        created_progress = True
+    historical_completed = challenged_word_count_for_list(db, word_list.id, total) if not progress or not progress.completed_rounds else 0
     completed = min(
-        max(progress.completed_count if progress else 0, challenged_word_count_for_list(db, word_list.id, total)),
+        max(progress.completed_count if progress else 0, historical_completed),
         total,
     )
+    completed_rounds = progress.completed_rounds if progress else 0
+    if total and completed >= total and progress:
+        progress.completed_rounds = (progress.completed_rounds or 0) + 1
+        progress.completed_count = 0
+        progress.current_index = 0
+        db.add(progress)
+        db.commit()
+        db.refresh(progress)
+        completed = 0
+        completed_rounds = progress.completed_rounds
+    elif created_progress:
+        db.commit()
+        db.refresh(progress)
     percent = round((completed / total) * 100) if total else 0
     return {
         "completed": completed,
         "total": total,
         "percent": percent,
         "is_complete": bool(total and completed >= total),
+        "completed_rounds": completed_rounds,
     }
 
 

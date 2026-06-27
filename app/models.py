@@ -41,6 +41,7 @@ class WordList(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    sequence_offset: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -72,6 +73,7 @@ class ChallengeProgress(Base):
     word_list_id: Mapped[int] = mapped_column(ForeignKey("word_lists.id", ondelete="CASCADE"), nullable=False, index=True)
     current_index: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     completed_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    completed_rounds: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

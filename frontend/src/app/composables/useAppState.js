@@ -31,6 +31,7 @@ export function useAppState() {
   return {
     shellContext,
     route,
+    data,
     routeTitle,
     loading,
     error,

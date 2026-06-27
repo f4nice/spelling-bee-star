@@ -27,7 +27,7 @@ const activeFilter = ref("all");
 const indexedWords = computed(() =>
   (props.data.words || []).map((word, index) => ({
     word,
-    index,
+    index: Number(word.display_index || index + 1) - 1,
   }))
 );
 

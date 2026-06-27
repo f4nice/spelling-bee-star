@@ -14,14 +14,7 @@ const props = defineProps({
 
 const crownImageUrl = "/static/icons/challenge-crown-transparent.png";
 
-const isChallengeComplete = computed(() => {
-  const challenge = props.card.challenge || {};
-  const total = Number(challenge.total || props.card.count || 0);
-  const completed = Number(challenge.completed || 0);
-  return total > 0 && completed >= total;
-});
-
-const completedRoundCount = computed(() => (isChallengeComplete.value ? 1 : 0));
+const completedRoundCount = computed(() => Number(props.card.challenge?.completed_rounds || 0));
 </script>
 
 <template>
