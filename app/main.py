@@ -31,6 +31,7 @@ from app.models import (
     ChallengeProgress,
     ChallengeSpellingAttempt,
     DailyQuote,
+    LearningGrowthMetric,
     Word,
     WordList,
     WordListItem,
@@ -75,18 +76,58 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260627-010"
-DEFAULT_PAGE_VERSION = "v20260624.0"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260627-012"
+DEFAULT_PAGE_VERSION = "v20260627.1"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
+GROWTH_TROPHY_ASSET_STEM = "learning-growth-trophy"
+GROWTH_TROPHY_FALLBACK_IMAGE = "/static/icons/challenge-crown-transparent.png"
+
+GROWTH_BADGE_CONFIG = [
+    {
+        "key": "spelling_words",
+        "label": "拼写挑战",
+        "badge_label": "拼写 1000 题",
+        "target": 1000,
+        "unit": "题",
+        "tier": "gold",
+    },
+    {
+        "key": "challenge_rounds",
+        "label": "完整挑战",
+        "badge_label": "完成 10 轮",
+        "target": 10,
+        "unit": "轮",
+        "tier": "platinum",
+    },
+    {
+        "key": "good_quotes",
+        "label": "好句阅读",
+        "badge_label": "阅读 100 条好句",
+        "target": 100,
+        "unit": "条",
+        "tier": "silver",
+    },
+    {
+        "key": "science_discoveries",
+        "label": "科学探索",
+        "badge_label": "探索 100 个知识点",
+        "target": 100,
+        "unit": "个",
+        "tier": "emerald",
+    },
+]
 
 
 SCIENCE_LEVELS = [
     {"key": "L300-L500", "label": "L300-L500", "tone": "short sentences and simple science words"},
     {"key": "L500-L700", "label": "L500-L700", "tone": "clear middle-grade explanations"},
     {"key": "L700-L900", "label": "L700-L900", "tone": "richer details and cause-effect language"},
+    {"key": "L900-L1100", "label": "L900-L1100", "tone": "upper middle-grade explanations with evidence and examples"},
+    {"key": "L1100-L1300", "label": "L1100-L1300", "tone": "more academic wording with clear scientific reasoning"},
+    {"key": "L1300-L1500", "label": "L1300-L1500", "tone": "advanced science reading with concise technical context"},
 ]
 
 SCIENCE_SOURCES = [
@@ -146,6 +187,99 @@ def science_slug(value: str) -> str:
     return slug or "science-discovery"
 
 
+def science_image_url(slug: str) -> str:
+    return f"/booklearner/api/science-image/{quote_plus(slug)}.svg"
+
+
+def hydrate_science_item(item: dict[str, Any]) -> dict[str, Any]:
+    slug = str(item.get("slug") or science_slug(str(item.get("title") or "science-discovery")))
+    item["imageUrl"] = science_image_url(slug)
+    return item
+
+
+def hydrate_science_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    for item in payload.get("items") or []:
+        if isinstance(item, dict):
+            hydrate_science_item(item)
+    if isinstance(payload.get("item"), dict):
+        hydrate_science_item(payload["item"])
+    return payload
+
+
+def science_svg_lines(text: str, limit: int = 26) -> list[str]:
+    words = str(text or "").split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if current and len(candidate) > limit:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines[:3] or ["Science Discovery"]
+
+
+def science_svg_card(item: dict[str, Any]) -> str:
+    topic = str(item.get("topic") or "科学")
+    title = str(item.get("title") or "Science Discovery")
+    summary = str(item.get("summary") or "")
+    themes = {
+        "动物": ("#7ccba2", "#1f7a59", "#f6d6a8"),
+        "植物": ("#c8eb7f", "#236b3b", "#f4ffe5"),
+        "人体": ("#9dd6ff", "#315f9d", "#fff2d6"),
+        "微生物": ("#c8b8ff", "#6043a8", "#eef4ff"),
+        "地球": ("#8ed9d1", "#1f6f79", "#f2e7c9"),
+        "太空": ("#2c3a82", "#111b4d", "#dfe7ff"),
+        "工程": ("#ffd16f", "#8a5a18", "#ecfbff"),
+    }
+    c1, c2, c3 = themes.get(topic, ("#a9e5cf", "#1d7f5b", "#f5fbf7"))
+    title_lines = science_svg_lines(title, 24)
+    summary_lines = science_svg_lines(summary, 46)[:2]
+    title_markup = "\n".join(
+        f'<text x="48" y="{282 + index * 46}" class="title">{html.escape(line)}</text>'
+        for index, line in enumerate(title_lines)
+    )
+    summary_markup = "\n".join(
+        f'<text x="52" y="{385 + index * 26}" class="summary">{html.escape(line)}</text>'
+        for index, line in enumerate(summary_lines)
+    )
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-label="{html.escape(title)}">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="{c1}"/>
+      <stop offset="100%" stop-color="{c2}"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="74%" cy="24%" r="58%">
+      <stop offset="0%" stop-color="{c3}" stop-opacity="0.92"/>
+      <stop offset="100%" stop-color="{c3}" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#0d2c24" flood-opacity="0.18"/>
+    </filter>
+    <style>
+      .topic {{ font: 900 28px Arial, sans-serif; fill: #ffffff; letter-spacing: 3px; }}
+      .title {{ font: 900 38px Arial, sans-serif; fill: #ffffff; }}
+      .summary {{ font: 700 18px Arial, sans-serif; fill: rgba(255,255,255,0.84); }}
+    </style>
+  </defs>
+  <rect width="800" height="450" rx="34" fill="url(#bg)"/>
+  <rect width="800" height="450" rx="34" fill="url(#glow)"/>
+  <circle cx="650" cy="92" r="108" fill="#fff" opacity="0.16"/>
+  <circle cx="720" cy="210" r="72" fill="#fff" opacity="0.13"/>
+  <path d="M-30 310 C140 210 220 360 375 272 C520 190 610 256 836 176 L836 450 L-30 450 Z" fill="#ffffff" opacity="0.18"/>
+  <path d="M72 126 C118 72 174 80 218 126 C266 178 330 170 372 120 C410 76 466 82 502 132" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" opacity="0.28"/>
+  <g filter="url(#soft)">
+    <rect x="42" y="38" width="182" height="54" rx="27" fill="rgba(255,255,255,0.18)"/>
+    <text x="66" y="74" class="topic">{html.escape(topic)}</text>
+    {title_markup}
+    {summary_markup}
+  </g>
+</svg>"""
+
+
 def science_word_items(words: str) -> list[dict[str, str]]:
     return [
         {
@@ -181,6 +315,7 @@ def build_science_discovery_pool(level: str | None = None) -> list[dict[str, Any
                     "level": level_info["key"],
                     "levelLabel": level_info["label"],
                     "summary": summary,
+                    "imageUrl": science_image_url(slug),
                     "source": source_name,
                     "sourceUrl": source_url,
                     "article": science_article_paragraphs(title, summary, topic, level_info),
@@ -220,7 +355,7 @@ def build_science_daily_payload(level: str, topic: str, batch: int) -> dict[str,
         try:
             cached = json.loads(cache_path.read_text(encoding="utf-8"))
             if isinstance(cached, dict):
-                return cached
+                return hydrate_science_payload(cached)
         except (OSError, json.JSONDecodeError):
             pass
 
@@ -246,12 +381,13 @@ def build_science_daily_payload(level: str, topic: str, batch: int) -> dict[str,
         cache_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError:
         pass
-    return payload
+    return hydrate_science_payload(payload)
 
 
 def find_science_article(slug: str, level: str | None = None) -> dict[str, Any] | None:
     candidates = build_science_discovery_pool(level) + build_science_discovery_pool()
-    return next((item for item in candidates if item["slug"] == slug), None)
+    item = next((item for item in candidates if item["slug"] == slug), None)
+    return hydrate_science_item(item) if item else None
 
 
 def is_ai_quota_error(detail: str) -> bool:
@@ -290,6 +426,22 @@ def public_asset_extension(content: bytes) -> str:
 
 def public_asset_slug(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]+", "-", value.lower()).strip("-") or "asset"
+
+
+def growth_trophy_image_url() -> str:
+    if PUBLIC_ASSET_DIR.exists():
+        matches = sorted(
+            [
+                path
+                for path in PUBLIC_ASSET_DIR.glob(f"{GROWTH_TROPHY_ASSET_STEM}.*")
+                if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
+            ],
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        if matches:
+            return f"/media/generated-assets/{matches[0].name}"
+    return GROWTH_TROPHY_FALLBACK_IMAGE
 
 
 def store_book_cover_image(title: str, content: bytes) -> str:
@@ -608,6 +760,21 @@ def good_words_featured(
     analysis_id: int | None = Query(default=None, ge=1),
 ):
     return {"items": list_featured_good_words_quotes(limit=limit, analysis_id=analysis_id)}
+
+
+@app.get("/booklearner/api/science-image/{slug}.svg")
+def good_words_science_image(slug: str):
+    item = find_science_article(slug) or {
+        "slug": slug,
+        "title": slug.replace("-", " ").title(),
+        "topic": "科学",
+        "summary": "A small science discovery for today's reading.",
+    }
+    return Response(
+        content=science_svg_card(item),
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @app.get("/booklearner/api/science-daily")
@@ -961,6 +1128,7 @@ def vue_home_api(db: Session = Depends(get_db)):
         "cards": cards,
         "featured_cards": cards[:4],
         "calendar": challenge_calendar(db),
+        "growth": learning_growth_summary(db),
         "stats": {
             "word_lists": len(word_lists),
             "words": db.scalar(select(func.count(Word.id))) or 0,
@@ -985,6 +1153,7 @@ def vue_shell_api(db: Session = Depends(get_db)):
         "daily_quote": get_daily_quote(db),
         "sidebar_challenges": sidebar_challenge_progress(db),
         "wrong_word_count": wrong_word_count(db),
+        "learning_growth": learning_growth_summary(db),
     })
 
 
@@ -1892,6 +2061,60 @@ async def generate_public_asset_image(
     }
 
 
+@app.post("/api/vue/public-assets/growth-trophy")
+async def generate_growth_trophy_asset(
+    edit_token: str = Form(default=""),
+    model: str = Form(default="wan2.7-image-pro"),
+):
+    require_word_write_access(edit_token)
+    selected_model = (model or "wan2.7-image-pro").strip()
+    prompt = (
+        "A beautiful premium game achievement trophy icon for a children's English learning app, "
+        "golden trophy cup, PS5 style achievement badge, centered isolated object, cute but polished, "
+        "soft highlights, transparent or clean light background, no text, no letters, no watermark, high quality"
+    )
+    try:
+        content = await generate_dashscope_prompt_image(
+            api_key=settings.dashscope_api_key,
+            endpoint=settings.dashscope_image_endpoint,
+            task_endpoint=settings.dashscope_task_endpoint,
+            poll_seconds=settings.dashscope_image_poll_seconds,
+            timeout_seconds=settings.dashscope_image_timeout_seconds,
+            model=selected_model,
+            prompt=prompt,
+        )
+    except RuntimeError as exc:
+        detail = str(exc)
+        if "not configured" in detail:
+            raise HTTPException(status_code=400, detail=detail) from exc
+        if is_ai_quota_error(detail):
+            raise HTTPException(status_code=402, detail="额度已经用完") from exc
+        raise HTTPException(status_code=502, detail=f"奖杯生成失败: {detail}") from exc
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text[:400] if exc.response is not None else str(exc)
+        if is_ai_quota_error(detail):
+            raise HTTPException(status_code=402, detail="额度已经用完") from exc
+        raise HTTPException(status_code=502, detail=f"奖杯生成失败: {detail}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"奖杯生成失败: {exc}") from exc
+
+    suffix = public_asset_extension(content)
+    for old_asset in PUBLIC_ASSET_DIR.glob(f"{GROWTH_TROPHY_ASSET_STEM}.*"):
+        if old_asset.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}:
+            try:
+                old_asset.unlink()
+            except OSError:
+                pass
+    target = PUBLIC_ASSET_DIR / f"{GROWTH_TROPHY_ASSET_STEM}{suffix}"
+    target.write_bytes(content)
+    return {
+        "ok": True,
+        "name": "成长奖杯",
+        "model": selected_model,
+        "image_url": f"/media/generated-assets/{target.name}",
+    }
+
+
 @app.post("/api/vue/words/{word_id}/ai-image")
 async def generate_ai_word_image(
     word_id: int,
@@ -2552,6 +2775,157 @@ def clean_list_name(name: str) -> str:
     return text[:255] or "新单词表"
 
 
+def percent_value(value: int, target: int) -> int:
+    if target <= 0:
+        return 0
+    return max(0, min(100, round((value / target) * 100)))
+
+
+def default_learning_growth_summary() -> dict[str, Any]:
+    trophy_image = growth_trophy_image_url()
+    return {
+        "title": "成长成就",
+        "subtitle": "像闯关一样完成每天学习",
+        "level": 1,
+        "points": 0,
+        "trophyImageUrl": trophy_image,
+        "metrics": [
+            {
+                **item,
+                "badgeLabel": item["badge_label"],
+                "value": 0,
+                "percent": 0,
+                "unlocked": False,
+                "iconUrl": trophy_image,
+            }
+            for item in GROWTH_BADGE_CONFIG
+        ],
+        "dailyMissions": [],
+    }
+
+
+def growth_metric_value(db: Session, metric_key: str) -> int:
+    metric = db.scalar(select(LearningGrowthMetric).where(LearningGrowthMetric.metric_key == metric_key))
+    return metric.metric_value if metric else 0
+
+
+def sync_learning_growth_metric(
+    db: Session,
+    metric_key: str,
+    label: str,
+    value: int,
+    target: int,
+    badge_label: str,
+) -> None:
+    metric = db.scalar(select(LearningGrowthMetric).where(LearningGrowthMetric.metric_key == metric_key))
+    if metric:
+        metric.metric_label = label
+        metric.metric_value = value
+        metric.metric_target = target
+        metric.badge_label = badge_label
+    else:
+        metric = LearningGrowthMetric(
+            metric_key=metric_key,
+            metric_label=label,
+            metric_value=value,
+            metric_target=target,
+            badge_label=badge_label,
+        )
+    db.add(metric)
+
+
+def good_quote_growth_count() -> int:
+    try:
+        return len(list_featured_good_words_quotes(limit=1000))
+    except Exception:
+        return 0
+
+
+def science_growth_count() -> int:
+    try:
+        return len(build_science_discovery_pool())
+    except Exception:
+        return 0
+
+
+def learning_growth_summary(db: Session) -> dict[str, Any]:
+    try:
+        trophy_image = growth_trophy_image_url()
+        spelling_words = db.scalar(select(func.count(ChallengeSpellingAttempt.id))) or 0
+        challenge_rounds = db.scalar(select(func.coalesce(func.sum(ChallengeProgress.completed_rounds), 0))) or 0
+        good_quotes = max(good_quote_growth_count(), growth_metric_value(db, "good_quotes"))
+        science_discoveries = max(science_growth_count(), growth_metric_value(db, "science_discoveries"))
+        values = {
+            "spelling_words": int(spelling_words),
+            "challenge_rounds": int(challenge_rounds),
+            "good_quotes": int(good_quotes),
+            "science_discoveries": int(science_discoveries),
+        }
+        metrics = []
+        for config in GROWTH_BADGE_CONFIG:
+            value = values.get(config["key"], 0)
+            sync_learning_growth_metric(
+                db,
+                config["key"],
+                config["label"],
+                value,
+                config["target"],
+                config["badge_label"],
+            )
+            metrics.append(
+                {
+                    **config,
+                    "badgeLabel": config["badge_label"],
+                    "value": value,
+                    "percent": percent_value(value, config["target"]),
+                    "unlocked": value >= config["target"],
+                    "iconUrl": trophy_image,
+                }
+            )
+        db.commit()
+
+        today = date.today()
+        today_stat = db.scalar(select(ChallengeDailyStat).where(ChallengeDailyStat.stat_date == today))
+        today_correct = today_stat.correct_count if today_stat else 0
+        today_wrong = today_stat.wrong_count if today_stat else 0
+        today_total = today_correct + today_wrong
+        points = values["spelling_words"] * 2 + values["challenge_rounds"] * 50 + values["good_quotes"] * 3 + values["science_discoveries"] * 8
+        return {
+            "title": "成长成就",
+            "subtitle": "每天完成挑战，点亮自己的奖杯墙",
+            "level": max(1, points // 500 + 1),
+            "points": points,
+            "trophyImageUrl": trophy_image,
+            "metrics": metrics,
+            "dailyMissions": [
+                {
+                    "key": "today_spelling",
+                    "label": "今日拼写",
+                    "value": today_total,
+                    "target": 20,
+                    "percent": percent_value(today_total, 20),
+                },
+                {
+                    "key": "today_correct",
+                    "label": "今日答对",
+                    "value": today_correct,
+                    "target": 10,
+                    "percent": percent_value(today_correct, 10),
+                },
+                {
+                    "key": "science_seed",
+                    "label": "科学探索库",
+                    "value": values["science_discoveries"],
+                    "target": 100,
+                    "percent": percent_value(values["science_discoveries"], 100),
+                },
+            ],
+        }
+    except Exception:
+        db.rollback()
+        return default_learning_growth_summary()
+
+
 def page_context(request: Request, db: Session, extra: dict | None = None) -> dict:
     context = {
         "request": request,
@@ -2559,6 +2933,7 @@ def page_context(request: Request, db: Session, extra: dict | None = None) -> di
         "daily_quote": get_daily_quote(db),
         "sidebar_challenges": sidebar_challenge_progress(db),
         "wrong_word_count": wrong_word_count(db),
+        "learning_growth": learning_growth_summary(db),
         "version_matrix": ensure_version_matrix_file(),
         "static_version": static_asset_version(),
     }
@@ -2579,6 +2954,7 @@ def serialize_shell_context(context: dict[str, Any]) -> dict[str, Any]:
         if daily_quote
         else None,
         "wrongWordCount": context.get("wrong_word_count", 0),
+        "learningGrowth": context.get("learning_growth") or default_learning_growth_summary(),
         "versionMatrix": context.get("version_matrix") or ensure_version_matrix_file(),
         "sidebarChallenges": [
             {

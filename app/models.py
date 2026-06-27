@@ -130,6 +130,19 @@ class WrongWord(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class LearningGrowthMetric(Base):
+    __tablename__ = "learning_growth_metrics"
+    __table_args__ = (UniqueConstraint("metric_key", name="uq_learning_growth_metrics_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    metric_key: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    metric_label: Mapped[str] = mapped_column(String(120), nullable=False)
+    metric_value: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    metric_target: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    badge_label: Mapped[str] = mapped_column(String(120), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class CacheEntry(Base):
     __tablename__ = "speakeasy_cache"
 

@@ -20,6 +20,9 @@ const levels = [
   { value: "L300-L500", label: "L300-L500 入门" },
   { value: "L500-L700", label: "L500-L700 进阶" },
   { value: "L700-L900", label: "L700-L900 挑战" },
+  { value: "L900-L1100", label: "L900-L1100 深入" },
+  { value: "L1100-L1300", label: "L1100-L1300 高阶" },
+  { value: "L1300-L1500", label: "L1300-L1500 专题" },
 ];
 const topics = ["全部", "动物", "植物", "人体", "微生物", "地球", "太空", "工程"];
 const loading = ref(false);
@@ -113,6 +116,9 @@ function openDiscovery(item) {
         class="science-discovery-card"
         @click="openDiscovery(item)"
       >
+        <div v-if="item.imageUrl" class="science-card-image">
+          <img :src="item.imageUrl" :alt="item.title" loading="lazy" />
+        </div>
         <div class="science-card-topline">
           <span>{{ item.topic }}</span>
           <small>{{ item.source }}</small>

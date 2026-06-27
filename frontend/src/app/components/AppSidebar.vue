@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { buildSidebarNavItems } from "../sidebarNav.js";
 import SidebarChallengeProgress from "./SidebarChallengeProgress.vue";
+import SidebarGrowthPanel from "./SidebarGrowthPanel.vue";
 import SidebarNavList from "./SidebarNavList.vue";
 
 const props = defineProps({
@@ -30,6 +31,7 @@ function navigate(path) {
   <aside class="sidebar">
     <nav class="side-nav" aria-label="主导航">
       <SidebarNavList :items="navItems" :navigate="navigate" />
+      <SidebarGrowthPanel :growth="shell.learningGrowth" :navigate="navigate" />
       <SidebarChallengeProgress :challenges="shell.sidebarChallenges" :navigate="navigate" />
     </nav>
   </aside>

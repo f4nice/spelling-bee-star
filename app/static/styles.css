@@ -187,6 +187,98 @@ body {
   background: rgba(255, 255, 255, 0.22);
 }
 
+.sidebar-growth-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 14px 10px 4px;
+  border-top: 1px solid var(--line);
+}
+
+.sidebar-growth-head {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  border: 1px solid rgba(226, 178, 73, 0.45);
+  border-radius: 16px;
+  padding: 10px;
+  color: #fff;
+  background: linear-gradient(135deg, #1b2a22 0%, #114232 58%, #9d7a24 150%);
+  box-shadow: 0 14px 28px rgba(16, 72, 53, 0.16);
+  cursor: pointer;
+}
+
+.sidebar-growth-head img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.22));
+}
+
+.sidebar-growth-head small {
+  display: block;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.sidebar-growth-head strong {
+  display: block;
+  color: #fff;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.sidebar-growth-head em {
+  color: #ffe7a3;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.sidebar-growth-metrics {
+  display: grid;
+  gap: 7px;
+}
+
+.sidebar-growth-metric {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  font-size: 12px;
+}
+
+.sidebar-growth-metric span {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-growth-metric strong {
+  color: var(--accent-dark);
+  font-size: 11px;
+}
+
+.sidebar-growth-metric i {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  height: 6px;
+  border-radius: 999px;
+  background: #e4ebe5;
+}
+
+.sidebar-growth-metric b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #d8a738, #1d7f5b);
+}
+
 .challenge-sidebar {
   display: grid;
   gap: 10px;
@@ -1803,6 +1895,135 @@ a:focus-visible {
   letter-spacing: 0;
 }
 
+.home-growth-console {
+  display: grid;
+  gap: 14px;
+  border: 1px solid rgba(226, 178, 73, 0.36);
+  border-radius: 18px;
+  padding: 16px;
+  color: #fff;
+  background:
+    radial-gradient(circle at top left, rgba(255, 226, 142, 0.2), transparent 42%),
+    linear-gradient(135deg, #17241f 0%, #164735 58%, #8a6a21 170%);
+  box-shadow: 0 20px 45px rgba(13, 44, 36, 0.16);
+}
+
+.home-growth-main {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.home-growth-main img {
+  width: 68px;
+  height: 68px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.28));
+}
+
+.home-growth-main .section-kicker {
+  color: #a2f2cc;
+}
+
+.home-growth-main h3 {
+  margin: 2px 0 4px;
+  color: #fff;
+  font-size: 24px;
+  line-height: 1.16;
+}
+
+.home-growth-main p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.home-growth-main > strong {
+  border-radius: 999px;
+  padding: 9px 13px;
+  color: #ffe7a3;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.home-growth-badges {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.growth-badge-card {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.growth-badge-medal {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: radial-gradient(circle at 38% 28%, #fff7cf, #d9a02e 58%, #8d6318);
+}
+
+.growth-badge-medal img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+}
+
+.growth-badge-card strong {
+  display: block;
+  color: #fff;
+  font-size: 14px;
+}
+
+.growth-badge-card span {
+  display: block;
+  margin-top: 3px;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.growth-badge-card i {
+  display: block;
+  overflow: hidden;
+  height: 7px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.growth-badge-card b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ffe18b, #6ee7b7);
+}
+
+.home-growth-missions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.home-growth-missions span {
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .challenge-calendar {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -3182,22 +3403,40 @@ button.calendar-day {
   display: grid;
   gap: 10px;
   align-content: start;
-  min-height: 210px;
+  min-height: 300px;
   border: 1px solid rgba(18, 35, 47, 0.1);
   border-radius: var(--radius-lg);
-  padding: 14px;
+  padding: 12px;
   color: inherit;
   background: #fff;
   text-align: left;
   box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+  overflow: hidden;
+  transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, color 0.16s ease, transform 0.16s ease;
 }
 
 .science-discovery-card:hover {
   border-color: rgba(29, 127, 91, 0.36);
+  color: #fff;
+  background: linear-gradient(135deg, #176f50, #0e4738);
   box-shadow: var(--shadow);
   transform: translateY(-2px);
+}
+
+.science-card-image {
+  height: 132px;
+  margin: -2px -2px 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #e9f8f1;
+}
+
+.science-card-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .science-card-topline {
@@ -3234,6 +3473,18 @@ button.calendar-day {
   margin: 0;
   color: #4f6074;
   line-height: 1.5;
+}
+
+.science-discovery-card:hover h3,
+.science-discovery-card:hover p,
+.science-discovery-card:hover .science-card-topline small {
+  color: #fff;
+}
+
+.science-discovery-card:hover .science-card-topline span,
+.science-discovery-card:hover .science-word-chips span {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .science-word-chips {
@@ -3280,6 +3531,36 @@ button.calendar-day {
 .science-article-panel h1 {
   max-width: 780px;
   font-size: 42px;
+}
+
+.science-article-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.science-read-more-button {
+  border-color: #bfe9d2;
+  color: var(--accent-dark);
+  background: #ecfdf4;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.science-article-hero-image {
+  max-height: 340px;
+  border: 1px solid rgba(29, 127, 91, 0.14);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #eef8f1;
+  box-shadow: var(--shadow-sm);
+}
+
+.science-article-hero-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: 340px;
+  object-fit: cover;
 }
 
 .science-article-source {
@@ -3348,9 +3629,51 @@ button.calendar-day {
   background: #fff;
 }
 
-.science-quiz-list span {
+.science-quiz-question-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.science-answer-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #bfe9d2;
+  border-radius: 999px;
+  padding: 0;
+  color: var(--accent-dark);
+  background: #ecfdf4;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.18s ease, box-shadow 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.science-answer-toggle:hover {
+  color: #fff;
+  background: var(--accent);
+  box-shadow: 0 10px 22px rgba(18, 120, 86, 0.18);
+  transform: translateY(-1px);
+}
+
+.science-quiz-list .science-quiz-answer {
+  display: block;
+  margin-top: 8px;
   color: var(--muted);
   line-height: 1.45;
+}
+
+.science-quiz-list .science-quiz-answer.is-hidden {
+  width: min(320px, 100%);
+  height: 14px;
+  border-radius: 999px;
+  color: transparent;
+  background: linear-gradient(90deg, #eaf4ef, #d9eadf, #eaf4ef);
+  user-select: none;
 }
 
 .science-parent-note {

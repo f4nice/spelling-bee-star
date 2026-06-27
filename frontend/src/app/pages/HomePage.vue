@@ -12,6 +12,6 @@ defineProps([
 
 <template>
   <HomeStatsGrid :stats="data.stats" :go="go" />
-  <HomeChallengeCalendar :calendar="data.calendar" :go="go" />
+  <HomeChallengeCalendar :calendar="data.calendar" :growth="data.growth" :go="go" />
   <HomeFeaturedLists :cards="data.featured_cards" :go="go" :fallback-letter="fallbackLetter" />
 </template>
