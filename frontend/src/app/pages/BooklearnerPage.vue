@@ -43,7 +43,7 @@ watch(
 <template>
   <section class="booklearner-page">
     <BooklearnerHero
-      v-if="!['booklearnerDetail', 'booklearnerScience'].includes(route.name)"
+      v-if="!['booklearnerDetail', 'booklearnerScience', 'booklearnerScienceHome'].includes(route.name)"
       :route="route"
       :book="book"
       :go="go"

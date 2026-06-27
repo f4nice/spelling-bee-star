@@ -9,6 +9,8 @@ export function routeTitle(route, data) {
   if (route.name === "preview") return "导入预览";
   if (route.name === "newspaper") return "英文小报";
   if (route.name === "newspaperArticle") return data?.article?.title || "英文小报";
+  if (route.name === "booklearnerScienceHome") return "科学探索";
+  if (route.name === "booklearnerScience") return data?.book?.science?.article?.title || "科学探索";
   if (route.name.startsWith("booklearner")) return "好词好句";
   return "今天从这里开始";
 }

@@ -25,6 +25,12 @@ defineProps([
     :go="go"
     :load-science-article="loadScienceArticle"
   />
+  <BooklearnerScienceDiscoveries
+    v-else-if="route.name === 'booklearnerScienceHome'"
+    :book="book"
+    :go="go"
+    :load-science-discoveries="loadScienceDiscoveries"
+  />
   <BooklearnerDetailPanel
     v-else-if="route.name === 'booklearnerDetail'"
     :route="route"

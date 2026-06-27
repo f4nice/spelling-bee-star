@@ -40,6 +40,11 @@ export function useBooklearnerData({ book, route }) {
       return;
     }
 
+    if (route.value.name === 'booklearnerScienceHome') {
+      await loadScienceDiscoveries();
+      return;
+    }
+
     if (route.value.name === 'booklearnerDetail') {
       book.value.result = await fetchJson(booklearnerApiPaths.historyDetail(route.value.params.id));
       book.value.featured = (await fetchJson(booklearnerApiPaths.featured({ limit: 80, analysisId: route.value.params.id }))).items || [];

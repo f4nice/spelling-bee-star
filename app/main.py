@@ -75,7 +75,7 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260627-009"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260627-010"
 DEFAULT_PAGE_VERSION = "v20260624.0"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -496,6 +496,11 @@ def good_words_upload_page(request: Request, db: Session = Depends(get_db)):
 @app.get("/booklearner/quotes", response_class=HTMLResponse)
 def good_words_quotes_page(request: Request, db: Session = Depends(get_db)):
     return vue_shell(request, db, "booklearner/quotes")
+
+
+@app.get("/booklearner/science", response_class=HTMLResponse)
+def good_words_science_home_page(request: Request, db: Session = Depends(get_db)):
+    return vue_shell(request, db, "booklearner/science")
 
 
 @app.get("/booklearner/science/{slug}", response_class=HTMLResponse)
