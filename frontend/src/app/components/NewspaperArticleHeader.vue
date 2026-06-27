@@ -25,6 +25,6 @@ defineProps({
       <h1>{{ article.title }}</h1>
       <NewspaperArticleDetailMeta :article="article" />
     </div>
-    <NewspaperArticleActions :article="article" :go="go" />
+    <NewspaperArticleActions :go="go" />
   </div>
 </template>

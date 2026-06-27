@@ -21,7 +21,7 @@ defineProps({
   <section class="results">
     <div v-if="!book.result" class="empty-state">
       <h2>等待分析</h2>
-      <p>搜索书名、上传 txt/epub，或粘贴正文。</p>
+      <p>搜索书名或上传 TXT / EPUB 后，这里会展示好句和生僻词预览。</p>
     </div>
     <BooklearnerResultPanel
       v-else

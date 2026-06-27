@@ -7,10 +7,6 @@ export const booklearnerUploadWorkspaceProps = {
     type: Function,
     required: true,
   },
-  analyzeBookText: {
-    type: Function,
-    required: true,
-  },
   analyzeBookFile: {
     type: Function,
     required: true,

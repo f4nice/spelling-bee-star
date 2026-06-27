@@ -7,7 +7,6 @@ defineProps([
   "book",
   "go",
   "analyzeBookQuery",
-  "analyzeBookText",
   "analyzeBookFile",
   "saveBookAnalysis",
   "createBookWordList",

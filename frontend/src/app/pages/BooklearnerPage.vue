@@ -9,7 +9,6 @@ const props = defineProps([
   "book",
   "go",
   "analyzeBookQuery",
-  "analyzeBookText",
   "analyzeBookFile",
   "saveBookAnalysis",
   "createBookWordList"
@@ -54,7 +53,6 @@ watch(
       :book="book"
       :go="go"
       :analyze-book-query="analyzeBookQuery"
-      :analyze-book-text="analyzeBookText"
       :analyze-book-file="analyzeBookFile"
       :save-book-analysis="saveBookAnalysis"
       :create-book-word-list="createBookWordList"
@@ -64,7 +62,6 @@ watch(
       v-if="uploadModalOpen"
       :book="book"
       :analyze-book-query="analyzeBookQuery"
-      :analyze-book-text="analyzeBookText"
       :analyze-book-file="analyzeBookFile"
       :save-book-analysis="saveBookAnalysis"
       :create-book-word-list="createBookWordList"

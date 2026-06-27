@@ -1,17 +1,20 @@
 <script setup>
 import BooklearnerFileSourceFields from "./BooklearnerFileSourceFields.vue";
-import BooklearnerTextSourceFields from "./BooklearnerTextSourceFields.vue";
 
 defineProps({
   book: {
     type: Object,
     required: true,
   },
-  analyzeBookText: {
+  analyzeBookFile: {
     type: Function,
     required: true,
   },
-  analyzeBookFile: {
+  saveBookAnalysis: {
+    type: Function,
+    required: true,
+  },
+  createBookWordList: {
     type: Function,
     required: true,
   },
@@ -19,8 +22,12 @@ defineProps({
 </script>
 
 <template>
-  <div class="form active" role="group" aria-label="按正文分析">
-    <BooklearnerFileSourceFields :book="book" :analyze-book-file="analyzeBookFile" />
-    <BooklearnerTextSourceFields :book="book" :analyze-book-text="analyzeBookText" />
+  <div class="form active" role="group" aria-label="上传书籍文件">
+    <BooklearnerFileSourceFields
+      :book="book"
+      :analyze-book-file="analyzeBookFile"
+      :save-book-analysis="saveBookAnalysis"
+      :create-book-word-list="createBookWordList"
+    />
   </div>
 </template>

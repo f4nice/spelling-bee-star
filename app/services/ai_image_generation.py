@@ -11,7 +11,7 @@ import time
 from urllib.parse import urlparse
 
 import httpx
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 
 TENCENT_AIART_ENDPOINT = "https://aiart.tencentcloudapi.com"
@@ -26,15 +26,35 @@ DASHSCOPE_IMAGE_MODELS = {
 DASHSCOPE_ASYNC_IMAGE_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation"
 DASHSCOPE_MULTIMODAL_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
 CHINESE_FONT_PATHS = [
+    "C:/Windows/Fonts/STZHONGS.TTF",
+    "C:/Windows/Fonts/simkai.ttf",
+    "C:/Windows/Fonts/simsun.ttc",
     "C:/Windows/Fonts/msyh.ttc",
     "C:/Windows/Fonts/msyhbd.ttc",
     "C:/Windows/Fonts/simhei.ttf",
+    "/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSerifCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSerifCJK-Regular.ttc",
     "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
     "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
     "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
     "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+]
+CARD_TITLE_FONT_PATHS = [
+    "C:/Windows/Fonts/STZHONGS.TTF",
+    "C:/Windows/Fonts/simhei.ttf",
+    "C:/Windows/Fonts/msyhbd.ttc",
+    "C:/Windows/Fonts/simkai.ttf",
+    "C:/Windows/Fonts/simsun.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSerifCJK-Bold.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
 ]
 
 
@@ -98,6 +118,15 @@ def _load_font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont | Ima
     return ImageFont.load_default()
 
 
+def _load_card_title_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    for path in CARD_TITLE_FONT_PATHS:
+        try:
+            return ImageFont.truetype(path, size=size)
+        except OSError:
+            continue
+    return _load_font(size, bold=True)
+
+
 def _has_chinese_font() -> bool:
     return any(Path(path).exists() for path in CHINESE_FONT_PATHS)
 
@@ -134,6 +163,76 @@ def _fit_font(text: str, max_width: int, start_size: int, *, bold: bool = False)
     return _load_font(24, bold=bold)
 
 
+def _fit_card_title_font(text: str, max_width: int, start_size: int) -> ImageFont.ImageFont:
+    size = start_size
+    while size >= 40:
+        font = _load_card_title_font(size)
+        bbox = ImageDraw.Draw(Image.new("RGB", (10, 10))).textbbox((0, 0), text, font=font, stroke_width=8)
+        if bbox[2] - bbox[0] <= max_width:
+            return font
+        size -= 5
+    return _load_card_title_font(40)
+
+
+def _paint_bottom_readability_gradient(overlay: Image.Image) -> None:
+    width, height = overlay.size
+    gradient_height = int(height * 0.36)
+    start_y = height - gradient_height
+    gradient = Image.new("RGBA", (width, gradient_height), (0, 0, 0, 0))
+    grad_draw = ImageDraw.Draw(gradient)
+    for y in range(gradient_height):
+        progress = y / max(1, gradient_height - 1)
+        alpha = int(108 * (progress**1.8))
+        grad_draw.line((0, y, width, y), fill=(34, 18, 9, alpha))
+    overlay.alpha_composite(gradient, (0, start_y))
+
+
+def _draw_reference_style_title(
+    overlay: Image.Image,
+    text: str,
+    *,
+    canvas_size: int = 1024,
+) -> None:
+    draw = ImageDraw.Draw(overlay)
+    font = _fit_card_title_font(text, 900, 122)
+    stroke_width = 8
+    bbox = draw.textbbox((0, 0), text, font=font, stroke_width=stroke_width)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+    x = (canvas_size - text_width) // 2 - bbox[0]
+    y = canvas_size - text_height - 68 - bbox[1]
+
+    shadow = Image.new("RGBA", overlay.size, (0, 0, 0, 0))
+    shadow_draw = ImageDraw.Draw(shadow)
+    shadow_draw.text(
+        (x + 5, y + 8),
+        text,
+        font=font,
+        fill=(56, 28, 12, 220),
+        stroke_width=stroke_width + 2,
+        stroke_fill=(56, 28, 12, 220),
+    )
+    overlay.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(radius=4)))
+
+    for dx, dy, alpha in [(0, 5, 150), (3, 7, 120), (-3, 7, 100)]:
+        draw.text(
+            (x + dx, y + dy),
+            text,
+            font=font,
+            fill=(86, 44, 18, alpha),
+            stroke_width=stroke_width,
+            stroke_fill=(86, 44, 18, alpha),
+        )
+    draw.text(
+        (x, y),
+        text,
+        font=font,
+        fill=(255, 252, 244, 255),
+        stroke_width=stroke_width,
+        stroke_fill=(97, 55, 30, 238),
+    )
+
+
 def compose_word_card_image(
     image_bytes: bytes,
     *,
@@ -149,23 +248,10 @@ def compose_word_card_image(
     canvas.paste(image, (left, top))
 
     overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
     meaning_text = _short_meaning(chinese_definition)
     if meaning_text:
-        meaning_font = _fit_font(meaning_text, 860, 92, bold=True)
-        meaning_bbox = draw.textbbox((0, 0), meaning_text, font=meaning_font)
-        meaning_x = (1024 - (meaning_bbox[2] - meaning_bbox[0])) // 2
-        meaning_y = 1024 - (meaning_bbox[3] - meaning_bbox[1]) - 118
-        for dx, dy in [(0, 8), (0, 10), (4, 10)]:
-            draw.text((meaning_x + dx, meaning_y + dy), meaning_text, font=meaning_font, fill=(0, 0, 0, 92))
-        draw.text(
-            (meaning_x, meaning_y),
-            meaning_text,
-            font=meaning_font,
-            fill=(17, 103, 79, 255),
-            stroke_width=5,
-            stroke_fill=(255, 255, 255, 238),
-        )
+        _paint_bottom_readability_gradient(overlay)
+        _draw_reference_style_title(overlay, meaning_text)
 
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
     output = BytesIO()

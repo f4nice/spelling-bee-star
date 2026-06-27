@@ -11,10 +11,6 @@ defineProps({
     type: Function,
     required: true,
   },
-  analyzeBookText: {
-    type: Function,
-    required: true,
-  },
   analyzeBookFile: {
     type: Function,
     required: true,
@@ -46,7 +42,6 @@ defineEmits(["close"]);
       <BooklearnerUploadWorkspace
         :book="book"
         :analyze-book-query="analyzeBookQuery"
-        :analyze-book-text="analyzeBookText"
         :analyze-book-file="analyzeBookFile"
         :save-book-analysis="saveBookAnalysis"
         :create-book-word-list="createBookWordList"

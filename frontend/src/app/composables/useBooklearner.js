@@ -9,7 +9,6 @@ export function useBooklearner({ route, go }) {
   const { loadBooklearner } = useBooklearnerData({ book, route });
   const {
     analyzeBookQuery,
-    analyzeBookText,
     analyzeBookFile,
     saveBookAnalysis,
     createBookWordList,
@@ -19,7 +18,6 @@ export function useBooklearner({ route, go }) {
     book,
     loadBooklearner,
     analyzeBookQuery,
-    analyzeBookText,
     analyzeBookFile,
     saveBookAnalysis,
     createBookWordList,

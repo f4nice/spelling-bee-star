@@ -11,11 +11,15 @@ defineProps({
     type: Function,
     required: true,
   },
-  analyzeBookText: {
+  analyzeBookFile: {
     type: Function,
     required: true,
   },
-  analyzeBookFile: {
+  saveBookAnalysis: {
+    type: Function,
+    required: true,
+  },
+  createBookWordList: {
     type: Function,
     required: true,
   },
@@ -27,8 +31,9 @@ defineProps({
     <BooklearnerSearchPanel :book="book" :analyze-book-query="analyzeBookQuery" />
     <BooklearnerTextSourcePanel
       :book="book"
-      :analyze-book-text="analyzeBookText"
       :analyze-book-file="analyzeBookFile"
+      :save-book-analysis="saveBookAnalysis"
+      :create-book-word-list="createBookWordList"
     />
 
     <div v-if="book.notice" class="notice">{{ book.notice }}</div>
