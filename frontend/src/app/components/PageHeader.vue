@@ -38,7 +38,7 @@ function goBackToList(event) {
 </script>
 
 <template>
-  <section class="panel app-page-heading">
+  <section class="panel app-page-heading" :class="{ 'has-return-link': returnList }">
     <div class="page-heading-title">
       <p class="section-kicker">SpeakEasy</p>
       <h1>{{ routeTitle }}</h1>
@@ -63,6 +63,7 @@ function goBackToList(event) {
 }
 
 .page-heading-title {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
