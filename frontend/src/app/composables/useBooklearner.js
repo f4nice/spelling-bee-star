@@ -6,7 +6,11 @@ import { createBooklearnerState } from '../booklearnerState.js';
 export function useBooklearner({ route, go }) {
   const book = ref(createBooklearnerState());
 
-  const { loadBooklearner } = useBooklearnerData({ book, route });
+  const {
+    loadBooklearner,
+    loadScienceDiscoveries,
+    loadScienceArticle,
+  } = useBooklearnerData({ book, route });
   const {
     analyzeBookQuery,
     analyzeBookFile,
@@ -17,6 +21,8 @@ export function useBooklearner({ route, go }) {
   return {
     book,
     loadBooklearner,
+    loadScienceDiscoveries,
+    loadScienceArticle,
     analyzeBookQuery,
     analyzeBookFile,
     saveBookAnalysis,

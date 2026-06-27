@@ -6,6 +6,7 @@ const CACHE_RULES = [
   { test: (url) => url === "/api/vue/shell", ttl: 30 * 1000 },
   { test: (url) => url.startsWith("/api/vue/challenge-calendar/"), ttl: 5 * 60 * 1000 },
   { test: (url) => url === "/api/vue/home", ttl: 30 * 1000 },
+  { test: (url) => url.startsWith("/booklearner/api/science-daily"), ttl: 30 * 60 * 1000 },
   { test: (url) => /^\/api\/challenge\/\d+\/state\?/.test(url), ttl: 15 * 1000 },
 ];
 

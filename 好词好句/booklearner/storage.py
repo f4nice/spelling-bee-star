@@ -145,6 +145,50 @@ def get_analysis(analysis_id: int) -> dict[str, Any] | None:
     return json.loads(value)
 
 
+def update_analysis_cover(analysis_id: int, cover_url: str) -> dict[str, Any] | None:
+    config = get_mysql_config()
+    if not config.enabled or _mysql_connector() is None:
+        return None
+
+    clean_cover_url = str(cover_url or "").strip()
+    if not clean_cover_url:
+        return None
+
+    connection = None
+    cursor = None
+    try:
+        connection = _connect(config)
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT result_json FROM analyses WHERE id = %s", (analysis_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+
+        result = _json_value(row.get("result_json"))
+        if not isinstance(result, dict):
+            return None
+
+        book = result.setdefault("book", {})
+        if not isinstance(book, dict):
+            book = {}
+            result["book"] = book
+        book["coverUrl"] = clean_cover_url
+        book["cover_url"] = clean_cover_url
+
+        cursor.execute(
+            "UPDATE analyses SET result_json = %s WHERE id = %s",
+            (json.dumps(result, ensure_ascii=False), analysis_id),
+        )
+        connection.commit()
+        return result
+    except Exception:
+        if connection is not None:
+            connection.rollback()
+        return None
+    finally:
+        _close_cursor_connection(cursor, connection)
+
+
 def list_featured_quotes(limit: int = 12, analysis_id: int | None = None) -> list[dict[str, Any]]:
     config = get_mysql_config()
     if not config.enabled or _mysql_connector() is None:
@@ -253,7 +297,7 @@ def list_featured_quotes(limit: int = 12, analysis_id: int | None = None) -> lis
                 "words": stats.get("words"),
                 "vocabularyCount": len(vocabulary) if isinstance(vocabulary, list) else 0,
                 "createdAt": _serialize_value(row.get("created_at")),
-                "coverUrl": book.get("coverUrl"),
+                "coverUrl": book.get("coverUrl") or book.get("cover_url"),
                 "coverSeed": sum(ord(char) for char in str(title)) % 6,
             }
         )
@@ -279,7 +323,7 @@ def _featured_quote_from_joined_row(row: dict[str, Any]) -> dict[str, Any]:
         "words": stats.get("words") if isinstance(stats, dict) else None,
         "vocabularyCount": len(vocabulary) if isinstance(vocabulary, list) else 0,
         "createdAt": _serialize_value(row.get("created_at")),
-        "coverUrl": (book or {}).get("coverUrl"),
+        "coverUrl": (book or {}).get("coverUrl") or (book or {}).get("cover_url"),
         "coverSeed": sum(ord(char) for char in str(title)) % 6,
     }
 

@@ -11,7 +11,9 @@ const props = defineProps([
   "analyzeBookQuery",
   "analyzeBookFile",
   "saveBookAnalysis",
-  "createBookWordList"
+  "createBookWordList",
+  "loadScienceDiscoveries",
+  "loadScienceArticle"
 ]);
 
 const uploadModalOpen = ref(false);
@@ -41,7 +43,7 @@ watch(
 <template>
   <section class="booklearner-page">
     <BooklearnerHero
-      v-if="route.name !== 'booklearnerDetail'"
+      v-if="!['booklearnerDetail', 'booklearnerScience'].includes(route.name)"
       :route="route"
       :book="book"
       :go="go"
@@ -56,6 +58,8 @@ watch(
       :analyze-book-file="analyzeBookFile"
       :save-book-analysis="saveBookAnalysis"
       :create-book-word-list="createBookWordList"
+      :load-science-discoveries="loadScienceDiscoveries"
+      :load-science-article="loadScienceArticle"
     />
 
     <BooklearnerUploadModal

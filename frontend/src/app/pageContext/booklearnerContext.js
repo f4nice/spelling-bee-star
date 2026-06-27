@@ -5,5 +5,7 @@ export function buildBooklearnerContext(booklearner) {
     analyzeBookFile: booklearner.analyzeBookFile,
     saveBookAnalysis: booklearner.saveBookAnalysis,
     createBookWordList: booklearner.createBookWordList,
+    loadScienceDiscoveries: booklearner.loadScienceDiscoveries,
+    loadScienceArticle: booklearner.loadScienceArticle,
   };
 }

@@ -52,6 +52,10 @@ function quoteText(item) {
 function openRelated(item) {
   props.go(`/booklearner/detail/${item.id}`);
 }
+
+function returnToQuotes() {
+  props.go("/booklearner/quotes");
+}
 </script>
 
 <template>
@@ -128,9 +132,14 @@ function openRelated(item) {
     </article>
 
     <aside class="panel book-vocabulary-panel">
-      <div class="book-section-head">
-        <span class="eyebrow">VOCABULARY</span>
-        <h3>难点单词</h3>
+      <div class="book-section-head book-vocabulary-head">
+        <div>
+          <span class="eyebrow">VOCABULARY</span>
+          <h3>难点单词</h3>
+        </div>
+        <button type="button" class="secondary-button book-vocabulary-return-button" @click="returnToQuotes">
+          返回
+        </button>
       </div>
       <div class="book-vocabulary-list">
         <article v-for="item in vocabulary" :key="item.word" class="book-vocabulary-card">

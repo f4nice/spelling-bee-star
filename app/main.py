@@ -63,6 +63,7 @@ from booklearner.storage import (
     list_recent_analyses as list_recent_good_words_analyses,
     save_analysis as save_good_words_analysis,
     save_clicked_word as save_good_words_clicked_word,
+    update_analysis_cover as update_good_words_analysis_cover,
 )
 
 
@@ -74,11 +75,183 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260627-007"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260627-009"
 DEFAULT_PAGE_VERSION = "v20260624.0"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
+SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
+
+
+SCIENCE_LEVELS = [
+    {"key": "L300-L500", "label": "L300-L500", "tone": "short sentences and simple science words"},
+    {"key": "L500-L700", "label": "L500-L700", "tone": "clear middle-grade explanations"},
+    {"key": "L700-L900", "label": "L700-L900", "tone": "richer details and cause-effect language"},
+]
+
+SCIENCE_SOURCES = [
+    ("National Geographic Kids", "https://kids.nationalgeographic.com/science"),
+    ("Ask A Biologist", "https://askabiologist.asu.edu/"),
+    ("NASA Kids", "https://www.nasa.gov/kidsclub/"),
+    ("PBS LearningMedia", "https://www.pbslearningmedia.org/"),
+    ("Science Buddies", "https://www.sciencebuddies.org/"),
+    ("Newsela", "https://newsela.com/"),
+]
+
+SCIENCE_CONCEPTS = [
+    ("动物", "How Sea Otters Use Tools", "Sea otters crack shells with rocks and show that animals can solve problems in clever ways.", "otter, tool, shell"),
+    ("动物", "Why Owls Fly Quietly", "Soft feather edges help owls move through the air with very little sound.", "owl, feather, silent"),
+    ("动物", "The Secret Work of Coral Reefs", "Tiny coral animals build large reef homes that protect many ocean species.", "coral, reef, habitat"),
+    ("动物", "How Penguins Stay Warm", "Penguins use oily feathers, packed groups, and body fat to survive cold water.", "penguin, insulation, colony"),
+    ("动物", "Why Bees Dance", "Honeybees use movement to tell other bees where flowers are located.", "bee, nectar, signal"),
+    ("植物", "How Leaves Breathe", "Leaves use tiny openings to trade gases while making food from sunlight.", "leaf, stomata, photosynthesis"),
+    ("植物", "Why Seeds Travel", "Seeds move by wind, water, animals, and sticky hooks so plants can spread.", "seed, dispersal, germinate"),
+    ("植物", "The Job of Tree Rings", "Tree rings record years of growth and clues about rainfall and climate.", "tree ring, growth, climate"),
+    ("植物", "How Desert Plants Save Water", "Cacti and other desert plants store water and protect it with waxy skins.", "cactus, waxy, desert"),
+    ("植物", "Why Flowers Have Colors", "Flower colors and smells help guide pollinators toward nectar.", "flower, pollinator, nectar"),
+    ("人体", "How Your Heart Pumps", "The heart squeezes blood through vessels to deliver oxygen around the body.", "heart, blood, oxygen"),
+    ("人体", "Why Muscles Get Stronger", "Muscles adapt when they work, rest, and repair tiny fibers.", "muscle, fiber, repair"),
+    ("人体", "How Eyes See Color", "Special cells in the eye detect light and send color signals to the brain.", "retina, cone, signal"),
+    ("人体", "Why Sleep Helps Memory", "During sleep, the brain sorts information and strengthens useful memories.", "sleep, memory, brain"),
+    ("人体", "How Skin Protects You", "Skin blocks many germs, helps control heat, and senses the world.", "skin, germ, temperature"),
+    ("微生物", "The Good Side of Bacteria", "Many bacteria help digest food, recycle nutrients, and keep ecosystems balanced.", "bacteria, nutrient, ecosystem"),
+    ("微生物", "How Yeast Makes Bread Rise", "Yeast eats sugar and releases gas that makes dough puff up.", "yeast, dough, carbon dioxide"),
+    ("微生物", "What Makes Mold Grow", "Mold spreads by spores and grows best in warm, damp places.", "mold, spore, damp"),
+    ("微生物", "How Microbes Clean Water", "Some microbes break down waste and help clean water in treatment systems.", "microbe, waste, filter"),
+    ("微生物", "Why Handwashing Works", "Soap lifts oils and germs from skin so water can wash them away.", "soap, germ, rinse"),
+    ("地球", "Why Volcanoes Erupt", "Magma rises through weak places in Earth's crust and can burst out as lava.", "magma, lava, crust"),
+    ("地球", "How Rivers Shape Land", "Moving water carries rock and soil, slowly carving valleys and deltas.", "river, erosion, delta"),
+    ("地球", "Why Earthquakes Happen", "Earthquakes happen when rocks suddenly slip along faults underground.", "earthquake, fault, plate"),
+    ("地球", "How Clouds Form", "Warm air rises, cools, and turns water vapor into tiny droplets.", "cloud, vapor, droplet"),
+    ("地球", "What Makes a Fossil", "Fossils form when remains are buried and slowly replaced or preserved in rock.", "fossil, sediment, preserve"),
+    ("太空", "Why the Moon Changes Shape", "The Moon's phases come from how sunlight hits the part we can see.", "moon, phase, orbit"),
+    ("太空", "How Rockets Leave Earth", "Rockets push gas downward, and the reaction pushes the rocket upward.", "rocket, thrust, gravity"),
+    ("太空", "Why Mars Looks Red", "Iron-rich dust on Mars gives the planet its rusty red color.", "Mars, iron, dust"),
+    ("太空", "How Telescopes Collect Light", "Telescopes gather light so distant objects look brighter and clearer.", "telescope, light, lens"),
+    ("太空", "What Astronauts Need in Space", "Astronauts need air, water, food, exercise, and careful plans to stay healthy.", "astronaut, orbit, life support"),
+    ("工程", "How Bridges Carry Weight", "Bridges spread forces through beams, arches, cables, or triangles.", "bridge, force, beam"),
+    ("工程", "Why Robots Use Sensors", "Sensors help robots detect light, distance, touch, and movement.", "robot, sensor, program"),
+    ("工程", "How Solar Panels Work", "Solar panels turn sunlight into electricity using special materials.", "solar panel, electricity, sunlight"),
+    ("工程", "Why Filters Matter", "Filters trap particles and help clean air or water before people use it.", "filter, particle, clean"),
+]
+
+
+def science_level_config(level: str | None) -> dict[str, str]:
+    normalized = (level or "L500-L700").strip()
+    return next((item for item in SCIENCE_LEVELS if item["key"] == normalized), SCIENCE_LEVELS[1])
+
+
+def science_slug(value: str) -> str:
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", value.lower()).strip("-")
+    return slug or "science-discovery"
+
+
+def science_word_items(words: str) -> list[dict[str, str]]:
+    return [
+        {
+            "word": item.strip(),
+            "meaning": "科学关键词",
+        }
+        for item in words.split(",")
+        if item.strip()
+    ]
+
+
+def science_article_paragraphs(title: str, summary: str, topic: str, level_info: dict[str, str]) -> list[str]:
+    return [
+        f"{title} is a science idea in the topic of {topic}. {summary}",
+        f"At the {level_info['label']} reading level, focus on the cause, the effect, and the key science words.",
+        "Try connecting this idea to something you can observe at home, outside, or in a short classroom experiment.",
+    ]
+
+
+def build_science_discovery_pool(level: str | None = None) -> list[dict[str, Any]]:
+    level_items = SCIENCE_LEVELS if not level or level == "all" else [science_level_config(level)]
+    pool: list[dict[str, Any]] = []
+    for concept_index, (topic, title, summary, words) in enumerate(SCIENCE_CONCEPTS):
+        for level_index, level_info in enumerate(level_items):
+            source_name, source_url = SCIENCE_SOURCES[(concept_index + level_index) % len(SCIENCE_SOURCES)]
+            slug = science_slug(f"{title}-{level_info['key']}")
+            keywords = science_word_items(words)
+            pool.append(
+                {
+                    "slug": slug,
+                    "title": title,
+                    "topic": topic,
+                    "level": level_info["key"],
+                    "levelLabel": level_info["label"],
+                    "summary": summary,
+                    "source": source_name,
+                    "sourceUrl": source_url,
+                    "article": science_article_paragraphs(title, summary, topic, level_info),
+                    "words": keywords,
+                    "quiz": [
+                        {
+                            "question": "What is the main idea?",
+                            "answer": summary,
+                        },
+                        {
+                            "question": "Which topic does this discovery belong to?",
+                            "answer": topic,
+                        },
+                        {
+                            "question": "Name one science word from this article.",
+                            "answer": keywords[0]["word"] if keywords else title,
+                        },
+                    ],
+                    "parentNote": f"家长提示：这一条参考 {source_name} 这类儿童科学阅读方向，用适合 {level_info['label']} 的英文重写，重点看孩子是否能说出一个原因和一个结果。",
+                }
+            )
+    return pool
+
+
+def science_cache_path(day: str, level: str, topic: str, batch: int) -> Path:
+    safe_level = science_slug(level)
+    safe_topic = science_slug(topic)
+    return SCIENCE_DISCOVERY_CACHE_DIR / f"{day}-{safe_level}-{safe_topic}-{batch}.json"
+
+
+def build_science_daily_payload(level: str, topic: str, batch: int) -> dict[str, Any]:
+    day = date.today().isoformat()
+    level_info = science_level_config(level)
+    normalized_topic = (topic or "全部").strip() or "全部"
+    cache_path = science_cache_path(day, level_info["key"], normalized_topic, batch)
+    if cache_path.exists():
+        try:
+            cached = json.loads(cache_path.read_text(encoding="utf-8"))
+            if isinstance(cached, dict):
+                return cached
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    full_pool = build_science_discovery_pool()
+    pool = [item for item in build_science_discovery_pool(level_info["key"]) if normalized_topic == "全部" or item["topic"] == normalized_topic]
+    rng = random.Random(f"{day}:{level_info['key']}:{normalized_topic}:{batch}:science-discoveries-v1")
+    selected = rng.sample(pool, k=min(5, len(pool))) if pool else []
+    payload = {
+        "date": day,
+        "level": level_info["key"],
+        "levelLabel": level_info["label"],
+        "topic": normalized_topic,
+        "batch": batch,
+        "poolSize": len(full_pool),
+        "filteredPoolSize": len(pool),
+        "items": selected,
+        "sources": [
+            {"name": name, "url": url}
+            for name, url in SCIENCE_SOURCES
+        ],
+    }
+    try:
+        cache_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        pass
+    return payload
+
+
+def find_science_article(slug: str, level: str | None = None) -> dict[str, Any] | None:
+    candidates = build_science_discovery_pool(level) + build_science_discovery_pool()
+    return next((item for item in candidates if item["slug"] == slug), None)
 
 
 def is_ai_quota_error(detail: str) -> bool:
@@ -119,6 +292,16 @@ def public_asset_slug(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]+", "-", value.lower()).strip("-") or "asset"
 
 
+def store_book_cover_image(title: str, content: bytes) -> str:
+    if len(content) < 1000:
+        raise ValueError("封面图片文件太小，请换一张清晰图片。")
+    suffix = public_asset_extension(content)
+    safe_stem = public_asset_slug(Path(title or "book").stem)
+    target = BOOK_COVER_DIR / f"{safe_stem}-{uuid4().hex[:8]}{suffix}"
+    target.write_bytes(content)
+    return f"/media/book-covers/{target.name}"
+
+
 IMAGE_SYNC_LOCK = Lock()
 CACHE_REFRESHING: set[str] = set()
 CACHE_REFRESH_LOCK = Lock()
@@ -128,6 +311,7 @@ IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 BOOK_COVER_DIR.mkdir(parents=True, exist_ok=True)
 PUBLIC_ASSET_DIR.mkdir(parents=True, exist_ok=True)
+SCIENCE_DISCOVERY_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title=settings.app_name)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
@@ -287,6 +471,7 @@ def startup() -> None:
     IMAGE_DIR.mkdir(parents=True, exist_ok=True)
     AUDIO_DIR.mkdir(parents=True, exist_ok=True)
     BOOK_COVER_DIR.mkdir(parents=True, exist_ok=True)
+    SCIENCE_DISCOVERY_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     ensure_version_matrix_file()
     with SessionLocal() as db:
         seed_daily_quotes(db)
@@ -311,6 +496,13 @@ def good_words_upload_page(request: Request, db: Session = Depends(get_db)):
 @app.get("/booklearner/quotes", response_class=HTMLResponse)
 def good_words_quotes_page(request: Request, db: Session = Depends(get_db)):
     return vue_shell(request, db, "booklearner/quotes")
+
+
+@app.get("/booklearner/science/{slug}", response_class=HTMLResponse)
+def good_words_science_page(slug: str, request: Request, db: Session = Depends(get_db)):
+    if not find_science_article(slug):
+        raise HTTPException(status_code=404, detail="Science discovery not found")
+    return vue_shell(request, db, f"booklearner/science/{slug}")
 
 
 @app.get("/booklearner/detail/{analysis_id}", response_class=HTMLResponse)
@@ -413,12 +605,132 @@ def good_words_featured(
     return {"items": list_featured_good_words_quotes(limit=limit, analysis_id=analysis_id)}
 
 
+@app.get("/booklearner/api/science-daily")
+def good_words_science_daily(
+    level: str = Query(default="L500-L700"),
+    topic: str = Query(default="全部"),
+    batch: int = Query(default=0, ge=0, le=50),
+):
+    return build_science_daily_payload(level=level, topic=topic, batch=batch)
+
+
+@app.get("/booklearner/api/science-daily/{slug}")
+def good_words_science_daily_article(
+    slug: str,
+    level: str | None = Query(default=None),
+):
+    item = find_science_article(slug, level)
+    if not item:
+        raise HTTPException(status_code=404, detail="知识点不存在。")
+    return {
+        "item": item,
+        "sources": [
+            {"name": name, "url": url}
+            for name, url in SCIENCE_SOURCES
+        ],
+    }
+
+
 @app.get("/booklearner/api/history/{analysis_id}")
 def good_words_history_detail(analysis_id: int):
     item = get_good_words_analysis(analysis_id)
     if not item:
         raise HTTPException(status_code=404, detail="记录不存在，或 MySQL 未启用。")
     return item
+
+
+@app.post("/booklearner/api/history/{analysis_id}/cover")
+async def good_words_update_cover(
+    analysis_id: int,
+    file: UploadFile = File(...),
+):
+    item = get_good_words_analysis(analysis_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="记录不存在，或 MySQL 未启用。")
+
+    content = await file.read()
+    if file.content_type and not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="请上传图片文件。")
+
+    book = item.get("book") if isinstance(item, dict) else {}
+    title = (book or {}).get("title") or item.get("title") or f"book-{analysis_id}"
+    try:
+        cover_url = store_book_cover_image(str(title), content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    updated = update_good_words_analysis_cover(analysis_id, cover_url)
+    if not updated:
+        raise HTTPException(status_code=400, detail="封面保存失败。")
+    return {"ok": True, "coverUrl": cover_url, "result": updated}
+
+
+@app.post("/booklearner/api/history/{analysis_id}/ai-cover")
+async def good_words_generate_ai_cover(
+    analysis_id: int,
+    model: str = Form(default="wan2.7-image-pro"),
+    theme: str = Form(default=""),
+    style: str = Form(default="书籍封面插画"),
+):
+    item = get_good_words_analysis(analysis_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="记录不存在，或 MySQL 未启用。")
+
+    book = item.get("book") if isinstance(item, dict) else {}
+    title = str((book or {}).get("title") or item.get("title") or "English book").strip()
+    authors = (book or {}).get("authors")
+    if isinstance(authors, list):
+        author_text = " / ".join(str(author) for author in authors if author)
+    else:
+        author_text = str((book or {}).get("author") or item.get("author") or "").strip()
+    stats = item.get("stats") if isinstance(item, dict) else {}
+    selected_theme = " ".join((theme or "").split())[:80]
+    selected_style = " ".join((style or "书籍封面插画").split())[:80]
+    selected_model = " ".join((model or "wan2.7-image-pro").split())[:80]
+    prompt = " ".join(
+        part
+        for part in [
+            "Create a polished book cover illustration for an English reading excerpt system.",
+            f"Book title: {title}.",
+            f"Author: {author_text}." if author_text else "",
+            f"Theme: {selected_theme}." if selected_theme else "",
+            f"Visual style: {selected_style}.",
+            "Portrait book-cover composition, rich but clean, literary, high quality.",
+            "No readable text, no letters, no Chinese characters, no logos, no watermarks, no UI elements.",
+            "Leave all typography to the application.",
+            f"Book has about {stats.get('words')} words." if isinstance(stats, dict) and stats.get("words") else "",
+        ]
+        if part
+    )
+    try:
+        content = await generate_dashscope_prompt_image(
+            api_key=settings.dashscope_api_key,
+            endpoint=settings.dashscope_image_endpoint,
+            task_endpoint=settings.dashscope_task_endpoint,
+            poll_seconds=settings.dashscope_image_poll_seconds,
+            timeout_seconds=settings.dashscope_image_timeout_seconds,
+            model=selected_model,
+            prompt=prompt,
+        )
+        cover_url = store_book_cover_image(title, content)
+    except RuntimeError as exc:
+        detail = str(exc)
+        if "not configured" in detail:
+            raise HTTPException(status_code=400, detail=detail) from exc
+        if is_ai_quota_error(detail):
+            raise HTTPException(status_code=402, detail="额度已经用完") from exc
+        raise HTTPException(status_code=502, detail=f"AI 封面生成失败: {detail}") from exc
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text[:400] if exc.response is not None else str(exc)
+        if is_ai_quota_error(detail):
+            raise HTTPException(status_code=402, detail="额度已经用完") from exc
+        raise HTTPException(status_code=502, detail=f"AI 封面生成失败: {detail}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AI 封面生成失败: {exc}") from exc
+
+    updated = update_good_words_analysis_cover(analysis_id, cover_url)
+    if not updated:
+        raise HTTPException(status_code=400, detail="AI 封面保存失败。")
+    return {"ok": True, "coverUrl": cover_url, "result": updated, "model": selected_model}
 
 
 @app.post("/booklearner/api/clicked-word")
