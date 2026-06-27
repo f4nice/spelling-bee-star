@@ -951,6 +951,7 @@ async def vue_import_preview(
         for chunk_index in range(0, len(rows), chunk_size):
             chunk_number = (chunk_index // chunk_size) + 1
             chunk_list = get_or_create_word_list_by_name(db, f"{base_name}-{chunk_number}")
+            clear_word_list_items(db, chunk_list.id)
             chunk_list.sequence_offset = chunk_index
             db.add(chunk_list)
             db.commit()
@@ -2460,6 +2461,11 @@ def get_or_create_word_list_by_name(db: Session, name: str) -> WordList:
         db.commit()
         db.refresh(word_list)
     return word_list
+
+
+def clear_word_list_items(db: Session, word_list_id: int) -> None:
+    db.execute(delete(WordListItem).where(WordListItem.word_list_id == word_list_id))
+    db.commit()
 
 
 def link_word_to_list(db: Session, word_list_id: int, word_id: int) -> None:

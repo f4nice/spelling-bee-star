@@ -3,4 +3,8 @@ export const importPreviewSubmitButtonProps = {
     type: Function,
     required: true,
   },
+  isImporting: {
+    type: Boolean,
+    default: false,
+  },
 };

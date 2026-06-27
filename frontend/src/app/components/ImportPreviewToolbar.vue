@@ -17,6 +17,6 @@ defineProps(importPreviewToolbarProps);
     />
     <ImportPreviewSelectionActions :set-all-rows="setAllRows" :set-all-columns="setAllColumns" />
     <ImportPreviewImagePicker :import-form="importForm" />
-    <ImportPreviewSubmitButton :submit-import="submitImport" />
+    <ImportPreviewSubmitButton :submit-import="submitImport" :is-importing="isImporting" />
   </div>
 </template>

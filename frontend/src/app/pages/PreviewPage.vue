@@ -11,7 +11,8 @@ defineProps([
   "changePreviewSheet",
   "setAllRows",
   "setAllColumns",
-  "submitImport"
+  "submitImport",
+  "isImporting"
 ]);
 </script>
 
@@ -25,6 +26,7 @@ defineProps([
       :set-all-rows="setAllRows"
       :set-all-columns="setAllColumns"
       :submit-import="submitImport"
+      :is-importing="isImporting"
     />
     <ImportWordColumnOptions :columns="data.preview.columns" :import-form="importForm" />
     <ImportPreviewTable :preview="data.preview" :import-form="importForm" />

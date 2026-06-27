@@ -5,5 +5,7 @@ defineProps(importPreviewSubmitButtonProps);
 </script>
 
 <template>
-  <button type="button" @click="submitImport">确认导入</button>
+  <button type="button" :disabled="isImporting" @click="submitImport">
+    {{ isImporting ? "导入中..." : "确认导入" }}
+  </button>
 </template>
