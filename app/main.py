@@ -74,7 +74,7 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260627-002"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260627-003"
 DEFAULT_PAGE_VERSION = "v20260624.0"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -216,7 +216,8 @@ def release_version_sort_key(version: str) -> tuple[int, int]:
 
 def is_default_release_newer(matrix: dict[str, Any]) -> bool:
     current_version = normalize_version_number(str(matrix.get("version") or "").strip())
-    return release_version_sort_key(DEFAULT_RELEASE_VERSION) > release_version_sort_key(current_version)
+    default_version = normalize_version_number(str(default_version_matrix().get("version") or "").strip())
+    return release_version_sort_key(default_version) > release_version_sort_key(current_version)
 
 
 def ensure_version_matrix_file() -> dict[str, Any]:
