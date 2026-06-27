@@ -26,6 +26,18 @@ function authorText(item) {
   return item.author || item.authors_text || "作者未记录";
 }
 
+function bookCoverUrl(item) {
+  return item.coverUrl || item.cover_url || item.bookCoverUrl || item.book_cover_url || item.book?.coverUrl || item.book?.cover_url || "";
+}
+
+function coverSeed(item) {
+  return Number(item.coverSeed || item.cover_seed || item.analysisId || item.analysis_id || item.id || 0) % 6;
+}
+
+function coverLetter(item) {
+  return bookTitle(item).slice(0, 1).toUpperCase() || "B";
+}
+
 function openQuote(item) {
   const analysisId = item.analysisId || item.analysis_id || item.id;
   if (!analysisId) return;
@@ -61,8 +73,17 @@ function openQuote(item) {
         type="button"
         @click="openQuote(item)"
       >
-        <span class="book-quote-mark">“</span>
-        <span class="book-quote-text">{{ quoteText(item) }}</span>
+        <span class="book-quote-cover">
+          <img v-if="bookCoverUrl(item)" :src="bookCoverUrl(item)" :alt="bookTitle(item)" loading="lazy">
+          <span v-else class="book-history-cover-fallback" :class="`cover-seed-${coverSeed(item)}`">
+            <span>书摘</span>
+            <strong>{{ coverLetter(item) }}</strong>
+          </span>
+        </span>
+        <span class="book-quote-body">
+          <span class="book-quote-mark">“</span>
+          <span class="book-quote-text">{{ quoteText(item) }}</span>
+        </span>
         <span class="book-quote-source">
           {{ bookTitle(item) }}
           <span>{{ authorText(item) }}</span>
