@@ -1,6 +1,13 @@
 import { fetchJson } from '../utils.js';
 import { booklearnerApiPaths } from '../booklearnerApiPaths.js';
 
+const SCIENCE_LEVEL_KEYS = ['L300-L500', 'L500-L700', 'L700-L900', 'L900-L1100', 'L1100-L1300', 'L1300-L1500'];
+
+function levelFromScienceSlug(slug = '') {
+  const normalized = String(slug || '').toUpperCase();
+  return SCIENCE_LEVEL_KEYS.find((level) => normalized.includes(level.toUpperCase())) || '';
+}
+
 export function useBooklearnerData({ book, route }) {
   let scienceRequestId = 0;
 
@@ -32,10 +39,12 @@ export function useBooklearnerData({ book, route }) {
   async function loadScienceArticle(slug) {
     const current = book.value.science || {};
     const payload = await fetchJson(booklearnerApiPaths.scienceArticle(slug, {
-      level: current.level || 'L500-L700',
+      level: levelFromScienceSlug(slug) || current.level || 'L500-L700',
     }));
     updateScience({
       article: payload.item,
+      level: payload.item?.level || current.level,
+      levelLabel: payload.item?.levelLabel || current.levelLabel,
       sources: payload.sources || current.sources || [],
     });
   }
@@ -43,7 +52,7 @@ export function useBooklearnerData({ book, route }) {
   async function loadScienceFullArticle(slug) {
     const current = book.value.science || {};
     const payload = await fetchJson(booklearnerApiPaths.scienceFullArticle(slug, {
-      level: current.level || current.article?.level || 'L500-L700',
+      level: current.article?.level || levelFromScienceSlug(slug) || current.level || 'L500-L700',
     }), { skipCache: true });
     updateScience({
       article: {
