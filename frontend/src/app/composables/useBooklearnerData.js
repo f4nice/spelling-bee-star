@@ -3,22 +3,25 @@ import { booklearnerApiPaths } from '../booklearnerApiPaths.js';
 
 export function useBooklearnerData({ book, route }) {
   function updateScience(payload = {}) {
+    const hasArticle = Object.prototype.hasOwnProperty.call(payload, 'article');
     book.value.science = {
       ...(book.value.science || {}),
       ...payload,
-      article: payload.article ?? book.value.science?.article ?? null,
+      article: hasArticle ? payload.article : book.value.science?.article ?? null,
       notice: payload.notice || '',
     };
   }
 
   async function loadScienceDiscoveries(overrides = {}) {
     const current = book.value.science || {};
-    const payload = await fetchJson(booklearnerApiPaths.scienceDaily({
+    const requested = {
       level: overrides.level || current.level || 'L500-L700',
       topic: overrides.topic || current.topic || '全部',
       batch: overrides.batch ?? current.batch ?? 0,
-    }));
-    updateScience(payload);
+    };
+    updateScience({ ...requested, items: [], article: null });
+    const payload = await fetchJson(booklearnerApiPaths.scienceDaily(requested), { skipCache: overrides.force === true });
+    updateScience({ ...payload, article: null });
   }
 
   async function loadScienceArticle(slug) {

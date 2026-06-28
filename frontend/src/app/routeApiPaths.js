@@ -1,5 +1,6 @@
 export const routeApiPaths = {
   home: () => "/api/vue/home",
+  growth: () => "/api/vue/growth",
   lists: () => "/api/vue/lists",
   listDetail: (route) => `/api/vue/lists/${route.params.id}`,
   wrongWords: () => "/api/vue/wrong-words",

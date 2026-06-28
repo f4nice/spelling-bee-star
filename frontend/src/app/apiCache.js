@@ -65,7 +65,7 @@ export function clearApiCache(predicate = () => true) {
   }
 }
 
-export function invalidateApiCacheForMutation(url) {
+export function invalidateApiCacheForMutation(url, context = {}) {
   if (url.startsWith("/api/vue/words/")) {
     const wordId = url.split("/")[4];
     clearApiCache((key) => key.startsWith(`/api/vue/words/${wordId}`) || key.startsWith("/api/vue/lists"));
@@ -78,5 +78,9 @@ export function invalidateApiCacheForMutation(url) {
   if (/^\/api\/challenge\/\d+\/answer/.test(url)) {
     const wordListId = url.split("/")[3];
     clearApiCache((key) => key.startsWith(`/api/challenge/${wordListId}/state`));
+    clearApiCache((key) => key === "/api/vue/home" || key === "/api/vue/shell" || key === "/api/vue/wrong-words");
+    if (context.wrongDate) {
+      clearApiCache((key) => key === `/api/vue/challenge-calendar/${context.wrongDate}`);
+    }
   }
 }

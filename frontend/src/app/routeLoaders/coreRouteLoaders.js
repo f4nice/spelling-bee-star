@@ -6,6 +6,10 @@ export const coreRouteLoaders = {
     data.value = await fetchJson(routeApiPaths.home());
   },
 
+  async growth({ data }) {
+    data.value = await fetchJson(routeApiPaths.growth());
+  },
+
   async challengeDay({ route, data }) {
     data.value = await fetchJson(routeApiPaths.challengeDay(route));
   },

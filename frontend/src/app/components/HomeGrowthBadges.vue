@@ -6,6 +6,10 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  go: {
+    type: Function,
+    required: true,
+  },
 });
 
 const metrics = computed(() => props.growth?.metrics || []);
@@ -15,10 +19,23 @@ const trophyImage = computed(() => props.growth?.trophyImageUrl || "/static/icon
 function badgeLabel(item) {
   return item.badgeLabel || item.badge_label || item.label;
 }
+
+function openGrowth() {
+  props.go("/growth");
+}
 </script>
 
 <template>
-  <section v-if="growth" class="home-growth-console" aria-label="成长成就">
+  <section
+    v-if="growth"
+    class="home-growth-console"
+    aria-label="成长成就"
+    role="button"
+    tabindex="0"
+    @click="openGrowth"
+    @keydown.enter.prevent="openGrowth"
+    @keydown.space.prevent="openGrowth"
+  >
     <div class="home-growth-main">
       <img :src="trophyImage" alt="" aria-hidden="true" />
       <div>

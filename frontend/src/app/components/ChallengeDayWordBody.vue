@@ -16,6 +16,7 @@ defineProps({
     <div class="challenge-day-counts">
       <span>对 {{ item.correct_count }}</span>
       <span>错 {{ item.wrong_count }}</span>
+      <span v-if="item.corrected" class="is-corrected">已纠正</span>
     </div>
   </div>
 </template>

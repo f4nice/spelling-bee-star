@@ -15,14 +15,14 @@ const props = defineProps({
 const metrics = computed(() => props.growth?.metrics?.slice(0, 3) || []);
 const trophyImage = computed(() => props.growth?.trophyImageUrl || "/static/icons/challenge-crown-transparent.png");
 
-function openHome() {
-  props.navigate("/");
+function openGrowth() {
+  props.navigate("/growth");
 }
 </script>
 
 <template>
   <section class="sidebar-growth-panel" aria-label="成长成就">
-    <button type="button" class="sidebar-growth-head" @click="openHome">
+    <button type="button" class="sidebar-growth-head" @click="openGrowth">
       <img :src="trophyImage" alt="" aria-hidden="true" />
       <span>
         <small>成长等级</small>

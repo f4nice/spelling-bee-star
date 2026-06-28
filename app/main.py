@@ -76,8 +76,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260627-012"
-DEFAULT_PAGE_VERSION = "v20260627.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260628-002"
+DEFAULT_PAGE_VERSION = "v20260628.1"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
@@ -1146,6 +1146,11 @@ def vue_home_api(db: Session = Depends(get_db)):
     }
 
 
+@app.get("/api/vue/growth")
+def vue_growth_api(db: Session = Depends(get_db)):
+    return {"growth": learning_growth_summary(db)}
+
+
 @app.get("/api/vue/shell")
 def vue_shell_api(db: Session = Depends(get_db)):
     return serialize_shell_context({
@@ -1544,6 +1549,11 @@ def wrong_words_page(request: Request, db: Session = Depends(get_db)):
     return vue_shell(request, db, "wrong-words")
 
 
+@app.get("/growth", response_class=HTMLResponse)
+def growth_page(request: Request, db: Session = Depends(get_db)):
+    return vue_shell(request, db, "growth")
+
+
 @app.get("/challenge-calendar/{day}", response_class=HTMLResponse)
 def challenge_calendar_detail_page(day: str, request: Request, db: Session = Depends(get_db)):
     challenge_date = parse_wrong_date(day)
@@ -1779,6 +1789,9 @@ def serialize_word_list_card(card: dict[str, Any]) -> dict[str, Any]:
 
 
 def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
+    daily_wrong_ids = challenge_day_wrong_word_ids(db, challenge_date)
+    corrected_wrong_ids = challenge_day_corrected_wrong_word_ids(db, challenge_date, daily_wrong_ids)
+    wrong_word_list = get_wrong_word_list(db, challenge_date)
     stat = db.scalar(select(ChallengeDailyStat).where(ChallengeDailyStat.stat_date == challenge_date))
     detail_rows = db.execute(
         select(ChallengeDailyWord, Word, WordList)
@@ -1793,6 +1806,8 @@ def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
             "id": word.id,
             "word": word.word,
             "status": detail.last_result,
+            "was_wrong": bool((detail.wrong_count or 0) > 0 or word.id in daily_wrong_ids),
+            "corrected": word.id in corrected_wrong_ids,
             "correct_count": detail.correct_count,
             "wrong_count": detail.wrong_count,
             "word_list_id": word_list.id if word_list else None,
@@ -1805,9 +1820,33 @@ def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
         }
         for detail, word, word_list in detail_rows
     ]
+    seen_word_ids = {item["id"] for item in words}
+    missing_wrong_ids = sorted(daily_wrong_ids - seen_word_ids)
+    if missing_wrong_ids:
+        wrong_words = db.scalars(select(Word).where(Word.id.in_(missing_wrong_ids)).order_by(Word.word.asc())).all()
+        words.extend(
+            {
+                "id": word.id,
+                "word": word.word,
+                "status": "correct" if word.id in corrected_wrong_ids else "wrong",
+                "was_wrong": True,
+                "corrected": word.id in corrected_wrong_ids,
+                "correct_count": 0,
+                "wrong_count": 1,
+                "word_list_id": wrong_word_list.id if wrong_word_list else None,
+                "word_list_name": "\u5f53\u65e5\u751f\u8bcd\u672c",
+                "image_url": word.image_url,
+                "phonetic": word.phonetic,
+                "part_of_speech": word.part_of_speech,
+                "english_definition": word.english_definition,
+                "chinese_definition": word.chinese_definition,
+            }
+            for word in wrong_words
+        )
 
     correct = stat.correct_count if stat else sum(item["correct_count"] for item in words)
-    wrong = stat.wrong_count if stat else sum(item["wrong_count"] for item in words)
+    wrong_attempts = stat.wrong_count if stat else sum(item["wrong_count"] for item in words)
+    wrong_unique = len(daily_wrong_ids) if daily_wrong_ids else sum(1 for item in words if item["wrong_count"])
     recovery_note = ""
     if not words and stat and (stat.correct_count or stat.wrong_count):
         recovered_wrong_words = []
@@ -1899,12 +1938,15 @@ def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
             "\u9519\u8bef\u5355\u8bcd\u5df2\u4ece\u5f53\u65e5\u751f\u8bcd\u672c\u6062\u590d\uff1b"
             "\u4e4b\u540e\u65b0\u7684\u6311\u6218\u4f1a\u81ea\u52a8\u5b8c\u6574\u8bb0\u5f55\u6bcf\u4e2a\u5355\u8bcd\u3002"
         )
-    wrong_word_list = get_wrong_word_list(db, challenge_date)
     return {
         "date": challenge_date.isoformat(),
-        "total": correct + wrong,
+        "total": correct + wrong_attempts,
         "correct": correct,
-        "wrong": wrong,
+        "wrong": wrong_unique,
+        "wrong_attempts": wrong_attempts,
+        "corrected": len(corrected_wrong_ids),
+        "correction_pending": max(wrong_unique - len(corrected_wrong_ids), 0),
+        "wrong_challenge_count": wrong_unique,
         "wrong_word_list_id": wrong_word_list.id if wrong_word_list else None,
         "words": words,
         "has_detail_rows": bool(detail_rows),
@@ -2788,6 +2830,10 @@ def default_learning_growth_summary() -> dict[str, Any]:
         "subtitle": "像闯关一样完成每天学习",
         "level": 1,
         "points": 0,
+        "nextLevelPoints": 500,
+        "pointsToNextLevel": 500,
+        "levelProgressPercent": 0,
+        "scoreRules": growth_score_rules(),
         "trophyImageUrl": trophy_image,
         "metrics": [
             {
@@ -2848,6 +2894,15 @@ def science_growth_count() -> int:
         return 0
 
 
+def growth_score_rules() -> list[dict[str, Any]]:
+    return [
+        {"key": "spelling_words", "label": "拼写题", "points": 2},
+        {"key": "challenge_rounds", "label": "完整轮", "points": 50},
+        {"key": "good_quotes", "label": "好句", "points": 3},
+        {"key": "science_discoveries", "label": "科学点", "points": 8},
+    ]
+
+
 def learning_growth_summary(db: Session) -> dict[str, Any]:
     try:
         trophy_image = growth_trophy_image_url()
@@ -2890,11 +2945,18 @@ def learning_growth_summary(db: Session) -> dict[str, Any]:
         today_wrong = today_stat.wrong_count if today_stat else 0
         today_total = today_correct + today_wrong
         points = values["spelling_words"] * 2 + values["challenge_rounds"] * 50 + values["good_quotes"] * 3 + values["science_discoveries"] * 8
+        level = max(1, points // 500 + 1)
+        current_level_floor = (level - 1) * 500
+        next_level_points = level * 500
         return {
             "title": "成长成就",
             "subtitle": "每天完成挑战，点亮自己的奖杯墙",
-            "level": max(1, points // 500 + 1),
+            "level": level,
             "points": points,
+            "nextLevelPoints": next_level_points,
+            "pointsToNextLevel": max(next_level_points - points, 0),
+            "levelProgressPercent": percent_value(points - current_level_floor, 500),
+            "scoreRules": growth_score_rules(),
             "trophyImageUrl": trophy_image,
             "metrics": metrics,
             "dailyMissions": [
@@ -3406,6 +3468,47 @@ def clear_wrong_word_if_passed(db: Session, word_id: int, wrong_date: date | Non
             WrongWord.wrong_date == wrong_date,
         )
     )
+
+
+def challenge_day_wrong_word_ids(db: Session, challenge_date: date) -> set[int]:
+    word_ids: set[int] = set()
+    wrong_word_list = get_wrong_word_list(db, challenge_date)
+    if wrong_word_list:
+        word_ids.update(
+            row[0]
+            for row in db.execute(
+                select(WordListItem.word_id).where(WordListItem.word_list_id == wrong_word_list.id)
+            ).all()
+        )
+    word_ids.update(
+        row[0]
+        for row in db.execute(
+            select(ChallengeDailyWord.word_id)
+            .where(ChallengeDailyWord.challenge_date == challenge_date)
+            .where(ChallengeDailyWord.wrong_count > 0)
+        ).all()
+    )
+    word_ids.update(
+        row[0]
+        for row in db.execute(select(WrongWord.word_id).where(WrongWord.wrong_date == challenge_date)).all()
+    )
+    return word_ids
+
+
+def challenge_day_corrected_wrong_word_ids(db: Session, challenge_date: date, word_ids: set[int]) -> set[int]:
+    if not word_ids:
+        return set()
+    sorted_word_ids = sorted(word_ids)
+    return {
+        row[0]
+        for row in db.execute(
+            select(ChallengeDailyWord.word_id)
+            .where(ChallengeDailyWord.word_id.in_(sorted_word_ids))
+            .where(ChallengeDailyWord.challenge_date >= challenge_date)
+            .where(ChallengeDailyWord.correct_count > 0)
+            .group_by(ChallengeDailyWord.word_id)
+        ).all()
+    }
 
 
 def wrong_word_count(db: Session) -> int:

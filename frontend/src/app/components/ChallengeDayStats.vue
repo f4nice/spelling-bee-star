@@ -8,6 +8,18 @@ defineProps({
     type: Number,
     required: true,
   },
+  wrongAttempts: {
+    type: Number,
+    default: 0,
+  },
+  corrected: {
+    type: Number,
+    default: 0,
+  },
+  correctionPending: {
+    type: Number,
+    default: 0,
+  },
   activeFilter: {
     type: String,
     default: "all",
@@ -15,6 +27,10 @@ defineProps({
   wrongChallengeUrl: {
     type: String,
     default: "",
+  },
+  wrongChallengeCount: {
+    type: Number,
+    default: 0,
   },
   go: {
     type: Function,
@@ -34,7 +50,10 @@ defineEmits(["filter"]);
       </button>
     </div>
     <div class="panel challenge-day-filter" :class="{ active: activeFilter === 'wrong' }">
-      <span>答错</span>
+      <div class="challenge-day-stat-heading">
+        <span>答错</span>
+        <span class="challenge-day-correction-count">纠正 {{ corrected }}</span>
+      </div>
       <div class="challenge-day-wrong-actions">
         <button class="challenge-day-stat-number stat-wrong" type="button" @click="$emit('filter', 'wrong')">
           {{ wrong }}
@@ -42,12 +61,14 @@ defineEmits(["filter"]);
         <button
           class="secondary-button challenge-day-start-button"
           type="button"
-          :disabled="!wrongChallengeUrl || wrong <= 0"
+          :disabled="!wrongChallengeUrl || wrongChallengeCount <= 0"
           @click="go(wrongChallengeUrl)"
         >
           发起挑战
         </button>
       </div>
+      <small v-if="wrongAttempts && wrongAttempts !== wrong">错误次数 {{ wrongAttempts }} · 待纠正 {{ correctionPending }}</small>
+      <small v-else>待纠正 {{ correctionPending }}</small>
     </div>
     <button class="panel challenge-day-back" type="button" @click="go('/')">
       <span>返回</span>

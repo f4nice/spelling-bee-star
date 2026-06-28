@@ -27,6 +27,6 @@ export async function postChallengeAnswer({ wordListId, state, spelling }) {
     body: form,
   });
   if (!response.ok) throw new Error(challengeMessages.submitFailed);
-  invalidateApiCacheForMutation(url);
+  invalidateApiCacheForMutation(url, { wrongDate: state?.wrong_date });
   return response.json();
 }

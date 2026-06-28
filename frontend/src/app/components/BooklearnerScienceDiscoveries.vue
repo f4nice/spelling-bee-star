@@ -40,12 +40,18 @@ watch(
 );
 
 async function reload(overrides = {}) {
+  const nextLevel = overrides.level || selectedLevel.value;
+  const nextTopic = overrides.topic || selectedTopic.value;
+  const nextBatch = overrides.batch ?? science.value.batch ?? 0;
+  selectedLevel.value = nextLevel;
+  selectedTopic.value = nextTopic;
   loading.value = true;
   try {
     await props.loadScienceDiscoveries({
-      level: overrides.level || selectedLevel.value,
-      topic: overrides.topic || selectedTopic.value,
-      batch: overrides.batch ?? science.value.batch ?? 0,
+      level: nextLevel,
+      topic: nextTopic,
+      batch: nextBatch,
+      force: true,
     });
   } finally {
     loading.value = false;
@@ -61,7 +67,11 @@ function changeTopic() {
 }
 
 function nextBatch() {
-  reload({ batch: Number(science.value.batch || 0) + 1 });
+  reload({
+    level: selectedLevel.value,
+    topic: selectedTopic.value,
+    batch: Number(science.value.batch || 0) + 1,
+  });
 }
 
 function openDiscovery(item) {
@@ -121,7 +131,7 @@ function openDiscovery(item) {
         </div>
         <div class="science-card-topline">
           <span>{{ item.topic }}</span>
-          <small>{{ item.source }}</small>
+          <small>{{ item.levelLabel || science.levelLabel }}</small>
         </div>
         <h3>{{ item.title }}</h3>
         <p>{{ item.summary }}</p>

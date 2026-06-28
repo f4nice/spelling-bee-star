@@ -1906,6 +1906,15 @@ a:focus-visible {
     radial-gradient(circle at top left, rgba(255, 226, 142, 0.2), transparent 42%),
     linear-gradient(135deg, #17241f 0%, #164735 58%, #8a6a21 170%);
   box-shadow: 0 20px 45px rgba(13, 44, 36, 0.16);
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.home-growth-console:hover,
+.home-growth-console:focus-visible {
+  box-shadow: 0 24px 54px rgba(13, 44, 36, 0.22);
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .home-growth-main {
@@ -2024,6 +2033,195 @@ a:focus-visible {
   font-weight: 900;
 }
 
+.growth-detail-page {
+  display: grid;
+  gap: 16px;
+}
+
+.growth-detail-hero {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  border: 1px solid rgba(226, 178, 73, 0.34);
+  border-radius: 18px;
+  padding: 22px;
+  color: #fff;
+  background:
+    radial-gradient(circle at top left, rgba(255, 226, 142, 0.2), transparent 42%),
+    linear-gradient(135deg, #17241f 0%, #164735 58%, #8a6a21 170%);
+  box-shadow: var(--shadow);
+}
+
+.growth-detail-hero img {
+  width: 92px;
+  height: 92px;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.28));
+}
+
+.growth-detail-hero h1 {
+  margin: 2px 0 6px;
+  color: #fff;
+  font-size: 34px;
+  line-height: 1.12;
+}
+
+.growth-detail-hero p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.growth-detail-hero .section-kicker {
+  color: #a2f2cc;
+}
+
+.growth-detail-hero > strong {
+  border-radius: 999px;
+  padding: 10px 15px;
+  color: #ffe7a3;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.growth-level-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.growth-level-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.growth-level-head span,
+.growth-level-head em {
+  color: var(--muted);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.growth-level-head strong {
+  color: var(--accent-dark);
+  font-size: 32px;
+  line-height: 1;
+}
+
+.growth-level-progress,
+.growth-detail-card-body i,
+.growth-mission-grid i {
+  display: block;
+  overflow: hidden;
+  height: 9px;
+  border-radius: 999px;
+  background: #e4ebe5;
+}
+
+.growth-level-progress b,
+.growth-detail-card-body b,
+.growth-mission-grid b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #d8a738, #1d7f5b);
+}
+
+.growth-score-rules,
+.growth-mission-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.growth-score-rules span {
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--accent-dark);
+  background: #e9f8f1;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.growth-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.growth-detail-card {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.growth-detail-medal {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  border-radius: 18px;
+  background: radial-gradient(circle at 38% 28%, #fff7cf, #d9a02e 58%, #8d6318);
+}
+
+.growth-detail-medal img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.growth-detail-card-body {
+  display: grid;
+  gap: 5px;
+}
+
+.growth-detail-card-body span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.growth-detail-card-body strong {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.growth-detail-card-body p {
+  margin: 0;
+  color: var(--accent-dark);
+  font-weight: 900;
+}
+
+.growth-mission-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.growth-mission-grid span {
+  display: grid;
+  gap: 7px;
+  min-width: 180px;
+  flex: 1 1 180px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  background: #fbfcfa;
+}
+
+.growth-mission-grid strong {
+  color: var(--ink);
+}
+
+.growth-mission-grid em {
+  color: var(--accent-dark);
+  font-style: normal;
+  font-weight: 900;
+}
+
 .challenge-calendar {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -2100,20 +2298,21 @@ a:focus-visible {
 }
 
 .calendar-result-lines {
-  display: inline-grid;
-  gap: 4px;
-  justify-self: start;
+  display: grid;
+  width: 100%;
+  gap: 5px;
   align-self: end;
 }
 
 .calendar-result-line {
-  display: inline-flex;
+  display: flex;
   align-items: baseline;
+  justify-content: space-between;
   gap: 3px;
-  width: max-content;
-  min-width: 70px;
+  width: 100%;
+  min-width: 0;
   padding: 3px 8px;
-  border-radius: 999px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.82);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
   font-size: 11px;
@@ -2332,6 +2531,21 @@ a:focus-visible {
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
 
+.challenge-day-stat-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.challenge-day-correction-count {
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: var(--accent-dark);
+  background: #e4f6ee;
+  white-space: nowrap;
+}
+
 .challenge-day-stat-number {
   width: max-content;
   border: 0;
@@ -2365,6 +2579,16 @@ a:focus-visible {
   color: var(--muted);
   font-size: 13px;
   font-weight: 800;
+}
+
+.challenge-day-stats .challenge-day-correction-count {
+  color: var(--accent-dark);
+}
+
+.challenge-day-stats small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .challenge-day-stats strong {
@@ -2500,6 +2724,11 @@ a:focus-visible {
   background: #f5f7f8;
   font-size: 12px;
   font-weight: 900;
+}
+
+.challenge-day-counts .is-corrected {
+  color: var(--accent-dark);
+  background: #e4f6ee;
 }
 
 .challenge-day-filter-empty {
@@ -4140,6 +4369,23 @@ button.calendar-day {
 
   .science-article-panel h1 {
     font-size: 32px;
+  }
+
+  .growth-detail-hero {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .growth-detail-hero > strong {
+    grid-column: 1 / -1;
+    width: fit-content;
+  }
+
+  .growth-level-head {
+    grid-template-columns: 1fr;
+  }
+
+  .challenge-day-stats {
+    grid-template-columns: 1fr;
   }
 }
 

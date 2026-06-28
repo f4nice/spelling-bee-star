@@ -2,17 +2,20 @@ import { invalidateApiCacheForMutation, readApiCache, writeApiCache } from "./ap
 
 export async function fetchJson(url, options) {
   const method = (options?.method || "GET").toUpperCase();
-  if (method === "GET") {
+  const skipCache = Boolean(options?.skipCache);
+  const requestOptions = options ? { ...options } : undefined;
+  if (requestOptions) delete requestOptions.skipCache;
+  if (method === "GET" && !skipCache) {
     const cached = readApiCache(url);
     if (cached) return cached;
   }
 
-  const response = await fetch(url, options);
+  const response = await fetch(url, requestOptions);
   const isJson = response.headers.get("content-type")?.includes("application/json");
   const payload = isJson ? await response.json() : null;
   if (!response.ok) throw new Error(payload?.detail || payload?.error || "页面数据加载失败");
 
-  if (method === "GET") {
+  if (method === "GET" && !skipCache) {
     writeApiCache(url, payload);
   } else {
     invalidateApiCacheForMutation(url);
