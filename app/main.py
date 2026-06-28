@@ -10,7 +10,7 @@ import re
 import sys
 from threading import Lock, Thread
 from typing import Any
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 from uuid import uuid4
 import zipfile
 
@@ -76,12 +76,14 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260628-014"
-DEFAULT_PAGE_VERSION = "v20260628.11"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260628-015"
+DEFAULT_PAGE_VERSION = "v20260628.12"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
 SCIENCE_IMAGE_VERSION = "20260628-clean-hero-1"
+SCIENCE_DISCOVERY_DATA_VERSION = "20260628-source-refresh-1"
+SCIENCE_PUBLIC_CONTENT_VERSION = "v3"
 SCIENCE_PUBLIC_CONTENT_TTL = timedelta(days=3650)
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
 GROWTH_TROPHY_ASSET_STEM = "learning-growth-trophy"
@@ -133,12 +135,15 @@ SCIENCE_LEVELS = [
 ]
 
 SCIENCE_SOURCES = [
-    ("National Geographic Kids", "https://kids.nationalgeographic.com/science"),
-    ("Ask A Biologist", "https://askabiologist.asu.edu/"),
-    ("NASA Kids", "https://www.nasa.gov/kidsclub/"),
-    ("PBS LearningMedia", "https://www.pbslearningmedia.org/"),
-    ("Science Buddies", "https://www.sciencebuddies.org/"),
-    ("Newsela", "https://newsela.com/"),
+    ("NASA Space Place", "https://spaceplace.nasa.gov/"),
+    ("NASA Science Kids", "https://science.nasa.gov/kids/"),
+    ("NOAA Education", "https://www.noaa.gov/education"),
+    ("USGS Water Science School", "https://www.usgs.gov/water-science-school"),
+    ("USGS Volcano Hazards", "https://www.usgs.gov/programs/VHP"),
+    ("CDC Clean Hands", "https://www.cdc.gov/clean-hands/"),
+    ("EPA Students", "https://www.epa.gov/students"),
+    ("EIA Energy Kids", "https://www.eia.gov/kids/"),
+    ("Federal Highway Administration", "https://highways.dot.gov/"),
 ]
 
 SCIENCE_CONCEPTS = [
@@ -177,6 +182,225 @@ SCIENCE_CONCEPTS = [
     ("工程", "How Solar Panels Work", "Solar panels turn sunlight into electricity using special materials.", "solar panel, electricity, sunlight"),
     ("工程", "Why Filters Matter", "Filters trap particles and help clean air or water before people use it.", "filter, particle, clean"),
 ]
+
+SCIENCE_TOPIC_REFERENCE = {
+    "动物": ("NOAA Education", "https://www.noaa.gov/education"),
+    "植物": ("NASA Science Kids", "https://science.nasa.gov/kids/earth/"),
+    "人体": ("CDC", "https://www.cdc.gov/"),
+    "微生物": ("CDC Clean Hands", "https://www.cdc.gov/clean-hands/"),
+    "地球": ("USGS", "https://www.usgs.gov/"),
+    "太空": ("NASA Space Place", "https://spaceplace.nasa.gov/"),
+    "工程": ("Federal Highway Administration", "https://highways.dot.gov/"),
+}
+
+SCIENCE_REFERENCE_BY_TITLE = {
+    "The Secret Work of Coral Reefs": ("NOAA Fisheries", "https://www.fisheries.noaa.gov/national/habitat-conservation/shallow-coral-reef-habitat"),
+    "How Your Heart Pumps": ("CDC", "https://www.cdc.gov/heart-defects/how-the-heart-works/index.html"),
+    "Why Handwashing Works": ("CDC Clean Hands", "https://www.cdc.gov/clean-hands/data-research/facts-stats/index.html"),
+    "Why Volcanoes Erupt": ("USGS Volcano Hazards Program", "https://www.usgs.gov/faqs/how-do-volcanoes-erupt"),
+    "How Rivers Shape Land": ("USGS Water Science School", "https://www.usgs.gov/water-science-school/surface-water"),
+    "How Clouds Form": ("NASA Science Kids", "https://science.nasa.gov/kids/earth/how-do-clouds-form/"),
+    "Why the Moon Changes Shape": ("NASA Space Place", "https://spaceplace.nasa.gov/moon-phases/"),
+    "How Solar Panels Work": ("EIA Energy Kids", "https://www.eia.gov/kids/energy-sources/solar/"),
+    "What Astronauts Need in Space": ("NASA Space Place", "https://spaceplace.nasa.gov/"),
+    "How Bridges Carry Weight": ("Federal Highway Administration", "https://highways.dot.gov/"),
+    "Why Filters Matter": ("EPA Students", "https://www.epa.gov/students"),
+}
+
+SCIENCE_CONCEPT_FACTS = {
+    "How Sea Otters Use Tools": [
+        "A sea otter often floats on its back and uses its chest like a workbench while it opens hard-shelled food.",
+        "The tool is useful because a shell protects the soft animal inside, and repeated tapping can crack that shell without wasting too much energy.",
+        "This behavior shows that an animal can match a problem, a body part, and an object from the environment.",
+    ],
+    "Why Owls Fly Quietly": [
+        "An owl wing does not slice through air like a smooth board; the feather edges split moving air into smaller, softer currents.",
+        "Soft fringes and downy surfaces reduce the rushing sound that many birds make when air breaks around their wings.",
+        "Quiet flight helps an owl approach prey before the prey can use hearing as an early warning system.",
+    ],
+    "The Secret Work of Coral Reefs": [
+        "A reef is built by many tiny coral animals that make hard skeletons and slowly create a three-dimensional home.",
+        "That structure gives fish and other ocean animals places to hide, feed, reproduce, and grow.",
+        "Because so much life depends on reef structure, small changes in water temperature, sunlight, or water quality can affect a whole community.",
+    ],
+    "How Penguins Stay Warm": [
+        "A penguin keeps heat with overlapping feathers, a layer of fat, and a body shape that reduces heat loss.",
+        "When penguins huddle, each bird loses less heat to cold air and wind than it would alone.",
+        "Warmth is not one trick; it is a system of body parts and behaviors working together.",
+    ],
+    "Why Bees Dance": [
+        "A honeybee dance is a moving signal that helps other bees find food without every bee searching at random.",
+        "The direction and length of the dance can give clues about where nectar is located.",
+        "The colony works better because one bee's discovery can become shared information.",
+    ],
+    "How Leaves Breathe": [
+        "Leaves trade gases through tiny openings, while green cells use light energy to help make sugar.",
+        "A leaf must balance two needs: taking in carbon dioxide and keeping too much water from escaping.",
+        "The shape of a leaf, the number of openings, and the weather around it all affect that balance.",
+    ],
+    "Why Seeds Travel": [
+        "A seed must leave the parent plant if it is going to find enough space, light, and water to grow.",
+        "Some seeds float, some fly, some stick to fur, and some pass through animals after fruit is eaten.",
+        "Seed movement is a plant's way of solving a problem even though the plant itself cannot walk.",
+    ],
+    "The Job of Tree Rings": [
+        "A tree ring is a record of growth, and each ring shows wood made during one growing season.",
+        "Wide and narrow rings can give clues about rainfall, temperature, fire, or other conditions from that year.",
+        "Scientists compare ring patterns from many trees to build evidence about past environments.",
+    ],
+    "How Desert Plants Save Water": [
+        "Many desert plants store water in thick tissues and reduce water loss with waxy surfaces or small leaves.",
+        "Spines can protect stored water and can also shade the plant surface a little.",
+        "The plant survives by slowing water loss, not by finding water every day.",
+    ],
+    "Why Flowers Have Colors": [
+        "Flower colors, patterns, and smells can guide pollinators toward nectar or pollen.",
+        "When an animal visits a flower, pollen may stick to its body and move to another flower.",
+        "A flower is both a plant structure and a signal in a living partnership.",
+    ],
+    "How Your Heart Pumps": [
+        "The heart is a muscle that squeezes in a rhythm, moving blood through chambers, valves, and blood vessels.",
+        "Blood picks up oxygen in the lungs and then carries that oxygen to body cells that need energy.",
+        "Valves matter because they keep blood moving in one direction instead of leaking backward.",
+    ],
+    "Why Muscles Get Stronger": [
+        "A muscle becomes stronger when work, rest, food, and repeated practice give the body time to repair and adapt.",
+        "Exercise challenges muscle fibers, and recovery helps the body rebuild them for the next effort.",
+        "Strength is evidence of adaptation, not something that appears from one hard workout.",
+    ],
+    "How Eyes See Color": [
+        "Color vision begins when light enters the eye and reaches cells that respond to different wavelengths.",
+        "The brain compares signals from these cells and builds the color experience we notice.",
+        "Objects do not simply contain color; they reflect light that the eye and brain interpret.",
+    ],
+    "Why Sleep Helps Memory": [
+        "During sleep, the brain is still active, sorting recent experiences and strengthening useful connections.",
+        "Rest can make a skill or idea easier to use later because the brain has time to organize it.",
+        "Memory depends on attention while learning and recovery after learning.",
+    ],
+    "How Skin Protects You": [
+        "Skin is a flexible barrier that helps block germs, keep water inside the body, and sense touch and temperature.",
+        "When skin is cut, the body starts repair work so the barrier can close again.",
+        "Protection is both physical and sensory: skin warns you about heat, pressure, and injury.",
+    ],
+    "The Good Side of Bacteria": [
+        "Some bacteria cause disease, but many bacteria help ecosystems recycle nutrients and help bodies digest food.",
+        "Helpful bacteria often work in communities where different microbes use different materials.",
+        "The important science question is not whether bacteria are good or bad, but what each kind is doing in its environment.",
+    ],
+    "How Yeast Makes Bread Rise": [
+        "Yeast is a living microbe that uses sugar and releases carbon dioxide gas.",
+        "Gas bubbles get trapped in dough, so the dough expands and becomes lighter.",
+        "Warmth, time, and food affect how active yeast becomes.",
+    ],
+    "What Makes Mold Grow": [
+        "Mold spreads by tiny spores and grows well when it has moisture, food, and the right temperature.",
+        "A damp surface can become a habitat for mold because spores are already common in the air.",
+        "Controlling moisture is often the most important way to slow mold growth.",
+    ],
+    "How Microbes Clean Water": [
+        "Some water treatment systems use microbes that break down waste into simpler materials.",
+        "The microbes need the right oxygen, food, and flow conditions to keep working.",
+        "Clean water can depend on living processes as well as filters, settling tanks, and human engineering.",
+    ],
+    "Why Handwashing Works": [
+        "Soap helps lift oils, dirt, and many germs from skin so running water can carry them away.",
+        "Rubbing matters because it reaches the backs of hands, between fingers, and under nails.",
+        "Handwashing is a small action with a large effect because hands move germs between surfaces, faces, and other people.",
+    ],
+    "Why Volcanoes Erupt": [
+        "Deep underground, hot rock can melt into magma, which is less dense than nearby solid rock.",
+        "Magma rises through cracks or weak places and may collect in chambers before reaching the surface.",
+        "Once magma erupts, scientists call it lava, and the eruption can also release gases, ash, and broken rock.",
+    ],
+    "How Rivers Shape Land": [
+        "A river carries water, sand, soil, and rock, and that moving material can wear land down over time.",
+        "Fast water can erode banks and valleys, while slower water may drop sediment in bars, floodplains, or deltas.",
+        "River shape is evidence of energy, slope, water volume, and the material the river is moving.",
+    ],
+    "Why Earthquakes Happen": [
+        "Earth's outer layer is broken into moving plates, and stress can build where rocks are locked together.",
+        "An earthquake happens when rocks suddenly slip and release stored energy as shaking waves.",
+        "Faults, aftershocks, and patterns of past quakes help scientists estimate where shaking is more likely.",
+    ],
+    "How Clouds Form": [
+        "A cloud forms when invisible water vapor cools and changes into tiny liquid droplets or ice crystals.",
+        "Those droplets need small particles, such as dust or salt, to gather on.",
+        "Rising air, cooling temperature, and moisture work together to decide when a cloud appears.",
+    ],
+    "What Makes a Fossil": [
+        "A fossil usually begins when a dead organism is buried quickly by sediment.",
+        "Over long periods, minerals can fill spaces or replace hard parts such as shells, bones, or wood.",
+        "Fossils are rare records because most living things decay or are broken apart before they can be preserved.",
+    ],
+    "Why the Moon Changes Shape": [
+        "The Moon does not make its own light; we see sunlight reflecting from its surface.",
+        "As the Moon orbits Earth, we see different amounts of the sunlit half.",
+        "The repeating pattern of phases is evidence that the Moon is moving around Earth.",
+    ],
+    "How Rockets Leave Earth": [
+        "A rocket pushes hot gas downward, and the gas pushes the rocket upward with an equal and opposite force.",
+        "The rocket must produce enough thrust to overcome gravity and keep accelerating.",
+        "Fuel, mass, shape, and guidance all matter because leaving Earth is a problem of force and motion.",
+    ],
+    "Why Mars Looks Red": [
+        "Mars looks red because iron minerals in its dust and rocks have reacted with oxygen over time.",
+        "Fine dust can cover large areas, so the rusty color is visible even from far away.",
+        "The color gives scientists a clue about the planet's surface materials and history.",
+    ],
+    "How Telescopes Collect Light": [
+        "A telescope gathers more light than an eye can gather by itself.",
+        "Mirrors or lenses focus that light so faint or distant objects can be seen more clearly.",
+        "A larger light-collecting area can reveal details that would otherwise be too dim.",
+    ],
+    "What Astronauts Need in Space": [
+        "Astronauts need air, water, food, temperature control, communication, exercise, and protection from hazards.",
+        "In orbit, the body and equipment behave differently because there is very little weight pulling things downward.",
+        "Space travel is a life-support problem as much as it is a rocket problem.",
+    ],
+    "How Bridges Carry Weight": [
+        "A bridge carries weight by spreading forces from the deck into supports, cables, arches, or trusses.",
+        "Different shapes handle tension and compression in different ways, so design changes how much weight a bridge can hold.",
+        "Testing a model bridge helps engineers compare evidence instead of guessing which design is strongest.",
+    ],
+    "Why Robots Use Sensors": [
+        "A robot sensor changes information from the world, such as light, distance, touch, or sound, into data the robot can use.",
+        "A program compares sensor data with instructions and chooses the next action.",
+        "Sensors matter because a robot that cannot detect change cannot respond to its environment.",
+    ],
+    "How Solar Panels Work": [
+        "A solar cell can convert light energy directly into electrical energy.",
+        "Many cells are connected into a panel so they can produce more useful power together.",
+        "Sunlight, angle, shade, and storage all affect how much electricity a solar system can provide.",
+    ],
+    "Why Filters Matter": [
+        "A filter is a barrier with tiny spaces that let some materials pass while trapping others.",
+        "In water or air, larger particles can be blocked, while smaller molecules may need different treatment methods.",
+        "A good filter is matched to the problem: the material, pore size, flow speed, and contaminant all matter.",
+    ],
+}
+
+SCIENCE_PUBLIC_SOURCE_DOMAINS = (
+    "nasa.gov",
+    "spaceplace.nasa.gov",
+    "noaa.gov",
+    "usgs.gov",
+    "cdc.gov",
+    "epa.gov",
+    "eia.gov",
+    "dot.gov",
+)
+
+
+def science_reference_for_item(title: str, topic: str) -> tuple[str, str]:
+    return SCIENCE_REFERENCE_BY_TITLE.get(title) or SCIENCE_TOPIC_REFERENCE.get(topic) or SCIENCE_SOURCES[0]
+
+
+def is_public_science_source(source_url: str | None) -> bool:
+    if not source_url:
+        return False
+    hostname = (urlparse(source_url).hostname or "").lower()
+    return any(hostname == domain or hostname.endswith(f".{domain}") for domain in SCIENCE_PUBLIC_SOURCE_DOMAINS)
 
 
 def science_level_config(level: str | None) -> dict[str, str]:
@@ -481,11 +705,13 @@ def science_word_items(words: str) -> list[dict[str, str]]:
 
 
 def science_article_paragraphs(title: str, summary: str, topic: str, level_info: dict[str, str]) -> list[str]:
-    return [
-        f"{title} is a science idea in the topic of {topic}. {summary}",
-        f"At the {level_info['label']} reading level, focus on the cause, the effect, and the key science words.",
-        "Try connecting this idea to something you can observe at home, outside, or in a short classroom experiment.",
+    facts = SCIENCE_CONCEPT_FACTS.get(title, [])
+    preview = [
+        f"{title} is a science reading about {topic}. {summary}",
+        *(facts[:2] or [f"At the {level_info['label']} reading level, look for evidence, cause, and effect."]),
+        "Try connecting the idea to something you can observe, test, or explain with a simple model.",
     ]
+    return preview[:4]
 
 
 def science_html_to_plain_text(markup: str, max_chars: int = 5000) -> str:
@@ -502,6 +728,8 @@ def science_html_to_plain_text(markup: str, max_chars: int = 5000) -> str:
 
 def fetch_science_source_text(source_url: str) -> str:
     if not source_url or not source_url.startswith(("http://", "https://")):
+        return ""
+    if not is_public_science_source(source_url):
         return ""
     try:
         response = httpx.get(
@@ -521,6 +749,31 @@ def fetch_science_source_text(source_url: str) -> str:
     if content_type and not any(kind in content_type.lower() for kind in ("text/html", "text/plain", "application/xhtml+xml")):
         return ""
     return science_html_to_plain_text(response.text)
+
+
+def science_source_sentences(source_text: str, terms: list[str], max_count: int = 2) -> list[str]:
+    if not source_text:
+        return []
+    keywords = {
+        word.lower()
+        for term in terms
+        for word in re.findall(r"[a-zA-Z]{4,}", term or "")
+        if word.lower() not in {"science", "reading", "learn", "about", "with", "from", "this", "that"}
+    }
+    sentences = re.split(r"(?<=[.!?])\s+", re.sub(r"\s+", " ", source_text).strip())
+    selected: list[str] = []
+    blocked = ("cookie", "privacy", "subscribe", "browser", "javascript", "menu", "search")
+    for sentence in sentences:
+        clean = sentence.strip()
+        lower = clean.lower()
+        if len(clean) < 65 or len(clean) > 280 or any(token in lower for token in blocked):
+            continue
+        if keywords and not any(keyword in lower for keyword in keywords):
+            continue
+        selected.append(clean)
+        if len(selected) >= max_count:
+            break
+    return selected
 
 
 def science_topic_frame(topic: str) -> str:
@@ -576,30 +829,34 @@ def build_science_full_article(item: dict[str, Any], source_text: str = "") -> d
     ]
     focus_words = ", ".join(words[:4]) or "evidence, pattern, cause, effect"
     summary_sentence = summary if summary.endswith((".", "!", "?")) else f"{summary}."
-    topic_frame = science_topic_frame(topic)
     source_name = str(item.get("source") or "参考来源")
-    source_status = "referenced" if source_text else "generated"
+    source_url = str(item.get("sourceUrl") or "")
+    public_source_text = source_text if is_public_science_source(source_url) else ""
+    source_sentences = science_source_sentences(public_source_text, [title, summary, *words])
+    concept_facts = SCIENCE_CONCEPT_FACTS.get(title, [])
+    source_status = "public-source" if public_source_text else "generated"
     source_note = (
-        f"已尝试参考 {source_name} 的公开科学阅读内容，并改写成站内原创全文。"
-        if source_text
-        else "参考站点暂时无法读取，已根据当前知识点生成站内原创全文。"
-    )
-    source_bridge = (
-        f"The reference source gives this topic a wider science context, so this SpeakEasy version keeps the focus on {focus_words}."
-        if source_text
-        else f"This SpeakEasy version expands the card into a complete reading passage with the focus words {focus_words}."
+        f"已读取 {source_name} 的公共科普页面，并整理成站内分级阅读。"
+        if public_source_text
+        else "已根据公共来源选题和站内科学事实库生成分级阅读；更新全文时会尝试读取公共来源页面。"
     )
 
     paragraphs = [
-        f"{title} starts with a careful question: what can we learn by looking closely at {topic_frame}? {summary_sentence}",
-        f"The first idea is structure. In science, a structure is the shape, layer, part, or system that makes something work. When readers notice structure, they can explain not only what they see, but why it matters.",
-        f"The second idea is cause and effect. A change in water, sunlight, temperature, pressure, motion, or time can produce a visible result. Good readers ask which condition changed first and which result followed after it.",
-        f"For a {level_info['label']} reader, the strongest evidence is usually a pattern. One observation may be interesting, but repeated observations help scientists decide whether an explanation is reliable.",
-        source_bridge,
-        f"The most useful vocabulary here includes {focus_words}. Try using each word to explain one step in the process. If a word names a thing, connect it to what it does; if it names an action, connect it to what changes next.",
-        f"A simple way to investigate this topic is to make a small observation plan. Choose one example, record what you notice, compare it with another example, and write one sentence that begins with \"I think this happened because...\"",
-        f"The big takeaway is that science reading is not just memorizing facts. It is learning how details become evidence, how evidence supports an explanation, and how an explanation helps us understand the world more clearly.",
+        f"{title} begins with a real science question in {topic}: how can we explain what we observe? {summary_sentence}",
     ]
+    if source_sentences:
+        paragraphs.append(f"A public reference page adds this useful detail: {source_sentences[0]}")
+    paragraphs.extend(concept_facts)
+    if len(source_sentences) > 1:
+        paragraphs.append(f"Another detail from the public reference helps connect the idea to evidence: {source_sentences[1]}")
+    paragraphs.extend(
+        [
+            f"For a {level_info['label']} reader, the goal is to follow the process in order: what starts first, what changes next, and what evidence shows the result.",
+            f"The most useful vocabulary here includes {focus_words}. Use each word in one sentence that explains a step, a structure, or a change.",
+            "A simple investigation can make the reading stronger. Choose one example, make a prediction, observe carefully, and compare the result with your prediction.",
+            "The big takeaway is that science reading is not just remembering facts. It is using details as evidence and then explaining why those details matter.",
+        ]
+    )
     return {
         "fullArticle": paragraphs,
         "illustrations": science_article_illustrations(item),
@@ -611,7 +868,7 @@ def build_science_full_article(item: dict[str, Any], source_text: str = "") -> d
 
 def science_public_content_key(item: dict[str, Any]) -> str:
     slug = str(item.get("slug") or science_slug(str(item.get("title") or "science-discovery")))
-    return f"science:public-content:v2:{slug}"
+    return f"science:public-content:{SCIENCE_PUBLIC_CONTENT_VERSION}:{slug}"
 
 
 def read_science_public_content(db: Session, item: dict[str, Any]) -> dict[str, Any] | None:
@@ -674,7 +931,7 @@ def build_science_discovery_pool(level: str | None = None) -> list[dict[str, Any
     pool: list[dict[str, Any]] = []
     for concept_index, (topic, title, summary, words) in enumerate(SCIENCE_CONCEPTS):
         for level_index, level_info in enumerate(level_items):
-            source_name, source_url = SCIENCE_SOURCES[(concept_index + level_index) % len(SCIENCE_SOURCES)]
+            source_name, source_url = science_reference_for_item(title, topic)
             slug = science_slug(f"{title}-{level_info['key']}")
             keywords = science_word_items(words)
             pool.append(
@@ -713,7 +970,8 @@ def build_science_discovery_pool(level: str | None = None) -> list[dict[str, Any
 def science_cache_path(day: str, level: str, topic: str, batch: int) -> Path:
     safe_level = science_slug(level)
     safe_topic = science_slug(topic)
-    return SCIENCE_DISCOVERY_CACHE_DIR / f"{day}-{safe_level}-{safe_topic}-{batch}.json"
+    safe_version = science_slug(SCIENCE_DISCOVERY_DATA_VERSION)
+    return SCIENCE_DISCOVERY_CACHE_DIR / f"{day}-{safe_level}-{safe_topic}-{batch}-{safe_version}.json"
 
 
 def build_science_daily_payload(level: str, topic: str, batch: int) -> dict[str, Any]:
@@ -731,7 +989,7 @@ def build_science_daily_payload(level: str, topic: str, batch: int) -> dict[str,
 
     full_pool = build_science_discovery_pool()
     pool = [item for item in build_science_discovery_pool(level_info["key"]) if normalized_topic == "全部" or item["topic"] == normalized_topic]
-    rng = random.Random(f"{day}:{level_info['key']}:{normalized_topic}:{batch}:science-discoveries-v1")
+    rng = random.Random(f"{day}:{level_info['key']}:{normalized_topic}:{batch}:{SCIENCE_DISCOVERY_DATA_VERSION}")
     selected = rng.sample(pool, k=min(5, len(pool))) if pool else []
     payload = {
         "date": day,
