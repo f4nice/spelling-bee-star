@@ -40,7 +40,7 @@ export function useBooklearnerData({ book, route }) {
     const current = book.value.science || {};
     const payload = await fetchJson(booklearnerApiPaths.scienceArticle(slug, {
       level: levelFromScienceSlug(slug) || current.level || 'L500-L700',
-    }));
+    }), { skipCache: true });
     updateScience({
       article: payload.item,
       level: payload.item?.level || current.level,
