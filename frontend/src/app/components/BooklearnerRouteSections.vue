@@ -14,6 +14,7 @@ defineProps([
   "createBookWordList",
   "loadScienceDiscoveries",
   "loadScienceArticle",
+  "loadScienceFullArticle",
 ]);
 </script>
 
@@ -24,6 +25,7 @@ defineProps([
     :book="book"
     :go="go"
     :load-science-article="loadScienceArticle"
+    :load-science-full-article="loadScienceFullArticle"
   />
   <BooklearnerScienceDiscoveries
     v-else-if="route.name === 'booklearnerScienceHome'"

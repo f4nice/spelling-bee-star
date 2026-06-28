@@ -20,5 +20,6 @@ defineProps({
     :create-book-word-list="ctx.createBookWordList"
     :load-science-discoveries="ctx.loadScienceDiscoveries"
     :load-science-article="ctx.loadScienceArticle"
+    :load-science-full-article="ctx.loadScienceFullArticle"
   />
 </template>

@@ -76,8 +76,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260628-004"
-DEFAULT_PAGE_VERSION = "v20260628.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260628-005"
+DEFAULT_PAGE_VERSION = "v20260628.2"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
@@ -297,6 +297,98 @@ def science_article_paragraphs(title: str, summary: str, topic: str, level_info:
         f"At the {level_info['label']} reading level, focus on the cause, the effect, and the key science words.",
         "Try connecting this idea to something you can observe at home, outside, or in a short classroom experiment.",
     ]
+
+
+def science_html_to_plain_text(markup: str, max_chars: int = 5000) -> str:
+    text = re.sub(r"(?is)<(script|style|noscript|svg|nav|header|footer|aside|form).*?</\1>", " ", markup or "")
+    text = re.sub(r"(?is)<br\s*/?>", "\n", text)
+    text = re.sub(r"(?is)</(p|div|section|article|h[1-6]|li)>", "\n", text)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    text = html.unescape(text)
+    text = re.sub(r"[ \t\r\f\v]+", " ", text)
+    text = re.sub(r"\n\s+", "\n", text)
+    text = re.sub(r"\n{2,}", "\n", text).strip()
+    return text[:max_chars]
+
+
+def fetch_science_source_text(source_url: str) -> str:
+    if not source_url or not source_url.startswith(("http://", "https://")):
+        return ""
+    try:
+        response = httpx.get(
+            source_url,
+            follow_redirects=True,
+            timeout=4.5,
+            headers={
+                "User-Agent": "SpeakEasy Science Reader/1.0 (+https://speakeasy.local)",
+                "Accept": "text/html, text/plain;q=0.9, */*;q=0.3",
+            },
+        )
+    except httpx.HTTPError:
+        return ""
+    if response.status_code >= 400:
+        return ""
+    content_type = response.headers.get("content-type", "")
+    if content_type and not any(kind in content_type.lower() for kind in ("text/html", "text/plain", "application/xhtml+xml")):
+        return ""
+    return science_html_to_plain_text(response.text)
+
+
+def science_topic_frame(topic: str) -> str:
+    frames = {
+        "动物": "a living animal and the environment around it",
+        "植物": "a plant, its structure, and the conditions where it grows",
+        "人体": "the human body and the systems that keep it working",
+        "微生物": "tiny living things that change food, water, soil, or health",
+        "地球": "Earth systems that move matter and energy over time",
+        "太空": "objects and forces beyond Earth",
+        "工程": "a design problem that people solve with materials, forces, and testing",
+    }
+    return frames.get(topic, "a science question that can be tested with evidence")
+
+
+def build_science_full_article(item: dict[str, Any], source_text: str = "") -> dict[str, Any]:
+    title = str(item.get("title") or "Science Discovery")
+    topic = str(item.get("topic") or "科学")
+    summary = str(item.get("summary") or "").strip()
+    level_info = science_level_config(str(item.get("level") or item.get("levelLabel") or ""))
+    words = [
+        str(word.get("word") or "").strip()
+        for word in item.get("words") or []
+        if isinstance(word, dict) and str(word.get("word") or "").strip()
+    ]
+    focus_words = ", ".join(words[:4]) or "evidence, pattern, cause, effect"
+    summary_sentence = summary if summary.endswith((".", "!", "?")) else f"{summary}."
+    topic_frame = science_topic_frame(topic)
+    source_name = str(item.get("source") or "参考来源")
+    source_status = "referenced" if source_text else "generated"
+    source_note = (
+        f"已尝试参考 {source_name} 的公开科学阅读内容，并改写成站内原创全文。"
+        if source_text
+        else "参考站点暂时无法读取，已根据当前知识点生成站内原创全文。"
+    )
+    source_bridge = (
+        f"The reference source gives this topic a wider science context, so this SpeakEasy version keeps the focus on {focus_words}."
+        if source_text
+        else f"This SpeakEasy version expands the card into a complete reading passage with the focus words {focus_words}."
+    )
+
+    paragraphs = [
+        f"{title} starts with a careful question: what can we learn by looking closely at {topic_frame}? {summary_sentence}",
+        f"The first idea is structure. In science, a structure is the shape, layer, part, or system that makes something work. When readers notice structure, they can explain not only what they see, but why it matters.",
+        f"The second idea is cause and effect. A change in water, sunlight, temperature, pressure, motion, or time can produce a visible result. Good readers ask which condition changed first and which result followed after it.",
+        f"For a {level_info['label']} reader, the strongest evidence is usually a pattern. One observation may be interesting, but repeated observations help scientists decide whether an explanation is reliable.",
+        source_bridge,
+        f"The most useful vocabulary here includes {focus_words}. Try using each word to explain one step in the process. If a word names a thing, connect it to what it does; if it names an action, connect it to what changes next.",
+        f"A simple way to investigate this topic is to make a small observation plan. Choose one example, record what you notice, compare it with another example, and write one sentence that begins with \"I think this happened because...\"",
+        f"The big takeaway is that science reading is not just memorizing facts. It is learning how details become evidence, how evidence supports an explanation, and how an explanation helps us understand the world more clearly.",
+    ]
+    return {
+        "fullArticle": paragraphs,
+        "fullArticleSourceStatus": source_status,
+        "fullArticleSourceNote": source_note,
+        "fullArticleGeneratedAt": date.today().isoformat(),
+    }
 
 
 def build_science_discovery_pool(level: str | None = None) -> list[dict[str, Any]]:
@@ -784,6 +876,28 @@ def good_words_science_daily(
     batch: int = Query(default=0, ge=0, le=50),
 ):
     return build_science_daily_payload(level=level, topic=topic, batch=batch)
+
+
+@app.get("/booklearner/api/science-daily/{slug}/full-article")
+def good_words_science_daily_full_article(
+    slug: str,
+    level: str | None = Query(default=None),
+):
+    item = find_science_article(slug, level)
+    if not item:
+        raise HTTPException(status_code=404, detail="知识点不存在。")
+    source_text = fetch_science_source_text(str(item.get("sourceUrl") or ""))
+    item = {
+        **item,
+        **build_science_full_article(item, source_text),
+    }
+    return {
+        "item": item,
+        "sources": [
+            {"name": name, "url": url}
+            for name, url in SCIENCE_SOURCES
+        ],
+    }
 
 
 @app.get("/booklearner/api/science-daily/{slug}")

@@ -18,16 +18,26 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  loadScienceFullArticle: {
+    type: Function,
+    required: true,
+  },
 });
 
 const article = computed(() => props.book.science?.article || null);
 const sources = computed(() => props.book.science?.sources || []);
+const fullArticle = computed(() => (Array.isArray(article.value?.fullArticle) ? article.value.fullArticle : []));
+const readingParagraphs = computed(() => (fullArticle.value.length ? fullArticle.value : article.value?.article || []));
 const revealedAnswers = ref({});
+const fullArticleLoading = ref(false);
+const fullArticleError = ref("");
 
 watch(
   () => article.value?.slug,
   () => {
     revealedAnswers.value = {};
+    fullArticleError.value = "";
+    fullArticleLoading.value = false;
   },
 );
 
@@ -50,6 +60,19 @@ function toggleAnswer(item, index) {
     [key]: !revealedAnswers.value[key],
   };
 }
+
+async function loadFullArticle() {
+  if (!article.value || fullArticleLoading.value) return;
+  fullArticleLoading.value = true;
+  fullArticleError.value = "";
+  try {
+    await props.loadScienceFullArticle(article.value.slug || props.route.params.slug);
+  } catch (error) {
+    fullArticleError.value = error.message || "全文生成失败，请稍后再试。";
+  } finally {
+    fullArticleLoading.value = false;
+  }
+}
 </script>
 
 <template>
@@ -64,10 +87,16 @@ function toggleAnswer(item, index) {
     </div>
     <h1>{{ article.title }}</h1>
     <div class="science-article-actions">
-      <a class="secondary-button science-read-more-button" :href="article.sourceUrl" target="_blank" rel="noreferrer">
-        阅读全文
-      </a>
+      <button
+        type="button"
+        class="secondary-button science-read-more-button"
+        :disabled="fullArticleLoading"
+        @click="loadFullArticle"
+      >
+        {{ fullArticleLoading ? "生成中..." : fullArticle.length ? "更新全文" : "阅读全文" }}
+      </button>
     </div>
+    <p v-if="fullArticleError" class="notice science-full-article-error">{{ fullArticleError }}</p>
     <p class="science-article-summary">{{ article.summary }}</p>
     <div v-if="article.imageUrl" class="science-article-hero-image">
       <img :src="article.imageUrl" :alt="article.title" loading="lazy" />
@@ -78,8 +107,11 @@ function toggleAnswer(item, index) {
       <a :href="article.sourceUrl" target="_blank" rel="noreferrer">{{ article.source }}</a>
     </div>
 
-    <article class="science-reading-body">
-      <p v-for="paragraph in article.article" :key="paragraph">{{ paragraph }}</p>
+    <article class="science-reading-body" :class="{ 'has-full-article': fullArticle.length }">
+      <div v-if="article.fullArticleSourceNote" class="science-full-article-note">
+        {{ article.fullArticleSourceNote }}
+      </div>
+      <p v-for="paragraph in readingParagraphs" :key="paragraph">{{ paragraph }}</p>
     </article>
 
     <section class="science-article-section">

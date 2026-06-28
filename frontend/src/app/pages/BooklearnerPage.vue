@@ -13,7 +13,8 @@ const props = defineProps([
   "saveBookAnalysis",
   "createBookWordList",
   "loadScienceDiscoveries",
-  "loadScienceArticle"
+  "loadScienceArticle",
+  "loadScienceFullArticle"
 ]);
 
 const uploadModalOpen = ref(false);
@@ -60,6 +61,7 @@ watch(
       :create-book-word-list="createBookWordList"
       :load-science-discoveries="loadScienceDiscoveries"
       :load-science-article="loadScienceArticle"
+      :load-science-full-article="loadScienceFullArticle"
     />
 
     <BooklearnerUploadModal

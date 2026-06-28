@@ -100,9 +100,9 @@ watch(searchQuery, () => {
   </section>
   <section class="panel list-word-search-panel">
     <form class="list-word-search-form" @submit.prevent="runSearch">
-      <label>
-        <span>搜索单词</span>
-        <input v-model="searchQuery" type="search" placeholder="输入单词" autocomplete="off" />
+      <label class="list-word-search-field" aria-label="搜索单词">
+        <Search :size="19" aria-hidden="true" />
+        <input v-model="searchQuery" type="search" placeholder="输入单词，查看所在单词表" autocomplete="off" />
       </label>
       <button class="primary-action-button list-word-search-button" type="submit" :disabled="!trimmedSearchQuery || isSearching">
         <Search :size="18" aria-hidden="true" />

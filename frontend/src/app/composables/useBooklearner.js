@@ -10,6 +10,7 @@ export function useBooklearner({ route, go }) {
     loadBooklearner,
     loadScienceDiscoveries,
     loadScienceArticle,
+    loadScienceFullArticle,
   } = useBooklearnerData({ book, route });
   const {
     analyzeBookQuery,
@@ -23,6 +24,7 @@ export function useBooklearner({ route, go }) {
     loadBooklearner,
     loadScienceDiscoveries,
     loadScienceArticle,
+    loadScienceFullArticle,
     analyzeBookQuery,
     analyzeBookFile,
     saveBookAnalysis,

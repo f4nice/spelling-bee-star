@@ -25,6 +25,12 @@ export const booklearnerApiPaths = {
     const suffix = params.toString() ? `?${params.toString()}` : "";
     return `/booklearner/api/science-daily/${encodeURIComponent(slug)}${suffix}`;
   },
+  scienceFullArticle: (slug, { level = "" } = {}) => {
+    const params = new URLSearchParams();
+    if (level) params.set("level", level);
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    return `/booklearner/api/science-daily/${encodeURIComponent(slug)}/full-article${suffix}`;
+  },
   saveAnalysis: () => "/booklearner/api/save-analysis",
   wordList: () => "/booklearner/api/word-list",
 };

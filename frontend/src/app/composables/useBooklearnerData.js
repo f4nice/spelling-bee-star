@@ -40,6 +40,20 @@ export function useBooklearnerData({ book, route }) {
     });
   }
 
+  async function loadScienceFullArticle(slug) {
+    const current = book.value.science || {};
+    const payload = await fetchJson(booklearnerApiPaths.scienceFullArticle(slug, {
+      level: current.level || current.article?.level || 'L500-L700',
+    }), { skipCache: true });
+    updateScience({
+      article: {
+        ...(current.article || {}),
+        ...payload.item,
+      },
+      sources: payload.sources || current.sources || [],
+    });
+  }
+
   async function loadBooklearner() {
     book.value.result = null;
     book.value.history = (await fetchJson(booklearnerApiPaths.history())).items || [];
@@ -70,5 +84,6 @@ export function useBooklearnerData({ book, route }) {
     loadBooklearner,
     loadScienceDiscoveries,
     loadScienceArticle,
+    loadScienceFullArticle,
   };
 }

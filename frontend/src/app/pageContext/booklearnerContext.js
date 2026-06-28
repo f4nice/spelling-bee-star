@@ -7,5 +7,6 @@ export function buildBooklearnerContext(booklearner) {
     createBookWordList: booklearner.createBookWordList,
     loadScienceDiscoveries: booklearner.loadScienceDiscoveries,
     loadScienceArticle: booklearner.loadScienceArticle,
+    loadScienceFullArticle: booklearner.loadScienceFullArticle,
   };
 }
