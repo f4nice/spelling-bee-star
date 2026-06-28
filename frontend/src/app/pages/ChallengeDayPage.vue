@@ -26,7 +26,9 @@ const filteredWords = computed(() => {
   return (props.data.words || []).filter((item) => item.status === activeFilter.value);
 });
 
-const wrongChallengeCount = computed(() => props.data.wrong_challenge_count ?? props.data.wrong ?? 0);
+const wrongChallengeCount = computed(
+  () => props.data.wrong_challenge_count ?? props.data.correction_pending ?? props.data.wrong ?? 0,
+);
 const wrongChallengeUrl = computed(() => {
   if (!props.data.wrong_word_list_id || !wrongChallengeCount.value) return "";
   const params = new URLSearchParams({

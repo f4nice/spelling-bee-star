@@ -76,8 +76,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260628-013"
-DEFAULT_PAGE_VERSION = "v20260628.10"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260628-014"
+DEFAULT_PAGE_VERSION = "v20260628.11"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
@@ -2027,10 +2027,15 @@ def apply_challenge_answer(
     if not word_list:
         raise HTTPException(status_code=404, detail="Word list not found")
 
-    words = get_words_for_list(db, word_list_id)
+    wrong_date_value = parse_wrong_date(wrong_date)
+    correction_mode = bool(wrong_date_value)
+    words = (
+        correction_challenge_words(db, word_list_id, wrong_date_value)
+        if correction_mode
+        else get_words_for_list(db, word_list_id)
+    )
     progress = get_or_create_challenge_progress(db, word_list_id)
     total = len(words)
-    wrong_date_value = parse_wrong_date(wrong_date)
     answer_feedback = None
 
     if action == "reset":
@@ -2039,6 +2044,7 @@ def apply_challenge_answer(
         session_correct = 0
         session_wrong = 0
     elif total:
+        progress.current_index = min(max(progress.current_index, 0), max(total - 1, 0))
         current_word = words[progress.current_index] if 0 <= progress.current_index < total else None
         if action == "spell" and current_word:
             typed = normalize_spelling_answer(spelling)
@@ -2060,12 +2066,11 @@ def apply_challenge_answer(
                 is_correct=action == "known",
             )
         if action == "wrong" and current_word:
-            record_wrong_word(db, current_word.id)
+            record_wrong_word(db, current_word.id, wrong_date_value if correction_mode else None)
         if action == "known":
             if current_word:
                 clear_wrong_word_if_passed(db, current_word.id, wrong_date_value)
         if action in {"known", "wrong"}:
-            progress.completed_count = min(progress.completed_count + 1, total)
             if action == "known":
                 session_correct += 1
             else:
@@ -2077,17 +2082,30 @@ def apply_challenge_answer(
                     word_id=current_word.id,
                     word_list_id=word_list_id,
                 )
-        if progress.completed_count < total:
-            progress.current_index = (progress.current_index + 1) % total
-        else:
-            progress.current_index = max(total - 1, 0)
+            if correction_mode:
+                progress.completed_count = 0
+                if action == "known":
+                    remaining_total = len(correction_challenge_words(db, word_list_id, wrong_date_value))
+                    progress.current_index = min(progress.current_index, max(remaining_total - 1, 0))
+                else:
+                    progress.current_index = (progress.current_index + 1) % total
+            else:
+                progress.completed_count = min(progress.completed_count + 1, total)
+                if progress.completed_count < total:
+                    progress.current_index = (progress.current_index + 1) % total
+                else:
+                    progress.current_index = max(total - 1, 0)
 
     db.add(progress)
     db.commit()
-    daily_count = min(max(daily_count, 1), 500)
-    start_count = max(start_count, 0)
     session_correct = max(session_correct, 0)
     session_wrong = max(session_wrong, 0)
+    if correction_mode:
+        daily_count = max(session_correct + len(correction_challenge_words(db, word_list_id, wrong_date_value)), 1)
+        start_count = 0
+    else:
+        daily_count = min(max(daily_count, 1), 500)
+        start_count = max(start_count, 0)
     return {
         "daily_count": daily_count,
         "start_count": start_count,
@@ -2113,10 +2131,20 @@ def challenge_payload(
         raise HTTPException(status_code=404, detail="Word list not found")
     wrong_date_value = parse_wrong_date(wrong_date)
 
-    words = get_words_for_list(db, word_list_id)
+    correction_mode = bool(wrong_date_value)
+    words = (
+        correction_challenge_words(db, word_list_id, wrong_date_value)
+        if correction_mode
+        else get_words_for_list(db, word_list_id)
+    )
     progress = get_or_create_challenge_progress(db, word_list_id)
     total = len(words)
-    if restart:
+    if correction_mode:
+        if restart:
+            progress.current_index = 0
+        progress.completed_count = 0
+        progress.current_index = min(max(progress.current_index, 0), max(total - 1, 0))
+    elif restart:
         restart_index = min(max(start_count or 0, 0), max(total - 1, 0))
         progress.completed_count = restart_index
         progress.current_index = restart_index
@@ -2134,19 +2162,39 @@ def challenge_payload(
     db.add(progress)
     db.commit()
 
-    start_count = progress.completed_count if start_count is None else start_count
-    start_count = min(max(start_count, 0), total)
-    daily_count = min(max(daily_count, 1), max(total, 1))
-    daily_target = min(total, start_count + daily_count)
-    daily_total = max(0, daily_target - start_count)
     session_correct = max(session_correct, 0)
     session_wrong = max(session_wrong, 0)
-    session_answered = min(session_correct + session_wrong, daily_total) if daily_total else 0
-    daily_done = session_answered
-    daily_remaining = max(0, daily_total - session_answered)
-    is_daily_complete = bool(total and daily_total and session_answered >= daily_total)
+    if correction_mode:
+        start_count = 0
+        daily_remaining = total
+        daily_total = session_correct + daily_remaining
+        daily_count = max(daily_total, 1)
+        daily_target = daily_total
+        session_answered = session_correct
+        daily_done = session_correct
+        is_daily_complete = daily_remaining == 0
+        challenge_summary = {
+            "completed": session_correct,
+            "total": daily_total,
+            "percent": round((session_correct / daily_total) * 100) if daily_total else 100,
+            "is_complete": is_daily_complete,
+            "completed_rounds": progress.completed_rounds or 0,
+        }
+    else:
+        start_count = progress.completed_count if start_count is None else start_count
+        start_count = min(max(start_count, 0), total)
+        daily_count = min(max(daily_count, 1), max(total, 1))
+        daily_target = min(total, start_count + daily_count)
+        daily_total = max(0, daily_target - start_count)
+        session_answered = min(session_correct + session_wrong, daily_total) if daily_total else 0
+        daily_done = session_answered
+        daily_remaining = max(0, daily_total - session_answered)
+        is_daily_complete = bool(total and daily_total and session_answered >= daily_total)
+        challenge_summary = challenge_state(db, word_list)
 
-    current_word = None if is_daily_complete or progress.completed_count >= total or not words else words[progress.current_index]
+    current_word = None if is_daily_complete or not words else words[progress.current_index]
+    if not correction_mode and progress.completed_count >= total:
+        current_word = None
     challenge_audio_sources = None
     challenge_image_url = None
     masked_example = None
@@ -2163,7 +2211,7 @@ def challenge_payload(
             current_word.alternate_spellings,
         )
 
-    state = challenge_state(db, word_list)
+    accuracy_attempts = session_correct + session_wrong if correction_mode else session_answered
     today_challenge = {
         "daily_count": daily_count,
         "start_count": start_count,
@@ -2172,12 +2220,12 @@ def challenge_payload(
         "total": daily_total,
         "percent": round((daily_done / daily_total) * 100) if daily_total else 100,
         "is_complete": is_daily_complete,
-        "all_complete": bool(total and progress.completed_count >= total),
+        "all_complete": bool(daily_remaining == 0) if correction_mode else bool(total and progress.completed_count >= total),
         "correct": session_correct,
         "wrong": session_wrong,
         "answered": session_answered,
         "remaining": daily_remaining,
-        "accuracy": round((session_correct / session_answered) * 100) if session_answered else 0,
+        "accuracy": round((session_correct / accuracy_attempts) * 100) if accuracy_attempts else 0,
     }
     return {
         "word_list": {"id": word_list.id, "name": word_list.name},
@@ -2187,12 +2235,13 @@ def challenge_payload(
             "completed_count": progress.completed_count,
             "completed_rounds": progress.completed_rounds,
         },
-        "challenge": state,
+        "challenge": challenge_summary,
         "today_challenge": today_challenge,
         "challenge_audio_sources": challenge_audio_sources,
         "challenge_image_url": challenge_image_url,
         "masked_example": masked_example,
         "wrong_date": wrong_date_value.isoformat() if wrong_date_value else None,
+        "correction_mode": correction_mode,
     }
 
 
@@ -2241,6 +2290,7 @@ def serialize_word_list_card(card: dict[str, Any]) -> dict[str, Any]:
 def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
     daily_wrong_ids = challenge_day_wrong_word_ids(db, challenge_date)
     corrected_wrong_ids = challenge_day_corrected_wrong_word_ids(db, challenge_date, daily_wrong_ids)
+    pending_wrong_ids = daily_wrong_ids - corrected_wrong_ids
     wrong_word_list = get_wrong_word_list(db, challenge_date)
     stat = db.scalar(select(ChallengeDailyStat).where(ChallengeDailyStat.stat_date == challenge_date))
     detail_rows = db.execute(
@@ -2395,8 +2445,8 @@ def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
         "wrong": wrong_unique,
         "wrong_attempts": wrong_attempts,
         "corrected": len(corrected_wrong_ids),
-        "correction_pending": max(wrong_unique - len(corrected_wrong_ids), 0),
-        "wrong_challenge_count": wrong_unique,
+        "correction_pending": len(pending_wrong_ids),
+        "wrong_challenge_count": len(pending_wrong_ids),
         "wrong_word_list_id": wrong_word_list.id if wrong_word_list else None,
         "words": words,
         "has_detail_rows": bool(detail_rows),
@@ -3884,20 +3934,20 @@ def parse_wrong_date(value: str | None) -> date | None:
         return None
 
 
-def record_wrong_word(db: Session, word_id: int) -> None:
-    today = date.today()
+def record_wrong_word(db: Session, word_id: int, wrong_date: date | None = None) -> None:
+    target_date = wrong_date or date.today()
     wrong_word = db.scalar(
         select(WrongWord).where(
             WrongWord.word_id == word_id,
-            WrongWord.wrong_date == today,
+            WrongWord.wrong_date == target_date,
         )
     )
     if wrong_word:
         wrong_word.wrong_count += 1
     else:
-        wrong_word = WrongWord(word_id=word_id, wrong_date=today)
+        wrong_word = WrongWord(word_id=word_id, wrong_date=target_date)
     db.add(wrong_word)
-    word_list = get_or_create_wrong_word_list(db, today)
+    word_list = get_or_create_wrong_word_list(db, target_date)
     existing_item = db.scalar(
         select(WordListItem).where(
             WordListItem.word_list_id == word_list.id,
@@ -3959,6 +4009,26 @@ def challenge_day_corrected_wrong_word_ids(db: Session, challenge_date: date, wo
             .group_by(ChallengeDailyWord.word_id)
         ).all()
     }
+
+
+def challenge_day_pending_wrong_word_ids(db: Session, challenge_date: date) -> set[int]:
+    wrong_ids = challenge_day_wrong_word_ids(db, challenge_date)
+    corrected_ids = challenge_day_corrected_wrong_word_ids(db, challenge_date, wrong_ids)
+    return wrong_ids - corrected_ids
+
+
+def correction_challenge_words(db: Session, word_list_id: int, wrong_date: date | None) -> list[Word]:
+    if not wrong_date:
+        return get_words_for_list(db, word_list_id)
+    pending_ids = challenge_day_pending_wrong_word_ids(db, wrong_date)
+    if not pending_ids:
+        return []
+    words = [word for word in get_words_for_list(db, word_list_id) if word.id in pending_ids]
+    seen_ids = {word.id for word in words}
+    missing_ids = sorted(pending_ids - seen_ids)
+    if missing_ids:
+        words.extend(db.scalars(select(Word).where(Word.id.in_(missing_ids)).order_by(Word.word.asc())).all())
+    return words
 
 
 def wrong_word_count(db: Session) -> int:
