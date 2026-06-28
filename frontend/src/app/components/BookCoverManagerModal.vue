@@ -43,6 +43,13 @@ const aiModel = ref("wan2.7-image-pro");
 
 const selectedFileName = computed(() => selectedFile.value?.name || "还没有选择图片");
 const fallbackLetter = computed(() => (props.title || "B").slice(0, 1).toUpperCase());
+const canSaveUploadedCover = computed(() => Boolean(selectedFile.value) && !isSavingReplacement.value);
+const saveButtonText = computed(() => {
+  if (isSavingReplacement.value) return "保存中...";
+  if (selectedFile.value) return "保存上传图片";
+  if (replacementPreview.value?.type === "saved") return "已保存";
+  return "请先选择图片";
+});
 
 const aiImageModels = [
   "wan2.7-image-pro",
@@ -167,10 +174,10 @@ async function generateAiCover() {
           <button
             class="challenge-button word-image-save-replacement"
             type="button"
-            :disabled="!selectedFile || isSavingReplacement"
+            :disabled="!canSaveUploadedCover"
             @click="saveReplacement"
           >
-            {{ isSavingReplacement ? "保存中..." : "保存上传图片" }}
+            {{ saveButtonText }}
           </button>
         </div>
 

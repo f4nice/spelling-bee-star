@@ -1886,6 +1886,17 @@ a:focus-visible {
   background: var(--accent-dark);
 }
 
+.challenge-button:disabled,
+.challenge-button[disabled],
+.challenge-button:disabled:hover,
+.challenge-button[disabled]:hover {
+  color: #607083;
+  background: #dfe8e3;
+  box-shadow: none;
+  transform: none;
+  cursor: not-allowed;
+}
+
 .calendar-panel {
   display: grid;
   gap: 16px;
