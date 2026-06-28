@@ -43,7 +43,7 @@ const aiModel = ref("wan2.7-image-pro");
 
 const selectedFileName = computed(() => selectedFile.value?.name || "还没有选择图片");
 const fallbackLetter = computed(() => (props.title || "B").slice(0, 1).toUpperCase());
-const canSaveUploadedCover = computed(() => Boolean(selectedFile.value) && !isSavingReplacement.value);
+const canSaveUploadedCover = computed(() => !isSavingReplacement.value);
 const saveButtonText = computed(() => {
   if (isSavingReplacement.value) return "保存中...";
   if (selectedFile.value) return "保存上传图片";
@@ -90,7 +90,10 @@ watch(
 onBeforeUnmount(clearPreview);
 
 async function saveReplacement() {
-  if (!selectedFile.value) return;
+  if (!selectedFile.value) {
+    notice.value = "请先选择一张要上传的封面图片。";
+    return;
+  }
   isSavingReplacement.value = true;
   notice.value = "";
   try {

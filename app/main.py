@@ -76,14 +76,14 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-002"
-DEFAULT_PAGE_VERSION = "v20260629.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-003"
+DEFAULT_PAGE_VERSION = "v20260629.3"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
 SCIENCE_IMAGE_VERSION = "20260629-no-text-1"
-SCIENCE_DISCOVERY_DATA_VERSION = "20260628-source-refresh-2"
-SCIENCE_PUBLIC_CONTENT_VERSION = "v4"
+SCIENCE_DISCOVERY_DATA_VERSION = "20260629-topic-pool-1"
+SCIENCE_PUBLIC_CONTENT_VERSION = "v5"
 SCIENCE_PUBLIC_CONTENT_TTL = timedelta(days=3650)
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
 GROWTH_TROPHY_ASSET_STEM = "learning-growth-trophy"
@@ -152,35 +152,57 @@ SCIENCE_CONCEPTS = [
     ("动物", "The Secret Work of Coral Reefs", "Tiny coral animals build large reef homes that protect many ocean species.", "coral, reef, habitat"),
     ("动物", "How Penguins Stay Warm", "Penguins use oily feathers, packed groups, and body fat to survive cold water.", "penguin, insulation, colony"),
     ("动物", "Why Bees Dance", "Honeybees use movement to tell other bees where flowers are located.", "bee, nectar, signal"),
+    ("动物", "How Bats Use Echoes", "Bats send out sounds and listen for returning echoes to find insects in the dark.", "bat, echo, sound wave"),
+    ("动物", "Why Camels Have Humps", "Camels store fat in humps and use other body features to survive dry places.", "camel, hump, desert"),
+    ("动物", "How Salmon Find Their Way", "Salmon use smell, current, and Earth's magnetic clues to return to home streams.", "salmon, migration, stream"),
     ("植物", "How Leaves Breathe", "Leaves use tiny openings to trade gases while making food from sunlight.", "leaf, stomata, photosynthesis"),
     ("植物", "Why Seeds Travel", "Seeds move by wind, water, animals, and sticky hooks so plants can spread.", "seed, dispersal, germinate"),
     ("植物", "The Job of Tree Rings", "Tree rings record years of growth and clues about rainfall and climate.", "tree ring, growth, climate"),
     ("植物", "How Desert Plants Save Water", "Cacti and other desert plants store water and protect it with waxy skins.", "cactus, waxy, desert"),
     ("植物", "Why Flowers Have Colors", "Flower colors and smells help guide pollinators toward nectar.", "flower, pollinator, nectar"),
+    ("植物", "How Roots Find Water", "Roots grow through soil and branch toward places where water and minerals are available.", "root, water, mineral"),
+    ("植物", "Why Plants Turn Toward Light", "Plant stems can bend as growth changes on each side, helping leaves reach more light.", "plant, light, growth"),
+    ("植物", "How Forests Share Nutrients", "Trees, fungi, and soil organisms move nutrients through busy underground networks.", "forest, fungi, nutrient"),
     ("人体", "How Your Heart Pumps", "The heart squeezes blood through vessels to deliver oxygen around the body.", "heart, blood, oxygen"),
     ("人体", "Why Muscles Get Stronger", "Muscles adapt when they work, rest, and repair tiny fibers.", "muscle, fiber, repair"),
     ("人体", "How Eyes See Color", "Special cells in the eye detect light and send color signals to the brain.", "retina, cone, signal"),
     ("人体", "Why Sleep Helps Memory", "During sleep, the brain sorts information and strengthens useful memories.", "sleep, memory, brain"),
     ("人体", "How Skin Protects You", "Skin blocks many germs, helps control heat, and senses the world.", "skin, germ, temperature"),
+    ("人体", "How Lungs Move Air", "Lungs fill and empty as muscles change the space inside the chest.", "lung, breath, diaphragm"),
+    ("人体", "Why Bones Heal", "Bone cells rebuild cracked areas with new tissue that slowly becomes strong again.", "bone, cell, repair"),
+    ("人体", "How Your Ear Hears Sound", "The ear changes vibrations in air into signals the brain can understand.", "ear, vibration, signal"),
     ("微生物", "The Good Side of Bacteria", "Many bacteria help digest food, recycle nutrients, and keep ecosystems balanced.", "bacteria, nutrient, ecosystem"),
     ("微生物", "How Yeast Makes Bread Rise", "Yeast eats sugar and releases gas that makes dough puff up.", "yeast, dough, carbon dioxide"),
     ("微生物", "What Makes Mold Grow", "Mold spreads by spores and grows best in warm, damp places.", "mold, spore, damp"),
     ("微生物", "How Microbes Clean Water", "Some microbes break down waste and help clean water in treatment systems.", "microbe, waste, filter"),
     ("微生物", "Why Handwashing Works", "Soap lifts oils and germs from skin so water can wash them away.", "soap, germ, rinse"),
+    ("微生物", "How Probiotics Help Digestion", "Helpful microbes can live in the gut and support digestion by breaking down food.", "probiotic, gut, digestion"),
+    ("微生物", "Why Food Spoils", "Food spoils when microbes grow and change its smell, texture, or safety.", "food, microbe, spoil"),
+    ("微生物", "How Algae Make Oxygen", "Tiny algae use sunlight in water and release oxygen as they grow.", "algae, oxygen, sunlight"),
     ("地球", "Why Volcanoes Erupt", "Magma rises through weak places in Earth's crust and can burst out as lava.", "magma, lava, crust"),
     ("地球", "How Rivers Shape Land", "Moving water carries rock and soil, slowly carving valleys and deltas.", "river, erosion, delta"),
     ("地球", "Why Earthquakes Happen", "Earthquakes happen when rocks suddenly slip along faults underground.", "earthquake, fault, plate"),
     ("地球", "How Clouds Form", "Warm air rises, cools, and turns water vapor into tiny droplets.", "cloud, vapor, droplet"),
     ("地球", "What Makes a Fossil", "Fossils form when remains are buried and slowly replaced or preserved in rock.", "fossil, sediment, preserve"),
+    ("地球", "How Glaciers Move", "Glaciers flow slowly downhill and scrape land as thick ice deforms under its own weight.", "glacier, ice, valley"),
+    ("地球", "Why Ocean Tides Rise", "Tides rise and fall because gravity from the Moon and Sun pulls on ocean water.", "tide, gravity, ocean"),
+    ("地球", "How Soil Forms", "Soil forms as rock breaks down and mixes with air, water, and once-living material.", "soil, rock, humus"),
     ("太空", "Why the Moon Changes Shape", "The Moon's phases come from how sunlight hits the part we can see.", "moon, phase, orbit"),
     ("太空", "How Rockets Leave Earth", "Rockets push gas downward, and the reaction pushes the rocket upward.", "rocket, thrust, gravity"),
     ("太空", "Why Mars Looks Red", "Iron-rich dust on Mars gives the planet its rusty red color.", "Mars, iron, dust"),
     ("太空", "How Telescopes Collect Light", "Telescopes gather light so distant objects look brighter and clearer.", "telescope, light, lens"),
     ("太空", "What Astronauts Need in Space", "Astronauts need air, water, food, exercise, and careful plans to stay healthy.", "astronaut, orbit, life support"),
+    ("太空", "Why Stars Shine", "Stars shine because nuclear reactions in their cores release huge amounts of energy.", "star, fusion, energy"),
+    ("太空", "How Satellites Stay in Orbit", "Satellites keep falling around Earth because forward motion and gravity balance.", "satellite, orbit, gravity"),
+    ("太空", "What Makes a Comet Tail", "A comet grows a bright tail when sunlight warms ice and dust near the Sun.", "comet, ice, tail"),
     ("工程", "How Bridges Carry Weight", "Bridges spread forces through beams, arches, cables, or triangles.", "bridge, force, beam"),
     ("工程", "Why Robots Use Sensors", "Sensors help robots detect light, distance, touch, and movement.", "robot, sensor, program"),
     ("工程", "How Solar Panels Work", "Solar panels turn sunlight into electricity using special materials.", "solar panel, electricity, sunlight"),
     ("工程", "Why Filters Matter", "Filters trap particles and help clean air or water before people use it.", "filter, particle, clean"),
+    ("工程", "How Wind Turbines Make Electricity", "Wind turbines turn moving air into spinning motion and then electrical energy.", "turbine, wind, generator"),
+    ("工程", "Why Airplanes Have Wings", "Airplane wings shape moving air so lift can help hold the plane up.", "airplane, wing, lift"),
+    ("工程", "How Dams Hold Back Water", "Dams use heavy walls, strong foundations, and spillways to control moving water.", "dam, water, spillway"),
+    ("工程", "How 3D Printers Build Shapes", "3D printers build objects layer by layer from digital designs.", "printer, layer, design"),
 ]
 
 SCIENCE_TOPIC_REFERENCE = {
@@ -202,6 +224,12 @@ SCIENCE_REFERENCE_BY_TITLE = {
     "How Clouds Form": ("NASA Science Kids", "https://science.nasa.gov/kids/earth/how-do-clouds-form/"),
     "Why the Moon Changes Shape": ("NASA Space Place", "https://spaceplace.nasa.gov/moon-phases/"),
     "How Solar Panels Work": ("EIA Energy Kids", "https://www.eia.gov/kids/energy-sources/solar/"),
+    "Why Stars Shine": ("NASA Space Place", "https://spaceplace.nasa.gov/sun-corona/"),
+    "How Satellites Stay in Orbit": ("NASA Space Place", "https://spaceplace.nasa.gov/"),
+    "What Makes a Comet Tail": ("NASA Space Place", "https://spaceplace.nasa.gov/comets/"),
+    "How Wind Turbines Make Electricity": ("EIA Energy Kids", "https://www.eia.gov/kids/energy-sources/wind/"),
+    "Why Airplanes Have Wings": ("NASA Glenn Research Center", "https://www1.grc.nasa.gov/beginners-guide-to-aeronautics/"),
+    "How Dams Hold Back Water": ("USGS Water Science School", "https://www.usgs.gov/water-science-school"),
     "What Astronauts Need in Space": ("NASA Space Place", "https://spaceplace.nasa.gov/"),
     "How Bridges Carry Weight": ("Federal Highway Administration", "https://www.environment.fhwa.dot.gov/env_topics/historic_pres/post1945_engineering/this_bridge.aspx"),
     "Why Filters Matter": ("EPA Water Filtration", "https://nepis.epa.gov/Exe/ZyPURL.cgi?Dockey=P100A2CR.TXT"),
@@ -379,6 +407,121 @@ SCIENCE_CONCEPT_FACTS = {
         "A good filter is matched to the problem: the material, pore size, flow speed, and contaminant all matter.",
     ],
 }
+
+SCIENCE_CONCEPT_FACTS.update(
+    {
+        "How Bats Use Echoes": [
+            "A bat sends out high sounds that bounce off insects, branches, and walls.",
+            "The returning echo changes with distance, size, and movement, so the bat can adjust its flight.",
+            "Echolocation is useful because sound can carry information even when light is limited.",
+        ],
+        "Why Camels Have Humps": [
+            "A camel's hump stores fat, not water, and that stored energy can help when food is scarce.",
+            "Other adaptations, such as wide feet and a body that tolerates heat, reduce stress in dry habitats.",
+            "Survival in a desert depends on managing energy, heat, and water loss together.",
+        ],
+        "How Salmon Find Their Way": [
+            "Young salmon leave freshwater streams and later return from the ocean to reproduce.",
+            "Smell can help salmon recognize home waters, while currents and magnetic clues may guide longer travel.",
+            "Migration connects rivers and oceans, so a change in one place can affect the whole life cycle.",
+        ],
+        "How Roots Find Water": [
+            "Roots grow through small spaces in soil and branch into areas with water and dissolved minerals.",
+            "Root hairs increase surface area, which helps the plant absorb more from the soil around it.",
+            "A plant's hidden root system can decide how well the visible stem and leaves survive.",
+        ],
+        "Why Plants Turn Toward Light": [
+            "Many shoots bend toward light because cells on one side grow more than cells on the other side.",
+            "Turning toward light can help leaves capture more energy for photosynthesis.",
+            "This movement shows that plants respond to their environment even though they do not walk.",
+        ],
+        "How Forests Share Nutrients": [
+            "Tree roots, fungi, bacteria, and decaying leaves form an underground nutrient network.",
+            "Fungi can connect with roots and help move minerals, while receiving sugars from the plant.",
+            "A forest is not just separate trees; it is a living system with many exchanges below the surface.",
+        ],
+        "How Lungs Move Air": [
+            "The diaphragm and rib muscles change the size of the chest space.",
+            "When the space inside the chest gets larger, air moves into the lungs; when it gets smaller, air moves out.",
+            "Breathing is a pressure-and-motion process that keeps oxygen entering and carbon dioxide leaving.",
+        ],
+        "Why Bones Heal": [
+            "After a break, blood, repair cells, and minerals gather around the damaged area.",
+            "Soft repair tissue can become harder over time as new bone forms and reshapes.",
+            "A healed bone is evidence that the body can rebuild structure, but the process needs protection and time.",
+        ],
+        "How Your Ear Hears Sound": [
+            "Sound begins as vibration in air and reaches the eardrum as moving pressure waves.",
+            "Tiny bones and fluid-filled parts of the inner ear help change vibration into nerve signals.",
+            "The brain interprets those signals as pitch, loudness, direction, and meaning.",
+        ],
+        "How Probiotics Help Digestion": [
+            "Probiotics are helpful microbes that can live in the gut or in fermented foods.",
+            "Some microbes help break down food materials that human cells cannot digest alone.",
+            "Gut health depends on a community, so balance and habitat matter as much as a single microbe.",
+        ],
+        "Why Food Spoils": [
+            "Food can spoil when microbes use it as a source of energy and multiply.",
+            "Warmth, moisture, oxygen, and time can speed up changes in smell, texture, and safety.",
+            "Cooling, drying, sealing, or cooking food works because those actions change the conditions microbes need.",
+        ],
+        "How Algae Make Oxygen": [
+            "Many algae are tiny photosynthetic organisms that live in water and use sunlight.",
+            "During photosynthesis, algae take in carbon dioxide and release oxygen.",
+            "Because algae can grow in huge numbers, they affect food webs and the gases dissolved in water.",
+        ],
+        "How Glaciers Move": [
+            "A glacier is thick ice that can flow slowly downhill under its own weight.",
+            "As it moves, it can scrape rock, carry sediment, and shape valleys.",
+            "Glacial landforms are evidence of motion that is slow for people but powerful over long periods.",
+        ],
+        "Why Ocean Tides Rise": [
+            "Ocean tides are linked to gravity from the Moon and, to a lesser degree, the Sun.",
+            "As Earth rotates, coastlines move through areas where ocean water is pulled higher or lower.",
+            "Tide patterns show how distant objects can still affect water on Earth.",
+        ],
+        "How Soil Forms": [
+            "Soil begins as rock breaks into smaller pieces through weather, water, roots, and time.",
+            "Dead leaves, microbes, and animals add organic material that helps soil hold water and nutrients.",
+            "Good soil is a mixture, not just dirt: minerals, air, water, and living things work together.",
+        ],
+        "Why Stars Shine": [
+            "A star shines because nuclear fusion in its core changes hydrogen into helium and releases energy.",
+            "That energy moves outward and eventually leaves the star as light and heat.",
+            "The light we see is evidence of processes happening in a place too hot and distant to visit.",
+        ],
+        "How Satellites Stay in Orbit": [
+            "A satellite in orbit is always falling toward Earth, but it also moves forward very fast.",
+            "Because Earth curves away beneath it, the satellite keeps missing the ground.",
+            "Orbit is a balance between gravity, speed, and direction rather than a place with no gravity.",
+        ],
+        "What Makes a Comet Tail": [
+            "A comet contains ice, dust, and rock left from the early solar system.",
+            "When it comes closer to the Sun, warming ice releases gas and dust around the comet.",
+            "Sunlight and charged particles can push that material into a tail that points away from the Sun.",
+        ],
+        "How Wind Turbines Make Electricity": [
+            "Moving air pushes turbine blades and makes the rotor spin.",
+            "The spinning motion turns a generator, which changes mechanical energy into electrical energy.",
+            "A wind turbine's output depends on wind speed, blade shape, tower height, and the generator system.",
+        ],
+        "Why Airplanes Have Wings": [
+            "A wing changes how air moves above and below it as the airplane goes forward.",
+            "The shape and angle of the wing help create lift, while engines provide thrust.",
+            "Flight depends on several forces at once: lift, weight, thrust, and drag.",
+        ],
+        "How Dams Hold Back Water": [
+            "A dam must resist the push of stored water, which grows stronger with depth.",
+            "Strong foundations, curved or heavy walls, and controlled spillways help manage that pressure.",
+            "A dam is both a structure and a water-control system, so safety depends on design and operation.",
+        ],
+        "How 3D Printers Build Shapes": [
+            "A 3D printer follows a digital design and builds an object in thin layers.",
+            "Each layer must line up with the layer before it so the final shape is accurate.",
+            "Layer-by-layer building lets engineers test shapes quickly before making a final product.",
+        ],
+    }
+)
 
 SCIENCE_PUBLIC_SOURCE_DOMAINS = (
     "nasa.gov",
@@ -658,8 +801,7 @@ def science_article_paragraphs(title: str, summary: str, topic: str, level_info:
     facts = SCIENCE_CONCEPT_FACTS.get(title, [])
     preview = [
         f"{title} is a science reading about {topic}. {summary}",
-        *(facts[:2] or [f"At the {level_info['label']} reading level, look for evidence, cause, and effect."]),
-        "Try connecting the idea to something you can observe, test, or explain with a simple model.",
+        *(facts[:3] or [f"At the {level_info['label']} reading level, look for evidence, cause, and effect."]),
     ]
     return preview[:4]
 
@@ -739,6 +881,31 @@ def science_topic_frame(topic: str) -> str:
     return frames.get(topic, "a science question that can be tested with evidence")
 
 
+def science_topic_investigation_prompt(topic: str) -> str:
+    prompts = {
+        "动物": "compare the body part or behavior with the survival problem it solves",
+        "植物": "trace water, light, or nutrients from the environment into the plant structure",
+        "人体": "follow the signal, force, or material as it moves through the body system",
+        "微生物": "identify the condition that lets the microbe grow, slow down, or change its surroundings",
+        "地球": "connect the moving material to the landform, pattern, or evidence left behind",
+        "太空": "separate the force, motion, and energy so the distant object becomes easier to explain",
+        "工程": "change one material, shape, setting, or constraint and predict the measurable result",
+    }
+    return prompts.get(topic, "name the changing condition and the evidence that would show the result")
+
+
+def science_extension_paragraphs(title: str, topic: str, words: list[str]) -> list[str]:
+    facts = SCIENCE_CONCEPT_FACTS.get(title, [])
+    focus_words = ", ".join(words[:3]) or "evidence, pattern, result"
+    first_fact = facts[0].rstrip(".") if facts else f"{title} connects an observation with a cause and a result"
+    second_fact = facts[1].rstrip(".") if len(facts) > 1 else f"the important details belong to {science_topic_frame(topic)}"
+    prompt = science_topic_investigation_prompt(topic)
+    return [
+        f"To go deeper with {title}, turn the facts into a cause-and-effect chain: {first_fact}. Then connect that chain to the next detail: {second_fact}.",
+        f"One useful check is to {prompt}. Use {focus_words} to name the evidence a reader could actually observe or measure.",
+    ]
+
+
 def science_illustration_caption(item: dict[str, Any]) -> str:
     topic = str(item.get("topic") or "科学")
     title = str(item.get("title") or "")
@@ -771,13 +938,11 @@ def build_science_full_article(item: dict[str, Any], source_text: str = "") -> d
     title = str(item.get("title") or "Science Discovery")
     topic = str(item.get("topic") or "科学")
     summary = str(item.get("summary") or "").strip()
-    level_info = science_level_config(str(item.get("level") or item.get("levelLabel") or ""))
     words = [
         str(word.get("word") or "").strip()
         for word in item.get("words") or []
         if isinstance(word, dict) and str(word.get("word") or "").strip()
     ]
-    focus_words = ", ".join(words[:4]) or "evidence, pattern, cause, effect"
     summary_sentence = summary if summary.endswith((".", "!", "?")) else f"{summary}."
     source_name = str(item.get("source") or "参考来源")
     source_url = str(item.get("sourceUrl") or "")
@@ -799,14 +964,7 @@ def build_science_full_article(item: dict[str, Any], source_text: str = "") -> d
     paragraphs.extend(concept_facts)
     if len(source_sentences) > 1:
         paragraphs.append(f"Another detail from the public reference helps connect the idea to evidence: {source_sentences[1]}")
-    paragraphs.extend(
-        [
-            f"For a {level_info['label']} reader, the goal is to follow the process in order: what starts first, what changes next, and what evidence shows the result.",
-            f"The most useful vocabulary here includes {focus_words}. Use each word in one sentence that explains a step, a structure, or a change.",
-            "A simple investigation can make the reading stronger. Choose one example, make a prediction, observe carefully, and compare the result with your prediction.",
-            "The big takeaway is that science reading is not just remembering facts. It is using details as evidence and then explaining why those details matter.",
-        ]
-    )
+    paragraphs.extend(science_extension_paragraphs(title, topic, words))
     return {
         "fullArticle": paragraphs,
         "illustrations": science_article_illustrations(item),

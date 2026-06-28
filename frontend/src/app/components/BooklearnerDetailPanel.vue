@@ -73,13 +73,19 @@ function returnToQuotes() {
     <article class="panel book-detail-main">
       <div class="book-detail-hero">
         <div class="book-detail-cover">
-          <div class="book-detail-cover-frame">
+          <button
+            type="button"
+            class="book-detail-cover-frame book-detail-cover-action"
+            :aria-label="`管理《${title}》封面图片`"
+            @click="isCoverManagerOpen = true"
+          >
             <img v-if="coverUrl" :src="coverUrl" :alt="title">
             <div v-else class="book-history-cover-fallback cover-seed-0">
               <span>书摘</span>
               <strong>{{ title.slice(0, 1).toUpperCase() }}</strong>
             </div>
-          </div>
+            <span class="book-cover-manager-pill">图片管理</span>
+          </button>
           <button type="button" class="secondary-button image-manager-trigger book-cover-manager-trigger" @click="isCoverManagerOpen = true">
             图片管理
           </button>
