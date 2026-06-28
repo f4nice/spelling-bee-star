@@ -2042,7 +2042,7 @@ a:focus-visible {
   display: grid;
   grid-template-rows: auto 1fr;
   gap: 8px;
-  min-height: 76px;
+  min-height: 96px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   padding: 9px;
@@ -2099,25 +2099,49 @@ a:focus-visible {
   background: var(--accent);
 }
 
-.calendar-total {
-  display: inline-flex;
-  align-items: baseline;
+.calendar-result-lines {
+  display: inline-grid;
+  gap: 4px;
   justify-self: start;
   align-self: end;
+}
+
+.calendar-result-line {
+  display: inline-flex;
+  align-items: baseline;
   gap: 3px;
-  padding: 4px 9px;
+  width: max-content;
+  min-width: 70px;
+  padding: 3px 8px;
   border-radius: 999px;
-  color: var(--accent-dark);
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.82);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 900;
   text-align: center;
 }
 
-.calendar-total strong {
-  color: var(--accent);
-  font-size: 15px;
+.calendar-result-line strong {
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.calendar-result-line.is-correct {
+  color: #0f7a55;
+  background: rgba(218, 247, 234, 0.88);
+}
+
+.calendar-result-line.is-correct strong {
+  color: #08764f;
+}
+
+.calendar-result-line.is-wrong {
+  color: #b4232a;
+  background: rgba(255, 232, 232, 0.9);
+}
+
+.calendar-result-line.is-wrong strong {
+  color: #cf1f2b;
 }
 
 .calendar-marks {
