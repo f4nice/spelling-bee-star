@@ -76,12 +76,12 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260628-016"
-DEFAULT_PAGE_VERSION = "v20260628.13"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-001"
+DEFAULT_PAGE_VERSION = "v20260629.1"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
-SCIENCE_IMAGE_VERSION = "20260628-clean-hero-1"
+SCIENCE_IMAGE_VERSION = "20260629-no-text-1"
 SCIENCE_DISCOVERY_DATA_VERSION = "20260628-source-refresh-2"
 SCIENCE_PUBLIC_CONTENT_VERSION = "v4"
 SCIENCE_PUBLIC_CONTENT_TTL = timedelta(days=3650)
@@ -589,7 +589,6 @@ def science_svg_scene(item: dict[str, Any]) -> str:
 def science_svg_card(item: dict[str, Any]) -> str:
     topic = str(item.get("topic") or "科学")
     title = str(item.get("title") or "Science Discovery")
-    summary = str(item.get("summary") or "")
     themes = {
         "动物": ("#7ccba2", "#1f7a59", "#f6d6a8"),
         "植物": ("#c8eb7f", "#236b3b", "#f4ffe5"),
@@ -600,16 +599,6 @@ def science_svg_card(item: dict[str, Any]) -> str:
         "工程": ("#ffd16f", "#8a5a18", "#ecfbff"),
     }
     c1, c2, c3 = themes.get(topic, ("#a9e5cf", "#1d7f5b", "#f5fbf7"))
-    title_lines = science_svg_lines(title, 24)
-    summary_lines = science_svg_lines(summary, 46)[:2]
-    title_markup = "\n".join(
-        f'<text x="48" y="{282 + index * 46}" class="title">{html.escape(line)}</text>'
-        for index, line in enumerate(title_lines)
-    )
-    summary_markup = "\n".join(
-        f'<text x="52" y="{385 + index * 26}" class="summary">{html.escape(line)}</text>'
-        for index, line in enumerate(summary_lines)
-    )
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-label="{html.escape(title)}">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -623,11 +612,6 @@ def science_svg_card(item: dict[str, Any]) -> str:
     <filter id="soft">
       <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#0d2c24" flood-opacity="0.18"/>
     </filter>
-    <style>
-      .topic {{ font: 900 28px Arial, sans-serif; fill: #ffffff; letter-spacing: 3px; }}
-      .title {{ font: 900 38px Arial, sans-serif; fill: #ffffff; }}
-      .summary {{ font: 700 18px Arial, sans-serif; fill: rgba(255,255,255,0.84); }}
-    </style>
   </defs>
   <rect width="800" height="450" rx="34" fill="url(#bg)"/>
   <rect width="800" height="450" rx="34" fill="url(#glow)"/>
@@ -636,59 +620,22 @@ def science_svg_card(item: dict[str, Any]) -> str:
   <path d="M-30 310 C140 210 220 360 375 272 C520 190 610 256 836 176 L836 450 L-30 450 Z" fill="#ffffff" opacity="0.18"/>
   <path d="M72 126 C118 72 174 80 218 126 C266 178 330 170 372 120 C410 76 466 82 502 132" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" opacity="0.28"/>
   <g filter="url(#soft)">
-    <rect x="42" y="38" width="182" height="54" rx="27" fill="rgba(255,255,255,0.18)"/>
-    <text x="66" y="74" class="topic">{html.escape(topic)}</text>
-    {title_markup}
-    {summary_markup}
+    {science_svg_scene(item)}
   </g>
 </svg>"""
 
 
 def science_svg_diagram(item: dict[str, Any]) -> str:
-    topic = str(item.get("topic") or "科学")
     title = str(item.get("title") or "Science Discovery")
-    summary = str(item.get("summary") or "")
-    words = [
-        str(word.get("word") or "").strip()
-        for word in item.get("words") or []
-        if isinstance(word, dict) and str(word.get("word") or "").strip()
-    ]
-    chips = words[:3] or [topic, "observe", "explain"]
-    chip_markup = "\n".join(
-        f'<rect x="{54 + index * 132}" y="356" width="116" height="38" rx="19" fill="#ffffff" opacity="0.86"/>'
-        f'<text x="{112 + index * 132}" y="381" class="chip" text-anchor="middle">{html.escape(chip)}</text>'
-        for index, chip in enumerate(chips[:5])
-    )
-    title_lines = science_svg_lines(title, 25)[:2]
-    title_markup = "\n".join(
-        f'<text x="54" y="{58 + index * 34}" class="title">{html.escape(line)}</text>'
-        for index, line in enumerate(title_lines)
-    )
-    summary_lines = science_svg_lines(summary, 48)[:2]
-    summary_markup = "\n".join(
-        f'<text x="54" y="{126 + index * 25}" class="summary">{html.escape(line)}</text>'
-        for index, line in enumerate(summary_lines)
-    )
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-label="{html.escape(title)} illustration">
   <defs>
     <filter id="soft">
       <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#102334" flood-opacity="0.18"/>
     </filter>
-    <style>
-      .title {{ font: 900 34px Arial, sans-serif; fill: #102334; }}
-      .summary {{ font: 700 17px Arial, sans-serif; fill: #41566d; }}
-      .chip {{ font: 900 15px Arial, sans-serif; fill: #0f6848; }}
-    </style>
   </defs>
   <rect width="800" height="450" rx="34" fill="#f4fbf8"/>
-  {science_svg_scene(item)}
   <g filter="url(#soft)">
-    <rect x="34" y="30" width="412" height="148" rx="22" fill="rgba(255,255,255,0.86)"/>
-    {title_markup}
-    {summary_markup}
-  </g>
-  <g filter="url(#soft)">
-    {chip_markup}
+    {science_svg_scene(item)}
   </g>
 </svg>"""
 
