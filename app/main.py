@@ -76,8 +76,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-001"
-DEFAULT_PAGE_VERSION = "v20260629.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-002"
+DEFAULT_PAGE_VERSION = "v20260629.2"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
@@ -424,6 +424,9 @@ def science_illustration_url(slug: str, kind: str = "diagram") -> str:
 def hydrate_science_item(item: dict[str, Any]) -> dict[str, Any]:
     slug = str(item.get("slug") or science_slug(str(item.get("title") or "science-discovery")))
     item["imageUrl"] = science_image_url(slug)
+    for illustration in item.get("illustrations") or []:
+        if isinstance(illustration, dict):
+            illustration["imageUrl"] = science_illustration_url(slug, str(illustration.get("kind") or "diagram"))
     return item
 
 
