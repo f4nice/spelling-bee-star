@@ -76,12 +76,12 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260628-007"
-DEFAULT_PAGE_VERSION = "v20260628.4"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260628-008"
+DEFAULT_PAGE_VERSION = "v20260628.5"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
-SCIENCE_IMAGE_VERSION = "20260628-illustration-1"
+SCIENCE_IMAGE_VERSION = "20260628-clean-hero-1"
 SCIENCE_PUBLIC_CONTENT_TTL = timedelta(days=3650)
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
 GROWTH_TROPHY_ASSET_STEM = "learning-growth-trophy"
@@ -376,15 +376,14 @@ def science_svg_card(item: dict[str, Any]) -> str:
         "工程": ("#ffd16f", "#8a5a18", "#ecfbff"),
     }
     c1, c2, c3 = themes.get(topic, ("#a9e5cf", "#1d7f5b", "#f5fbf7"))
-    title_lines = science_svg_lines(title, 27)
-    summary_lines = science_svg_lines(summary, 54)[:2]
-    scene_markup = science_svg_scene(item)
+    title_lines = science_svg_lines(title, 24)
+    summary_lines = science_svg_lines(summary, 46)[:2]
     title_markup = "\n".join(
-        f'<text x="48" y="{66 + index * 38}" class="title">{html.escape(line)}</text>'
+        f'<text x="48" y="{282 + index * 46}" class="title">{html.escape(line)}</text>'
         for index, line in enumerate(title_lines)
     )
     summary_markup = "\n".join(
-        f'<text x="52" y="{166 + index * 26}" class="summary">{html.escape(line)}</text>'
+        f'<text x="52" y="{385 + index * 26}" class="summary">{html.escape(line)}</text>'
         for index, line in enumerate(summary_lines)
     )
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-label="{html.escape(title)}">
@@ -401,19 +400,20 @@ def science_svg_card(item: dict[str, Any]) -> str:
       <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#0d2c24" flood-opacity="0.18"/>
     </filter>
     <style>
-      .topic {{ font: 900 22px Arial, sans-serif; fill: #ffffff; letter-spacing: 2px; }}
-      .title {{ font: 900 34px Arial, sans-serif; fill: #102334; }}
-      .summary {{ font: 700 17px Arial, sans-serif; fill: #33495f; }}
+      .topic {{ font: 900 28px Arial, sans-serif; fill: #ffffff; letter-spacing: 3px; }}
+      .title {{ font: 900 38px Arial, sans-serif; fill: #ffffff; }}
+      .summary {{ font: 700 18px Arial, sans-serif; fill: rgba(255,255,255,0.84); }}
     </style>
   </defs>
   <rect width="800" height="450" rx="34" fill="url(#bg)"/>
-  <rect width="800" height="450" rx="34" fill="url(#glow)" opacity="0.72"/>
-  {scene_markup}
-  <rect x="0" y="0" width="800" height="450" rx="34" fill="none" stroke="rgba(16,35,52,0.10)" stroke-width="2"/>
+  <rect width="800" height="450" rx="34" fill="url(#glow)"/>
+  <circle cx="650" cy="92" r="108" fill="#fff" opacity="0.16"/>
+  <circle cx="720" cy="210" r="72" fill="#fff" opacity="0.13"/>
+  <path d="M-30 310 C140 210 220 360 375 272 C520 190 610 256 836 176 L836 450 L-30 450 Z" fill="#ffffff" opacity="0.18"/>
+  <path d="M72 126 C118 72 174 80 218 126 C266 178 330 170 372 120 C410 76 466 82 502 132" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" opacity="0.28"/>
   <g filter="url(#soft)">
-    <rect x="34" y="28" width="336" height="172" rx="22" fill="rgba(255,255,255,0.82)"/>
-    <rect x="48" y="142" width="118" height="32" rx="16" fill="{c2}" opacity="0.9"/>
-    <text x="66" y="165" class="topic">{html.escape(topic)}</text>
+    <rect x="42" y="38" width="182" height="54" rx="27" fill="rgba(255,255,255,0.18)"/>
+    <text x="66" y="74" class="topic">{html.escape(topic)}</text>
     {title_markup}
     {summary_markup}
   </g>
