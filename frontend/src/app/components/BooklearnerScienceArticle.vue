@@ -28,6 +28,17 @@ const article = computed(() => props.book.science?.article || null);
 const sources = computed(() => props.book.science?.sources || []);
 const fullArticle = computed(() => (Array.isArray(article.value?.fullArticle) ? article.value.fullArticle : []));
 const readingParagraphs = computed(() => (fullArticle.value.length ? fullArticle.value : article.value?.article || []));
+const illustrations = computed(() => (Array.isArray(article.value?.illustrations) ? article.value.illustrations : []));
+const readingBlocks = computed(() => {
+  const blocks = [];
+  readingParagraphs.value.forEach((paragraph, index) => {
+    blocks.push({ type: "paragraph", key: `p:${index}:${paragraph}`, text: paragraph });
+    if (fullArticle.value.length && index === 1 && illustrations.value[0]) {
+      blocks.push({ type: "illustration", key: `i:${illustrations.value[0].imageUrl}`, item: illustrations.value[0] });
+    }
+  });
+  return blocks;
+});
 const revealedAnswers = ref({});
 const fullArticleLoading = ref(false);
 const fullArticleError = ref("");
@@ -111,7 +122,13 @@ async function loadFullArticle() {
       <div v-if="article.fullArticleSourceNote" class="science-full-article-note">
         {{ article.fullArticleSourceNote }}
       </div>
-      <p v-for="paragraph in readingParagraphs" :key="paragraph">{{ paragraph }}</p>
+      <template v-for="block in readingBlocks" :key="block.key">
+        <p v-if="block.type === 'paragraph'">{{ block.text }}</p>
+        <figure v-else class="science-inline-figure">
+          <img :src="block.item.imageUrl" :alt="block.item.title" loading="lazy" />
+          <figcaption>{{ block.item.caption }}</figcaption>
+        </figure>
+      </template>
     </article>
 
     <section class="science-article-section">

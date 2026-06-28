@@ -76,11 +76,13 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260628-006"
-DEFAULT_PAGE_VERSION = "v20260628.3"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260628-007"
+DEFAULT_PAGE_VERSION = "v20260628.4"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
+SCIENCE_IMAGE_VERSION = "20260628-illustration-1"
+SCIENCE_PUBLIC_CONTENT_TTL = timedelta(days=3650)
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
 GROWTH_TROPHY_ASSET_STEM = "learning-growth-trophy"
 GROWTH_TROPHY_FALLBACK_IMAGE = "/static/icons/challenge-crown-transparent.png"
@@ -188,7 +190,11 @@ def science_slug(value: str) -> str:
 
 
 def science_image_url(slug: str) -> str:
-    return f"/booklearner/api/science-image/{quote_plus(slug)}.svg"
+    return f"/booklearner/api/science-image/{quote_plus(slug)}.svg?v={SCIENCE_IMAGE_VERSION}"
+
+
+def science_illustration_url(slug: str, kind: str = "diagram") -> str:
+    return f"/booklearner/api/science-illustration/{quote_plus(slug)}/{quote_plus(kind)}.svg?v={SCIENCE_IMAGE_VERSION}"
 
 
 def hydrate_science_item(item: dict[str, Any]) -> dict[str, Any]:
@@ -222,6 +228,140 @@ def science_svg_lines(text: str, limit: int = 26) -> list[str]:
     return lines[:3] or ["Science Discovery"]
 
 
+def science_svg_scene(item: dict[str, Any]) -> str:
+    title = str(item.get("title") or "").lower()
+    topic = str(item.get("topic") or "科学")
+    if "bridge" in title:
+        return """
+  <g class="scene bridge-scene">
+    <rect x="0" y="250" width="800" height="200" fill="#8bd3f7" opacity="0.72"/>
+    <path d="M0 302 C110 270 205 328 320 296 C454 258 570 328 800 286 L800 450 L0 450 Z" fill="#4aa8c8" opacity="0.62"/>
+    <rect x="78" y="210" width="644" height="28" rx="8" fill="#46586c"/>
+    <rect x="66" y="190" width="668" height="24" rx="9" fill="#f5b74b"/>
+    <path d="M132 210 C222 120 306 120 398 210" fill="none" stroke="#f08b35" stroke-width="20" stroke-linecap="round"/>
+    <path d="M402 210 C492 120 576 120 668 210" fill="none" stroke="#f08b35" stroke-width="20" stroke-linecap="round"/>
+    <path d="M148 218 L230 150 L314 218 M420 218 L502 150 L586 218" fill="none" stroke="#fff4cc" stroke-width="9" stroke-linecap="round" opacity="0.9"/>
+    <rect x="145" y="235" width="34" height="138" rx="8" fill="#66788c"/>
+    <rect x="384" y="235" width="34" height="146" rx="8" fill="#66788c"/>
+    <rect x="625" y="235" width="34" height="132" rx="8" fill="#66788c"/>
+    <g class="force-arrows">
+      <path d="M246 98 L246 165" stroke="#1d7f5b" stroke-width="10" stroke-linecap="round"/>
+      <path d="M246 170 L224 142 M246 170 L268 142" fill="none" stroke="#1d7f5b" stroke-width="10" stroke-linecap="round"/>
+      <path d="M552 98 L552 165" stroke="#1d7f5b" stroke-width="10" stroke-linecap="round"/>
+      <path d="M552 170 L530 142 M552 170 L574 142" fill="none" stroke="#1d7f5b" stroke-width="10" stroke-linecap="round"/>
+    </g>
+  </g>"""
+    if "tree ring" in title:
+        return """
+  <g class="scene tree-ring-scene">
+    <rect x="0" y="284" width="800" height="166" fill="#b8df8a"/>
+    <ellipse cx="430" cy="234" rx="220" ry="132" fill="#c98c42"/>
+    <ellipse cx="430" cy="234" rx="180" ry="103" fill="none" stroke="#f6d58c" stroke-width="15"/>
+    <ellipse cx="430" cy="234" rx="132" ry="76" fill="none" stroke="#8a5527" stroke-width="10" opacity="0.65"/>
+    <ellipse cx="430" cy="234" rx="82" ry="45" fill="none" stroke="#f4c970" stroke-width="9"/>
+    <ellipse cx="430" cy="234" rx="28" ry="16" fill="#7a4a24" opacity="0.72"/>
+    <path d="M222 332 C312 302 530 302 630 336" fill="none" stroke="#236b3b" stroke-width="12" stroke-linecap="round" opacity="0.5"/>
+  </g>"""
+    if "filter" in title or "water" in title:
+        return """
+  <g class="scene filter-scene">
+    <rect x="0" y="268" width="800" height="182" fill="#bdeaf5"/>
+    <path d="M300 90 L500 90 L456 214 L456 330 L344 330 L344 214 Z" fill="#ffffff" opacity="0.86" stroke="#3e8aa1" stroke-width="10"/>
+    <path d="M325 164 L475 164" stroke="#f5b74b" stroke-width="18" stroke-linecap="round"/>
+    <path d="M336 208 L464 208" stroke="#677a8e" stroke-width="14" stroke-linecap="round"/>
+    <path d="M354 254 L446 254" stroke="#79c7a0" stroke-width="14" stroke-linecap="round"/>
+    <circle cx="268" cy="114" r="18" fill="#5dbce0"/>
+    <circle cx="538" cy="142" r="24" fill="#5dbce0"/>
+    <circle cx="488" cy="360" r="20" fill="#5dbce0"/>
+  </g>"""
+    if "coral" in title:
+        return """
+  <g class="scene coral-scene">
+    <rect x="0" y="0" width="800" height="450" fill="#8ed9d1"/>
+    <path d="M0 318 C148 278 280 348 408 302 C550 252 640 318 800 280 L800 450 L0 450 Z" fill="#237b86" opacity="0.64"/>
+    <path d="M266 352 L266 270 M266 306 C230 292 218 260 222 232 M266 314 C306 298 318 260 312 228" stroke="#ff8a7a" stroke-width="18" stroke-linecap="round" fill="none"/>
+    <path d="M422 370 L422 282 M422 318 C382 300 372 266 378 238 M422 324 C462 302 476 266 470 236" stroke="#ffc25f" stroke-width="16" stroke-linecap="round" fill="none"/>
+    <ellipse cx="572" cy="232" rx="54" ry="24" fill="#f7f2b7"/>
+    <circle cx="610" cy="226" r="5" fill="#17324d"/>
+    <path d="M520 232 L486 214 L486 250 Z" fill="#f7f2b7"/>
+  </g>"""
+    if topic == "工程":
+        return """
+  <g class="scene engineering-scene">
+    <rect x="0" y="278" width="800" height="172" fill="#d9f2f8"/>
+    <rect x="178" y="244" width="444" height="48" rx="12" fill="#485b70"/>
+    <path d="M210 244 L282 156 L354 244 M364 244 L436 156 L508 244 M518 244 L590 156 L662 244" fill="none" stroke="#f5b74b" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="242" cy="332" r="38" fill="#7890a6"/>
+    <circle cx="558" cy="332" r="38" fill="#7890a6"/>
+    <path d="M120 366 H680" stroke="#7dc79c" stroke-width="16" stroke-linecap="round"/>
+  </g>"""
+    if topic == "植物":
+        return """
+  <g class="scene plant-scene">
+    <rect x="0" y="300" width="800" height="150" fill="#b8df8a"/>
+    <circle cx="654" cy="100" r="54" fill="#ffe08a" opacity="0.88"/>
+    <path d="M394 352 C388 282 398 224 430 168" stroke="#236b3b" stroke-width="18" stroke-linecap="round" fill="none"/>
+    <path d="M430 168 C500 128 574 144 626 204 C540 222 474 210 430 168 Z" fill="#57b77c"/>
+    <path d="M392 238 C318 194 248 204 198 266 C284 292 348 280 392 238 Z" fill="#74c987"/>
+  </g>"""
+    if topic == "动物":
+        return """
+  <g class="scene animal-scene">
+    <rect x="0" y="292" width="800" height="158" fill="#b8df8a"/>
+    <ellipse cx="430" cy="236" rx="124" ry="72" fill="#d9a063"/>
+    <circle cx="528" cy="198" r="48" fill="#d9a063"/>
+    <circle cx="544" cy="188" r="7" fill="#17324d"/>
+    <path d="M560 210 Q586 214 602 200" stroke="#17324d" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <path d="M320 222 C260 180 232 178 196 212" stroke="#d9a063" stroke-width="24" stroke-linecap="round" fill="none"/>
+    <path d="M376 298 L354 366 M470 298 L494 366" stroke="#7e5130" stroke-width="18" stroke-linecap="round"/>
+  </g>"""
+    if topic == "人体":
+        return """
+  <g class="scene body-scene">
+    <rect x="0" y="0" width="800" height="450" fill="#d9f0ff"/>
+    <path d="M404 336 C330 276 270 228 270 164 C270 118 304 88 348 88 C374 88 394 104 404 126 C414 104 438 88 466 88 C510 88 544 118 544 164 C544 228 484 276 404 336 Z" fill="#ff6f7d"/>
+    <path d="M318 212 H374 L394 176 L430 258 L456 212 H502" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>"""
+    if topic == "微生物":
+        return """
+  <g class="scene microbe-scene">
+    <rect x="0" y="0" width="800" height="450" fill="#ede7ff"/>
+    <circle cx="326" cy="214" r="86" fill="#8b72d8"/>
+    <circle cx="492" cy="178" r="58" fill="#6fcaa0"/>
+    <circle cx="510" cy="298" r="72" fill="#b391ee"/>
+    <circle cx="298" cy="190" r="12" fill="#fff" opacity="0.72"/>
+    <circle cx="468" cy="158" r="9" fill="#fff" opacity="0.72"/>
+    <circle cx="536" cy="282" r="11" fill="#fff" opacity="0.72"/>
+    <path d="M226 306 C300 266 360 334 438 292 C506 256 558 334 646 286" fill="none" stroke="#ffffff" stroke-width="13" stroke-linecap="round" opacity="0.52"/>
+  </g>"""
+    if topic == "地球":
+        return """
+  <g class="scene earth-scene">
+    <rect x="0" y="0" width="800" height="450" fill="#d8f3ef"/>
+    <path d="M0 312 C126 248 218 326 348 268 C488 206 604 296 800 232 L800 450 L0 450 Z" fill="#4aa886" opacity="0.76"/>
+    <path d="M0 356 C174 310 284 386 430 338 C552 298 646 354 800 314 L800 450 L0 450 Z" fill="#8d6a47" opacity="0.78"/>
+    <path d="M356 272 C390 314 456 318 492 352 C442 360 398 344 368 318 C340 292 314 292 276 300 C298 280 326 266 356 272 Z" fill="#6fd0e6"/>
+  </g>"""
+    if topic == "太空":
+        return """
+  <g class="scene space-scene">
+    <rect x="0" y="0" width="800" height="450" fill="#17245a"/>
+    <circle cx="640" cy="112" r="54" fill="#f5dda6"/>
+    <circle cx="242" cy="92" r="4" fill="#ffffff"/><circle cx="516" cy="68" r="5" fill="#ffffff"/><circle cx="594" cy="260" r="4" fill="#ffffff"/>
+    <path d="M376 318 L422 154 L468 318 Z" fill="#f4f6ff"/>
+    <path d="M422 154 C450 196 456 236 468 318 L422 292 Z" fill="#c9d7ff"/>
+    <circle cx="422" cy="236" r="24" fill="#66c6f2"/>
+    <path d="M394 318 L362 374 M450 318 L486 374" stroke="#ffb85c" stroke-width="18" stroke-linecap="round"/>
+  </g>"""
+    return """
+  <g class="scene science-scene">
+    <rect x="0" y="286" width="800" height="164" fill="#c8ead8"/>
+    <circle cx="394" cy="210" r="96" fill="#77caa0"/>
+    <path d="M286 306 C360 246 446 370 522 288" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" opacity="0.62"/>
+    <circle cx="538" cy="166" r="48" fill="#ffe08a" opacity="0.82"/>
+  </g>"""
+
+
 def science_svg_card(item: dict[str, Any]) -> str:
     topic = str(item.get("topic") or "科学")
     title = str(item.get("title") or "Science Discovery")
@@ -236,14 +376,15 @@ def science_svg_card(item: dict[str, Any]) -> str:
         "工程": ("#ffd16f", "#8a5a18", "#ecfbff"),
     }
     c1, c2, c3 = themes.get(topic, ("#a9e5cf", "#1d7f5b", "#f5fbf7"))
-    title_lines = science_svg_lines(title, 24)
-    summary_lines = science_svg_lines(summary, 46)[:2]
+    title_lines = science_svg_lines(title, 27)
+    summary_lines = science_svg_lines(summary, 54)[:2]
+    scene_markup = science_svg_scene(item)
     title_markup = "\n".join(
-        f'<text x="48" y="{282 + index * 46}" class="title">{html.escape(line)}</text>'
+        f'<text x="48" y="{66 + index * 38}" class="title">{html.escape(line)}</text>'
         for index, line in enumerate(title_lines)
     )
     summary_markup = "\n".join(
-        f'<text x="52" y="{385 + index * 26}" class="summary">{html.escape(line)}</text>'
+        f'<text x="52" y="{166 + index * 26}" class="summary">{html.escape(line)}</text>'
         for index, line in enumerate(summary_lines)
     )
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-label="{html.escape(title)}">
@@ -260,22 +401,70 @@ def science_svg_card(item: dict[str, Any]) -> str:
       <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#0d2c24" flood-opacity="0.18"/>
     </filter>
     <style>
-      .topic {{ font: 900 28px Arial, sans-serif; fill: #ffffff; letter-spacing: 3px; }}
-      .title {{ font: 900 38px Arial, sans-serif; fill: #ffffff; }}
-      .summary {{ font: 700 18px Arial, sans-serif; fill: rgba(255,255,255,0.84); }}
+      .topic {{ font: 900 22px Arial, sans-serif; fill: #ffffff; letter-spacing: 2px; }}
+      .title {{ font: 900 34px Arial, sans-serif; fill: #102334; }}
+      .summary {{ font: 700 17px Arial, sans-serif; fill: #33495f; }}
     </style>
   </defs>
   <rect width="800" height="450" rx="34" fill="url(#bg)"/>
-  <rect width="800" height="450" rx="34" fill="url(#glow)"/>
-  <circle cx="650" cy="92" r="108" fill="#fff" opacity="0.16"/>
-  <circle cx="720" cy="210" r="72" fill="#fff" opacity="0.13"/>
-  <path d="M-30 310 C140 210 220 360 375 272 C520 190 610 256 836 176 L836 450 L-30 450 Z" fill="#ffffff" opacity="0.18"/>
-  <path d="M72 126 C118 72 174 80 218 126 C266 178 330 170 372 120 C410 76 466 82 502 132" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" opacity="0.28"/>
+  <rect width="800" height="450" rx="34" fill="url(#glow)" opacity="0.72"/>
+  {scene_markup}
+  <rect x="0" y="0" width="800" height="450" rx="34" fill="none" stroke="rgba(16,35,52,0.10)" stroke-width="2"/>
   <g filter="url(#soft)">
-    <rect x="42" y="38" width="182" height="54" rx="27" fill="rgba(255,255,255,0.18)"/>
-    <text x="66" y="74" class="topic">{html.escape(topic)}</text>
+    <rect x="34" y="28" width="336" height="172" rx="22" fill="rgba(255,255,255,0.82)"/>
+    <rect x="48" y="142" width="118" height="32" rx="16" fill="{c2}" opacity="0.9"/>
+    <text x="66" y="165" class="topic">{html.escape(topic)}</text>
     {title_markup}
     {summary_markup}
+  </g>
+</svg>"""
+
+
+def science_svg_diagram(item: dict[str, Any]) -> str:
+    topic = str(item.get("topic") or "科学")
+    title = str(item.get("title") or "Science Discovery")
+    summary = str(item.get("summary") or "")
+    words = [
+        str(word.get("word") or "").strip()
+        for word in item.get("words") or []
+        if isinstance(word, dict) and str(word.get("word") or "").strip()
+    ]
+    chips = words[:3] or [topic, "observe", "explain"]
+    chip_markup = "\n".join(
+        f'<rect x="{54 + index * 132}" y="356" width="116" height="38" rx="19" fill="#ffffff" opacity="0.86"/>'
+        f'<text x="{112 + index * 132}" y="381" class="chip" text-anchor="middle">{html.escape(chip)}</text>'
+        for index, chip in enumerate(chips[:5])
+    )
+    title_lines = science_svg_lines(title, 25)[:2]
+    title_markup = "\n".join(
+        f'<text x="54" y="{58 + index * 34}" class="title">{html.escape(line)}</text>'
+        for index, line in enumerate(title_lines)
+    )
+    summary_lines = science_svg_lines(summary, 48)[:2]
+    summary_markup = "\n".join(
+        f'<text x="54" y="{126 + index * 25}" class="summary">{html.escape(line)}</text>'
+        for index, line in enumerate(summary_lines)
+    )
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-label="{html.escape(title)} illustration">
+  <defs>
+    <filter id="soft">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#102334" flood-opacity="0.18"/>
+    </filter>
+    <style>
+      .title {{ font: 900 34px Arial, sans-serif; fill: #102334; }}
+      .summary {{ font: 700 17px Arial, sans-serif; fill: #41566d; }}
+      .chip {{ font: 900 15px Arial, sans-serif; fill: #0f6848; }}
+    </style>
+  </defs>
+  <rect width="800" height="450" rx="34" fill="#f4fbf8"/>
+  {science_svg_scene(item)}
+  <g filter="url(#soft)">
+    <rect x="34" y="30" width="412" height="148" rx="22" fill="rgba(255,255,255,0.86)"/>
+    {title_markup}
+    {summary_markup}
+  </g>
+  <g filter="url(#soft)">
+    {chip_markup}
   </g>
 </svg>"""
 
@@ -347,6 +536,34 @@ def science_topic_frame(topic: str) -> str:
     return frames.get(topic, "a science question that can be tested with evidence")
 
 
+def science_illustration_caption(item: dict[str, Any]) -> str:
+    topic = str(item.get("topic") or "科学")
+    title = str(item.get("title") or "")
+    if "bridge" in title.lower():
+        return "插图展示桥面、拱形结构、支撑柱和向下的力，帮助理解重量怎样被分散。"
+    captions = {
+        "植物": "插图展示植物结构和环境条件，帮助把观察到的细节和科学解释连起来。",
+        "动物": "插图展示动物身体结构或行为，帮助理解它怎样适应环境。",
+        "人体": "插图展示人体系统中的关键结构，帮助理解身体怎样完成任务。",
+        "微生物": "插图展示微小生命体和它们造成的变化，帮助理解看不见的科学过程。",
+        "地球": "插图展示地球表面的形状和变化，帮助理解时间、运动和环境之间的关系。",
+        "太空": "插图展示太空物体或航天结构，帮助理解距离、运动和能量。",
+        "工程": "插图展示材料、结构和力之间的关系，帮助理解工程设计为什么有效。",
+    }
+    return captions.get(topic, "插图展示这个科学问题的关键结构，帮助阅读时抓住证据和因果关系。")
+
+
+def science_article_illustrations(item: dict[str, Any]) -> list[dict[str, str]]:
+    slug = str(item.get("slug") or science_slug(str(item.get("title") or "science-discovery")))
+    return [
+        {
+            "title": f"{item.get('title') or 'Science Discovery'} illustration",
+            "caption": science_illustration_caption(item),
+            "imageUrl": science_illustration_url(slug),
+        }
+    ]
+
+
 def build_science_full_article(item: dict[str, Any], source_text: str = "") -> dict[str, Any]:
     title = str(item.get("title") or "Science Discovery")
     topic = str(item.get("topic") or "科学")
@@ -385,10 +602,71 @@ def build_science_full_article(item: dict[str, Any], source_text: str = "") -> d
     ]
     return {
         "fullArticle": paragraphs,
+        "illustrations": science_article_illustrations(item),
         "fullArticleSourceStatus": source_status,
         "fullArticleSourceNote": source_note,
         "fullArticleGeneratedAt": date.today().isoformat(),
     }
+
+
+def science_public_content_key(item: dict[str, Any]) -> str:
+    slug = str(item.get("slug") or science_slug(str(item.get("title") or "science-discovery")))
+    return f"science:public-content:v2:{slug}"
+
+
+def read_science_public_content(db: Session, item: dict[str, Any]) -> dict[str, Any] | None:
+    entry = db.get(CacheEntry, science_public_content_key(item))
+    if not entry or entry.expires_at <= datetime.utcnow():
+        return None
+    try:
+        payload = json.loads(entry.payload)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def write_science_public_content(db: Session, item: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    encoded = json.dumps(payload, ensure_ascii=False)
+    now = datetime.utcnow()
+    key = science_public_content_key(item)
+    entry = db.get(CacheEntry, key)
+    if entry:
+        entry.payload = encoded
+        entry.expires_at = now + SCIENCE_PUBLIC_CONTENT_TTL
+    else:
+        entry = CacheEntry(key=key, payload=encoded, expires_at=now + SCIENCE_PUBLIC_CONTENT_TTL)
+        db.add(entry)
+    db.commit()
+    return payload
+
+
+def get_science_public_content(
+    item: dict[str, Any],
+    db: Session,
+    *,
+    refresh: bool = False,
+    source_text: str = "",
+) -> dict[str, Any]:
+    if not refresh:
+        cached = read_science_public_content(db, item)
+        if cached:
+            return cached
+    payload = build_science_full_article(item, source_text)
+    return write_science_public_content(db, item, payload)
+
+
+def merge_science_public_content(item: dict[str, Any], db: Session, *, refresh: bool = False, source_text: str = "") -> dict[str, Any]:
+    content = get_science_public_content(item, db, refresh=refresh, source_text=source_text)
+    return hydrate_science_item({**item, **content})
+
+
+def attach_science_public_content(payload: dict[str, Any], db: Session) -> dict[str, Any]:
+    for index, item in enumerate(payload.get("items") or []):
+        if isinstance(item, dict):
+            payload["items"][index] = merge_science_public_content(item, db)
+    if isinstance(payload.get("item"), dict):
+        payload["item"] = merge_science_public_content(payload["item"], db)
+    return hydrate_science_payload(payload)
 
 
 def build_science_discovery_pool(level: str | None = None) -> list[dict[str, Any]]:
@@ -869,28 +1147,42 @@ def good_words_science_image(slug: str):
     )
 
 
+@app.get("/booklearner/api/science-illustration/{slug}/{kind}.svg")
+def good_words_science_illustration(slug: str, kind: str):
+    item = find_science_article(slug) or {
+        "slug": slug,
+        "title": slug.replace("-", " ").title(),
+        "topic": "科学",
+        "summary": "A small science discovery for today's reading.",
+    }
+    return Response(
+        content=science_svg_diagram(item),
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
 @app.get("/booklearner/api/science-daily")
 def good_words_science_daily(
     level: str = Query(default="L500-L700"),
     topic: str = Query(default="全部"),
     batch: int = Query(default=0, ge=0, le=50),
+    db: Session = Depends(get_db),
 ):
-    return build_science_daily_payload(level=level, topic=topic, batch=batch)
+    return attach_science_public_content(build_science_daily_payload(level=level, topic=topic, batch=batch), db)
 
 
 @app.get("/booklearner/api/science-daily/{slug}/full-article")
 def good_words_science_daily_full_article(
     slug: str,
     level: str | None = Query(default=None),
+    db: Session = Depends(get_db),
 ):
     item = find_science_article(slug, level)
     if not item:
         raise HTTPException(status_code=404, detail="知识点不存在。")
     source_text = fetch_science_source_text(str(item.get("sourceUrl") or ""))
-    item = {
-        **item,
-        **build_science_full_article(item, source_text),
-    }
+    item = merge_science_public_content(item, db, refresh=True, source_text=source_text)
     return {
         "item": item,
         "sources": [
@@ -904,10 +1196,12 @@ def good_words_science_daily_full_article(
 def good_words_science_daily_article(
     slug: str,
     level: str | None = Query(default=None),
+    db: Session = Depends(get_db),
 ):
     item = find_science_article(slug, level)
     if not item:
         raise HTTPException(status_code=404, detail="知识点不存在。")
+    item = merge_science_public_content(item, db)
     return {
         "item": item,
         "sources": [

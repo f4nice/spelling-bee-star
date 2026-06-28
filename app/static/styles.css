@@ -4006,6 +4006,31 @@ button.calendar-day {
   line-height: 1.5;
 }
 
+.science-inline-figure {
+  display: grid;
+  gap: 10px;
+  margin: 2px 0 6px;
+  border: 1px solid rgba(29, 127, 91, 0.14);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f6fbf8;
+}
+
+.science-inline-figure img {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: cover;
+}
+
+.science-inline-figure figcaption {
+  padding: 0 14px 14px;
+  color: #43566a;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.5;
+}
+
 .science-reading-body p {
   margin: 0;
   color: var(--ink);
