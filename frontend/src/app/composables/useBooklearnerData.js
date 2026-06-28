@@ -31,7 +31,7 @@ export function useBooklearnerData({ book, route }) {
       batch: overrides.batch ?? current.batch ?? 0,
     };
     updateScience({ ...requested, items: [], article: null });
-    const payload = await fetchJson(booklearnerApiPaths.scienceDaily(requested), { skipCache: overrides.force === true });
+    const payload = await fetchJson(booklearnerApiPaths.scienceDaily(requested), { skipCache: true });
     if (requestId !== scienceRequestId) return;
     updateScience({ ...payload, article: null });
   }
@@ -77,7 +77,7 @@ export function useBooklearnerData({ book, route }) {
     }
 
     if (route.value.name === 'booklearnerDetail') {
-      book.value.result = await fetchJson(booklearnerApiPaths.historyDetail(route.value.params.id));
+      book.value.result = await fetchJson(booklearnerApiPaths.historyDetail(route.value.params.id), { skipCache: true });
       book.value.featured = (await fetchJson(booklearnerApiPaths.featured({ limit: 80, analysisId: route.value.params.id }))).items || [];
       return;
     }

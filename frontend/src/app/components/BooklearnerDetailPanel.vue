@@ -1,5 +1,6 @@
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import BookCoverManagerModal from "./BookCoverManagerModal.vue";
 
 const props = defineProps({
   route: {
@@ -18,8 +19,17 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  uploadBookCover: {
+    type: Function,
+    required: true,
+  },
+  generateBookAiCover: {
+    type: Function,
+    required: true,
+  },
 });
 
+const isCoverManagerOpen = ref(false);
 const result = computed(() => props.book.result || {});
 const bookInfo = computed(() => result.value.book || {});
 const title = computed(() => bookInfo.value.title || result.value.title || "书籍详情");
@@ -63,11 +73,16 @@ function returnToQuotes() {
     <article class="panel book-detail-main">
       <div class="book-detail-hero">
         <div class="book-detail-cover">
-          <img v-if="coverUrl" :src="coverUrl" :alt="title">
-          <div v-else class="book-history-cover-fallback cover-seed-0">
-            <span>书摘</span>
-            <strong>{{ title.slice(0, 1).toUpperCase() }}</strong>
+          <div class="book-detail-cover-frame">
+            <img v-if="coverUrl" :src="coverUrl" :alt="title">
+            <div v-else class="book-history-cover-fallback cover-seed-0">
+              <span>书摘</span>
+              <strong>{{ title.slice(0, 1).toUpperCase() }}</strong>
+            </div>
           </div>
+          <button type="button" class="secondary-button image-manager-trigger book-cover-manager-trigger" @click="isCoverManagerOpen = true">
+            图片管理
+          </button>
         </div>
         <div class="book-detail-info">
           <span class="eyebrow">BOOK DETAIL</span>
@@ -151,5 +166,16 @@ function returnToQuotes() {
         <p v-if="!vocabulary.length" class="notice">这本书还没有难词记录。</p>
       </div>
     </aside>
+
+    <BookCoverManagerModal
+      v-if="isCoverManagerOpen"
+      :analysis-id="Number(route.params.id)"
+      :title="title"
+      :author="author"
+      :cover-url="coverUrl"
+      :upload-book-cover="uploadBookCover"
+      :generate-book-ai-cover="generateBookAiCover"
+      @close="isCoverManagerOpen = false"
+    />
   </section>
 </template>

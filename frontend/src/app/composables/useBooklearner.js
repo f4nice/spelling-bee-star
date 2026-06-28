@@ -17,6 +17,8 @@ export function useBooklearner({ route, go }) {
     analyzeBookFile,
     saveBookAnalysis,
     createBookWordList,
+    uploadBookCover,
+    generateBookAiCover,
   } = useBooklearnerActions({ book, go });
 
   return {
@@ -29,5 +31,7 @@ export function useBooklearner({ route, go }) {
     analyzeBookFile,
     saveBookAnalysis,
     createBookWordList,
+    uploadBookCover,
+    generateBookAiCover,
   };
 }

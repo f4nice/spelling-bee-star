@@ -5,6 +5,8 @@ export function buildBooklearnerContext(booklearner) {
     analyzeBookFile: booklearner.analyzeBookFile,
     saveBookAnalysis: booklearner.saveBookAnalysis,
     createBookWordList: booklearner.createBookWordList,
+    uploadBookCover: booklearner.uploadBookCover,
+    generateBookAiCover: booklearner.generateBookAiCover,
     loadScienceDiscoveries: booklearner.loadScienceDiscoveries,
     loadScienceArticle: booklearner.loadScienceArticle,
     loadScienceFullArticle: booklearner.loadScienceFullArticle,

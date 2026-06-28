@@ -40,13 +40,47 @@ const readingBlocks = computed(() => {
   return blocks;
 });
 const revealedAnswers = ref({});
+const quizDrafts = ref({});
+const quizFeedback = ref({});
 const fullArticleLoading = ref(false);
 const fullArticleError = ref("");
+const QUIZ_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "be",
+  "by",
+  "can",
+  "does",
+  "for",
+  "from",
+  "how",
+  "in",
+  "is",
+  "it",
+  "of",
+  "or",
+  "that",
+  "the",
+  "this",
+  "to",
+  "what",
+  "when",
+  "where",
+  "which",
+  "why",
+  "with",
+]);
 
 watch(
   () => article.value?.slug,
   () => {
     revealedAnswers.value = {};
+    quizDrafts.value = {};
+    quizFeedback.value = {};
     fullArticleError.value = "";
     fullArticleLoading.value = false;
   },
@@ -69,6 +103,62 @@ function toggleAnswer(item, index) {
   revealedAnswers.value = {
     ...revealedAnswers.value,
     [key]: !revealedAnswers.value[key],
+  };
+}
+
+function updateQuizDraft(item, index, value) {
+  const key = answerKey(item, index);
+  quizDrafts.value = {
+    ...quizDrafts.value,
+    [key]: value,
+  };
+}
+
+function normalizeAnswerText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5\s-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function answerTokens(value) {
+  return normalizeAnswerText(value)
+    .split(" ")
+    .map((item) => item.trim())
+    .filter((item) => item && item.length > 1 && !QUIZ_STOP_WORDS.has(item));
+}
+
+function compareAnswerText(draft, answer) {
+  const normalizedDraft = normalizeAnswerText(draft);
+  const normalizedAnswer = normalizeAnswerText(answer);
+  if (!normalizedDraft) {
+    return { tone: "empty", text: "先写下你的答案，再来对比。" };
+  }
+  if (!normalizedAnswer) {
+    return { tone: "near", text: "已记录答案。" };
+  }
+  if (normalizedDraft.includes(normalizedAnswer) || normalizedAnswer.includes(normalizedDraft)) {
+    return { tone: "good", text: "很接近，核心答案已经答出来了。" };
+  }
+  const expected = answerTokens(answer);
+  const actual = new Set(answerTokens(draft));
+  const matched = expected.filter((token) => actual.has(token));
+  const score = expected.length ? matched.length / expected.length : 0;
+  if (score >= 0.55) {
+    return { tone: "good", text: `很接近，命中了 ${matched.length}/${expected.length} 个关键词。` };
+  }
+  if (score >= 0.25) {
+    return { tone: "near", text: `有一部分对上了，再补充关键词：${expected.filter((token) => !actual.has(token)).slice(0, 3).join(", ")}。` };
+  }
+  return { tone: "try", text: "还不太接近，可以再读一遍段落，抓住主语、原因和结果。" };
+}
+
+function checkQuizAnswer(item, index) {
+  const key = answerKey(item, index);
+  quizFeedback.value = {
+    ...quizFeedback.value,
+    [key]: compareAnswerText(quizDrafts.value[key], item.answer),
   };
 }
 
@@ -159,6 +249,25 @@ async function loadFullArticle() {
               <span aria-hidden="true">👁</span>
             </button>
           </div>
+          <div class="science-quiz-response">
+            <textarea
+              :value="quizDrafts[answerKey(item, index)] || ''"
+              rows="2"
+              placeholder="写下你的答案"
+              @input="updateQuizDraft(item, index, $event.target.value)"
+              @keydown.ctrl.enter.prevent="checkQuizAnswer(item, index)"
+            ></textarea>
+            <button type="button" class="secondary-button science-quiz-check" @click="checkQuizAnswer(item, index)">
+              对比答案
+            </button>
+          </div>
+          <p
+            v-if="quizFeedback[answerKey(item, index)]"
+            class="science-quiz-feedback"
+            :class="`is-${quizFeedback[answerKey(item, index)].tone}`"
+          >
+            {{ quizFeedback[answerKey(item, index)].text }}
+          </p>
           <span v-if="answerVisible(item, index)" class="science-quiz-answer">{{ item.answer }}</span>
           <span v-else class="science-quiz-answer is-hidden" aria-hidden="true"></span>
         </li>

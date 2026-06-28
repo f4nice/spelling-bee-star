@@ -12,6 +12,8 @@ const props = defineProps([
   "analyzeBookFile",
   "saveBookAnalysis",
   "createBookWordList",
+  "uploadBookCover",
+  "generateBookAiCover",
   "loadScienceDiscoveries",
   "loadScienceArticle",
   "loadScienceFullArticle"
@@ -59,6 +61,8 @@ watch(
       :analyze-book-file="analyzeBookFile"
       :save-book-analysis="saveBookAnalysis"
       :create-book-word-list="createBookWordList"
+      :upload-book-cover="uploadBookCover"
+      :generate-book-ai-cover="generateBookAiCover"
       :load-science-discoveries="loadScienceDiscoveries"
       :load-science-article="loadScienceArticle"
       :load-science-full-article="loadScienceFullArticle"

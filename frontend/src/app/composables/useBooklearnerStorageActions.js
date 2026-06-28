@@ -1,8 +1,24 @@
 import { fetchJson } from "../utils.js";
 import { booklearnerApiPaths } from "../booklearnerApiPaths.js";
-import { createBooklearnerSaveAnalysisRequest, createBooklearnerWordListRequest } from "../booklearnerForms.js";
+import {
+  createBookAiCoverForm,
+  createBookCoverUploadForm,
+  createBooklearnerSaveAnalysisRequest,
+  createBooklearnerWordListRequest,
+} from "../booklearnerForms.js";
 
 export function useBooklearnerStorageActions({ book, go, setNotice }) {
+  function applyBookCoverResult(payload, fallbackNotice) {
+    if (payload?.result) {
+      book.value.result = payload.result;
+    } else if (payload?.coverUrl && book.value.result) {
+      const nextBook = { ...(book.value.result.book || {}), coverUrl: payload.coverUrl };
+      book.value.result = { ...book.value.result, book: nextBook };
+    }
+    setNotice(fallbackNotice);
+    return payload;
+  }
+
   async function saveBookAnalysis() {
     try {
       const request = createBooklearnerSaveAnalysisRequest({
@@ -37,8 +53,38 @@ export function useBooklearnerStorageActions({ book, go, setNotice }) {
     }
   }
 
+  async function uploadBookCover(analysisId, file) {
+    if (!analysisId || !file) return null;
+    try {
+      const payload = await fetchJson(booklearnerApiPaths.historyCover(analysisId), {
+        method: "POST",
+        body: createBookCoverUploadForm(file),
+      });
+      return applyBookCoverResult(payload, "封面图片已更新");
+    } catch (error) {
+      setNotice(error?.message || "封面图片保存失败，请稍后再试");
+      throw error;
+    }
+  }
+
+  async function generateBookAiCover(analysisId, controls = {}) {
+    if (!analysisId) return null;
+    try {
+      const payload = await fetchJson(booklearnerApiPaths.historyAiCover(analysisId), {
+        method: "POST",
+        body: createBookAiCoverForm(controls),
+      });
+      return applyBookCoverResult(payload, "AI 封面已生成");
+    } catch (error) {
+      setNotice(error?.message || "AI 封面生成失败，请稍后再试");
+      throw error;
+    }
+  }
+
   return {
     saveBookAnalysis,
     createBookWordList,
+    uploadBookCover,
+    generateBookAiCover,
   };
 }

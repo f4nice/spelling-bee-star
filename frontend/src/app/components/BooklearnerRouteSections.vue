@@ -12,6 +12,8 @@ defineProps([
   "analyzeBookFile",
   "saveBookAnalysis",
   "createBookWordList",
+  "uploadBookCover",
+  "generateBookAiCover",
   "loadScienceDiscoveries",
   "loadScienceArticle",
   "loadScienceFullArticle",
@@ -39,6 +41,8 @@ defineProps([
     :book="book"
     :go="go"
     :create-book-word-list="createBookWordList"
+    :upload-book-cover="uploadBookCover"
+    :generate-book-ai-cover="generateBookAiCover"
   />
   <template v-else-if="route.name !== 'booklearnerUpload'">
     <BooklearnerQuoteFeed

@@ -18,6 +18,8 @@ defineProps({
     :analyze-book-file="ctx.analyzeBookFile"
     :save-book-analysis="ctx.saveBookAnalysis"
     :create-book-word-list="ctx.createBookWordList"
+    :upload-book-cover="ctx.uploadBookCover"
+    :generate-book-ai-cover="ctx.generateBookAiCover"
     :load-science-discoveries="ctx.loadScienceDiscoveries"
     :load-science-article="ctx.loadScienceArticle"
     :load-science-full-article="ctx.loadScienceFullArticle"
