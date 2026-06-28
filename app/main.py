@@ -76,14 +76,14 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260628-015"
-DEFAULT_PAGE_VERSION = "v20260628.12"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260628-016"
+DEFAULT_PAGE_VERSION = "v20260628.13"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
 SCIENCE_IMAGE_VERSION = "20260628-clean-hero-1"
-SCIENCE_DISCOVERY_DATA_VERSION = "20260628-source-refresh-1"
-SCIENCE_PUBLIC_CONTENT_VERSION = "v3"
+SCIENCE_DISCOVERY_DATA_VERSION = "20260628-source-refresh-2"
+SCIENCE_PUBLIC_CONTENT_VERSION = "v4"
 SCIENCE_PUBLIC_CONTENT_TTL = timedelta(days=3650)
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
 GROWTH_TROPHY_ASSET_STEM = "learning-growth-trophy"
@@ -141,7 +141,7 @@ SCIENCE_SOURCES = [
     ("USGS Water Science School", "https://www.usgs.gov/water-science-school"),
     ("USGS Volcano Hazards", "https://www.usgs.gov/programs/VHP"),
     ("CDC Clean Hands", "https://www.cdc.gov/clean-hands/"),
-    ("EPA Students", "https://www.epa.gov/students"),
+    ("EPA Water Filtration", "https://nepis.epa.gov/Exe/ZyPURL.cgi?Dockey=P100A2CR.TXT"),
     ("EIA Energy Kids", "https://www.eia.gov/kids/"),
     ("Federal Highway Administration", "https://highways.dot.gov/"),
 ]
@@ -203,8 +203,8 @@ SCIENCE_REFERENCE_BY_TITLE = {
     "Why the Moon Changes Shape": ("NASA Space Place", "https://spaceplace.nasa.gov/moon-phases/"),
     "How Solar Panels Work": ("EIA Energy Kids", "https://www.eia.gov/kids/energy-sources/solar/"),
     "What Astronauts Need in Space": ("NASA Space Place", "https://spaceplace.nasa.gov/"),
-    "How Bridges Carry Weight": ("Federal Highway Administration", "https://highways.dot.gov/"),
-    "Why Filters Matter": ("EPA Students", "https://www.epa.gov/students"),
+    "How Bridges Carry Weight": ("Federal Highway Administration", "https://www.environment.fhwa.dot.gov/env_topics/historic_pres/post1945_engineering/this_bridge.aspx"),
+    "Why Filters Matter": ("EPA Water Filtration", "https://nepis.epa.gov/Exe/ZyPURL.cgi?Dockey=P100A2CR.TXT"),
 }
 
 SCIENCE_CONCEPT_FACTS = {
