@@ -2,6 +2,7 @@ export const routeApiPaths = {
   home: () => "/api/vue/home",
   growth: () => "/api/vue/growth",
   lists: () => "/api/vue/lists",
+  listSearch: (query) => `/api/vue/lists/search?q=${encodeURIComponent(query)}`,
   listDetail: (route) => `/api/vue/lists/${route.params.id}`,
   wrongWords: () => "/api/vue/wrong-words",
   challengeDay: (route) => `/api/vue/challenge-calendar/${route.params.day}`,

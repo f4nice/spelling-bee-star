@@ -76,7 +76,7 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260628-002"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260628-003"
 DEFAULT_PAGE_VERSION = "v20260628.1"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -1166,6 +1166,48 @@ def vue_shell_api(db: Session = Depends(get_db)):
 def vue_lists_api(db: Session = Depends(get_db)):
     cards = [serialize_word_list_card(word_list_card(db, word_list)) for word_list in regular_word_lists(db)]
     return {"cards": cards}
+
+
+@app.get("/api/vue/lists/search")
+def vue_list_word_search_api(q: str = Query(default="", max_length=80), db: Session = Depends(get_db)):
+    query = " ".join(q.strip().split())
+    if not query:
+        return {"query": "", "results": []}
+
+    like_query = f"%{query.lower()}%"
+    rows = db.execute(
+        select(Word, WordList)
+        .join(WordListItem, WordListItem.word_id == Word.id)
+        .join(WordList, WordList.id == WordListItem.word_list_id)
+        .where(func.lower(Word.word).like(like_query))
+        .order_by(Word.word.asc(), WordList.name.asc(), WordList.id.asc())
+        .limit(300)
+    ).all()
+
+    grouped: dict[int, dict[str, Any]] = {}
+    for word, word_list in rows:
+        if is_wrong_word_list_name(word_list.name):
+            continue
+        item = grouped.setdefault(
+            word.id,
+            {
+                "word": serialize_word(word),
+                "lists": [],
+            },
+        )
+        item["lists"].append({"id": word_list.id, "name": word_list.name})
+
+    normalized_query = query.lower()
+    results = sorted(
+        grouped.values(),
+        key=lambda item: (
+            not str(item["word"].get("word") or "").lower().startswith(normalized_query),
+            str(item["word"].get("word") or "").lower(),
+        ),
+    )[:40]
+    for item in results:
+        item["list_count"] = len(item["lists"])
+    return {"query": query, "results": results}
 
 
 @app.get("/api/vue/lists/{word_list_id}")
