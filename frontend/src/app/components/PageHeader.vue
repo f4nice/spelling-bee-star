@@ -56,15 +56,53 @@ function goBackToList(event) {
 
 <style scoped>
 .app-page-heading {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 18px;
+  min-height: 96px;
+  overflow: hidden;
+  padding: 20px 22px;
+  border-color: rgba(29, 127, 91, 0.14);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(239, 248, 243, 0.94));
+}
+
+.app-page-heading::after {
+  content: "";
+  position: absolute;
+  right: 22px;
+  bottom: 0;
+  left: 22px;
+  height: 3px;
+  border-radius: 999px 999px 0 0;
+  background: linear-gradient(90deg, rgba(29, 127, 91, 0.54), rgba(29, 127, 91, 0));
 }
 
 .page-heading-title {
+  display: grid;
+  gap: 8px;
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.page-heading-title .section-kicker {
+  width: fit-content;
+  margin: 0;
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: var(--accent-dark);
+  background: #e9f8f1;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.page-heading-title h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 34px;
+  line-height: 1.08;
 }
 
 .page-heading-return-button {
@@ -87,6 +125,12 @@ function goBackToList(event) {
 @media (max-width: 720px) {
   .app-page-heading {
     align-items: flex-start;
+    min-height: auto;
+    padding: 18px;
+  }
+
+  .page-heading-title h1 {
+    font-size: 30px;
   }
 }
 </style>
