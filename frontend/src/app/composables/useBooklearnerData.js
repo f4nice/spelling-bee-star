@@ -2,6 +2,8 @@ import { fetchJson } from '../utils.js';
 import { booklearnerApiPaths } from '../booklearnerApiPaths.js';
 
 export function useBooklearnerData({ book, route }) {
+  let scienceRequestId = 0;
+
   function updateScience(payload = {}) {
     const hasArticle = Object.prototype.hasOwnProperty.call(payload, 'article');
     book.value.science = {
@@ -13,6 +15,8 @@ export function useBooklearnerData({ book, route }) {
   }
 
   async function loadScienceDiscoveries(overrides = {}) {
+    const requestId = scienceRequestId + 1;
+    scienceRequestId = requestId;
     const current = book.value.science || {};
     const requested = {
       level: overrides.level || current.level || 'L500-L700',
@@ -21,6 +25,7 @@ export function useBooklearnerData({ book, route }) {
     };
     updateScience({ ...requested, items: [], article: null });
     const payload = await fetchJson(booklearnerApiPaths.scienceDaily(requested), { skipCache: overrides.force === true });
+    if (requestId !== scienceRequestId) return;
     updateScience({ ...payload, article: null });
   }
 

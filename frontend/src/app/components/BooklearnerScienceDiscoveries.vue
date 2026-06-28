@@ -26,6 +26,7 @@ const levels = [
 ];
 const topics = ["全部", "动物", "植物", "人体", "微生物", "地球", "太空", "工程"];
 const loading = ref(false);
+const reloadToken = ref(0);
 const science = computed(() => props.book.science || {});
 const selectedLevel = ref(science.value.level || "L500-L700");
 const selectedTopic = ref(science.value.topic || "全部");
@@ -40,6 +41,8 @@ watch(
 );
 
 async function reload(overrides = {}) {
+  const token = reloadToken.value + 1;
+  reloadToken.value = token;
   const nextLevel = overrides.level || selectedLevel.value;
   const nextTopic = overrides.topic || selectedTopic.value;
   const nextBatch = overrides.batch ?? science.value.batch ?? 0;
@@ -54,7 +57,9 @@ async function reload(overrides = {}) {
       force: true,
     });
   } finally {
-    loading.value = false;
+    if (reloadToken.value === token) {
+      loading.value = false;
+    }
   }
 }
 

@@ -18,5 +18,7 @@ defineProps({
     :analyze-book-file="ctx.analyzeBookFile"
     :save-book-analysis="ctx.saveBookAnalysis"
     :create-book-word-list="ctx.createBookWordList"
+    :load-science-discoveries="ctx.loadScienceDiscoveries"
+    :load-science-article="ctx.loadScienceArticle"
   />
 </template>
