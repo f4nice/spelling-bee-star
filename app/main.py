@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 import html
 from io import BytesIO
 import json
+import logging
 from pathlib import Path
 import random
 import re
@@ -20,6 +21,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete, func, inspect, or_, select, text
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -76,8 +78,9 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-005"
-DEFAULT_PAGE_VERSION = "v20260629.5"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-006"
+DEFAULT_PAGE_VERSION = "v20260629.6"
+CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
@@ -1220,7 +1223,9 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 async def add_cache_headers(request: Request, call_next):
     response = await call_next(request)
     path = request.url.path
-    if path.startswith("/static/") or path.startswith("/media/"):
+    if re.fullmatch(r"/static/vue/(speakeasy-app|challenge-app)\.js", path):
+        response.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
+    elif path.startswith("/static/") or path.startswith("/media/"):
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     elif path == "/tts" or re.fullmatch(r"/words/\d+/(tts|audio)", path):
         response.headers["Cache-Control"] = "public, max-age=2592000"
@@ -1353,7 +1358,11 @@ def load_version_matrix() -> dict[str, Any]:
 
 
 def vue_shell(request: Request, db: Session, vue_path: str = ""):
-    return templates.TemplateResponse("vue_app.html", page_context(request, db, {"vue_path": vue_path}))
+    response = templates.TemplateResponse("vue_app.html", page_context(request, db, {"vue_path": vue_path}))
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -2330,46 +2339,161 @@ def challenge_state_api(
 @app.post("/api/challenge/{word_list_id}/answer")
 def challenge_answer_api(
     word_list_id: int,
+    request: Request,
     action: str = Form(default="known"),
-    daily_count: int = Form(default=20),
-    start_count: int = Form(default=0),
-    session_correct: int = Form(default=0),
-    session_wrong: int = Form(default=0),
+    daily_count: str = Form(default="20"),
+    start_count: str = Form(default="0"),
+    session_correct: str = Form(default="0"),
+    session_wrong: str = Form(default="0"),
     spelling: str = Form(default=""),
-    word_id: int | None = Form(default=None),
+    word_id: str = Form(default=""),
     wrong_date: str = Form(default=""),
+    client_trace_id: str = Form(default=""),
+    client_page_url: str = Form(default=""),
+    client_page_version: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
-    result = apply_challenge_answer(
-        db,
-        word_list_id=word_list_id,
-        action=action,
-        daily_count=daily_count,
-        start_count=start_count,
-        session_correct=session_correct,
-        session_wrong=session_wrong,
-        spelling=spelling,
-        answer_word_id=word_id,
-        wrong_date=wrong_date,
-    )
-    query = {
-        "daily_count": result["daily_count"],
-        "start_count": result["start_count"],
-        "session_correct": result["session_correct"],
-        "session_wrong": result["session_wrong"],
-    }
-    if result["wrong_date"]:
-        query["wrong_date"] = result["wrong_date"].isoformat()
-    next_state = challenge_payload(
-        db,
-        word_list_id=word_list_id,
-        daily_count=result["daily_count"],
-        start_count=result["start_count"],
-        session_correct=result["session_correct"],
-        session_wrong=result["session_wrong"],
-        wrong_date=result["wrong_date"].isoformat() if result["wrong_date"] else None,
-    )
-    return {"ok": True, "query": query, "state": next_state, "answer": result.get("answer")}
+    trace_id = challenge_trace_id(client_trace_id)
+    daily_count_value = parse_form_int(daily_count, default=20, min_value=1, max_value=500)
+    start_count_value = parse_form_int(start_count, default=0, min_value=0)
+    session_correct_value = parse_form_int(session_correct, default=0, min_value=0)
+    session_wrong_value = parse_form_int(session_wrong, default=0, min_value=0)
+    answer_word_id = parse_form_int(word_id, default=0, min_value=0) or None
+    client_host = request.client.host if request.client else "-"
+    try:
+        result = None
+        for attempt in range(2):
+            try:
+                result = apply_challenge_answer(
+                    db,
+                    word_list_id=word_list_id,
+                    action=action,
+                    daily_count=daily_count_value,
+                    start_count=start_count_value,
+                    session_correct=session_correct_value,
+                    session_wrong=session_wrong_value,
+                    spelling=spelling,
+                    answer_word_id=answer_word_id,
+                    wrong_date=wrong_date,
+                )
+                break
+            except (IntegrityError, OperationalError):
+                db.rollback()
+                CHALLENGE_LOGGER.warning(
+                    "challenge answer db retry trace_id=%s attempt=%s word_list_id=%s word_id=%s action=%s daily_count=%s start_count=%s session_correct=%s session_wrong=%s wrong_date=%s page_version=%s page_url=%s client=%s",
+                    trace_id,
+                    attempt + 1,
+                    word_list_id,
+                    answer_word_id or "",
+                    action,
+                    daily_count_value,
+                    start_count_value,
+                    session_correct_value,
+                    session_wrong_value,
+                    wrong_date,
+                    client_page_version,
+                    client_page_url,
+                    client_host,
+                    exc_info=True,
+                )
+                if attempt:
+                    raise
+        if result is None:
+            raise challenge_http_error(503, "提交暂时失败，请刷新后继续挑战。", trace_id)
+        query = {
+            "daily_count": result["daily_count"],
+            "start_count": result["start_count"],
+            "session_correct": result["session_correct"],
+            "session_wrong": result["session_wrong"],
+        }
+        if result["wrong_date"]:
+            query["wrong_date"] = result["wrong_date"].isoformat()
+        next_state = None
+        try:
+            next_state = challenge_payload(
+                db,
+                word_list_id=word_list_id,
+                daily_count=result["daily_count"],
+                start_count=result["start_count"],
+                session_correct=result["session_correct"],
+                session_wrong=result["session_wrong"],
+                wrong_date=result["wrong_date"].isoformat() if result["wrong_date"] else None,
+            )
+        except Exception:
+            db.rollback()
+            CHALLENGE_LOGGER.exception(
+                "challenge answer state reload failed trace_id=%s word_list_id=%s word_id=%s page_version=%s page_url=%s client=%s",
+                trace_id,
+                word_list_id,
+                answer_word_id or "",
+                client_page_version,
+                client_page_url,
+                client_host,
+            )
+        return {"ok": True, "query": query, "state": next_state, "answer": result.get("answer"), "trace_id": trace_id}
+    except HTTPException as exc:
+        detail = str(exc.detail or "提交失败")
+        if trace_id not in detail:
+            detail = f"{detail}（追踪码：{trace_id}）"
+        CHALLENGE_LOGGER.warning(
+            "challenge answer rejected trace_id=%s status=%s word_list_id=%s word_id=%s action=%s daily_count=%s start_count=%s session_correct=%s session_wrong=%s wrong_date=%s page_version=%s page_url=%s client=%s detail=%s",
+            trace_id,
+            exc.status_code,
+            word_list_id,
+            answer_word_id or "",
+            action,
+            daily_count_value,
+            start_count_value,
+            session_correct_value,
+            session_wrong_value,
+            wrong_date,
+            client_page_version,
+            client_page_url,
+            client_host,
+            detail,
+            exc_info=exc.status_code >= 500,
+        )
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=detail,
+            headers={**(exc.headers or {}), "X-SpeakEasy-Trace-Id": trace_id},
+        )
+    except (IntegrityError, OperationalError):
+        db.rollback()
+        CHALLENGE_LOGGER.exception(
+            "challenge answer database failed trace_id=%s word_list_id=%s word_id=%s action=%s daily_count=%s start_count=%s session_correct=%s session_wrong=%s wrong_date=%s page_version=%s page_url=%s client=%s",
+            trace_id,
+            word_list_id,
+            answer_word_id or "",
+            action,
+            daily_count_value,
+            start_count_value,
+            session_correct_value,
+            session_wrong_value,
+            wrong_date,
+            client_page_version,
+            client_page_url,
+            client_host,
+        )
+        raise challenge_http_error(503, "提交暂时失败，请刷新后继续挑战。", trace_id)
+    except Exception:
+        db.rollback()
+        CHALLENGE_LOGGER.exception(
+            "challenge answer failed trace_id=%s word_list_id=%s word_id=%s action=%s daily_count=%s start_count=%s session_correct=%s session_wrong=%s wrong_date=%s page_version=%s page_url=%s client=%s",
+            trace_id,
+            word_list_id,
+            answer_word_id or "",
+            action,
+            daily_count_value,
+            start_count_value,
+            session_correct_value,
+            session_wrong_value,
+            wrong_date,
+            client_page_version,
+            client_page_url,
+            client_host,
+        )
+        raise challenge_http_error(500, "提交失败，服务器已记录错误。", trace_id)
 
 
 @app.get("/wrong-words", response_class=HTMLResponse)
@@ -4290,7 +4414,14 @@ def get_or_create_challenge_progress(db: Session, word_list_id: int) -> Challeng
         return progress
     progress = ChallengeProgress(word_list_id=word_list_id)
     db.add(progress)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        progress = db.scalar(select(ChallengeProgress).where(ChallengeProgress.word_list_id == word_list_id))
+        if progress:
+            return progress
+        raise
     db.refresh(progress)
     return progress
 
@@ -4320,6 +4451,31 @@ def parse_wrong_date(value: str | None) -> date | None:
         return date.fromisoformat(value)
     except ValueError:
         return None
+
+
+def parse_form_int(value: Any, default: int = 0, min_value: int | None = None, max_value: int | None = None) -> int:
+    try:
+        parsed = int(str(value).strip())
+    except (TypeError, ValueError):
+        parsed = default
+    if min_value is not None:
+        parsed = max(parsed, min_value)
+    if max_value is not None:
+        parsed = min(parsed, max_value)
+    return parsed
+
+
+def challenge_trace_id(value: str | None = None) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_.:-]", "", str(value or "").strip())
+    return cleaned[:80] or f"chg-{uuid4().hex[:12]}"
+
+
+def challenge_http_error(status_code: int, message: str, trace_id: str) -> HTTPException:
+    return HTTPException(
+        status_code=status_code,
+        detail=f"{message}（追踪码：{trace_id}）",
+        headers={"X-SpeakEasy-Trace-Id": trace_id},
+    )
 
 
 def record_wrong_word(db: Session, word_id: int, wrong_date: date | None = None) -> None:
