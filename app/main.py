@@ -76,15 +76,25 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-004"
-DEFAULT_PAGE_VERSION = "v20260629.4"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-005"
+DEFAULT_PAGE_VERSION = "v20260629.5"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
 SCIENCE_IMAGE_VERSION = "20260629-no-text-1"
-SCIENCE_DISCOVERY_DATA_VERSION = "20260629-topic-pool-1"
+SCIENCE_DISCOVERY_DATA_VERSION = "20260629-topic-cache-1"
 SCIENCE_PUBLIC_CONTENT_VERSION = "v5"
 SCIENCE_PUBLIC_CONTENT_TTL = timedelta(days=3650)
+SCIENCE_TOPIC_CACHE_KEYS = {
+    "全部": "all",
+    "动物": "animals",
+    "植物": "plants",
+    "人体": "human-body",
+    "微生物": "microbes",
+    "地球": "earth",
+    "太空": "space",
+    "工程": "engineering",
+}
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
 GROWTH_TROPHY_ASSET_STEM = "learning-growth-trophy"
 GROWTH_TROPHY_FALLBACK_IMAGE = "/static/icons/challenge-crown-transparent.png"
@@ -1077,7 +1087,7 @@ def build_science_discovery_pool(level: str | None = None) -> list[dict[str, Any
 
 def science_cache_path(day: str, level: str, topic: str, batch: int) -> Path:
     safe_level = science_slug(level)
-    safe_topic = science_slug(topic)
+    safe_topic = SCIENCE_TOPIC_CACHE_KEYS.get((topic or "").strip()) or science_slug(topic)
     safe_version = science_slug(SCIENCE_DISCOVERY_DATA_VERSION)
     return SCIENCE_DISCOVERY_CACHE_DIR / f"{day}-{safe_level}-{safe_topic}-{batch}-{safe_version}.json"
 
