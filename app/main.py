@@ -76,8 +76,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-003"
-DEFAULT_PAGE_VERSION = "v20260629.3"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-004"
+DEFAULT_PAGE_VERSION = "v20260629.4"
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
@@ -2326,6 +2326,7 @@ def challenge_answer_api(
     session_correct: int = Form(default=0),
     session_wrong: int = Form(default=0),
     spelling: str = Form(default=""),
+    word_id: int | None = Form(default=None),
     wrong_date: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
@@ -2338,6 +2339,7 @@ def challenge_answer_api(
         session_correct=session_correct,
         session_wrong=session_wrong,
         spelling=spelling,
+        answer_word_id=word_id,
         wrong_date=wrong_date,
     )
     query = {
@@ -2387,6 +2389,7 @@ def apply_challenge_answer(
     session_correct: int,
     session_wrong: int,
     spelling: str,
+    answer_word_id: int | None,
     wrong_date: str,
 ) -> dict[str, Any]:
     word_list = db.get(WordList, word_list_id)
@@ -2411,7 +2414,16 @@ def apply_challenge_answer(
         session_wrong = 0
     elif total:
         progress.current_index = min(max(progress.current_index, 0), max(total - 1, 0))
-        current_word = words[progress.current_index] if 0 <= progress.current_index < total else None
+        requested_index = None
+        if answer_word_id:
+            requested_index = next((index for index, word in enumerate(words) if word.id == answer_word_id), None)
+        if requested_index is not None:
+            progress.current_index = requested_index
+        current_word = (
+            None
+            if answer_word_id and requested_index is None
+            else words[progress.current_index] if 0 <= progress.current_index < total else None
+        )
         if action == "spell" and current_word:
             typed = normalize_spelling_answer(spelling)
             expected = spelling_answer_options(current_word)

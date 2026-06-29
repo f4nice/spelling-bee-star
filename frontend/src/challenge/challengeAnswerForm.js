@@ -6,6 +6,7 @@ export function buildChallengeAnswerForm({ state, spelling }) {
   form.append('session_correct', String(state.today_challenge.correct));
   form.append('session_wrong', String(state.today_challenge.wrong));
   form.append('spelling', spelling);
+  if (state.current_word?.id) form.append('word_id', String(state.current_word.id));
   if (state.wrong_date) form.append('wrong_date', state.wrong_date);
   return form;
 }

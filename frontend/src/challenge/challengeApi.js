@@ -1,6 +1,6 @@
 import { challengeApiPaths } from "./challengeApiPaths.js";
 import { buildChallengeAnswerForm } from "./challengeAnswerForm.js";
-import { invalidateApiCacheForMutation, readApiCache, writeApiCache } from "../app/apiCache.js";
+import { invalidateApiCacheForMutation } from "../app/apiCache.js";
 
 export const challengeMessages = {
   loadFailed: "加载挑战失败",
@@ -9,14 +9,9 @@ export const challengeMessages = {
 
 export async function fetchChallengeState(wordListId, params) {
   const url = challengeApiPaths.state(wordListId, params);
-  const cached = readApiCache(url);
-  if (cached) return cached;
-
-  const response = await fetch(url);
+  const response = await fetch(url, { cache: "no-store" });
   if (!response.ok) throw new Error(challengeMessages.loadFailed);
-  const payload = await response.json();
-  writeApiCache(url, payload);
-  return payload;
+  return response.json();
 }
 
 export async function postChallengeAnswer({ wordListId, state, spelling }) {
