@@ -36,11 +36,19 @@ export async function fetchChallengeState(wordListId, params) {
 
 export async function postChallengeAnswer({ wordListId, state, spelling }) {
   const form = buildChallengeAnswerForm({ state, spelling });
+  const traceId = String(form.get("client_trace_id") || "");
   const url = challengeApiPaths.answer(wordListId);
-  const response = await fetch(url, {
-    method: "POST",
-    body: form,
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      body: form,
+    });
+  } catch (error) {
+    const detail = error?.message ? `：${error.message}` : "";
+    const traceSuffix = traceId ? `，追踪码：${traceId}` : "";
+    throw new Error(`${challengeMessages.submitFailed}（网络异常${detail}${traceSuffix}）`);
+  }
   if (!response.ok) throw new Error(await responseErrorMessage(response, challengeMessages.submitFailed));
   invalidateApiCacheForMutation(url, { wrongDate: state?.wrong_date });
   return response.json();

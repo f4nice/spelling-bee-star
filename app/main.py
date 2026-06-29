@@ -78,8 +78,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-006"
-DEFAULT_PAGE_VERSION = "v20260629.6"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-007"
+DEFAULT_PAGE_VERSION = "v20260629.7"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2430,6 +2430,22 @@ def challenge_answer_api(
                 client_page_url,
                 client_host,
             )
+        CHALLENGE_LOGGER.info(
+            "challenge answer accepted trace_id=%s word_list_id=%s word_id=%s action=%s daily_count=%s start_count=%s session_correct=%s session_wrong=%s wrong_date=%s next_state=%s page_version=%s page_url=%s client=%s",
+            trace_id,
+            word_list_id,
+            answer_word_id or "",
+            action,
+            daily_count_value,
+            start_count_value,
+            result["session_correct"],
+            result["session_wrong"],
+            result["wrong_date"].isoformat() if result["wrong_date"] else "",
+            "yes" if next_state else "no",
+            client_page_version,
+            client_page_url,
+            client_host,
+        )
         return {"ok": True, "query": query, "state": next_state, "answer": result.get("answer"), "trace_id": trace_id}
     except HTTPException as exc:
         detail = str(exc.detail or "提交失败")
