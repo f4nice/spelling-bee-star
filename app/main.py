@@ -78,8 +78,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-007"
-DEFAULT_PAGE_VERSION = "v20260629.7"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-008"
+DEFAULT_PAGE_VERSION = "v20260629.8"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2430,7 +2430,7 @@ def challenge_answer_api(
                 client_page_url,
                 client_host,
             )
-        CHALLENGE_LOGGER.info(
+        CHALLENGE_LOGGER.warning(
             "challenge answer accepted trace_id=%s word_list_id=%s word_id=%s action=%s daily_count=%s start_count=%s session_correct=%s session_wrong=%s wrong_date=%s next_state=%s page_version=%s page_url=%s client=%s",
             trace_id,
             word_list_id,
