@@ -8,6 +8,11 @@ function levelFromScienceSlug(slug = '') {
   return SCIENCE_LEVEL_KEYS.find((level) => normalized.includes(level.toUpperCase())) || '';
 }
 
+function sourceModeFromScienceSlug(slug = '') {
+  const normalized = String(slug || '').toLowerCase();
+  return normalized.startsWith('gutenberg-') || normalized.startsWith('public-book-') ? 'public-books' : '';
+}
+
 export function useBooklearnerData({ book, route }) {
   let scienceRequestId = 0;
 
@@ -28,6 +33,7 @@ export function useBooklearnerData({ book, route }) {
     const requested = {
       level: overrides.level || current.level || 'L500-L700',
       topic: overrides.topic || current.topic || '全部',
+      sourceMode: overrides.sourceMode || current.sourceMode || 'science',
       batch: overrides.batch ?? current.batch ?? 0,
     };
     updateScience({ ...requested, items: [], article: null });
@@ -38,21 +44,27 @@ export function useBooklearnerData({ book, route }) {
 
   async function loadScienceArticle(slug) {
     const current = book.value.science || {};
+    const sourceMode = sourceModeFromScienceSlug(slug) || current.sourceMode || 'science';
     const payload = await fetchJson(booklearnerApiPaths.scienceArticle(slug, {
       level: levelFromScienceSlug(slug) || current.level || 'L500-L700',
+      sourceMode,
     }), { skipCache: true });
     updateScience({
       article: payload.item,
       level: payload.item?.level || current.level,
       levelLabel: payload.item?.levelLabel || current.levelLabel,
+      sourceMode: payload.item?.sourceMode || sourceMode,
+      sourceModeLabel: payload.item?.sourceModeLabel || current.sourceModeLabel,
       sources: payload.sources || current.sources || [],
     });
   }
 
   async function loadScienceFullArticle(slug) {
     const current = book.value.science || {};
+    const sourceMode = current.article?.sourceMode || sourceModeFromScienceSlug(slug) || current.sourceMode || 'science';
     const payload = await fetchJson(booklearnerApiPaths.scienceFullArticle(slug, {
       level: current.article?.level || levelFromScienceSlug(slug) || current.level || 'L500-L700',
+      sourceMode,
     }), { skipCache: true });
     updateScience({
       article: {

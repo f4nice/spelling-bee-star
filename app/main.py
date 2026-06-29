@@ -78,16 +78,30 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-008"
-DEFAULT_PAGE_VERSION = "v20260629.8"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260629-009"
+DEFAULT_PAGE_VERSION = "v20260629.9"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
 SCIENCE_IMAGE_VERSION = "20260629-no-text-1"
-SCIENCE_DISCOVERY_DATA_VERSION = "20260629-topic-cache-1"
-SCIENCE_PUBLIC_CONTENT_VERSION = "v5"
+SCIENCE_DISCOVERY_DATA_VERSION = "20260629-source-mode-1"
+SCIENCE_PUBLIC_CONTENT_VERSION = "v6"
 SCIENCE_PUBLIC_CONTENT_TTL = timedelta(days=3650)
+SCIENCE_SOURCE_MODE_DEFAULT = "science"
+SCIENCE_SOURCE_MODE_PUBLIC_BOOKS = "public-books"
+SCIENCE_SOURCE_MODES = [
+    {
+        "key": SCIENCE_SOURCE_MODE_DEFAULT,
+        "label": "公共科学源",
+        "note": "NASA / NOAA / USGS / CDC / EPA 等公共科学页面",
+    },
+    {
+        "key": SCIENCE_SOURCE_MODE_PUBLIC_BOOKS,
+        "label": "公版阅读",
+        "note": "Project Gutenberg 公版英文阅读素材",
+    },
+]
 SCIENCE_TOPIC_CACHE_KEYS = {
     "全部": "all",
     "动物": "animals",
@@ -98,6 +112,55 @@ SCIENCE_TOPIC_CACHE_KEYS = {
     "太空": "space",
     "工程": "engineering",
 }
+SCIENCE_PUBLIC_BOOK_SOURCES = [
+    ("Gutendex", "https://gutendex.com/"),
+    ("Project Gutenberg", "https://www.gutenberg.org/"),
+]
+SCIENCE_PUBLIC_BOOK_TOPIC_QUERIES = {
+    "全部": "science natural history",
+    "动物": "animals natural history biology",
+    "植物": "botany plants natural history",
+    "人体": "physiology health body",
+    "微生物": "germs bacteria hygiene",
+    "地球": "geology earth weather",
+    "太空": "astronomy stars moon",
+    "工程": "engineering mechanics electricity",
+}
+SCIENCE_PUBLIC_BOOK_KEYWORDS = {
+    "动物": "animal, nature, observe",
+    "植物": "plant, leaf, grow",
+    "人体": "body, health, system",
+    "微生物": "germ, microbe, hygiene",
+    "地球": "earth, rock, weather",
+    "太空": "astronomy, star, orbit",
+    "工程": "machine, force, design",
+}
+SCIENCE_PUBLIC_BOOK_FALLBACKS = [
+    {
+        "title": "A Public-Domain Science Reader",
+        "author": "Project Gutenberg collection",
+        "topic": "地球",
+        "summary": "This public-domain reading set collects older English science writing that can be used for careful reading, vocabulary, and evidence practice.",
+        "subjects": ["Science", "Natural history", "Public domain books"],
+        "sourceUrl": "https://www.gutenberg.org/ebooks/search/?query=science",
+    },
+    {
+        "title": "A Public-Domain Astronomy Reader",
+        "author": "Project Gutenberg collection",
+        "topic": "太空",
+        "summary": "This public-domain reading set introduces astronomy words and observations through older English nonfiction.",
+        "subjects": ["Astronomy", "Stars", "Moon"],
+        "sourceUrl": "https://www.gutenberg.org/ebooks/search/?query=astronomy",
+    },
+    {
+        "title": "A Public-Domain Natural History Reader",
+        "author": "Project Gutenberg collection",
+        "topic": "动物",
+        "summary": "This public-domain reading set uses natural history writing to practice describing animals, habitats, and observations.",
+        "subjects": ["Natural history", "Animals", "Observation"],
+        "sourceUrl": "https://www.gutenberg.org/ebooks/search/?query=natural%20history",
+    },
+]
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
 GROWTH_TROPHY_ASSET_STEM = "learning-growth-trophy"
 GROWTH_TROPHY_FALLBACK_IMAGE = "/static/icons/challenge-crown-transparent.png"
@@ -548,6 +611,29 @@ SCIENCE_PUBLIC_SOURCE_DOMAINS = (
 )
 
 
+def science_source_mode_config(source_mode: str | None) -> dict[str, str]:
+    normalized = (source_mode or SCIENCE_SOURCE_MODE_DEFAULT).strip().lower().replace("_", "-")
+    aliases = {
+        "public": SCIENCE_SOURCE_MODE_PUBLIC_BOOKS,
+        "public-book": SCIENCE_SOURCE_MODE_PUBLIC_BOOKS,
+        "public-books": SCIENCE_SOURCE_MODE_PUBLIC_BOOKS,
+        "gutenberg": SCIENCE_SOURCE_MODE_PUBLIC_BOOKS,
+        "gutendex": SCIENCE_SOURCE_MODE_PUBLIC_BOOKS,
+    }
+    normalized = aliases.get(normalized, normalized)
+    return next((item for item in SCIENCE_SOURCE_MODES if item["key"] == normalized), SCIENCE_SOURCE_MODES[0])
+
+
+def science_source_mode_key(source_mode: str | None) -> str:
+    return science_source_mode_config(source_mode)["key"]
+
+
+def science_sources_for_mode(source_mode: str | None) -> list[dict[str, str]]:
+    if science_source_mode_key(source_mode) == SCIENCE_SOURCE_MODE_PUBLIC_BOOKS:
+        return [{"name": name, "url": url} for name, url in SCIENCE_PUBLIC_BOOK_SOURCES]
+    return [{"name": name, "url": url} for name, url in SCIENCE_SOURCES]
+
+
 def science_reference_for_item(title: str, topic: str) -> tuple[str, str]:
     return SCIENCE_REFERENCE_BY_TITLE.get(title) or SCIENCE_TOPIC_REFERENCE.get(topic) or SCIENCE_SOURCES[0]
 
@@ -557,6 +643,13 @@ def is_public_science_source(source_url: str | None) -> bool:
         return False
     hostname = (urlparse(source_url).hostname or "").lower()
     return any(hostname == domain or hostname.endswith(f".{domain}") for domain in SCIENCE_PUBLIC_SOURCE_DOMAINS)
+
+
+def is_public_book_text_source(source_url: str | None) -> bool:
+    if not source_url:
+        return False
+    hostname = (urlparse(source_url).hostname or "").lower()
+    return hostname == "gutenberg.org" or hostname.endswith(".gutenberg.org")
 
 
 def science_level_config(level: str | None) -> dict[str, str]:
@@ -856,6 +949,322 @@ def fetch_science_source_text(source_url: str) -> str:
     return science_html_to_plain_text(response.text)
 
 
+def fetch_gutendex_books(topic: str, limit: int = 28) -> list[dict[str, Any]]:
+    query = SCIENCE_PUBLIC_BOOK_TOPIC_QUERIES.get((topic or "全部").strip(), SCIENCE_PUBLIC_BOOK_TOPIC_QUERIES["全部"])
+    try:
+        response = httpx.get(
+            "https://gutendex.com/books",
+            params={"languages": "en", "copyright": "false", "search": query},
+            follow_redirects=True,
+            timeout=3.5,
+            headers={
+                "User-Agent": "SpeakEasy Science Reader/1.0 (+https://speakeasy.local)",
+                "Accept": "application/json",
+            },
+        )
+    except httpx.HTTPError:
+        return []
+    if response.status_code >= 400:
+        return []
+    try:
+        payload = response.json()
+    except ValueError:
+        return []
+    results = payload.get("results") if isinstance(payload, dict) else []
+    if not isinstance(results, list):
+        return []
+    return [item for item in results[:limit] if isinstance(item, dict)]
+
+
+def fetch_gutendex_book(book_id: str) -> dict[str, Any] | None:
+    safe_id = re.sub(r"[^0-9]", "", str(book_id or ""))
+    if not safe_id:
+        return None
+    try:
+        response = httpx.get(
+            f"https://gutendex.com/books/{safe_id}",
+            follow_redirects=True,
+            timeout=3.5,
+            headers={
+                "User-Agent": "SpeakEasy Science Reader/1.0 (+https://speakeasy.local)",
+                "Accept": "application/json",
+            },
+        )
+    except httpx.HTTPError:
+        return None
+    if response.status_code >= 400:
+        return None
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def public_book_text_url(book: dict[str, Any]) -> str:
+    formats = book.get("formats") if isinstance(book, dict) else {}
+    if not isinstance(formats, dict):
+        return ""
+    for media_type, url in formats.items():
+        if "text/plain" in str(media_type).lower() and str(url).startswith(("http://", "https://")):
+            return str(url)
+    return ""
+
+
+def public_book_author(book: dict[str, Any]) -> str:
+    authors = book.get("authors") if isinstance(book, dict) else []
+    if isinstance(authors, list) and authors:
+        names = [str(author.get("name") or "").strip() for author in authors if isinstance(author, dict)]
+        names = [name for name in names if name]
+        if names:
+            return ", ".join(names[:2])
+    return str(book.get("author") or "Project Gutenberg").strip() or "Project Gutenberg"
+
+
+def clean_public_book_summary(value: str, limit: int = 210) -> str:
+    text = re.sub(r"\s+", " ", html.unescape(str(value or ""))).strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rsplit(" ", 1)[0].rstrip(".,;:") + "."
+
+
+def infer_public_book_topic(book: dict[str, Any], fallback_topic: str = "全部") -> str:
+    normalized_fallback = (fallback_topic or "全部").strip()
+    if normalized_fallback in SCIENCE_TOPIC_CACHE_KEYS and normalized_fallback != "全部":
+        return normalized_fallback
+    fields = [
+        str(book.get("title") or ""),
+        " ".join(str(item) for item in (book.get("subjects") or [])[:10]),
+        " ".join(str(item) for item in (book.get("bookshelves") or [])[:10]),
+    ]
+    marker = " ".join(fields).lower()
+    checks = [
+        ("太空", ("astronomy", "star", "moon", "planet", "solar", "comet")),
+        ("工程", ("engineering", "mechanic", "machine", "electric", "technology", "bridge")),
+        ("微生物", ("bacteria", "microbe", "germ", "hygiene", "disease")),
+        ("人体", ("physiology", "body", "health", "medicine", "heart")),
+        ("植物", ("botany", "plant", "flower", "tree", "leaf")),
+        ("动物", ("animal", "zoology", "natural history", "bird", "insect")),
+        ("地球", ("geology", "earth", "weather", "water", "climate", "volcano")),
+    ]
+    for topic, keywords in checks:
+        if any(keyword in marker for keyword in keywords):
+            return topic
+    return "地球"
+
+
+def public_book_summary(book: dict[str, Any], topic: str) -> str:
+    summaries = book.get("summaries") if isinstance(book, dict) else []
+    if isinstance(summaries, list):
+        for item in summaries:
+            summary = clean_public_book_summary(str(item or ""))
+            if summary:
+                return summary
+    subjects = [str(item).strip() for item in (book.get("subjects") or []) if str(item).strip()]
+    if subjects:
+        return clean_public_book_summary(f"A public-domain reading connected to {topic}, with subjects such as {', '.join(subjects[:3])}.")
+    author = public_book_author(book)
+    title = str(book.get("title") or "Public-domain science reading")
+    return clean_public_book_summary(f"{title} is a public-domain English reading by {author} that can support science vocabulary and evidence-based reading.")
+
+
+def public_book_keywords(book: dict[str, Any], topic: str) -> list[dict[str, str]]:
+    base_words = [word.strip() for word in SCIENCE_PUBLIC_BOOK_KEYWORDS.get(topic, "science, reading, evidence").split(",")]
+    title_words = [
+        word.lower()
+        for word in re.findall(r"[A-Za-z]{4,}", str(book.get("title") or ""))
+        if word.lower() not in {"with", "from", "that", "this", "book", "story"}
+    ]
+    words: list[str] = []
+    for word in [*title_words, *base_words]:
+        if word and word not in words:
+            words.append(word)
+        if len(words) >= 3:
+            break
+    return science_word_items(", ".join(words or base_words[:3]))
+
+
+def public_book_item_from_gutendex(
+    book: dict[str, Any],
+    level_info: dict[str, str],
+    fallback_topic: str = "全部",
+) -> dict[str, Any]:
+    book_id = str(book.get("id") or "").strip()
+    title = str(book.get("title") or "Public-Domain Science Reading").strip()
+    topic = infer_public_book_topic(book, fallback_topic)
+    author = public_book_author(book)
+    summary = public_book_summary(book, topic)
+    slug_seed = f"gutenberg-{book_id}-{level_info['key']}" if book_id else f"public-book-{title}-{level_info['key']}"
+    slug = science_slug(slug_seed)
+    source_url = f"https://www.gutenberg.org/ebooks/{book_id}" if book_id else str(book.get("sourceUrl") or "https://www.gutenberg.org/")
+    subjects = [str(item).strip() for item in (book.get("subjects") or []) if str(item).strip()]
+    keywords = public_book_keywords(book, topic)
+    return {
+        "slug": slug,
+        "title": title,
+        "topic": topic,
+        "level": level_info["key"],
+        "levelLabel": level_info["label"],
+        "summary": summary,
+        "imageUrl": science_image_url(slug),
+        "source": "Project Gutenberg",
+        "sourceUrl": source_url,
+        "textSourceUrl": public_book_text_url(book),
+        "sourceMode": SCIENCE_SOURCE_MODE_PUBLIC_BOOKS,
+        "sourceModeLabel": science_source_mode_config(SCIENCE_SOURCE_MODE_PUBLIC_BOOKS)["label"],
+        "author": author,
+        "subjects": subjects[:6],
+        "article": [
+            f"{title} is a public-domain reading connected to {topic}.",
+            summary,
+            f"Read it at the {level_info['label']} level by looking for evidence, examples, and useful vocabulary.",
+        ],
+        "words": keywords,
+        "quiz": [
+            {
+                "question": "What is this public-domain reading mostly about?",
+                "answer": summary,
+            },
+            {
+                "question": "Which science topic does this reading connect to?",
+                "answer": topic,
+            },
+            {
+                "question": "Name one useful word from this reading.",
+                "answer": keywords[0]["word"] if keywords else title,
+            },
+        ],
+        "parentNote": f"家长提示：这一条来自 Project Gutenberg 公版书目，适合把英文阅读和 {topic} 主题词汇连起来。蓝思段为站内分级标注，可继续配合 Lexile 工具精算。",
+    }
+
+
+def public_book_item_from_fallback(seed: dict[str, Any], level_info: dict[str, str]) -> dict[str, Any]:
+    book = {
+        "title": seed["title"],
+        "author": seed.get("author", "Project Gutenberg collection"),
+        "subjects": seed.get("subjects", []),
+        "sourceUrl": seed.get("sourceUrl", "https://www.gutenberg.org/"),
+        "summaries": [seed.get("summary", "")],
+    }
+    item = public_book_item_from_gutendex(book, level_info, seed.get("topic", "地球"))
+    item["slug"] = science_slug(f"public-book-{seed['title']}-{level_info['key']}")
+    item["sourceUrl"] = seed.get("sourceUrl", item["sourceUrl"])
+    return item
+
+
+def public_book_fallback_seeds(topic: str) -> list[dict[str, Any]]:
+    normalized_topic = (topic or "全部").strip() or "全部"
+    seeds = [
+        seed
+        for seed in SCIENCE_PUBLIC_BOOK_FALLBACKS
+        if normalized_topic == "全部" or seed.get("topic") == normalized_topic
+    ]
+    if normalized_topic == "全部":
+        combined = list(seeds)
+        seen_titles = {str(seed.get("title") or "") for seed in combined}
+        for topic_key in SCIENCE_TOPIC_CACHE_KEYS:
+            if topic_key == "全部":
+                continue
+            for seed in public_book_fallback_seeds(topic_key):
+                title = str(seed.get("title") or "")
+                if title and title not in seen_titles:
+                    seen_titles.add(title)
+                    combined.append(seed)
+        return combined
+    topic_labels = {
+        "动物": "Natural History",
+        "植物": "Botany",
+        "人体": "Physiology",
+        "微生物": "Germ Life",
+        "地球": "Earth Science",
+        "太空": "Astronomy",
+        "工程": "Engineering",
+    }
+    label = topic_labels.get(normalized_topic, "Science")
+    base_summary = {
+        "动物": "Use public-domain natural history writing to practice describing animals, habitats, and observations.",
+        "植物": "Use public-domain botany writing to practice plant vocabulary, structure, and growth observations.",
+        "人体": "Use public-domain physiology writing to practice body-system vocabulary and careful evidence reading.",
+        "微生物": "Use public-domain germ and hygiene writing to discuss microbes, health, and observation.",
+        "地球": "Use public-domain earth science writing to practice geology, weather, water, and evidence vocabulary.",
+        "太空": "Use public-domain astronomy writing to practice stars, planets, motion, and observation vocabulary.",
+        "工程": "Use public-domain engineering writing to practice force, design, machine, and invention vocabulary.",
+    }.get(normalized_topic, "Use public-domain science writing to practice evidence-based English reading.")
+    while len(seeds) < 5:
+        index = len(seeds) + 1
+        title = f"A Public-Domain {label} Reader {index}"
+        seeds.append(
+            {
+                "title": title,
+                "author": "Project Gutenberg collection",
+                "topic": normalized_topic,
+                "summary": base_summary,
+                "subjects": [label, "Science", "Public domain books"],
+                "sourceUrl": f"https://www.gutenberg.org/ebooks/search/?query={quote_plus(label)}",
+            }
+        )
+    return seeds
+
+
+def strip_gutenberg_boilerplate(text: str) -> str:
+    cleaned = re.sub(r"\r\n?", "\n", text or "")
+    start_match = re.search(r"\*\*\*\s*START OF (?:THE|THIS) PROJECT GUTENBERG EBOOK.*?\*\*\*", cleaned, re.I | re.S)
+    if start_match:
+        cleaned = cleaned[start_match.end() :]
+    end_match = re.search(r"\*\*\*\s*END OF (?:THE|THIS) PROJECT GUTENBERG EBOOK.*", cleaned, re.I | re.S)
+    if end_match:
+        cleaned = cleaned[: end_match.start()]
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    cleaned = re.sub(r"[ \t]+", " ", cleaned)
+    return cleaned.strip()
+
+
+def fetch_public_book_text(source_url: str) -> str:
+    if not source_url or not source_url.startswith(("http://", "https://")):
+        return ""
+    if not is_public_book_text_source(source_url):
+        return ""
+    try:
+        response = httpx.get(
+            source_url,
+            follow_redirects=True,
+            timeout=6,
+            headers={
+                "User-Agent": "SpeakEasy Science Reader/1.0 (+https://speakeasy.local)",
+                "Accept": "text/plain, text/html;q=0.6, */*;q=0.2",
+            },
+        )
+    except httpx.HTTPError:
+        return ""
+    if response.status_code >= 400:
+        return ""
+    content_type = response.headers.get("content-type", "").lower()
+    raw_text = response.text
+    if "text/html" in content_type:
+        raw_text = science_html_to_plain_text(raw_text, max_chars=16000)
+    return strip_gutenberg_boilerplate(raw_text)[:16000]
+
+
+def public_book_excerpt_paragraphs(source_text: str, limit: int = 3) -> list[str]:
+    if not source_text:
+        return []
+    paragraphs = [
+        re.sub(r"\s+", " ", item).strip()
+        for item in re.split(r"\n\s*\n", source_text)
+        if 120 <= len(re.sub(r"\s+", " ", item).strip()) <= 650
+    ]
+    blocked = ("contents", "chapter", "preface", "illustration", "transcriber's note")
+    selected: list[str] = []
+    for paragraph in paragraphs:
+        lower = paragraph.lower()
+        if any(token in lower for token in blocked):
+            continue
+        selected.append(paragraph)
+        if len(selected) >= limit:
+            break
+    return selected
+
+
 def science_source_sentences(source_text: str, terms: list[str], max_count: int = 2) -> list[str]:
     if not source_text:
         return []
@@ -947,7 +1356,52 @@ def science_article_illustrations(item: dict[str, Any]) -> list[dict[str, str]]:
     ]
 
 
+def build_public_book_full_article(item: dict[str, Any], source_text: str = "") -> dict[str, Any]:
+    title = str(item.get("title") or "Public-Domain Science Reading")
+    topic = str(item.get("topic") or "科学")
+    summary = str(item.get("summary") or "").strip()
+    author = str(item.get("author") or "").strip()
+    words = [
+        str(word.get("word") or "").strip()
+        for word in item.get("words") or []
+        if isinstance(word, dict) and str(word.get("word") or "").strip()
+    ]
+    subjects = [str(subject).strip() for subject in (item.get("subjects") or []) if str(subject).strip()]
+    excerpts = public_book_excerpt_paragraphs(source_text)
+    source_note = (
+        "已读取 Project Gutenberg 公版文本，并整理成站内阅读节选。"
+        if excerpts
+        else "已接入 Project Gutenberg 公版书目；更新全文时会尝试读取可用的公版文本。"
+    )
+    intro = f"{title} is a public-domain English reading"
+    if author:
+        intro += f" by {author}"
+    intro += f". In Science Exploration, use it as a {topic} reading path: read for examples, evidence, and vocabulary."
+    paragraphs = [
+        intro,
+        summary or f"This reading can help connect English nonfiction with the topic of {topic}.",
+    ]
+    if subjects:
+        paragraphs.append(f"Catalog subjects include: {', '.join(subjects[:4])}.")
+    if excerpts:
+        paragraphs.append("Public-domain excerpt:")
+        paragraphs.extend(excerpts)
+    paragraphs.append(
+        f"Reading task: choose one sentence from the text, underline the evidence, and explain how it connects to {', '.join(words[:3]) or topic}."
+    )
+    return {
+        "fullArticle": paragraphs,
+        "illustrations": science_article_illustrations(item),
+        "fullArticleSourceStatus": "public-domain-book" if excerpts else "public-domain-metadata",
+        "fullArticleSourceNote": source_note,
+        "fullArticleGeneratedAt": date.today().isoformat(),
+    }
+
+
 def build_science_full_article(item: dict[str, Any], source_text: str = "") -> dict[str, Any]:
+    if item.get("sourceMode") == SCIENCE_SOURCE_MODE_PUBLIC_BOOKS:
+        return build_public_book_full_article(item, source_text)
+
     title = str(item.get("title") or "Science Discovery")
     topic = str(item.get("topic") or "科学")
     summary = str(item.get("summary") or "").strip()
@@ -1066,6 +1520,8 @@ def build_science_discovery_pool(level: str | None = None) -> list[dict[str, Any
                     "imageUrl": science_image_url(slug),
                     "source": source_name,
                     "sourceUrl": source_url,
+                    "sourceMode": SCIENCE_SOURCE_MODE_DEFAULT,
+                    "sourceModeLabel": science_source_mode_config(SCIENCE_SOURCE_MODE_DEFAULT)["label"],
                     "article": science_article_paragraphs(title, summary, topic, level_info),
                     "words": keywords,
                     "quiz": [
@@ -1088,18 +1544,43 @@ def build_science_discovery_pool(level: str | None = None) -> list[dict[str, Any
     return pool
 
 
-def science_cache_path(day: str, level: str, topic: str, batch: int) -> Path:
+def build_public_books_discovery_pool(level: str | None = None, topic: str = "全部") -> list[dict[str, Any]]:
+    level_info = science_level_config(level)
+    normalized_topic = (topic or "全部").strip() or "全部"
+    books = fetch_gutendex_books(normalized_topic)
+    pool = [
+        public_book_item_from_gutendex(book, level_info, normalized_topic)
+        for book in books
+    ]
+    pool = [item for item in pool if item.get("title") and item.get("summary")]
+    if not pool:
+        pool = [
+            public_book_item_from_fallback(seed, level_info)
+            for seed in public_book_fallback_seeds(normalized_topic)
+        ]
+    return pool
+
+
+def science_cache_path(day: str, level: str, topic: str, batch: int, source_mode: str = SCIENCE_SOURCE_MODE_DEFAULT) -> Path:
     safe_level = science_slug(level)
     safe_topic = SCIENCE_TOPIC_CACHE_KEYS.get((topic or "").strip()) or science_slug(topic)
+    safe_mode = science_slug(science_source_mode_key(source_mode))
     safe_version = science_slug(SCIENCE_DISCOVERY_DATA_VERSION)
-    return SCIENCE_DISCOVERY_CACHE_DIR / f"{day}-{safe_level}-{safe_topic}-{batch}-{safe_version}.json"
+    return SCIENCE_DISCOVERY_CACHE_DIR / f"{day}-{safe_mode}-{safe_level}-{safe_topic}-{batch}-{safe_version}.json"
 
 
-def build_science_daily_payload(level: str, topic: str, batch: int) -> dict[str, Any]:
+def build_science_daily_payload(
+    level: str,
+    topic: str,
+    batch: int,
+    source_mode: str = SCIENCE_SOURCE_MODE_DEFAULT,
+) -> dict[str, Any]:
     day = date.today().isoformat()
     level_info = science_level_config(level)
     normalized_topic = (topic or "全部").strip() or "全部"
-    cache_path = science_cache_path(day, level_info["key"], normalized_topic, batch)
+    mode_info = science_source_mode_config(source_mode)
+    mode_key = mode_info["key"]
+    cache_path = science_cache_path(day, level_info["key"], normalized_topic, batch, mode_key)
     if cache_path.exists():
         try:
             cached = json.loads(cache_path.read_text(encoding="utf-8"))
@@ -1108,23 +1589,31 @@ def build_science_daily_payload(level: str, topic: str, batch: int) -> dict[str,
         except (OSError, json.JSONDecodeError):
             pass
 
-    full_pool = build_science_discovery_pool()
-    pool = [item for item in build_science_discovery_pool(level_info["key"]) if normalized_topic == "全部" or item["topic"] == normalized_topic]
-    rng = random.Random(f"{day}:{level_info['key']}:{normalized_topic}:{batch}:{SCIENCE_DISCOVERY_DATA_VERSION}")
+    if mode_key == SCIENCE_SOURCE_MODE_PUBLIC_BOOKS:
+        pool = build_public_books_discovery_pool(level_info["key"], normalized_topic)
+        full_pool = pool
+    else:
+        full_pool = build_science_discovery_pool()
+        pool = [
+            item
+            for item in build_science_discovery_pool(level_info["key"])
+            if normalized_topic == "全部" or item["topic"] == normalized_topic
+        ]
+    rng = random.Random(f"{day}:{mode_key}:{level_info['key']}:{normalized_topic}:{batch}:{SCIENCE_DISCOVERY_DATA_VERSION}")
     selected = rng.sample(pool, k=min(5, len(pool))) if pool else []
     payload = {
         "date": day,
         "level": level_info["key"],
         "levelLabel": level_info["label"],
         "topic": normalized_topic,
+        "sourceMode": mode_key,
+        "sourceModeLabel": mode_info["label"],
+        "sourceModeNote": mode_info["note"],
         "batch": batch,
         "poolSize": len(full_pool),
         "filteredPoolSize": len(pool),
         "items": selected,
-        "sources": [
-            {"name": name, "url": url}
-            for name, url in SCIENCE_SOURCES
-        ],
+        "sources": science_sources_for_mode(mode_key),
     }
     try:
         cache_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1133,9 +1622,37 @@ def build_science_daily_payload(level: str, topic: str, batch: int) -> dict[str,
     return hydrate_science_payload(payload)
 
 
-def find_science_article(slug: str, level: str | None = None) -> dict[str, Any] | None:
+def find_public_book_article(slug: str, level: str | None = None) -> dict[str, Any] | None:
+    level_info = science_level_config(level)
+    normalized_slug = science_slug(slug)
+    id_match = re.match(r"gutenberg-([0-9]+)-", normalized_slug)
+    if id_match:
+        book = fetch_gutendex_book(id_match.group(1))
+        if book:
+            return hydrate_science_item(public_book_item_from_gutendex(book, level_info))
+    fallback_seeds: list[dict[str, Any]] = []
+    seen_titles: set[str] = set()
+    for topic in SCIENCE_TOPIC_CACHE_KEYS:
+        for seed in public_book_fallback_seeds(topic):
+            title = str(seed.get("title") or "")
+            if title and title not in seen_titles:
+                seen_titles.add(title)
+                fallback_seeds.append(seed)
+    fallback_candidates = [public_book_item_from_fallback(seed, level_info) for seed in fallback_seeds]
+    return next((item for item in fallback_candidates if item["slug"] == normalized_slug), None)
+
+
+def find_science_article(
+    slug: str,
+    level: str | None = None,
+    source_mode: str | None = None,
+) -> dict[str, Any] | None:
+    normalized_slug = science_slug(slug)
+    mode_key = science_source_mode_key(source_mode)
+    if mode_key == SCIENCE_SOURCE_MODE_PUBLIC_BOOKS or normalized_slug.startswith(("gutenberg-", "public-book-")):
+        return find_public_book_article(normalized_slug, level)
     candidates = build_science_discovery_pool(level) + build_science_discovery_pool()
-    item = next((item for item in candidates if item["slug"] == slug), None)
+    item = next((item for item in candidates if item["slug"] == normalized_slug), None)
     return hydrate_science_item(item) if item else None
 
 
@@ -1551,29 +2068,34 @@ def good_words_science_illustration(slug: str, kind: str):
 def good_words_science_daily(
     level: str = Query(default="L500-L700"),
     topic: str = Query(default="全部"),
+    source_mode: str = Query(default=SCIENCE_SOURCE_MODE_DEFAULT),
     batch: int = Query(default=0, ge=0, le=50),
     db: Session = Depends(get_db),
 ):
-    return attach_science_public_content(build_science_daily_payload(level=level, topic=topic, batch=batch), db)
+    return attach_science_public_content(
+        build_science_daily_payload(level=level, topic=topic, batch=batch, source_mode=source_mode),
+        db,
+    )
 
 
 @app.get("/booklearner/api/science-daily/{slug}/full-article")
 def good_words_science_daily_full_article(
     slug: str,
     level: str | None = Query(default=None),
+    source_mode: str = Query(default=SCIENCE_SOURCE_MODE_DEFAULT),
     db: Session = Depends(get_db),
 ):
-    item = find_science_article(slug, level)
+    item = find_science_article(slug, level, source_mode=source_mode)
     if not item:
         raise HTTPException(status_code=404, detail="知识点不存在。")
-    source_text = fetch_science_source_text(str(item.get("sourceUrl") or ""))
+    if item.get("sourceMode") == SCIENCE_SOURCE_MODE_PUBLIC_BOOKS:
+        source_text = fetch_public_book_text(str(item.get("textSourceUrl") or ""))
+    else:
+        source_text = fetch_science_source_text(str(item.get("sourceUrl") or ""))
     item = merge_science_public_content(item, db, refresh=True, source_text=source_text)
     return {
         "item": item,
-        "sources": [
-            {"name": name, "url": url}
-            for name, url in SCIENCE_SOURCES
-        ],
+        "sources": science_sources_for_mode(item.get("sourceMode") or source_mode),
     }
 
 
@@ -1581,18 +2103,16 @@ def good_words_science_daily_full_article(
 def good_words_science_daily_article(
     slug: str,
     level: str | None = Query(default=None),
+    source_mode: str = Query(default=SCIENCE_SOURCE_MODE_DEFAULT),
     db: Session = Depends(get_db),
 ):
-    item = find_science_article(slug, level)
+    item = find_science_article(slug, level, source_mode=source_mode)
     if not item:
         raise HTTPException(status_code=404, detail="知识点不存在。")
     item = merge_science_public_content(item, db)
     return {
         "item": item,
-        "sources": [
-            {"name": name, "url": url}
-            for name, url in SCIENCE_SOURCES
-        ],
+        "sources": science_sources_for_mode(item.get("sourceMode") or source_mode),
     }
 
 

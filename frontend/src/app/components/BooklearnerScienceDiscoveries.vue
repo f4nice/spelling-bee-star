@@ -25,17 +25,23 @@ const levels = [
   { value: "L1300-L1500", label: "L1300-L1500 专题" },
 ];
 const topics = ["全部", "动物", "植物", "人体", "微生物", "地球", "太空", "工程"];
+const sourceModes = [
+  { value: "science", label: "公共科学源" },
+  { value: "public-books", label: "公版阅读" },
+];
 const loading = ref(false);
 const reloadToken = ref(0);
 const science = computed(() => props.book.science || {});
 const selectedLevel = ref(science.value.level || "L500-L700");
 const selectedTopic = ref(science.value.topic || "全部");
+const selectedSourceMode = ref(science.value.sourceMode || "science");
 
 watch(
   science,
   (value) => {
     selectedLevel.value = value.level || selectedLevel.value;
     selectedTopic.value = value.topic || selectedTopic.value;
+    selectedSourceMode.value = value.sourceMode || selectedSourceMode.value;
   },
   { deep: true },
 );
@@ -45,14 +51,17 @@ async function reload(overrides = {}) {
   reloadToken.value = token;
   const nextLevel = overrides.level || selectedLevel.value;
   const nextTopic = overrides.topic || selectedTopic.value;
+  const nextSourceMode = overrides.sourceMode || selectedSourceMode.value;
   const nextBatch = overrides.batch ?? science.value.batch ?? 0;
   selectedLevel.value = nextLevel;
   selectedTopic.value = nextTopic;
+  selectedSourceMode.value = nextSourceMode;
   loading.value = true;
   try {
     await props.loadScienceDiscoveries({
       level: nextLevel,
       topic: nextTopic,
+      sourceMode: nextSourceMode,
       batch: nextBatch,
       force: true,
     });
@@ -71,10 +80,15 @@ function changeTopic() {
   reload({ topic: selectedTopic.value, batch: 0 });
 }
 
+function changeSourceMode() {
+  reload({ sourceMode: selectedSourceMode.value, batch: 0 });
+}
+
 function nextBatch() {
   reload({
     level: selectedLevel.value,
     topic: selectedTopic.value,
+    sourceMode: selectedSourceMode.value,
     batch: Number(science.value.batch || 0) + 1,
   });
 }
@@ -110,9 +124,16 @@ function openDiscovery(item) {
           <option v-for="item in topics" :key="item" :value="item">{{ item }}</option>
         </select>
       </label>
+      <label>
+        <span>Source Mode</span>
+        <select v-model="selectedSourceMode" @change="changeSourceMode">
+          <option v-for="item in sourceModes" :key="item.value" :value="item.value">{{ item.label }}</option>
+        </select>
+      </label>
       <div class="science-cache-note">
         <strong>{{ science.date || "今日" }}</strong>
         <span>{{ science.levelLabel || selectedLevel }} · {{ science.topic || selectedTopic }}</span>
+        <small>{{ science.sourceModeLabel || sourceModes.find((item) => item.value === selectedSourceMode)?.label }}</small>
       </div>
     </div>
 

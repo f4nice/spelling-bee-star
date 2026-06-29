@@ -3847,7 +3847,7 @@ button.calendar-day {
 
 .science-toolbar {
   display: grid;
-  grid-template-columns: minmax(170px, 0.8fr) minmax(160px, 0.8fr) minmax(190px, 1fr);
+  grid-template-columns: minmax(160px, 0.75fr) minmax(150px, 0.75fr) minmax(150px, 0.75fr) minmax(190px, 1fr);
   gap: 12px;
   align-items: end;
 }
@@ -3883,6 +3883,11 @@ button.calendar-day {
 
 .science-cache-note strong {
   color: var(--accent-dark);
+}
+
+.science-cache-note small {
+  color: #6c7a8d;
+  font-weight: 800;
 }
 
 .science-source-strip {

@@ -11,23 +11,26 @@ export const booklearnerApiPaths = {
   historyDetail: (id) => `/booklearner/api/history/${id}`,
   historyCover: (id) => `/booklearner/api/history/${id}/cover`,
   historyAiCover: (id) => `/booklearner/api/history/${id}/ai-cover`,
-  scienceDaily: ({ level = "L500-L700", topic = "全部", batch = 0 } = {}) => {
+  scienceDaily: ({ level = "L500-L700", topic = "全部", sourceMode = "science", batch = 0 } = {}) => {
     const params = new URLSearchParams({
       level,
       topic,
+      source_mode: sourceMode,
       batch: String(batch),
     });
     return `/booklearner/api/science-daily?${params.toString()}`;
   },
-  scienceArticle: (slug, { level = "" } = {}) => {
+  scienceArticle: (slug, { level = "", sourceMode = "" } = {}) => {
     const params = new URLSearchParams();
     if (level) params.set("level", level);
+    if (sourceMode) params.set("source_mode", sourceMode);
     const suffix = params.toString() ? `?${params.toString()}` : "";
     return `/booklearner/api/science-daily/${encodeURIComponent(slug)}${suffix}`;
   },
-  scienceFullArticle: (slug, { level = "" } = {}) => {
+  scienceFullArticle: (slug, { level = "", sourceMode = "" } = {}) => {
     const params = new URLSearchParams();
     if (level) params.set("level", level);
+    if (sourceMode) params.set("source_mode", sourceMode);
     const suffix = params.toString() ? `?${params.toString()}` : "";
     return `/booklearner/api/science-daily/${encodeURIComponent(slug)}/full-article${suffix}`;
   },
