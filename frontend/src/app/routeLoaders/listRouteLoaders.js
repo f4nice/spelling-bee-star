@@ -8,7 +8,7 @@ export const listRouteLoaders = {
   },
 
   async listDetail({ route, data }) {
-    data.value = await fetchJson(routeApiPaths.listDetail(route));
+    data.value = await fetchJson(routeApiPaths.listDetail(route), { skipCache: true });
   },
 
   async wrongWords({ data }) {

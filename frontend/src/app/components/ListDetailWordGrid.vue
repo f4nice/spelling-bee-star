@@ -42,13 +42,17 @@ const indexedWords = computed(() =>
   }))
 );
 
+function hasPlayableAudio(word) {
+  return Boolean(word?.has_playable_audio || word?.has_audio);
+}
+
 const resourceCounts = computed(() => {
   const words = props.data.words || [];
   return {
     all: words.length,
     missingImage: words.filter((word) => !word.image_url).length,
-    missingAudio: words.filter((word) => !word.has_audio).length,
-    missingAny: words.filter((word) => !word.image_url || !word.has_audio).length,
+    missingAudio: words.filter((word) => !hasPlayableAudio(word)).length,
+    missingAny: words.filter((word) => !word.image_url || !hasPlayableAudio(word)).length,
   };
 });
 
@@ -64,10 +68,10 @@ const filteredWords = computed(() => {
     return indexedWords.value.filter(({ word }) => !word.image_url);
   }
   if (activeFilter.value === "missingAudio") {
-    return indexedWords.value.filter(({ word }) => !word.has_audio);
+    return indexedWords.value.filter(({ word }) => !hasPlayableAudio(word));
   }
   if (activeFilter.value === "missingAny") {
-    return indexedWords.value.filter(({ word }) => !word.image_url || !word.has_audio);
+    return indexedWords.value.filter(({ word }) => !word.image_url || !hasPlayableAudio(word));
   }
   return indexedWords.value;
 });

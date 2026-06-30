@@ -23,6 +23,6 @@ export async function syncWordListImages({ wordListId, setJob, onComplete }) {
   await runListImageSyncJob({ wordListId, setJob, onComplete });
 }
 
-export async function generateWordListAiImages({ wordListId, setJob, onComplete, allowPaid = false }) {
-  await runListAiImageJob({ wordListId, setJob, onComplete, allowPaid });
+export async function generateWordListAiImages({ wordListId, setJob, onProgress, onComplete, allowPaid = false }) {
+  await runListAiImageJob({ wordListId, setJob, onProgress, onComplete, allowPaid });
 }

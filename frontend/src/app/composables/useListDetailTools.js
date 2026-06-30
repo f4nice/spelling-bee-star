@@ -1,8 +1,10 @@
 import { ref } from "vue";
+import { routeApiPaths } from "../routeApiPaths.js";
 import { generateWordListAiImages, renameWordList } from "../listDetailActions.js";
 import { deleteCurrentWordList } from "../listDeleteBinding.js";
 import { createDeleteListState } from "../listDeleteState.js";
 import { syncListImagesForDetail } from "../listImageSyncBinding.js";
+import { fetchJson } from "../utils.js";
 
 export function useListDetailTools({ data, go, loadRoute }) {
   const deleteListState = ref(createDeleteListState());
@@ -20,13 +22,22 @@ export function useListDetailTools({ data, go, loadRoute }) {
     await syncListImagesForDetail({ data, loadRoute });
   }
 
+  async function refreshCurrentListDetail() {
+    const wordListId = data.value?.word_list?.id;
+    if (!wordListId) return;
+    data.value = await fetchJson(routeApiPaths.listDetail({ params: { id: wordListId } }), {
+      skipCache: true,
+    });
+  }
+
   async function generateListAiImages({ allowPaid = false } = {}) {
     await generateWordListAiImages({
       wordListId: data.value.word_list.id,
       setJob: (job) => {
         aiImageJob.value = job;
       },
-      onComplete: loadRoute,
+      onProgress: refreshCurrentListDetail,
+      onComplete: refreshCurrentListDetail,
       allowPaid,
     });
   }
