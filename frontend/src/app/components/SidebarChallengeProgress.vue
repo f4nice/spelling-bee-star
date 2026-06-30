@@ -9,6 +9,21 @@ defineProps({
     required: true,
   },
 });
+
+function challengeLink(item) {
+  const total = Math.max(Number(item.total || 0), 0);
+  const completed = Math.min(Math.max(Number(item.completed || 0), 0), total);
+  const remaining = Math.max(total - completed, 0);
+  const maxChallengeCount = Math.min(Math.max(total, 1), 500);
+  const dailyCount = remaining > 0 ? Math.min(remaining, maxChallengeCount) : maxChallengeCount;
+  const startCount = remaining > 0 ? completed : 0;
+  const params = new URLSearchParams({
+    daily_count: String(dailyCount),
+    start_count: String(startCount),
+  });
+  if (remaining <= 0 && total > 0) params.set("restart", "1");
+  return `/challenge/${item.id}?${params.toString()}`;
+}
 </script>
 
 <template>
@@ -18,8 +33,8 @@ defineProps({
       v-for="item in challenges"
       :key="item.id"
       class="challenge-progress-link"
-      :href="`/challenge/${item.id}`"
-      @click.prevent="navigate(`/challenge/${item.id}`)"
+      :href="challengeLink(item)"
+      @click.prevent="navigate(challengeLink(item))"
     >
       <strong>{{ item.name }}</strong>
       <span>{{ item.completed }} / {{ item.total }}</span>
