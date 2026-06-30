@@ -1798,6 +1798,48 @@ a:focus-visible {
   margin: -2px 0 0;
 }
 
+.list-paid-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 28, 36, 0.48);
+  backdrop-filter: blur(4px);
+}
+
+.list-paid-confirm-modal {
+  width: min(520px, 100%);
+  border: 1px solid rgba(218, 113, 75, 0.24);
+  border-radius: 18px;
+  padding: 24px;
+  background: #fffdfa;
+  box-shadow: 0 24px 60px rgba(21, 31, 43, 0.28);
+}
+
+.list-paid-confirm-modal h2 {
+  margin: 4px 0 10px;
+  color: var(--text);
+  font-size: clamp(24px, 4vw, 34px);
+  line-height: 1.08;
+}
+
+.list-paid-confirm-modal p:not(.section-kicker) {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.65;
+}
+
+.list-paid-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
 .word-card {
   position: relative;
   display: block;
@@ -7153,5 +7195,9 @@ select {
 
   .list-ai-image-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .list-paid-confirm-actions {
+    flex-direction: column;
   }
 }

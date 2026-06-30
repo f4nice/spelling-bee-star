@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 
 import WordCard from "./WordCard.vue";
 
@@ -32,6 +32,8 @@ const props = defineProps({
 
 const activeFilter = ref("all");
 const aiJobNotice = ref("");
+const isPaidConfirmOpen = ref(false);
+const paidPromptJobId = ref("");
 
 const indexedWords = computed(() =>
   (props.data.words || []).map((word, index) => ({
@@ -88,14 +90,25 @@ const aiImageJobText = computed(() => {
   return aiImageJob.value.message || "正在批量生成 AI 图片";
 });
 
-async function startBatchAiImages() {
+watch(aiImageJob, (job) => {
+  if (!job?.requires_paid_confirmation || paidPromptJobId.value === job.id) return;
+  paidPromptJobId.value = job.id;
+  isPaidConfirmOpen.value = true;
+});
+
+async function startBatchAiImages({ allowPaid = false } = {}) {
   if (isAiImageRunning.value || !resourceCounts.value.missingImage) return;
   aiJobNotice.value = "";
   try {
-    await props.generateListAiImages();
+    await props.generateListAiImages({ allowPaid });
   } catch (error) {
     aiJobNotice.value = error.message || "批量 AI 生图启动失败";
   }
+}
+
+async function confirmPaidBatch() {
+  isPaidConfirmOpen.value = false;
+  await startBatchAiImages({ allowPaid: true });
 }
 </script>
 
@@ -133,13 +146,25 @@ async function startBatchAiImages() {
         class="primary-action-button list-ai-image-button"
         type="button"
         :disabled="isAiImageRunning || !resourceCounts.missingImage"
-        @click="startBatchAiImages"
+        @click="startBatchAiImages()"
       >
         {{ isAiImageRunning ? "生成中" : "批量生成图片" }}
       </button>
     </div>
     <p v-if="aiJobNotice" class="notice list-ai-image-notice">{{ aiJobNotice }}</p>
   </section>
+
+  <div v-if="isPaidConfirmOpen" class="list-paid-confirm-backdrop" role="presentation">
+    <section class="list-paid-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="paidConfirmTitle">
+      <p class="section-kicker">Aliyun Quota</p>
+      <h2 id="paidConfirmTitle">免费额度可能已经用完</h2>
+      <p>阿里图片模型返回额度不足。确认后会继续调用阿里 · wan2.6-t2i，可能产生云服务费用。</p>
+      <div class="list-paid-confirm-actions">
+        <button class="secondary-button" type="button" @click="isPaidConfirmOpen = false">暂不继续</button>
+        <button class="primary-action-button" type="button" @click="confirmPaidBatch">确认付费继续</button>
+      </div>
+    </section>
+  </div>
 
   <section v-if="filteredWords.length" class="word-grid">
     <WordCard

@@ -3,8 +3,8 @@ import { listApiPaths } from "./listApiPaths.js";
 
 const FINAL_STATUSES = new Set(["complete", "failed"]);
 
-export async function runListAiImageJob({ wordListId, setJob, onComplete }) {
-  const job = await fetchJson(listApiPaths.aiImagesStart(wordListId), {
+export async function runListAiImageJob({ wordListId, setJob, onComplete, allowPaid = false }) {
+  const job = await fetchJson(listApiPaths.aiImagesStart(wordListId, allowPaid), {
     method: "POST",
     skipCache: true,
   });

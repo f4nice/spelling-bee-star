@@ -1,5 +1,6 @@
 export const listApiPaths = {
-  aiImagesStart: (wordListId) => `/api/vue/lists/${wordListId}/ai-images/start`,
+  aiImagesStart: (wordListId, allowPaid = false) =>
+    `/api/vue/lists/${wordListId}/ai-images/start${allowPaid ? "?allow_paid=1" : ""}`,
   aiImagesStatus: (wordListId, jobId) => `/api/vue/lists/${wordListId}/ai-images/${jobId}`,
   batchImages: () => "/api/vue/lists/batch-images",
   delete: (wordListId) => `/api/vue/lists/${wordListId}/delete`,

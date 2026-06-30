@@ -20,13 +20,14 @@ export function useListDetailTools({ data, go, loadRoute }) {
     await syncListImagesForDetail({ data, loadRoute });
   }
 
-  async function generateListAiImages() {
+  async function generateListAiImages({ allowPaid = false } = {}) {
     await generateWordListAiImages({
       wordListId: data.value.word_list.id,
       setJob: (job) => {
         aiImageJob.value = job;
       },
       onComplete: loadRoute,
+      allowPaid,
     });
   }
 

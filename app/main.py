@@ -78,8 +78,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260630-002"
-DEFAULT_PAGE_VERSION = "v20260630.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260630-003"
+DEFAULT_PAGE_VERSION = "v20260630.3"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3937,6 +3937,7 @@ def list_image_sync_status(word_list_id: int, job_id: str):
 def start_list_ai_image_batch(
     word_list_id: int,
     model: str = Query(default=LIST_AI_IMAGE_DEFAULT_MODEL),
+    allow_paid: str = Query(default="0"),
     db: Session = Depends(get_db),
 ):
     word_list = db.get(WordList, word_list_id)
@@ -3944,6 +3945,7 @@ def start_list_ai_image_batch(
         raise HTTPException(status_code=404, detail="Word list not found")
 
     selected_model = normalize_list_ai_image_model(model)
+    paid_confirmed = allow_paid.strip().lower() in {"1", "true", "yes", "paid"}
     pending_words = get_missing_image_words(db, word_list_id)
     job_id = uuid4().hex
     job = {
@@ -3958,13 +3960,15 @@ def start_list_ai_image_batch(
         "current_word": "",
         "model": selected_model,
         "model_label": list_ai_image_model_label(selected_model),
+        "paid_confirmed": paid_confirmed,
+        "requires_paid_confirmation": False,
         "results": [],
         "message": "批量 AI 生图任务已创建",
     }
     with IMAGE_SYNC_LOCK:
         LIST_AI_IMAGE_JOBS[job_id] = job
 
-    Thread(target=run_list_ai_image_job, args=(job_id, word_list_id, selected_model), daemon=True).start()
+    Thread(target=run_list_ai_image_job, args=(job_id, word_list_id, selected_model, paid_confirmed), daemon=True).start()
     return job
 
 
@@ -5245,16 +5249,16 @@ def append_list_ai_image_result(job_id: str, result: dict) -> None:
             job["failed"] += 1
 
 
-def list_ai_image_error_detail(exc: Exception) -> tuple[str, bool]:
+def list_ai_image_error_detail(exc: Exception) -> tuple[str, bool, bool]:
     if isinstance(exc, httpx.HTTPStatusError):
         detail = exc.response.text[:400] if exc.response is not None else str(exc)
     else:
         detail = str(exc)
     if "not configured" in detail:
-        return detail, True
+        return detail, True, False
     if is_ai_quota_error(detail):
-        return "额度已经用完", True
-    return detail[:300] or "AI 生图失败", False
+        return "额度已经用完", True, True
+    return detail[:300] or "AI 生图失败", False, False
 
 
 async def generate_missing_word_ai_image(db: Session, word: Word, model: str) -> dict:
@@ -5333,10 +5337,11 @@ def run_image_sync_job(job_id: str, word_list_id: int) -> None:
         db.close()
 
 
-def run_list_ai_image_job(job_id: str, word_list_id: int, model: str) -> None:
+def run_list_ai_image_job(job_id: str, word_list_id: int, model: str, paid_confirmed: bool = False) -> None:
     db = SessionLocal()
     try:
         pending_words = get_missing_image_words(db, word_list_id)
+        paid_note = "，已确认可能产生费用" if paid_confirmed else ""
         update_list_ai_image_job(
             job_id,
             status="running",
@@ -5345,20 +5350,29 @@ def run_list_ai_image_job(job_id: str, word_list_id: int, model: str) -> None:
             failed=0,
             generated=0,
             skipped=0,
-            message=f"正在使用 {list_ai_image_model_label(model)} 生成缺失图片",
+            message=f"正在使用 {list_ai_image_model_label(model)} 生成缺失图片{paid_note}",
         )
         if not pending_words:
             update_list_ai_image_job(job_id, status="complete", message="当前单词表没有缺失图片。")
             return
 
         fatal_error = ""
+        requires_paid_confirmation = False
         for word in pending_words:
             update_list_ai_image_job(job_id, current_word=word.word)
             try:
                 result = asyncio.run(generate_missing_word_ai_image(db, word, model))
             except Exception as exc:
-                detail, fatal = list_ai_image_error_detail(exc)
-                result = {"ok": False, "id": word.id, "word": word.word, "error": detail, "fatal": fatal}
+                detail, fatal, quota_error = list_ai_image_error_detail(exc)
+                requires_paid_confirmation = quota_error and not paid_confirmed
+                result = {
+                    "ok": False,
+                    "id": word.id,
+                    "word": word.word,
+                    "error": detail,
+                    "fatal": fatal,
+                    "quota_error": quota_error,
+                }
                 try:
                     word.enrichment_error = f"AI 批量生图失败: {detail}"
                     db.add(word)
@@ -5376,7 +5390,7 @@ def run_list_ai_image_job(job_id: str, word_list_id: int, model: str) -> None:
             failed = job.get("failed", 0) if job else 0
             generated = job.get("generated", 0) if job else 0
         if fatal_error:
-            message = f"批量 AI 生图已停止：{fatal_error}"
+            message = "免费额度可能已经用完，需要确认是否继续付费使用。" if requires_paid_confirmation else f"批量 AI 生图已停止：{fatal_error}"
             status = "failed"
         elif failed:
             message = f"已生成 {generated} 张，{failed} 个单词失败。"
@@ -5384,7 +5398,13 @@ def run_list_ai_image_job(job_id: str, word_list_id: int, model: str) -> None:
         else:
             message = f"已生成 {generated} 张缺失图片。"
             status = "complete"
-        update_list_ai_image_job(job_id, status=status, current_word="", message=message)
+        update_list_ai_image_job(
+            job_id,
+            status=status,
+            current_word="",
+            message=message,
+            requires_paid_confirmation=requires_paid_confirmation,
+        )
     finally:
         db.close()
 
