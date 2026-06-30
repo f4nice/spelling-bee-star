@@ -25,6 +25,10 @@ DASHSCOPE_IMAGE_MODELS = {
 }
 DASHSCOPE_ASYNC_IMAGE_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation"
 DASHSCOPE_MULTIMODAL_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+WORD_IMAGE_NEGATIVE_PROMPT = (
+    "English text, English words, alphabet letters, spelling, vocabulary word, captions, labels, signs, "
+    "book page text, UI text, watermark, logo, typography, distorted text, blurry, low quality"
+)
 CHINESE_FONT_PATHS = [
     "C:/Windows/Fonts/STZHONGS.TTF",
     "C:/Windows/Fonts/simkai.ttf",
@@ -69,24 +73,24 @@ def build_word_image_prompt(
     selected_theme = (theme or "").strip()
     selected_style = (style or "").strip()
     selected_meaning = _short_meaning(chinese_definition) or (chinese_definition or "").strip()
+    visual_concept = selected_meaning or word
     prompt_parts = [
-        "A clear educational square background image for an English vocabulary learning app.",
-        f"Visual concept: {selected_meaning or word}.",
-        "Use the visual concept as the primary subject.",
-        f"The English vocabulary word is {word}, but it is metadata only and must not appear as text.",
+        "Create a clean square illustration for a vocabulary picture card.",
+        f"Main visual concept: {visual_concept}.",
+        "Show the meaning through objects, actions, setting, color, and composition only.",
+        "The final image must be a pure picture with no written language anywhere.",
+        f"Do not draw, spell, print, label, or display the English word {word!r}.",
+        "No English words, alphabet letters, captions, signs, labels, book-page text, UI, logos, watermarks, or typography.",
         "Child-safe, clean, bright, centered main subject, high quality.",
-        "Generate a pure picture background only.",
-        "Do not include any text, letters, Chinese characters, captions, signs, labels, book pages, logos, watermarks, UI elements, or typography in the image.",
-        "Leave all wording to be added later by the application.",
     ]
     if selected_theme:
         prompt_parts.append(f"Theme: {selected_theme}.")
     if selected_style:
         prompt_parts.append(f"Visual style: {selected_style}.")
-    if english_definition:
-        prompt_parts.append(f"English definition: {english_definition}")
+    if english_definition and not selected_meaning:
+        prompt_parts.append(f"Use this only as hidden semantic guidance, not visible text: {english_definition}")
     if chinese_definition:
-        prompt_parts.append(f"Chinese meaning: {chinese_definition}")
+        prompt_parts.append(f"Meaning reference only, not visible text: {chinese_definition}")
     return " ".join(prompt_parts)
 
 
@@ -486,7 +490,7 @@ def _dashscope_payload_for_model(model: str, prompt: str) -> tuple[dict, bool]:
                     "n": 1,
                     "prompt_extend": True,
                     "watermark": False,
-                    "negative_prompt": "text, letters, caption, watermark, logo, blurry, distorted words",
+                    "negative_prompt": WORD_IMAGE_NEGATIVE_PROMPT,
                 },
             },
             False,
@@ -500,7 +504,7 @@ def _dashscope_payload_for_model(model: str, prompt: str) -> tuple[dict, bool]:
                 "n": 1,
                 "prompt_extend": True,
                 "watermark": False,
-                "negative_prompt": "Low resolution, low quality, blurry, watermark, logo, distorted text, malformed objects.",
+                "negative_prompt": WORD_IMAGE_NEGATIVE_PROMPT,
             },
         },
         False,

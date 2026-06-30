@@ -52,9 +52,9 @@ const aiStyle = ref("写实摄影");
 const aiMeaning = ref("");
 
 const aiImageModels = [
-  { key: "wan27", label: "wan2.7-image-pro", provider: "dashscope", model: "wan2.7-image-pro" },
-  { key: "qwen20", label: "qwen-image-2.0-pro", provider: "dashscope", model: "qwen-image-2.0-pro" },
-  { key: "wan26", label: "wan2.6-t2i", provider: "dashscope", model: "wan2.6-t2i" },
+  { key: "wan27", label: "模型一", provider: "dashscope", model: "wan2.7-image-pro" },
+  { key: "qwen20", label: "模型二", provider: "dashscope", model: "qwen-image-2.0-pro" },
+  { key: "wan26", label: "模型三", provider: "dashscope", model: "wan2.6-t2i" },
 ];
 
 const selectedFileName = computed(() => props.selectedImageFile?.name || "还没有选择图片");
@@ -202,7 +202,7 @@ async function generateAllAiCandidates() {
     <section class="word-image-manager-modal">
       <header class="word-image-manager-heading">
         <div>
-          <p class="section-kicker">Image</p>
+          <p class="section-kicker">图片</p>
           <h2 id="wordImageManagerTitle">图片管理</h2>
         </div>
         <button class="secondary-button compact-button" type="button" @click="emit('close')">关闭</button>
@@ -275,7 +275,7 @@ async function generateAllAiCandidates() {
                 :disabled="isGeneratingModel(option.key)"
                 @click="generateAiCandidate(option)"
               >
-                {{ isGeneratingModel(option.key) ? "生成中..." : option.model }}
+                {{ isGeneratingModel(option.key) ? "生成中..." : option.label }}
               </button>
               <button
                 class="challenge-button ai-image-generate-button"
@@ -316,7 +316,7 @@ async function generateAllAiCandidates() {
               @click="selectAiCandidate(candidate)"
             >
               <img :src="candidate.imageUrl" :alt="`${word.word} ${candidate.label}`">
-              <span>{{ candidate.model }}</span>
+              <span>{{ candidate.label }}</span>
             </button>
           </div>
           <p v-if="aiNotice" class="word-image-manager-empty">{{ aiNotice }}</p>
