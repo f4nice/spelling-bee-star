@@ -4,11 +4,12 @@ import hashlib
 import hmac
 from io import BytesIO
 import json
+import re
 import time
 from urllib.parse import urlparse
 
 import httpx
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 
 TENCENT_AIART_ENDPOINT = "https://aiart.tencentcloudapi.com"
@@ -23,9 +24,17 @@ DASHSCOPE_IMAGE_MODELS = {
 DASHSCOPE_ASYNC_IMAGE_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation"
 DASHSCOPE_MULTIMODAL_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
 WORD_IMAGE_NEGATIVE_PROMPT = (
-    "Any text in any language, Chinese text, Chinese characters, Hanzi, English text, English words, "
-    "alphabet letters, spelling, vocabulary word, captions, labels, signs, book page text, UI text, "
-    "watermark, logo, typography, distorted text, blurry, low quality"
+    "Repeated text, duplicate captions, multiple labels, English text, English words, alphabet letters, "
+    "spelling, vocabulary word, signs, book page text, UI text, watermark, logo, extra typography, "
+    "distorted text, blurry, low quality"
+)
+
+CHINESE_FONT_CANDIDATES = (
+    "C:/Windows/Fonts/msyh.ttc",
+    "C:/Windows/Fonts/simhei.ttf",
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
 )
 
 
@@ -39,15 +48,18 @@ def build_word_image_prompt(
 ) -> str:
     selected_theme = (theme or "").strip()
     selected_style = (style or "").strip()
+    label = primary_chinese_label(chinese_definition)
     prompt_parts = [
         "Create a clean square illustration for a vocabulary picture card.",
         f"Main semantic concept: the vocabulary word {word!r}.",
         "Show the meaning through objects, actions, setting, color, and composition only.",
-        "The final image must be a pure picture with no written language anywhere.",
+        "Do not render any built-in text inside the scene; one Chinese label may be composited separately after generation.",
         f"Do not draw, spell, print, label, or display the English word {word!r}.",
-        "No Chinese characters, no English words, no alphabet letters, no captions, no signs, no labels, no book-page text, no UI, no logos, no watermarks, no typography.",
+        "Avoid repeated captions, duplicate labels, English words, alphabet letters, signs, book-page text, UI, logos, watermarks, and extra typography.",
         "Child-safe, clean, bright, centered main subject, high quality.",
     ]
+    if label:
+        prompt_parts.append(f"Chinese label to use after generation: {label}. Do not repeat it in the generated scene.")
     if selected_theme:
         prompt_parts.append(f"Theme: {selected_theme}.")
     if selected_style:
@@ -55,6 +67,27 @@ def build_word_image_prompt(
     if english_definition:
         prompt_parts.append(f"Use this only as hidden semantic guidance, not visible text: {english_definition}")
     return " ".join(prompt_parts)
+
+
+def primary_chinese_label(chinese_definition: str | None) -> str:
+    text = " ".join((chinese_definition or "").split())
+    if not text:
+        return ""
+    text = re.sub(r"^[（(][^）)]*[）)]\s*", "", text).strip()
+    for separator in ("；", ";", "，", ",", "、", "/", "／", "\n"):
+        if separator in text:
+            text = text.split(separator, 1)[0].strip()
+    text = re.sub(r"[。.!！?？:：]+$", "", text).strip()
+    return text[:8]
+
+
+def chinese_label_font(size: int) -> ImageFont.ImageFont:
+    for path in CHINESE_FONT_CANDIDATES:
+        try:
+            return ImageFont.truetype(path, size=size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
 
 
 def compose_word_card_image(
@@ -69,6 +102,37 @@ def compose_word_card_image(
     left = (1024 - image.width) // 2
     top = (1024 - image.height) // 2
     canvas.paste(image, (left, top))
+    label = primary_chinese_label(chinese_definition)
+    if label:
+        draw = ImageDraw.Draw(canvas, "RGBA")
+        font_size = 96
+        font = chinese_label_font(font_size)
+        while font_size > 48:
+            text_box = draw.textbbox((0, 0), label, font=font, stroke_width=2)
+            text_width = text_box[2] - text_box[0]
+            if text_width <= 720:
+                break
+            font_size -= 8
+            font = chinese_label_font(font_size)
+        text_box = draw.textbbox((0, 0), label, font=font, stroke_width=2)
+        text_width = text_box[2] - text_box[0]
+        text_height = text_box[3] - text_box[1]
+        padding_x = 38
+        padding_y = 18
+        pill_width = text_width + padding_x * 2
+        pill_height = text_height + padding_y * 2
+        pill_left = (1024 - pill_width) // 2
+        pill_top = 1024 - pill_height - 54
+        pill_rect = (pill_left, pill_top, pill_left + pill_width, pill_top + pill_height)
+        draw.rounded_rectangle(pill_rect, radius=28, fill=(255, 255, 255, 196))
+        draw.text(
+            (pill_left + padding_x, pill_top + padding_y - text_box[1]),
+            label,
+            font=font,
+            fill=(126, 78, 48, 255),
+            stroke_width=4,
+            stroke_fill=(255, 255, 255, 235),
+        )
     output = BytesIO()
     canvas.save(output, format="JPEG", quality=92, optimize=True)
     return output.getvalue()
