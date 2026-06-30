@@ -1748,6 +1748,18 @@ a:focus-visible {
   line-height: 1.35;
 }
 
+.list-ai-image-quota {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 9px;
+  color: #0f6b4d;
+  background: rgba(29, 127, 91, 0.11);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
 .list-ai-image-progress strong {
   color: var(--accent-dark);
 }

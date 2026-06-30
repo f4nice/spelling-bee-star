@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     dashscope_task_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/tasks"
     dashscope_image_poll_seconds: float = 2.0
     dashscope_image_timeout_seconds: int = 180
+    ai_image_daily_free_quota: int = 0
     ai_tts_provider: str = "openai"
     openai_tts_model: str = "gpt-4o-mini-tts"
     openai_tts_voice_us: str = "alloy"

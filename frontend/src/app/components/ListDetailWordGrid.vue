@@ -73,6 +73,7 @@ const filteredWords = computed(() => {
 });
 
 const aiImageJob = computed(() => props.aiImageJob || null);
+const aiImageQuota = computed(() => aiImageJob.value?.quota || props.data.ai_image_quota || null);
 const aiImageTotal = computed(() => Math.max(Number(aiImageJob.value?.total || 0), 0));
 const aiImageDone = computed(() => Math.max(Number(aiImageJob.value?.done || 0), 0));
 const aiImageProgress = computed(() => {
@@ -88,6 +89,16 @@ const aiImageJobClass = computed(() => ({
 const aiImageJobText = computed(() => {
   if (!aiImageJob.value) return "默认模型：阿里 · wan2.6-t2i，只处理没有图片的单词。";
   return aiImageJob.value.message || "正在批量生成 AI 图片";
+});
+const aiImageQuotaText = computed(() => {
+  const quota = aiImageQuota.value || {};
+  const used = Math.max(Number(quota.used || 0), 0);
+  if (quota.configured) {
+    const limit = Math.max(Number(quota.limit || 0), 0);
+    const remaining = Math.max(Number(quota.remaining || 0), 0);
+    return `剩余 ${remaining} / ${limit}`;
+  }
+  return `已用 ${used} 张`;
 });
 
 watch(aiImageJob, (job) => {
@@ -137,6 +148,7 @@ async function confirmPaidBatch() {
       <div class="list-ai-image-summary">
         <strong>批量 AI 图片</strong>
         <span>{{ aiImageJobText }}</span>
+        <em class="list-ai-image-quota">今日免费额度：{{ aiImageQuotaText }}</em>
       </div>
       <div v-if="aiImageJob" class="sync-progress-wrap list-ai-image-progress">
         <div class="sync-progress" aria-hidden="true"><span :style="{ width: `${aiImageProgress}%` }"></span></div>
