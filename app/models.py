@@ -36,6 +36,30 @@ class Word(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class WordResourcePool(Base):
+    __tablename__ = "word_resource_pool"
+    __table_args__ = (UniqueConstraint("normalized_word", name="uq_word_resource_pool_normalized_word"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    normalized_word: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    display_word: Mapped[str | None] = mapped_column(String(128))
+    phonetic: Mapped[str | None] = mapped_column(String(255))
+    part_of_speech: Mapped[str | None] = mapped_column(String(120))
+    english_definition: Mapped[str | None] = mapped_column(Text)
+    chinese_definition: Mapped[str | None] = mapped_column(Text)
+    english_example: Mapped[str | None] = mapped_column(Text)
+    image_url: Mapped[str | None] = mapped_column(String(1000))
+    image_source: Mapped[str | None] = mapped_column(String(120))
+    american_audio_url: Mapped[str | None] = mapped_column(String(1000))
+    american_audio_source: Mapped[str | None] = mapped_column(String(120))
+    british_audio_url: Mapped[str | None] = mapped_column(String(1000))
+    british_audio_source: Mapped[str | None] = mapped_column(String(120))
+    source_word_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    use_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class WordList(Base):
     __tablename__ = "word_lists"
 

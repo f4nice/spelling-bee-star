@@ -37,6 +37,7 @@ from app.models import (
     Word,
     WordList,
     WordListItem,
+    WordResourcePool,
     WrongWord,
 )
 from app.services.enrichment import enrich_word
@@ -78,8 +79,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260630-006"
-DEFAULT_PAGE_VERSION = "v20260630.6"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260630-007"
+DEFAULT_PAGE_VERSION = "v20260630.7"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -1912,6 +1913,7 @@ def startup() -> None:
     with SessionLocal() as db:
         seed_daily_quotes(db)
         ensure_default_word_list(db)
+        seed_word_resource_pool(db)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -2546,6 +2548,7 @@ def vue_list_detail_api(word_list_id: int, db: Session = Depends(get_db)):
         .where(WordListItem.word_list_id == word_list_id)
         .order_by(WordListItem.id.asc())
     ).all()
+    apply_word_resources(db, words)
     stats = challenge_counts_for_words(db, [word.id for word in words])
     return {
         "word_list": {"id": word_list.id, "name": word_list.name, "sequence_offset": word_list.sequence_offset},
@@ -2603,6 +2606,7 @@ def vue_word_detail_api(
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
+    apply_word_resource(db, word, commit=True)
     cleaned_error = friendly_enrichment_error(word.enrichment_error)
     if cleaned_error != word.enrichment_error:
         word.enrichment_error = cleaned_error
@@ -2674,6 +2678,7 @@ def vue_update_word_field(
     word.enrichment_error = None
     db.add(word)
     db.commit()
+    remember_word_resource(db, word, override_text=True, commit=True)
     return {"ok": True, "field": field, "value": next_value}
 
 
@@ -2688,6 +2693,7 @@ async def vue_refresh_word(
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
     await enrich_word(db, word)
+    remember_word_resource(db, word, commit=True)
     return {"ok": True, "word": serialize_word(word)}
 
 
@@ -3607,6 +3613,7 @@ async def replace_word_image(
     word.enrichment_error = None
     db.add(word)
     db.commit()
+    remember_word_resource(db, word, image_source="upload", override_media=True, commit=True)
     if previous_url != word.image_url:
         remove_local_image(previous_url, IMAGE_DIR)
     return {"ok": True, "word": word.word, "image_url": word.image_url}
@@ -3791,6 +3798,7 @@ async def generate_ai_word_image(
         word.enrichment_error = None
         db.add(word)
         db.commit()
+        remember_word_resource(db, word, image_source="ai-image", override_media=True, commit=True)
         if previous_url != word.image_url:
             remove_local_image(previous_url, IMAGE_DIR)
     return {
@@ -3853,6 +3861,7 @@ async def replace_word_image_from_network(
     word.enrichment_error = None
     db.add(word)
     db.commit()
+    remember_word_resource(db, word, image_source="network", override_media=True, commit=True)
     if previous_url != word.image_url:
         remove_local_image(previous_url, IMAGE_DIR)
     return {"ok": True, "word": word.word, "image_url": word.image_url}
@@ -3894,6 +3903,7 @@ async def sync_word_image_record(db: Session, word: Word) -> dict:
                 word.enrichment_error = None
                 db.add(word)
                 db.commit()
+                remember_word_resource(db, word, image_source="network-sync", override_media=False, commit=True)
                 return {"ok": True, "id": word.id, "word": word.word, "image_url": local_url, "skipped": False}
         except Exception as exc:
             errors.append(str(exc))
@@ -4069,6 +4079,14 @@ async def word_audio_choice(
     word.enrichment_error = None
     db.add(word)
     db.commit()
+    remember_word_resource(
+        db,
+        word,
+        american_audio_source="choice" if accent == "us" else None,
+        british_audio_source="choice" if accent == "gb" else None,
+        override_media=True,
+        commit=True,
+    )
     return {"ok": True, "word": word.word, "accent": accent, "audio_url": audio_url}
 
 
@@ -4110,6 +4128,14 @@ async def word_recorded_audio(
     word.enrichment_error = None
     db.add(word)
     db.commit()
+    remember_word_resource(
+        db,
+        word,
+        american_audio_source="recorded" if accent == "us" else None,
+        british_audio_source="recorded" if accent == "gb" else None,
+        override_media=True,
+        commit=True,
+    )
     return {"ok": True, "word": word.word, "accent": accent, "audio_url": audio_url}
 
 
@@ -4184,6 +4210,14 @@ async def word_ai_audio(
         word.enrichment_error = None
         db.add(word)
         db.commit()
+        remember_word_resource(
+            db,
+            word,
+            american_audio_source="ai-tts" if accent == "us" else None,
+            british_audio_source="ai-tts" if accent == "gb" else None,
+            override_media=True,
+            commit=True,
+        )
     return {
         "ok": True,
         "word": word.word,
@@ -4285,6 +4319,10 @@ def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]
             created += 1
 
         try:
+            db.commit()
+            db.refresh(word)
+            apply_word_resource(db, word, commit=False)
+            remember_word_resource(db, word, commit=False)
             db.commit()
             db.refresh(word)
             link_word_to_list(db, word_list.id, word.id)
@@ -4436,6 +4474,158 @@ def start_enrichment_thread(word_ids: list[int]) -> None:
 def clean_list_name(name: str) -> str:
     text = " ".join((name or "").split())
     return text[:255] or "新单词表"
+
+
+def normalize_resource_word(value: str | None) -> str:
+    return " ".join((value or "").strip().lower().split())[:128]
+
+
+def get_word_resource(db: Session, word_text: str | None) -> WordResourcePool | None:
+    normalized = normalize_resource_word(word_text)
+    if not normalized:
+        return None
+    return db.scalar(select(WordResourcePool).where(WordResourcePool.normalized_word == normalized))
+
+
+def word_has_shareable_resource(word: Word) -> bool:
+    return any(
+        (getattr(word, field, None) or "").strip()
+        for field in (
+            "phonetic",
+            "part_of_speech",
+            "english_definition",
+            "chinese_definition",
+            "english_example",
+            "image_url",
+            "american_audio_url",
+            "british_audio_url",
+        )
+    )
+
+
+def remember_word_resource(
+    db: Session,
+    word: Word,
+    *,
+    image_source: str | None = None,
+    american_audio_source: str | None = None,
+    british_audio_source: str | None = None,
+    override_text: bool = False,
+    override_media: bool = False,
+    commit: bool = False,
+) -> bool:
+    normalized = normalize_resource_word(word.word)
+    if not normalized or not word_has_shareable_resource(word):
+        return False
+
+    resource = get_word_resource(db, word.word)
+    changed = False
+    if not resource:
+        resource = WordResourcePool(normalized_word=normalized)
+        db.add(resource)
+        changed = True
+
+    if resource.display_word != word.word:
+        resource.display_word = word.word
+        changed = True
+    if resource.source_word_id != word.id:
+        resource.source_word_id = word.id
+        changed = True
+
+    for field in ("phonetic", "part_of_speech", "english_definition", "chinese_definition", "english_example"):
+        value = (getattr(word, field, None) or "").strip()
+        if value and (override_text or not getattr(resource, field)):
+            setattr(resource, field, value)
+            changed = True
+
+    if (word.image_url or "").strip() and (override_media or not resource.image_url):
+        resource.image_url = word.image_url
+        resource.image_source = image_source or resource.image_source or "word"
+        changed = True
+    if (word.american_audio_url or "").strip() and (override_media or not resource.american_audio_url):
+        resource.american_audio_url = word.american_audio_url
+        resource.american_audio_source = american_audio_source or resource.american_audio_source or "word"
+        changed = True
+    if (word.british_audio_url or "").strip() and (override_media or not resource.british_audio_url):
+        resource.british_audio_url = word.british_audio_url
+        resource.british_audio_source = british_audio_source or resource.british_audio_source or "word"
+        changed = True
+
+    if changed:
+        db.add(resource)
+        if commit:
+            db.commit()
+    return changed
+
+
+def apply_word_resource(db: Session, word: Word, *, commit: bool = False) -> bool:
+    resource = get_word_resource(db, word.word)
+    if not resource:
+        return False
+
+    changed = False
+    for field in ("phonetic", "part_of_speech"):
+        value = (getattr(resource, field, None) or "").strip()
+        if value and not (getattr(word, field, None) or "").strip():
+            setattr(word, field, value)
+            changed = True
+
+    locked_text_fields = (
+        ("english_definition", "english_definition_locked"),
+        ("chinese_definition", "chinese_definition_locked"),
+        ("english_example", "english_example_locked"),
+    )
+    for field, lock_field in locked_text_fields:
+        value = (getattr(resource, field, None) or "").strip()
+        if value and not (getattr(word, field, None) or "").strip():
+            setattr(word, field, value)
+            setattr(word, lock_field, True)
+            changed = True
+
+    if (resource.image_url or "").strip() and not (word.image_url or "").strip():
+        word.image_url = resource.image_url
+        word.image_locked = True
+        changed = True
+    if (resource.american_audio_url or "").strip() and not (word.american_audio_url or "").strip():
+        word.american_audio_url = resource.american_audio_url
+        word.american_audio_locked = True
+        changed = True
+    if (resource.british_audio_url or "").strip() and not (word.british_audio_url or "").strip():
+        word.british_audio_url = resource.british_audio_url
+        word.british_audio_locked = True
+        changed = True
+
+    if changed:
+        word.enrichment_error = None
+        resource.use_count = (resource.use_count or 0) + 1
+        db.add(word)
+        db.add(resource)
+        if commit:
+            db.commit()
+            db.refresh(word)
+    return changed
+
+
+def apply_word_resources(db: Session, words: list[Word], *, commit: bool = True) -> int:
+    applied = 0
+    for word in words:
+        if apply_word_resource(db, word, commit=False):
+            applied += 1
+    if applied and commit:
+        db.commit()
+        for word in words:
+            db.refresh(word)
+    return applied
+
+
+def seed_word_resource_pool(db: Session) -> None:
+    words = db.scalars(select(Word).order_by(Word.id.asc())).all()
+    changed = 0
+    for word in words:
+        if remember_word_resource(db, word, commit=False):
+            changed += 1
+    if changed:
+        db.commit()
 
 
 def percent_value(value: int, target: int) -> int:
@@ -5010,6 +5200,7 @@ async def apply_uploaded_images_to_words(
         word.enrichment_error = None
         db.add(word)
         db.commit()
+        remember_word_resource(db, word, image_source="batch-upload", override_media=True, commit=True)
         if previous_url != word.image_url:
             remove_local_image(previous_url, IMAGE_DIR)
         result["matched"] += 1
@@ -5199,6 +5390,7 @@ def get_pending_image_words(db: Session, word_list_id: int) -> list[Word]:
         .where(WordListItem.word_list_id == word_list_id)
         .order_by(Word.word.asc())
     ).all()
+    apply_word_resources(db, words)
     return [word for word in words if needs_image_sync(word)]
 
 
@@ -5209,6 +5401,7 @@ def get_missing_image_words(db: Session, word_list_id: int) -> list[Word]:
         .where(WordListItem.word_list_id == word_list_id)
         .order_by(WordListItem.id.asc())
     ).all()
+    apply_word_resources(db, words)
     return [word for word in words if not (word.image_url or "").strip()]
 
 
@@ -5381,6 +5574,7 @@ async def generate_missing_word_ai_image(db: Session, word: Word, model: str) ->
     word.enrichment_error = None
     db.add(word)
     db.commit()
+    remember_word_resource(db, word, image_source=f"ai-image:{model}", override_media=True, commit=True)
     if previous_url != word.image_url:
         remove_local_image(previous_url, IMAGE_DIR)
     quota = increment_ai_image_quota(db, model)
@@ -5777,6 +5971,7 @@ async def enrich_word_ids(word_ids: list[int]) -> None:
             word = db.get(Word, word_id)
             if word:
                 await enrich_word(db, word)
+                remember_word_resource(db, word, commit=True)
     finally:
         db.close()
 
