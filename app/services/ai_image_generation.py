@@ -4,14 +4,11 @@ import hashlib
 import hmac
 from io import BytesIO
 import json
-import os
-from pathlib import Path
-import subprocess
 import time
 from urllib.parse import urlparse
 
 import httpx
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image
 
 
 TENCENT_AIART_ENDPOINT = "https://aiart.tencentcloudapi.com"
@@ -26,40 +23,10 @@ DASHSCOPE_IMAGE_MODELS = {
 DASHSCOPE_ASYNC_IMAGE_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation"
 DASHSCOPE_MULTIMODAL_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
 WORD_IMAGE_NEGATIVE_PROMPT = (
-    "English text, English words, alphabet letters, spelling, vocabulary word, captions, labels, signs, "
-    "book page text, UI text, watermark, logo, typography, distorted text, blurry, low quality"
+    "Any text in any language, Chinese text, Chinese characters, Hanzi, English text, English words, "
+    "alphabet letters, spelling, vocabulary word, captions, labels, signs, book page text, UI text, "
+    "watermark, logo, typography, distorted text, blurry, low quality"
 )
-CHINESE_FONT_PATHS = [
-    "C:/Windows/Fonts/STZHONGS.TTF",
-    "C:/Windows/Fonts/simkai.ttf",
-    "C:/Windows/Fonts/simsun.ttc",
-    "C:/Windows/Fonts/msyh.ttc",
-    "C:/Windows/Fonts/msyhbd.ttc",
-    "C:/Windows/Fonts/simhei.ttf",
-    "/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSerifCJK-Bold.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSerifCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
-    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-]
-CARD_TITLE_FONT_PATHS = [
-    "C:/Windows/Fonts/STZHONGS.TTF",
-    "C:/Windows/Fonts/simhei.ttf",
-    "C:/Windows/Fonts/msyhbd.ttc",
-    "C:/Windows/Fonts/simkai.ttf",
-    "C:/Windows/Fonts/simsun.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSerifCJK-Bold.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
-    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-]
 
 
 def build_word_image_prompt(
@@ -72,169 +39,22 @@ def build_word_image_prompt(
 ) -> str:
     selected_theme = (theme or "").strip()
     selected_style = (style or "").strip()
-    selected_meaning = _short_meaning(chinese_definition) or (chinese_definition or "").strip()
-    visual_concept = selected_meaning or word
     prompt_parts = [
         "Create a clean square illustration for a vocabulary picture card.",
-        f"Main visual concept: {visual_concept}.",
+        f"Main semantic concept: the vocabulary word {word!r}.",
         "Show the meaning through objects, actions, setting, color, and composition only.",
         "The final image must be a pure picture with no written language anywhere.",
         f"Do not draw, spell, print, label, or display the English word {word!r}.",
-        "No English words, alphabet letters, captions, signs, labels, book-page text, UI, logos, watermarks, or typography.",
+        "No Chinese characters, no English words, no alphabet letters, no captions, no signs, no labels, no book-page text, no UI, no logos, no watermarks, no typography.",
         "Child-safe, clean, bright, centered main subject, high quality.",
     ]
     if selected_theme:
         prompt_parts.append(f"Theme: {selected_theme}.")
     if selected_style:
         prompt_parts.append(f"Visual style: {selected_style}.")
-    if english_definition and not selected_meaning:
+    if english_definition:
         prompt_parts.append(f"Use this only as hidden semantic guidance, not visible text: {english_definition}")
-    if chinese_definition:
-        prompt_parts.append(f"Meaning reference only, not visible text: {chinese_definition}")
     return " ".join(prompt_parts)
-
-
-def _short_meaning(chinese_definition: str | None) -> str:
-    if not chinese_definition:
-        return ""
-    text = " ".join(str(chinese_definition).split())
-    for mark in ["；", ";", "。", ".", "，", ",", "（", "("]:
-        if mark in text:
-            text = text.split(mark, 1)[0]
-    return text.strip()[:18]
-
-
-def _load_font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    candidates = [
-        "C:/Windows/Fonts/msyhbd.ttc" if bold else "C:/Windows/Fonts/msyh.ttc",
-        "C:/Windows/Fonts/simhei.ttf",
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc" if bold else "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc" if bold else "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    ]
-    for path in candidates:
-        try:
-            return ImageFont.truetype(path, size=size)
-        except OSError:
-            continue
-    return ImageFont.load_default()
-
-
-def _load_card_title_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    for path in CARD_TITLE_FONT_PATHS:
-        try:
-            return ImageFont.truetype(path, size=size)
-        except OSError:
-            continue
-    return _load_font(size, bold=True)
-
-
-def _has_chinese_font() -> bool:
-    return any(Path(path).exists() for path in CHINESE_FONT_PATHS)
-
-
-def ensure_chinese_font() -> None:
-    if _has_chinese_font() or os.name == "nt":
-        return
-    if hasattr(os, "geteuid") and os.geteuid() != 0:
-        return
-    apt_get = "/usr/bin/apt-get"
-    if not Path(apt_get).exists():
-        return
-    try:
-        subprocess.run([apt_get, "update", "-qq"], check=False, timeout=60, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run(
-            [apt_get, "install", "-y", "-qq", "fontconfig", "fonts-wqy-microhei"],
-            check=False,
-            timeout=180,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return
-
-
-def _fit_font(text: str, max_width: int, start_size: int, *, bold: bool = False) -> ImageFont.ImageFont:
-    size = start_size
-    while size >= 24:
-        font = _load_font(size, bold=bold)
-        bbox = ImageDraw.Draw(Image.new("RGB", (10, 10))).textbbox((0, 0), text, font=font)
-        if bbox[2] - bbox[0] <= max_width:
-            return font
-        size -= 4
-    return _load_font(24, bold=bold)
-
-
-def _fit_card_title_font(text: str, max_width: int, start_size: int) -> ImageFont.ImageFont:
-    size = start_size
-    while size >= 40:
-        font = _load_card_title_font(size)
-        bbox = ImageDraw.Draw(Image.new("RGB", (10, 10))).textbbox((0, 0), text, font=font, stroke_width=8)
-        if bbox[2] - bbox[0] <= max_width:
-            return font
-        size -= 5
-    return _load_card_title_font(40)
-
-
-def _paint_bottom_readability_gradient(overlay: Image.Image) -> None:
-    width, height = overlay.size
-    gradient_height = int(height * 0.36)
-    start_y = height - gradient_height
-    gradient = Image.new("RGBA", (width, gradient_height), (0, 0, 0, 0))
-    grad_draw = ImageDraw.Draw(gradient)
-    for y in range(gradient_height):
-        progress = y / max(1, gradient_height - 1)
-        alpha = int(108 * (progress**1.8))
-        grad_draw.line((0, y, width, y), fill=(34, 18, 9, alpha))
-    overlay.alpha_composite(gradient, (0, start_y))
-
-
-def _draw_reference_style_title(
-    overlay: Image.Image,
-    text: str,
-    *,
-    canvas_size: int = 1024,
-) -> None:
-    draw = ImageDraw.Draw(overlay)
-    font = _fit_card_title_font(text, 900, 122)
-    stroke_width = 8
-    bbox = draw.textbbox((0, 0), text, font=font, stroke_width=stroke_width)
-    text_width = bbox[2] - bbox[0]
-    text_height = bbox[3] - bbox[1]
-    x = (canvas_size - text_width) // 2 - bbox[0]
-    y = canvas_size - text_height - 68 - bbox[1]
-
-    shadow = Image.new("RGBA", overlay.size, (0, 0, 0, 0))
-    shadow_draw = ImageDraw.Draw(shadow)
-    shadow_draw.text(
-        (x + 5, y + 8),
-        text,
-        font=font,
-        fill=(56, 28, 12, 220),
-        stroke_width=stroke_width + 2,
-        stroke_fill=(56, 28, 12, 220),
-    )
-    overlay.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(radius=4)))
-
-    for dx, dy, alpha in [(0, 5, 150), (3, 7, 120), (-3, 7, 100)]:
-        draw.text(
-            (x + dx, y + dy),
-            text,
-            font=font,
-            fill=(86, 44, 18, alpha),
-            stroke_width=stroke_width,
-            stroke_fill=(86, 44, 18, alpha),
-        )
-    draw.text(
-        (x, y),
-        text,
-        font=font,
-        fill=(255, 252, 244, 255),
-        stroke_width=stroke_width,
-        stroke_fill=(97, 55, 30, 238),
-    )
 
 
 def compose_word_card_image(
@@ -243,21 +63,12 @@ def compose_word_card_image(
     word: str,
     chinese_definition: str | None = None,
 ) -> bytes:
-    ensure_chinese_font()
     image = Image.open(BytesIO(image_bytes)).convert("RGB")
     image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
     canvas = Image.new("RGB", (1024, 1024), (244, 248, 245))
     left = (1024 - image.width) // 2
     top = (1024 - image.height) // 2
     canvas.paste(image, (left, top))
-
-    overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    meaning_text = _short_meaning(chinese_definition)
-    if meaning_text:
-        _paint_bottom_readability_gradient(overlay)
-        _draw_reference_style_title(overlay, meaning_text)
-
-    canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
     output = BytesIO()
     canvas.save(output, format="JPEG", quality=92, optimize=True)
     return output.getvalue()
