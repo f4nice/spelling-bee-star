@@ -52,9 +52,9 @@ const aiStyle = ref("写实摄影");
 const aiMeaning = ref("");
 
 const aiImageModels = [
-  { key: "wan27", label: "模型一", provider: "dashscope", model: "wan2.7-image-pro" },
-  { key: "qwen20", label: "模型二", provider: "dashscope", model: "qwen-image-2.0-pro" },
-  { key: "wan26", label: "模型三", provider: "dashscope", model: "wan2.6-t2i" },
+  { key: "wan27", label: "阿里 wan2.7", modelLabel: "阿里 · wan2.7-image-pro", provider: "dashscope", model: "wan2.7-image-pro" },
+  { key: "qwen20", label: "阿里 qwen", modelLabel: "阿里 · qwen-image-2.0-pro", provider: "dashscope", model: "qwen-image-2.0-pro" },
+  { key: "wan26", label: "阿里 wan2.6", modelLabel: "阿里 · wan2.6-t2i", provider: "dashscope", model: "wan2.6-t2i" },
 ];
 
 const selectedFileName = computed(() => props.selectedImageFile?.name || "还没有选择图片");
@@ -146,10 +146,11 @@ async function saveReplacement() {
 }
 
 function selectAiCandidate(candidate) {
+  const label = candidate.modelLabel || candidate.label;
   selectedReplacement.value = {
     type: "ai",
     imageUrl: candidate.imageUrl,
-    label: `AI 做图 · ${candidate.label}`,
+    label: `AI 做图 · ${label}`,
     key: candidate.key,
   };
   aiNotice.value = "已放入准备替换，确认后点击保存。";
@@ -172,6 +173,7 @@ async function generateAiCandidate(option) {
       ...option,
       imageUrl: result.image_url,
       model: result.model || option.model,
+      modelLabel: `阿里 · ${result.model || option.model}`,
     };
     aiCandidates.value = [
       candidate,
@@ -315,8 +317,8 @@ async function generateAllAiCandidates() {
               :class="{ selected: selectedReplacement?.type === 'ai' && selectedReplacement?.key === candidate.key }"
               @click="selectAiCandidate(candidate)"
             >
-              <img :src="candidate.imageUrl" :alt="`${word.word} ${candidate.label}`">
-              <span>{{ candidate.label }}</span>
+              <img :src="candidate.imageUrl" :alt="`${word.word} ${candidate.modelLabel || candidate.label}`">
+              <span>{{ candidate.modelLabel || candidate.label }}</span>
             </button>
           </div>
           <p v-if="aiNotice" class="word-image-manager-empty">{{ aiNotice }}</p>

@@ -78,8 +78,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260630-001"
-DEFAULT_PAGE_VERSION = "v20260630.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260630-002"
+DEFAULT_PAGE_VERSION = "v20260630.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -162,6 +162,13 @@ SCIENCE_PUBLIC_BOOK_FALLBACKS = [
     },
 ]
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
+LIST_AI_IMAGE_JOBS: dict[str, dict] = {}
+LIST_AI_IMAGE_DEFAULT_MODEL = "wan2.6-t2i"
+LIST_AI_IMAGE_MODEL_LABELS = {
+    "wan2.7-image-pro": "阿里 · wan2.7-image-pro",
+    "qwen-image-2.0-pro": "阿里 · qwen-image-2.0-pro",
+    "wan2.6-t2i": "阿里 · wan2.6-t2i",
+}
 GROWTH_TROPHY_ASSET_STEM = "learning-growth-trophy"
 GROWTH_TROPHY_FALLBACK_IMAGE = "/static/icons/challenge-crown-transparent.png"
 
@@ -3926,6 +3933,50 @@ def list_image_sync_status(word_list_id: int, job_id: str):
         return dict(job)
 
 
+@app.post("/api/vue/lists/{word_list_id}/ai-images/start")
+def start_list_ai_image_batch(
+    word_list_id: int,
+    model: str = Query(default=LIST_AI_IMAGE_DEFAULT_MODEL),
+    db: Session = Depends(get_db),
+):
+    word_list = db.get(WordList, word_list_id)
+    if not word_list:
+        raise HTTPException(status_code=404, detail="Word list not found")
+
+    selected_model = normalize_list_ai_image_model(model)
+    pending_words = get_missing_image_words(db, word_list_id)
+    job_id = uuid4().hex
+    job = {
+        "id": job_id,
+        "word_list_id": word_list_id,
+        "status": "queued",
+        "total": len(pending_words),
+        "done": 0,
+        "generated": 0,
+        "skipped": 0,
+        "failed": 0,
+        "current_word": "",
+        "model": selected_model,
+        "model_label": list_ai_image_model_label(selected_model),
+        "results": [],
+        "message": "批量 AI 生图任务已创建",
+    }
+    with IMAGE_SYNC_LOCK:
+        LIST_AI_IMAGE_JOBS[job_id] = job
+
+    Thread(target=run_list_ai_image_job, args=(job_id, word_list_id, selected_model), daemon=True).start()
+    return job
+
+
+@app.get("/api/vue/lists/{word_list_id}/ai-images/{job_id}")
+def list_ai_image_status(word_list_id: int, job_id: str):
+    with IMAGE_SYNC_LOCK:
+        job = LIST_AI_IMAGE_JOBS.get(job_id)
+        if not job or job.get("word_list_id") != word_list_id:
+            raise HTTPException(status_code=404, detail="AI image job not found")
+        return dict(job)
+
+
 @app.get("/words/{word_id}/image-view")
 def word_image_view(word_id: int, db: Session = Depends(get_db)):
     word = db.get(Word, word_id)
@@ -5129,6 +5180,16 @@ def get_pending_image_words(db: Session, word_list_id: int) -> list[Word]:
     return [word for word in words if needs_image_sync(word)]
 
 
+def get_missing_image_words(db: Session, word_list_id: int) -> list[Word]:
+    words = db.scalars(
+        select(Word)
+        .join(WordListItem, WordListItem.word_id == Word.id)
+        .where(WordListItem.word_list_id == word_list_id)
+        .order_by(WordListItem.id.asc())
+    ).all()
+    return [word for word in words if not (word.image_url or "").strip()]
+
+
 def update_image_sync_job(job_id: str, **changes) -> None:
     with IMAGE_SYNC_LOCK:
         job = IMAGE_SYNC_JOBS.get(job_id)
@@ -5146,6 +5207,93 @@ def append_image_sync_result(job_id: str, result: dict) -> None:
         job["done"] += 1
         if not result.get("ok"):
             job["failed"] += 1
+
+
+def normalize_list_ai_image_model(model: str | None) -> str:
+    selected = (model or LIST_AI_IMAGE_DEFAULT_MODEL).strip()
+    if selected not in LIST_AI_IMAGE_MODEL_LABELS:
+        return LIST_AI_IMAGE_DEFAULT_MODEL
+    return selected
+
+
+def list_ai_image_model_label(model: str | None) -> str:
+    selected = normalize_list_ai_image_model(model)
+    return LIST_AI_IMAGE_MODEL_LABELS[selected]
+
+
+def update_list_ai_image_job(job_id: str, **changes) -> None:
+    with IMAGE_SYNC_LOCK:
+        job = LIST_AI_IMAGE_JOBS.get(job_id)
+        if not job:
+            return
+        job.update(changes)
+
+
+def append_list_ai_image_result(job_id: str, result: dict) -> None:
+    with IMAGE_SYNC_LOCK:
+        job = LIST_AI_IMAGE_JOBS.get(job_id)
+        if not job:
+            return
+        job["results"].append(result)
+        job["results"] = job["results"][-60:]
+        job["done"] += 1
+        if result.get("skipped"):
+            job["skipped"] += 1
+        elif result.get("ok"):
+            job["generated"] += 1
+        else:
+            job["failed"] += 1
+
+
+def list_ai_image_error_detail(exc: Exception) -> tuple[str, bool]:
+    if isinstance(exc, httpx.HTTPStatusError):
+        detail = exc.response.text[:400] if exc.response is not None else str(exc)
+    else:
+        detail = str(exc)
+    if "not configured" in detail:
+        return detail, True
+    if is_ai_quota_error(detail):
+        return "额度已经用完", True
+    return detail[:300] or "AI 生图失败", False
+
+
+async def generate_missing_word_ai_image(db: Session, word: Word, model: str) -> dict:
+    db.refresh(word)
+    if (word.image_url or "").strip():
+        return {"ok": True, "id": word.id, "word": word.word, "image_url": word.image_url, "skipped": True}
+
+    content = await generate_word_image(
+        provider="dashscope",
+        word=word.word,
+        english_definition=word.english_definition,
+        chinese_definition=word.chinese_definition,
+        theme="单词卡片",
+        style="写实摄影",
+        dashscope_api_key=settings.dashscope_api_key,
+        dashscope_endpoint=settings.dashscope_image_endpoint,
+        dashscope_task_endpoint=settings.dashscope_task_endpoint,
+        dashscope_poll_seconds=settings.dashscope_image_poll_seconds,
+        dashscope_timeout_seconds=settings.dashscope_image_timeout_seconds,
+        dashscope_model=model,
+    )
+    previous_url = word.image_url
+    image_url = store_uploaded_word_image(word.word, content, IMAGE_DIR)
+    word.image_url = image_url
+    word.image_locked = True
+    word.enrichment_error = None
+    db.add(word)
+    db.commit()
+    if previous_url != word.image_url:
+        remove_local_image(previous_url, IMAGE_DIR)
+    return {
+        "ok": True,
+        "id": word.id,
+        "word": word.word,
+        "image_url": word.image_url,
+        "provider": "dashscope",
+        "model": model,
+        "model_label": list_ai_image_model_label(model),
+    }
 
 
 def run_image_sync_job(job_id: str, word_list_id: int) -> None:
@@ -5181,6 +5329,62 @@ def run_image_sync_job(job_id: str, word_list_id: int) -> None:
             current_word="",
             message="部分图片未找到。" if failed else "图片已下载并压缩到服务器图片库。",
         )
+    finally:
+        db.close()
+
+
+def run_list_ai_image_job(job_id: str, word_list_id: int, model: str) -> None:
+    db = SessionLocal()
+    try:
+        pending_words = get_missing_image_words(db, word_list_id)
+        update_list_ai_image_job(
+            job_id,
+            status="running",
+            total=len(pending_words),
+            done=0,
+            failed=0,
+            generated=0,
+            skipped=0,
+            message=f"正在使用 {list_ai_image_model_label(model)} 生成缺失图片",
+        )
+        if not pending_words:
+            update_list_ai_image_job(job_id, status="complete", message="当前单词表没有缺失图片。")
+            return
+
+        fatal_error = ""
+        for word in pending_words:
+            update_list_ai_image_job(job_id, current_word=word.word)
+            try:
+                result = asyncio.run(generate_missing_word_ai_image(db, word, model))
+            except Exception as exc:
+                detail, fatal = list_ai_image_error_detail(exc)
+                result = {"ok": False, "id": word.id, "word": word.word, "error": detail, "fatal": fatal}
+                try:
+                    word.enrichment_error = f"AI 批量生图失败: {detail}"
+                    db.add(word)
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                if fatal:
+                    fatal_error = detail
+            append_list_ai_image_result(job_id, result)
+            if fatal_error:
+                break
+
+        with IMAGE_SYNC_LOCK:
+            job = LIST_AI_IMAGE_JOBS.get(job_id)
+            failed = job.get("failed", 0) if job else 0
+            generated = job.get("generated", 0) if job else 0
+        if fatal_error:
+            message = f"批量 AI 生图已停止：{fatal_error}"
+            status = "failed"
+        elif failed:
+            message = f"已生成 {generated} 张，{failed} 个单词失败。"
+            status = "failed"
+        else:
+            message = f"已生成 {generated} 张缺失图片。"
+            status = "complete"
+        update_list_ai_image_job(job_id, status=status, current_word="", message=message)
     finally:
         db.close()
 

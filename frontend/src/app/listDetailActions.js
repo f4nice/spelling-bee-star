@@ -1,4 +1,5 @@
 import { listApiPaths } from "./listApiPaths.js";
+import { runListAiImageJob } from "./listAiImageJob.js";
 import { runListImageSyncJob } from "./listImageSyncJob.js";
 import { createDeleteListForm, createRenameListForm } from "./listForms.js";
 import { fetchJson } from "./utils.js";
@@ -20,4 +21,8 @@ export async function deleteWordList({ wordListId, password }) {
 
 export async function syncWordListImages({ wordListId, setJob, onComplete }) {
   await runListImageSyncJob({ wordListId, setJob, onComplete });
+}
+
+export async function generateWordListAiImages({ wordListId, setJob, onComplete }) {
+  await runListAiImageJob({ wordListId, setJob, onComplete });
 }

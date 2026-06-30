@@ -1,4 +1,6 @@
 export const listApiPaths = {
+  aiImagesStart: (wordListId) => `/api/vue/lists/${wordListId}/ai-images/start`,
+  aiImagesStatus: (wordListId, jobId) => `/api/vue/lists/${wordListId}/ai-images/${jobId}`,
   batchImages: () => "/api/vue/lists/batch-images",
   delete: (wordListId) => `/api/vue/lists/${wordListId}/delete`,
   rename: (wordListId) => `/api/vue/lists/${wordListId}/rename`,

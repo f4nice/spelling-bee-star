@@ -1646,15 +1646,20 @@ a:focus-visible {
 }
 
 .word-resource-filter-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  margin: -8px 0 18px;
+}
+
+.word-resource-filter-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 14px;
-  margin: -8px 0 18px;
 }
 
-.word-resource-filter-panel > div:first-child {
+.word-resource-filter-top > div:first-child {
   display: flex;
   align-items: baseline;
   gap: 10px;
@@ -1713,6 +1718,84 @@ a:focus-visible {
 
 .word-resource-filter-empty {
   margin-top: 0;
+}
+
+.list-ai-image-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 300px) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(29, 127, 91, 0.16);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #f7fcf9 0%, #eef8f3 100%);
+}
+
+.list-ai-image-summary {
+  display: grid;
+  gap: 3px;
+}
+
+.list-ai-image-summary strong {
+  color: var(--accent-dark);
+  font-size: 14px;
+}
+
+.list-ai-image-summary span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.list-ai-image-progress strong {
+  color: var(--accent-dark);
+}
+
+.list-ai-image-toolbar.is-syncing .sync-progress span {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.24) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.24) 50%,
+    rgba(255, 255, 255, 0.24) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 22px 22px;
+  animation: sync-stripes 0.8s linear infinite;
+}
+
+.list-ai-image-toolbar.is-complete .sync-progress span {
+  width: 100%;
+}
+
+.list-ai-image-toolbar.has-error {
+  border-color: #ffd8d3;
+  background: #fff8f7;
+}
+
+.list-ai-image-toolbar.has-error .sync-progress span {
+  background: var(--warn);
+}
+
+.list-ai-image-button {
+  min-height: 40px;
+  padding-inline: 16px;
+  white-space: nowrap;
+}
+
+.list-ai-image-button:disabled {
+  color: rgba(255, 255, 255, 0.72);
+  background: #8ab7a4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.list-ai-image-notice {
+  margin: -2px 0 0;
 }
 
 .word-card {
@@ -7054,17 +7137,21 @@ select {
     grid-template-columns: 1fr;
   }
 
-  .word-resource-filter-panel {
+  .word-resource-filter-top {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .word-resource-filter-panel > div:first-child {
+  .word-resource-filter-top > div:first-child {
     justify-content: space-between;
     min-width: 0;
   }
 
   .word-resource-filter-actions {
     justify-content: flex-start;
+  }
+
+  .list-ai-image-toolbar {
+    grid-template-columns: 1fr;
   }
 }

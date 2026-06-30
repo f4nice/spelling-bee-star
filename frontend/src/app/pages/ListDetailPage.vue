@@ -11,9 +11,11 @@ const props = defineProps([
   "uploadOptions",
   "uploadForm",
   "deleteListState",
+  "aiImageJob",
   "submitUpload",
   "renameList",
   "deleteList",
+  "generateListAiImages",
   "wordDetailUrl",
   "imageForWord",
   "fallbackLetter",
@@ -57,6 +59,8 @@ function openImportModal() {
   </ListsCreateModal>
   <ListDetailWordGrid
     :data="data"
+    :ai-image-job="aiImageJob"
+    :generate-list-ai-images="generateListAiImages"
     :word-detail-url="wordDetailUrl"
     :image-for-word="imageForWord"
     :fallback-letter="fallbackLetter"
