@@ -52,9 +52,9 @@ const aiStyle = ref("写实摄影");
 const aiMeaning = ref("");
 
 const aiImageModels = [
-  { key: "wan27", label: "阿里 wan2.7", modelLabel: "阿里 · wan2.7-image-pro", provider: "dashscope", model: "wan2.7-image-pro" },
-  { key: "qwen20", label: "阿里 qwen", modelLabel: "阿里 · qwen-image-2.0-pro", provider: "dashscope", model: "qwen-image-2.0-pro" },
-  { key: "wan26", label: "阿里 wan2.6", modelLabel: "阿里 · wan2.6-t2i", provider: "dashscope", model: "wan2.6-t2i" },
+  { key: "wan27", label: "阿里 · wan2.7-image-pro", modelLabel: "阿里 · wan2.7-image-pro", provider: "dashscope", model: "wan2.7-image-pro" },
+  { key: "qwen20", label: "阿里 · qwen-image-2.0-pro", modelLabel: "阿里 · qwen-image-2.0-pro", provider: "dashscope", model: "qwen-image-2.0-pro" },
+  { key: "wan26", label: "阿里 · wan2.6-t2i", modelLabel: "阿里 · wan2.6-t2i", provider: "dashscope", model: "wan2.6-t2i" },
 ];
 
 const selectedFileName = computed(() => props.selectedImageFile?.name || "还没有选择图片");

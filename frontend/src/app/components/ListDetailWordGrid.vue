@@ -90,15 +90,35 @@ const aiImageJobText = computed(() => {
   if (!aiImageJob.value) return "默认模型：阿里 · wan2.6-t2i，只处理没有图片的单词。";
   return aiImageJob.value.message || "正在批量生成 AI 图片";
 });
+const aiImageQuotaLabel = computed(() => {
+  const quota = aiImageQuota.value || {};
+  return quota.model_label ? `今日免费额度（${quota.model_label}）` : "今日免费额度";
+});
 const aiImageQuotaText = computed(() => {
   const quota = aiImageQuota.value || {};
   const used = Math.max(Number(quota.used || 0), 0);
   if (quota.configured) {
     const limit = Math.max(Number(quota.limit || 0), 0);
+    if (!limit) return "无免费额度";
     const remaining = Math.max(Number(quota.remaining || 0), 0);
     return `剩余 ${remaining} / ${limit}`;
   }
   return `已用 ${used} 张`;
+});
+const paidConfirmTitle = computed(() => {
+  const quota = aiImageQuota.value || {};
+  const limit = Math.max(Number(quota.limit || 0), 0);
+  if (quota.configured && !limit) return "当前模型没有免费额度";
+  return "免费额度已经用完";
+});
+const paidConfirmBody = computed(() => {
+  const quota = aiImageQuota.value || {};
+  const label = quota.model_label || "阿里图片模型";
+  const limit = Math.max(Number(quota.limit || 0), 0);
+  if (quota.configured && !limit) {
+    return `${label} 没有免费额度。确认后会继续生成图片，可能产生云服务费用。`;
+  }
+  return `${label} 今日免费额度已用完。确认后会继续生成图片，可能产生云服务费用。`;
 });
 
 watch(aiImageJob, (job) => {
@@ -148,7 +168,7 @@ async function confirmPaidBatch() {
       <div class="list-ai-image-summary">
         <strong>批量 AI 图片</strong>
         <span>{{ aiImageJobText }}</span>
-        <em class="list-ai-image-quota">今日免费额度：{{ aiImageQuotaText }}</em>
+        <em class="list-ai-image-quota">{{ aiImageQuotaLabel }}：{{ aiImageQuotaText }}</em>
       </div>
       <div v-if="aiImageJob" class="sync-progress-wrap list-ai-image-progress">
         <div class="sync-progress" aria-hidden="true"><span :style="{ width: `${aiImageProgress}%` }"></span></div>
@@ -169,8 +189,8 @@ async function confirmPaidBatch() {
   <div v-if="isPaidConfirmOpen" class="list-paid-confirm-backdrop" role="presentation">
     <section class="list-paid-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="paidConfirmTitle">
       <p class="section-kicker">Aliyun Quota</p>
-      <h2 id="paidConfirmTitle">免费额度可能已经用完</h2>
-      <p>阿里图片模型返回额度不足。确认后会继续调用阿里 · wan2.6-t2i，可能产生云服务费用。</p>
+      <h2 id="paidConfirmTitle">{{ paidConfirmTitle }}</h2>
+      <p>{{ paidConfirmBody }}</p>
       <div class="list-paid-confirm-actions">
         <button class="secondary-button" type="button" @click="isPaidConfirmOpen = false">暂不继续</button>
         <button class="primary-action-button" type="button" @click="confirmPaidBatch">确认付费继续</button>

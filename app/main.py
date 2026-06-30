@@ -78,8 +78,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260630-004"
-DEFAULT_PAGE_VERSION = "v20260630.4"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260630-005"
+DEFAULT_PAGE_VERSION = "v20260630.5"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -168,6 +168,10 @@ LIST_AI_IMAGE_MODEL_LABELS = {
     "wan2.7-image-pro": "阿里 · wan2.7-image-pro",
     "qwen-image-2.0-pro": "阿里 · qwen-image-2.0-pro",
     "wan2.6-t2i": "阿里 · wan2.6-t2i",
+}
+LIST_AI_IMAGE_DAILY_FREE_QUOTAS = {
+    "qwen-image-2.0-pro": 100,
+    "wan2.6-t2i": 0,
 }
 AI_IMAGE_QUOTA_CACHE_PREFIX = "ai-image:daily-quota"
 GROWTH_TROPHY_ASSET_STEM = "learning-growth-trophy"
@@ -2546,7 +2550,7 @@ def vue_list_detail_api(word_list_id: int, db: Session = Depends(get_db)):
     return {
         "word_list": {"id": word_list.id, "name": word_list.name, "sequence_offset": word_list.sequence_offset},
         "challenge": challenge_state(db, word_list),
-        "ai_image_quota": ai_image_quota_status(db),
+        "ai_image_quota": ai_image_quota_status(db, model=LIST_AI_IMAGE_DEFAULT_MODEL),
         "words": [
             {
                 **serialize_word(word),
@@ -3949,7 +3953,7 @@ def start_list_ai_image_batch(
     selected_model = normalize_list_ai_image_model(model)
     paid_confirmed = allow_paid.strip().lower() in {"1", "true", "yes", "paid"}
     pending_words = get_missing_image_words(db, word_list_id)
-    quota = ai_image_quota_status(db)
+    quota = ai_image_quota_status(db, model=selected_model)
     job_id = uuid4().hex
     job = {
         "id": job_id,
@@ -3976,10 +3980,11 @@ def start_list_ai_image_batch(
         update_list_ai_image_job(
             job_id,
             status="failed",
-            message="今日免费额度已用完，需要确认是否继续付费使用。",
+            message=ai_image_quota_confirmation_message(quota),
             requires_paid_confirmation=True,
         )
-        return job
+        with IMAGE_SYNC_LOCK:
+            return dict(LIST_AI_IMAGE_JOBS[job_id])
 
     Thread(target=run_list_ai_image_job, args=(job_id, word_list_id, selected_model, paid_confirmed), daemon=True).start()
     return job
@@ -5238,18 +5243,24 @@ def list_ai_image_model_label(model: str | None) -> str:
     return LIST_AI_IMAGE_MODEL_LABELS[selected]
 
 
-def ai_image_quota_cache_key(target_date: date | None = None) -> str:
+def ai_image_quota_cache_key(model: str | None = None, target_date: date | None = None) -> str:
     day = target_date or date.today()
-    return f"{AI_IMAGE_QUOTA_CACHE_PREFIX}:{day.isoformat()}"
+    selected_model = normalize_list_ai_image_model(model)
+    return f"{AI_IMAGE_QUOTA_CACHE_PREFIX}:{selected_model}:{day.isoformat()}"
 
 
-def ai_image_daily_free_limit() -> int:
-    return max(int(settings.ai_image_daily_free_quota or 0), 0)
+def ai_image_daily_free_limit(model: str | None = None) -> tuple[int, bool]:
+    selected_model = normalize_list_ai_image_model(model)
+    if selected_model in LIST_AI_IMAGE_DAILY_FREE_QUOTAS:
+        return max(int(LIST_AI_IMAGE_DAILY_FREE_QUOTAS[selected_model]), 0), True
+    configured_limit = max(int(settings.ai_image_daily_free_quota or 0), 0)
+    return configured_limit, configured_limit > 0
 
 
-def ai_image_quota_status(db: Session, target_date: date | None = None) -> dict[str, Any]:
+def ai_image_quota_status(db: Session, target_date: date | None = None, model: str | None = None) -> dict[str, Any]:
     day = target_date or date.today()
-    entry = db.get(CacheEntry, ai_image_quota_cache_key(day))
+    selected_model = normalize_list_ai_image_model(model)
+    entry = db.get(CacheEntry, ai_image_quota_cache_key(selected_model, day))
     used = 0
     if entry:
         try:
@@ -5258,13 +5269,15 @@ def ai_image_quota_status(db: Session, target_date: date | None = None) -> dict[
                 used = max(int(payload.get("used") or 0), 0)
         except (TypeError, ValueError, json.JSONDecodeError):
             used = 0
-    limit = ai_image_daily_free_limit()
-    remaining = max(limit - used, 0) if limit else None
+    limit, configured = ai_image_daily_free_limit(selected_model)
+    remaining = max(limit - used, 0) if configured else None
     return {
         "date": day.isoformat(),
+        "model": selected_model,
+        "model_label": list_ai_image_model_label(selected_model),
         "used": used,
         "limit": limit,
-        "configured": limit > 0,
+        "configured": configured,
         "remaining": remaining,
     }
 
@@ -5275,13 +5288,21 @@ def ai_image_quota_requires_confirmation(quota: dict[str, Any], paid_confirmed: 
     return int(quota.get("remaining") or 0) <= 0
 
 
-def increment_ai_image_quota(db: Session, amount: int = 1) -> dict[str, Any]:
+def ai_image_quota_confirmation_message(quota: dict[str, Any]) -> str:
+    if quota.get("configured") and int(quota.get("limit") or 0) <= 0:
+        return "当前模型没有免费额度，需要确认是否继续付费使用。"
+    return "今日免费额度已用完，需要确认是否继续付费使用。"
+
+
+def increment_ai_image_quota(db: Session, model: str | None = None, amount: int = 1) -> dict[str, Any]:
     day = date.today()
-    key = ai_image_quota_cache_key(day)
-    current = ai_image_quota_status(db, day)
+    selected_model = normalize_list_ai_image_model(model)
+    key = ai_image_quota_cache_key(selected_model, day)
+    current = ai_image_quota_status(db, day, selected_model)
     next_used = current["used"] + max(int(amount), 0)
     payload = {
         "date": day.isoformat(),
+        "model": selected_model,
         "used": next_used,
     }
     expires_at = datetime.combine(day + timedelta(days=2), datetime.min.time())
@@ -5293,7 +5314,7 @@ def increment_ai_image_quota(db: Session, amount: int = 1) -> dict[str, Any]:
     else:
         db.add(CacheEntry(key=key, payload=encoded, expires_at=expires_at))
     db.commit()
-    return ai_image_quota_status(db, day)
+    return ai_image_quota_status(db, day, selected_model)
 
 
 def update_list_ai_image_job(job_id: str, **changes) -> None:
@@ -5362,7 +5383,7 @@ async def generate_missing_word_ai_image(db: Session, word: Word, model: str) ->
     db.commit()
     if previous_url != word.image_url:
         remove_local_image(previous_url, IMAGE_DIR)
-    quota = increment_ai_image_quota(db)
+    quota = increment_ai_image_quota(db, model)
     return {
         "ok": True,
         "id": word.id,
@@ -5434,9 +5455,9 @@ def run_list_ai_image_job(job_id: str, word_list_id: int, model: str, paid_confi
         fatal_error = ""
         requires_paid_confirmation = False
         for word in pending_words:
-            quota = ai_image_quota_status(db)
+            quota = ai_image_quota_status(db, model=model)
             if ai_image_quota_requires_confirmation(quota, paid_confirmed):
-                fatal_error = "今日免费额度已用完"
+                fatal_error = ai_image_quota_confirmation_message(quota)
                 requires_paid_confirmation = True
                 update_list_ai_image_job(job_id, quota=quota)
                 break
@@ -5471,7 +5492,7 @@ def run_list_ai_image_job(job_id: str, word_list_id: int, model: str, paid_confi
             failed = job.get("failed", 0) if job else 0
             generated = job.get("generated", 0) if job else 0
         if fatal_error:
-            message = "免费额度可能已经用完，需要确认是否继续付费使用。" if requires_paid_confirmation else f"批量 AI 生图已停止：{fatal_error}"
+            message = fatal_error if requires_paid_confirmation else f"批量 AI 生图已停止：{fatal_error}"
             status = "failed"
         elif failed:
             message = f"已生成 {generated} 张，{failed} 个单词失败。"
