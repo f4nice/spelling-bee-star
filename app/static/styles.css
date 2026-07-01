@@ -6056,28 +6056,40 @@ button.calendar-day:disabled {
   gap: 6px;
 }
 
+.word-title-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.word-title-main h1[title] {
+  cursor: text;
+}
+
 .word-title-stack .title-alternate-edit {
+  width: min(260px, 46vw);
   min-height: 0;
-  resize: none;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  outline: 0;
-  background: transparent;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
   color: var(--accent-dark);
-  line-height: 1.4;
-  box-shadow: none;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .word-title-stack .title-alternate-edit:focus {
-  box-shadow: inset 0 -1px 0 rgba(29, 127, 91, 0.35);
+  box-shadow: 0 0 0 3px rgba(29, 127, 91, 0.12);
 }
 
 .title-alternate-text {
+  max-width: min(320px, 48vw);
   color: var(--accent-dark);
   font-size: 16px;
   font-weight: 700;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .phonetic {

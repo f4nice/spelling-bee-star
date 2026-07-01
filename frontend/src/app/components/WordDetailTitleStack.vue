@@ -28,13 +28,21 @@ const hasPhoneticText = computed(() => Boolean(phoneticText.value));
 
 async function startAlternateEdit() {
   if (!props.data.can_edit) return;
+  props.wordEdit.alternate_spellings = props.data.word.alternate_spellings || props.wordEdit.alternate_spellings || "";
   isEditingAlternate.value = true;
   await nextTick();
   alternateInput.value?.focus();
+  alternateInput.value?.select();
 }
 
 async function finishAlternateEdit() {
+  if (!isEditingAlternate.value) return;
   await props.saveWordField("alternate_spellings");
+  isEditingAlternate.value = false;
+}
+
+function cancelAlternateEdit() {
+  props.wordEdit.alternate_spellings = props.data.word.alternate_spellings || "";
   isEditingAlternate.value = false;
 }
 
@@ -62,8 +70,22 @@ function cancelPhoneticEdit() {
 </script>
 
 <template>
-  <div class="word-title-stack" @dblclick="startAlternateEdit">
-    <h1>{{ data.word.word }}</h1>
+  <div class="word-title-stack">
+    <div class="word-title-main">
+      <h1 :title="data.can_edit ? '双击编辑其他拼法' : null" @dblclick="startAlternateEdit">{{ data.word.word }}</h1>
+      <input
+        v-if="data.can_edit && isEditingAlternate"
+        ref="alternateInput"
+        v-model="wordEdit.alternate_spellings"
+        class="inline-edit-input title-alternate-edit"
+        placeholder="其他拼法"
+        aria-label="编辑其他拼法"
+        @blur="finishAlternateEdit"
+        @keydown.enter.prevent="finishAlternateEdit"
+        @keydown.esc.prevent="cancelAlternateEdit"
+      >
+      <strong v-else-if="hasAlternateSpellings" class="title-alternate-text">{{ alternateSpellingsText }}</strong>
+    </div>
     <input
       v-if="data.can_edit && isEditingPhonetic"
       ref="phoneticInput"
@@ -79,20 +101,10 @@ function cancelPhoneticEdit() {
     <p
       v-else-if="hasPhoneticText || data.can_edit"
       :class="['phonetic', { 'is-placeholder': !hasPhoneticText }]"
-      :title="data.can_edit ? '双击编辑音标' : ''"
+      :title="data.can_edit ? '双击编辑音标' : null"
       @dblclick.stop="startPhoneticEdit"
     >
       {{ hasPhoneticText ? `/${phoneticText}/` : "双击添加音标" }}
     </p>
-    <textarea
-      v-if="data.can_edit && isEditingAlternate"
-      ref="alternateInput"
-      v-model="wordEdit.alternate_spellings"
-      class="inline-edit-input title-alternate-edit"
-      rows="1"
-      placeholder="其他拼法"
-      @blur="finishAlternateEdit"
-    ></textarea>
-    <strong v-else-if="hasAlternateSpellings" class="title-alternate-text">{{ alternateSpellingsText }}</strong>
   </div>
 </template>
