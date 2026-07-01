@@ -79,8 +79,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260701-001"
-DEFAULT_PAGE_VERSION = "v20260701.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260701-002"
+DEFAULT_PAGE_VERSION = "v20260701.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2356,7 +2356,7 @@ async def good_words_create_word_list(request: Request, db: Session = Depends(ge
     if not isinstance(vocabulary, list):
         raise HTTPException(status_code=400, detail="单词数据格式不正确。")
 
-    word_list = WordList(name=title)
+    word_list = WordList(name=title, display_order=next_word_list_display_order(db))
     db.add(word_list)
     db.commit()
     db.refresh(word_list)
@@ -2493,6 +2493,44 @@ def vue_shell_api(db: Session = Depends(get_db)):
 def vue_lists_api(db: Session = Depends(get_db)):
     cards = [serialize_word_list_card(word_list_card(db, word_list)) for word_list in regular_word_lists(db)]
     return {"cards": cards}
+
+
+@app.post("/api/vue/lists/reorder")
+async def vue_reorder_lists_api(request: Request, db: Session = Depends(get_db)):
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="排序数据不是有效 JSON。") from exc
+
+    raw_ids = payload.get("ordered_ids") if isinstance(payload, dict) else None
+    if not isinstance(raw_ids, list):
+        raise HTTPException(status_code=400, detail="缺少单词表排序数据。")
+
+    word_lists = regular_word_lists(db)
+    by_id = {word_list.id: word_list for word_list in word_lists}
+    ordered_ids: list[int] = []
+    seen: set[int] = set()
+    for raw_id in raw_ids:
+        try:
+            word_list_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if word_list_id in by_id and word_list_id not in seen:
+            ordered_ids.append(word_list_id)
+            seen.add(word_list_id)
+
+    if not ordered_ids:
+        raise HTTPException(status_code=400, detail="没有可保存的单词表顺序。")
+
+    final_ids = ordered_ids + [word_list.id for word_list in word_lists if word_list.id not in seen]
+    for index, word_list_id in enumerate(final_ids, start=1):
+        word_list = by_id[word_list_id]
+        word_list.display_order = index * 10
+        db.add(word_list)
+    db.commit()
+
+    cards = [serialize_word_list_card(word_list_card(db, word_list)) for word_list in regular_word_lists(db)]
+    return {"ok": True, "cards": cards}
 
 
 @app.get("/api/vue/lists/search")
@@ -3345,7 +3383,7 @@ def serialize_word_list_card(card: dict[str, Any]) -> dict[str, Any]:
     word_list = card["list"]
     cover_word = card.get("cover_word")
     return {
-        "list": {"id": word_list.id, "name": word_list.name},
+        "list": {"id": word_list.id, "name": word_list.name, "display_order": word_list.display_order},
         "count": card["count"],
         "cover_word": serialize_word(cover_word) if cover_word else None,
         "challenge": card["challenge"],
@@ -4954,6 +4992,8 @@ def ensure_schema_columns() -> None:
             connection.execute(text(f"ALTER TABLE words ADD COLUMN {column} TEXT NULL"))
         for column in missing_string_columns:
             connection.execute(text(f"ALTER TABLE words ADD COLUMN {column} VARCHAR(120) NULL"))
+        if "word_lists" in table_names and "display_order" not in word_list_columns:
+            connection.execute(text("ALTER TABLE word_lists ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0"))
         if "word_lists" in table_names and "sequence_offset" not in word_list_columns:
             connection.execute(text("ALTER TABLE word_lists ADD COLUMN sequence_offset INTEGER NOT NULL DEFAULT 0"))
         if "challenge_progress" in table_names and "completed_rounds" not in challenge_progress_columns:
@@ -5008,7 +5048,7 @@ def get_or_create_word_list(db: Session, word_list_id: str, name: str) -> WordLi
     if word_list:
         word_list.name = clean_list_name(name)
     else:
-        word_list = WordList(name=clean_list_name(name))
+        word_list = WordList(name=clean_list_name(name), display_order=next_word_list_display_order(db))
         db.add(word_list)
     db.commit()
     db.refresh(word_list)
@@ -5021,11 +5061,16 @@ def get_or_create_word_list_by_name(db: Session, name: str) -> WordList:
         select(WordList).where(WordList.name == cleaned_name).order_by(WordList.id.asc()).limit(1)
     )
     if not word_list:
-        word_list = WordList(name=cleaned_name)
+        word_list = WordList(name=cleaned_name, display_order=next_word_list_display_order(db))
         db.add(word_list)
         db.commit()
         db.refresh(word_list)
     return word_list
+
+
+def next_word_list_display_order(db: Session) -> int:
+    current_min = db.scalar(select(func.min(WordList.display_order))) or 0
+    return int(current_min) - 10
 
 
 def clear_word_list_items(db: Session, word_list_id: int) -> None:
@@ -5047,7 +5092,7 @@ def link_word_to_list(db: Session, word_list_id: int, word_id: int) -> None:
 
 def ensure_default_word_list(db: Session) -> None:
     if db.scalar(select(func.count(WordList.id))) == 0:
-        default_list = WordList(name="默认单词表")
+        default_list = WordList(name="默认单词表", display_order=0)
         db.add(default_list)
         db.commit()
         db.refresh(default_list)
@@ -5102,7 +5147,9 @@ def is_wrong_word_list_name(name: str | None) -> bool:
 
 
 def regular_word_lists(db: Session) -> list[WordList]:
-    word_lists = db.scalars(select(WordList).order_by(WordList.created_at.desc())).all()
+    word_lists = db.scalars(
+        select(WordList).order_by(WordList.display_order.asc(), WordList.created_at.desc(), WordList.id.desc())
+    ).all()
     return [word_list for word_list in word_lists if not is_wrong_word_list_name(word_list.name)]
 
 
