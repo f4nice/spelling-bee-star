@@ -14,6 +14,5 @@ export function createImportPreviewSubmitForm({ previewId, preview, importForm }
   if (!allColumnsSelected) {
     importForm.selected_columns.forEach((item) => form.append("selected_columns", item));
   }
-  importForm.image_files.forEach((item) => form.append("image_files", item));
   return form;
 }

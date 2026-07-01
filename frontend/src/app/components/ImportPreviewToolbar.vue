@@ -1,5 +1,4 @@
 <script setup>
-import ImportPreviewImagePicker from "./ImportPreviewImagePicker.vue";
 import ImportPreviewSelectionActions from "./ImportPreviewSelectionActions.vue";
 import ImportPreviewSheetControls from "./ImportPreviewSheetControls.vue";
 import ImportPreviewSubmitButton from "./ImportPreviewSubmitButton.vue";
@@ -16,7 +15,6 @@ defineProps(importPreviewToolbarProps);
       :change-preview-sheet="changePreviewSheet"
     />
     <ImportPreviewSelectionActions :set-all-rows="setAllRows" :set-all-columns="setAllColumns" />
-    <ImportPreviewImagePicker :import-form="importForm" />
     <ImportPreviewSubmitButton :submit-import="submitImport" :is-importing="isImporting" />
   </div>
 </template>

@@ -79,8 +79,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260630-010"
-DEFAULT_PAGE_VERSION = "v20260630.10"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260701-001"
+DEFAULT_PAGE_VERSION = "v20260701.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2548,7 +2548,7 @@ def vue_list_detail_api(word_list_id: int, db: Session = Depends(get_db)):
         .where(WordListItem.word_list_id == word_list_id)
         .order_by(WordListItem.id.asc())
     ).all()
-    apply_word_resources(db, words)
+    apply_word_resources(db, words, include_image=False)
     stats = challenge_counts_for_words(db, [word.id for word in words])
     return {
         "word_list": {"id": word_list.id, "name": word_list.name, "sequence_offset": word_list.sequence_offset},
@@ -2606,7 +2606,7 @@ def vue_word_detail_api(
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
-    apply_word_resource(db, word, commit=True)
+    apply_word_resource(db, word, commit=True, include_image=False)
     cleaned_error = friendly_enrichment_error(word.enrichment_error)
     if cleaned_error != word.enrichment_error:
         word.enrichment_error = cleaned_error
@@ -2832,11 +2832,9 @@ async def vue_import_preview(
             db.commit()
         word_ids = import_rows(rows, db, target_list)
     image_result = {"matched": 0, "unmatched": 0, "failed": 0}
-    if image_files:
-        imported_words = [word for word_id in word_ids if (word := db.get(Word, word_id))]
-        image_result = await apply_uploaded_images_to_words(imported_words, image_files, db)
+    # Imports should not auto-match images; use the list page image tools after import.
     if word_ids:
-        start_enrichment_thread(word_ids)
+        start_enrichment_thread(word_ids, include_images=False)
     path.unlink(missing_ok=True)
     preview_excel_path(preview_id).unlink(missing_ok=True)
     return {
@@ -4321,7 +4319,7 @@ def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]
         try:
             db.commit()
             db.refresh(word)
-            apply_word_resource(db, word, commit=False)
+            apply_word_resource(db, word, commit=False, include_image=False)
             remember_word_resource(db, word, commit=False)
             db.commit()
             db.refresh(word)
@@ -4466,8 +4464,8 @@ def html_to_text(value: str) -> str:
     return value.strip()
 
 
-def start_enrichment_thread(word_ids: list[int]) -> None:
-    worker = Thread(target=lambda: asyncio.run(enrich_word_ids(word_ids)), daemon=True)
+def start_enrichment_thread(word_ids: list[int], *, include_images: bool = True) -> None:
+    worker = Thread(target=lambda: asyncio.run(enrich_word_ids(word_ids, include_images=include_images)), daemon=True)
     worker.start()
 
 
@@ -4558,7 +4556,7 @@ def remember_word_resource(
     return changed
 
 
-def apply_word_resource(db: Session, word: Word, *, commit: bool = False) -> bool:
+def apply_word_resource(db: Session, word: Word, *, commit: bool = False, include_image: bool = True) -> bool:
     resource = get_word_resource(db, word.word)
     if not resource:
         return False
@@ -4582,7 +4580,7 @@ def apply_word_resource(db: Session, word: Word, *, commit: bool = False) -> boo
             setattr(word, lock_field, True)
             changed = True
 
-    if (resource.image_url or "").strip() and not (word.image_url or "").strip():
+    if include_image and (resource.image_url or "").strip() and not (word.image_url or "").strip():
         word.image_url = resource.image_url
         word.image_locked = True
         changed = True
@@ -4606,10 +4604,10 @@ def apply_word_resource(db: Session, word: Word, *, commit: bool = False) -> boo
     return changed
 
 
-def apply_word_resources(db: Session, words: list[Word], *, commit: bool = True) -> int:
+def apply_word_resources(db: Session, words: list[Word], *, commit: bool = True, include_image: bool = True) -> int:
     applied = 0
     for word in words:
-        if apply_word_resource(db, word, commit=False):
+        if apply_word_resource(db, word, commit=False, include_image=include_image):
             applied += 1
     if applied and commit:
         db.commit()
@@ -5390,7 +5388,7 @@ def get_pending_image_words(db: Session, word_list_id: int) -> list[Word]:
         .where(WordListItem.word_list_id == word_list_id)
         .order_by(Word.word.asc())
     ).all()
-    apply_word_resources(db, words)
+    apply_word_resources(db, words, include_image=False)
     return [word for word in words if needs_image_sync(word)]
 
 
@@ -5401,7 +5399,7 @@ def get_missing_image_words(db: Session, word_list_id: int) -> list[Word]:
         .where(WordListItem.word_list_id == word_list_id)
         .order_by(WordListItem.id.asc())
     ).all()
-    apply_word_resources(db, words)
+    apply_word_resources(db, words, include_image=False)
     return [word for word in words if not (word.image_url or "").strip()]
 
 
@@ -5964,13 +5962,13 @@ def sidebar_challenge_progress(db: Session) -> list[dict]:
     return items
 
 
-async def enrich_word_ids(word_ids: list[int]) -> None:
+async def enrich_word_ids(word_ids: list[int], *, include_images: bool = True) -> None:
     db = SessionLocal()
     try:
         for word_id in word_ids:
             word = db.get(Word, word_id)
             if word:
-                await enrich_word(db, word)
+                await enrich_word(db, word, include_images=include_images)
                 remember_word_resource(db, word, commit=True)
     finally:
         db.close()

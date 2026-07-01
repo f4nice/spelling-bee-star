@@ -16,7 +16,7 @@ IMAGE_DIR = UPLOAD_DIR / "images"
 AUDIO_DIR = UPLOAD_DIR / "audio"
 
 
-async def enrich_word(db: Session, word: Word) -> Word:
+async def enrich_word(db: Session, word: Word, *, include_images: bool = True) -> Word:
     settings = get_settings()
     merriam_webster = MerriamWebsterClient(settings)
     free_dictionary = FreeDictionaryClient()
@@ -57,12 +57,12 @@ async def enrich_word(db: Session, word: Word) -> Word:
             except Exception as exc:
                 optional_errors.append(f"中文翻译暂不可用: {exc}")
 
-        if word.image_url and not word.image_locked and not is_local_media_url(word.image_url):
+        if include_images and word.image_url and not word.image_locked and not is_local_media_url(word.image_url):
             try:
                 word.image_url = await store_word_image(word.word, word.image_url, IMAGE_DIR)
             except Exception as exc:
                 optional_errors.append(f"图片本地化暂不可用: {exc}")
-        if not word.image_url and not word.image_locked:
+        if include_images and not word.image_url and not word.image_locked:
             try:
                 remote_image_url = await images.find_image(word.word)
                 if remote_image_url:
