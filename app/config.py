@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     dashscope_task_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/tasks"
     dashscope_image_poll_seconds: float = 2.0
     dashscope_image_timeout_seconds: int = 180
+    dashscope_tts_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer"
+    dashscope_tts_model: str = "cosyvoice-v3-flash"
+    dashscope_tts_voice_female: str = "longyan_v3"
+    dashscope_tts_voice_male: str = "longanyang"
+    dashscope_tts_format: str = "mp3"
+    dashscope_tts_sample_rate: int = 24000
     ai_image_daily_free_quota: int = 0
     ai_tts_provider: str = "openai"
     openai_tts_model: str = "gpt-4o-mini-tts"

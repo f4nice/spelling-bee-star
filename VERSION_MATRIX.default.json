@@ -1,7 +1,7 @@
 {
-  "version": "BIZ-REL-20260702-002",
+  "version": "BIZ-REL-20260702-003",
   "releaseName": "Vue 全站版",
-  "pageVersion": "v20260702.2",
+  "pageVersion": "v20260702.3",
   "footerText": "SpeakEasy",
   "modules": [
     { "label": "首页", "version": "v20260628.1", "status": "稳定" },
@@ -12,7 +12,7 @@
     { "label": "我的生词本", "version": "v20260624.0", "status": "可用" },
     { "label": "挑战进度", "version": "v20260701.4", "status": "可用" },
     { "label": "上传导入", "version": "v20260701.1", "status": "可用" },
-    { "label": "音频管理", "version": "v20260702.1", "status": "可用" },
+    { "label": "音频管理", "version": "v20260702.2", "status": "可用" },
     { "label": "图片管理", "version": "v20260701.1", "status": "可用" },
     { "label": "成长体系", "version": "v20260629.3", "status": "可用" }
   ]

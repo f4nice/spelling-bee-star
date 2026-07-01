@@ -79,8 +79,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260702-002"
-DEFAULT_PAGE_VERSION = "v20260702.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260702-003"
+DEFAULT_PAGE_VERSION = "v20260702.3"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -4249,10 +4249,9 @@ async def word_ai_audio(
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
-    tts_text = word.word
     if text_mode == "phonetic":
-        tts_text = re.sub(r"^/+|/+$", "", (word.phonetic or "").strip()).strip()
-        if not tts_text:
+        display_phonetic = re.sub(r"^/+|/+$", "", (word.phonetic or "").strip()).strip()
+        if not display_phonetic:
             raise HTTPException(status_code=400, detail="还没有音标，先补充音标后再生成。")
 
     try:
@@ -4260,12 +4259,20 @@ async def word_ai_audio(
             provider=settings.ai_tts_provider,
             api_key=settings.openai_api_key,
             model=settings.openai_tts_model,
-            word=tts_text,
+            word=word.word,
             accent=accent,
             voice_gender=voice_gender,
+            text_mode=text_mode,
             audio_dir=AUDIO_DIR,
             voice_us=settings.openai_tts_voice_us,
             voice_gb=settings.openai_tts_voice_gb,
+            dashscope_api_key=settings.dashscope_api_key,
+            dashscope_tts_endpoint=settings.dashscope_tts_endpoint,
+            dashscope_tts_model=settings.dashscope_tts_model,
+            dashscope_tts_voice_female=settings.dashscope_tts_voice_female,
+            dashscope_tts_voice_male=settings.dashscope_tts_voice_male,
+            dashscope_tts_format=settings.dashscope_tts_format,
+            dashscope_tts_sample_rate=settings.dashscope_tts_sample_rate,
             aliyun_appkey=settings.aliyun_nls_appkey,
             aliyun_token=settings.aliyun_nls_token,
             aliyun_access_key_id=settings.aliyun_access_key_id,

@@ -13,6 +13,8 @@ import httpx
 
 
 OPENAI_SPEECH_URL = "https://api.openai.com/v1/audio/speech"
+DASHSCOPE_TTS_URL = "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer"
+DATAMUSE_WORDS_URL = "https://api.datamuse.com/words"
 SUPPORTED_AUDIO_FORMATS = {"mp3", "wav", "pcm"}
 ALIYUN_TOKEN_ACTION = "CreateToken"
 ALIYUN_TOKEN_VERSION = "2019-02-28"
@@ -136,6 +138,131 @@ async def generate_openai_word_audio(
     return f"/media/audio/{target.name}"
 
 
+def _escape_ssml_text(value: str) -> str:
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
+
+
+def _extract_cmu_pronunciation(payload: Any, word: str) -> str:
+    if not isinstance(payload, list) or not payload:
+        return ""
+    normalized_word = (word or "").strip().lower()
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        if normalized_word and str(item.get("word") or "").strip().lower() != normalized_word:
+            continue
+        for tag in item.get("tags") or []:
+            tag_text = str(tag or "")
+            if tag_text.startswith("pron:"):
+                return re.sub(r"\s+", " ", tag_text.removeprefix("pron:")).strip()
+    return ""
+
+
+async def lookup_cmu_pronunciation(word: str) -> str:
+    query_word = (word or "").strip()
+    if not query_word:
+        return ""
+    async with httpx.AsyncClient(timeout=20) as client:
+        response = await client.get(
+            DATAMUSE_WORDS_URL,
+            params={"sp": query_word, "qe": "sp", "md": "r", "max": 1},
+        )
+        response.raise_for_status()
+        return _extract_cmu_pronunciation(response.json(), query_word)
+
+
+def build_cmu_phoneme_ssml(word: str, cmu_pronunciation: str) -> str:
+    safe_word = _escape_ssml_text((word or "").strip())
+    safe_pronunciation = _escape_ssml_text(re.sub(r"\s+", " ", cmu_pronunciation.strip()))
+    return f'<speak><phoneme alphabet="cmu" ph="{safe_pronunciation}">{safe_word}</phoneme></speak>'
+
+
+def _choose_dashscope_voice(*, voice_gender: str, voice_female: str, voice_male: str) -> str:
+    if voice_gender == "male":
+        return voice_male or "longanyang"
+    return voice_female or "longyan_v3"
+
+
+def _dashscope_audio_url(data: dict[str, Any]) -> str:
+    output = data.get("output") or {}
+    audio = output.get("audio") or {}
+    for key in ("url", "audio_url"):
+        if audio.get(key):
+            return str(audio[key])
+    if isinstance(output.get("url"), str):
+        return str(output["url"])
+    return ""
+
+
+async def generate_dashscope_phoneme_audio(
+    *,
+    api_key: str,
+    endpoint: str,
+    model: str,
+    word: str,
+    accent: str,
+    voice_gender: str,
+    audio_dir: Path,
+    voice_female: str,
+    voice_male: str,
+    audio_format: str,
+    sample_rate: int,
+) -> str:
+    if not api_key:
+        raise RuntimeError("DASHSCOPE_API_KEY is not configured on the server.")
+
+    normalized_format = (audio_format or "mp3").lower()
+    if normalized_format not in SUPPORTED_AUDIO_FORMATS:
+        raise RuntimeError(f"DASHSCOPE_TTS_FORMAT '{audio_format}' is not supported.")
+
+    cmu_pronunciation = await lookup_cmu_pronunciation(word)
+    if not cmu_pronunciation:
+        raise RuntimeError("没有找到可用的 CMU 音标，暂时不能按音标生成朗读。")
+
+    payload = {
+        "model": model or "cosyvoice-v3-flash",
+        "input": {
+            "text": build_cmu_phoneme_ssml(word, cmu_pronunciation),
+            "voice": _choose_dashscope_voice(
+                voice_gender=voice_gender,
+                voice_female=voice_female,
+                voice_male=voice_male,
+            ),
+            "format": normalized_format,
+            "sample_rate": sample_rate,
+            "enable_ssml": True,
+        },
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    request_endpoint = endpoint or DASHSCOPE_TTS_URL
+
+    async with httpx.AsyncClient(timeout=90) as client:
+        response = await client.post(request_endpoint, headers=headers, json=payload)
+        response.raise_for_status()
+        response_data = response.json()
+        audio_url = _dashscope_audio_url(response_data)
+        if not audio_url:
+            message = response_data.get("message") or response_data.get("code") or str(response_data)[:400]
+            raise RuntimeError(f"阿里百炼音标朗读生成失败: {message}")
+        audio_response = await client.get(audio_url)
+        audio_response.raise_for_status()
+        content = audio_response.content
+
+    if len(content) < 1000:
+        raise RuntimeError("阿里百炼音标朗读返回的音频太短，请稍后重试。")
+
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    target = audio_dir / f"{_safe_word_slug(word)}-{accent}-{voice_gender}-phoneme-{uuid4().hex[:8]}.{normalized_format}"
+    target.write_bytes(content)
+    return f"/media/audio/{target.name}"
+
+
 def _choose_aliyun_voice(
     *,
     accent: str,
@@ -244,9 +371,17 @@ async def generate_word_ai_audio(
     word: str,
     accent: str,
     voice_gender: str = "female",
+    text_mode: str = "word",
     audio_dir: Path,
     voice_us: str,
     voice_gb: str,
+    dashscope_api_key: str = "",
+    dashscope_tts_endpoint: str = DASHSCOPE_TTS_URL,
+    dashscope_tts_model: str = "cosyvoice-v3-flash",
+    dashscope_tts_voice_female: str = "longyan_v3",
+    dashscope_tts_voice_male: str = "longanyang",
+    dashscope_tts_format: str = "mp3",
+    dashscope_tts_sample_rate: int = 24000,
     aliyun_appkey: str = "",
     aliyun_token: str = "",
     aliyun_access_key_id: str = "",
@@ -266,6 +401,20 @@ async def generate_word_ai_audio(
     aliyun_speech_rate: int = 0,
     aliyun_pitch_rate: int = 0,
 ) -> str:
+    if text_mode == "phonetic":
+        return await generate_dashscope_phoneme_audio(
+            api_key=dashscope_api_key,
+            endpoint=dashscope_tts_endpoint,
+            model=dashscope_tts_model,
+            word=word,
+            accent=accent,
+            voice_gender=voice_gender,
+            audio_dir=audio_dir,
+            voice_female=dashscope_tts_voice_female,
+            voice_male=dashscope_tts_voice_male,
+            audio_format=dashscope_tts_format,
+            sample_rate=dashscope_tts_sample_rate,
+        )
     if provider == "openai":
         return await generate_openai_word_audio(
             api_key=api_key,
