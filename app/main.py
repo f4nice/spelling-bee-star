@@ -79,8 +79,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260701-004"
-DEFAULT_PAGE_VERSION = "v20260701.4"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260701-005"
+DEFAULT_PAGE_VERSION = "v20260701.5"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3108,6 +3108,27 @@ async def challenge_word_audio_issue_api(
     return {"ok": True, "word_id": word.id, "audio_issue": word.audio_issue}
 
 
+@app.post("/api/challenge/words/{word_id}/image-issue")
+async def challenge_word_image_issue_api(
+    word_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    flag = bool(payload.get("image_issue", True)) if isinstance(payload, dict) else True
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+    word.image_issue = flag
+    db.add(word)
+    db.commit()
+    db.refresh(word)
+    return {"ok": True, "word_id": word.id, "image_issue": word.image_issue}
+
+
 @app.get("/wrong-words", response_class=HTMLResponse)
 def wrong_words_page(request: Request, db: Session = Depends(get_db)):
     return vue_shell(request, db, "wrong-words")
@@ -3381,6 +3402,7 @@ def serialize_challenge_word(word: Word | None) -> dict[str, Any] | None:
         "chinese_definition": word.chinese_definition,
         "english_example": word.english_example,
         "audio_issue": word.audio_issue,
+        "image_issue": word.image_issue,
     }
 
 
@@ -3399,6 +3421,7 @@ def serialize_word(word: Word) -> dict[str, Any]:
         "has_audio": has_audio,
         "has_playable_audio": has_playable_audio,
         "audio_issue": word.audio_issue,
+        "image_issue": word.image_issue,
     }
 
 
@@ -3669,6 +3692,7 @@ async def replace_word_image(
         raise HTTPException(status_code=400, detail=f"图片处理失败: {exc}") from exc
 
     word.image_locked = True
+    word.image_issue = False
     word.enrichment_error = None
     db.add(word)
     db.commit()
@@ -3854,6 +3878,7 @@ async def generate_ai_word_image(
     if should_commit:
         word.image_url = image_url
         word.image_locked = True
+        word.image_issue = False
         word.enrichment_error = None
         db.add(word)
         db.commit()
@@ -3917,6 +3942,7 @@ async def replace_word_image_from_network(
     previous_url = word.image_url
     word.image_url = local_url
     word.image_locked = True
+    word.image_issue = False
     word.enrichment_error = None
     db.add(word)
     db.commit()
@@ -3959,6 +3985,7 @@ async def sync_word_image_record(db: Session, word: Word) -> dict:
             local_url = await store_word_image(word.word, image_url, IMAGE_DIR)
             if local_url:
                 word.image_url = local_url
+                word.image_issue = False
                 word.enrichment_error = None
                 db.add(word)
                 db.commit()
@@ -4647,6 +4674,7 @@ def apply_word_resource(db: Session, word: Word, *, commit: bool = False, includ
     if include_image and (resource.image_url or "").strip() and not (word.image_url or "").strip():
         word.image_url = resource.image_url
         word.image_locked = True
+        word.image_issue = False
         changed = True
     if (resource.american_audio_url or "").strip() and not (word.american_audio_url or "").strip():
         word.american_audio_url = resource.american_audio_url
@@ -4992,6 +5020,7 @@ def ensure_schema_columns() -> None:
         column
         for column in (
             "image_locked",
+            "image_issue",
             "audio_issue",
             "american_audio_locked",
             "british_audio_locked",
@@ -5269,6 +5298,7 @@ async def apply_uploaded_images_to_words(
             continue
 
         word.image_locked = True
+        word.image_issue = False
         word.enrichment_error = None
         db.add(word)
         db.commit()
@@ -5643,6 +5673,7 @@ async def generate_missing_word_ai_image(db: Session, word: Word, model: str) ->
     image_url = store_uploaded_word_image(word.word, content, IMAGE_DIR)
     word.image_url = image_url
     word.image_locked = True
+    word.image_issue = False
     word.enrichment_error = None
     db.add(word)
     db.commit()

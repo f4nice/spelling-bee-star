@@ -21,11 +21,13 @@ const {
   loading,
   submitting,
   markingAudioIssue,
+  markingImageIssue,
   errorMessage,
   wrongAnswer,
   submitSpelling,
   acknowledgeWrongAnswer,
   markAudioIssue,
+  markImageIssue,
 } = useChallengeSession(wordListId);
 </script>
 
@@ -43,7 +45,9 @@ const {
         :state="state"
         :submitting="submitting"
         :marking-audio-issue="markingAudioIssue"
+        :marking-image-issue="markingImageIssue"
         @mark-audio-issue="markAudioIssue"
+        @mark-image-issue="markImageIssue"
         @submit="submitSpelling"
       />
       <ChallengeComplete v-else :state="state" :restart-url="restartChallengeUrl(wordListId)" />

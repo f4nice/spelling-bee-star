@@ -29,6 +29,7 @@ class Word(Base):
     english_example_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(1000))
     image_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    image_issue: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     source: Mapped[str | None] = mapped_column(String(255))
     note: Mapped[str | None] = mapped_column(Text)
     enrichment_status: Mapped[str] = mapped_column(String(64), default="pending")

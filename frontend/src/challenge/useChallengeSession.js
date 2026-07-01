@@ -1,5 +1,11 @@
 import { onMounted, ref } from 'vue';
-import { challengeMessages, fetchChallengeState, postChallengeAnswer, postChallengeAudioIssue } from './challengeApi.js';
+import {
+  challengeMessages,
+  fetchChallengeState,
+  postChallengeAnswer,
+  postChallengeAudioIssue,
+  postChallengeImageIssue,
+} from './challengeApi.js';
 import { currentChallengeParams, paramsFromChallengeResult, replaceChallengeParams } from './challengeRouteState.js';
 
 export function useChallengeSession(wordListId) {
@@ -9,6 +15,7 @@ export function useChallengeSession(wordListId) {
   const loading = ref(true);
   const submitting = ref(false);
   const markingAudioIssue = ref(false);
+  const markingImageIssue = ref(false);
   const errorMessage = ref('');
   const wrongAnswer = ref(null);
   let pendingChallengeResult = null;
@@ -83,6 +90,23 @@ export function useChallengeSession(wordListId) {
     }
   }
 
+  async function markImageIssue(imageIssue) {
+    const wordId = state.value?.current_word?.id;
+    if (!wordId || markingImageIssue.value) return;
+    markingImageIssue.value = true;
+    errorMessage.value = '';
+    try {
+      const result = await postChallengeImageIssue({ wordId, imageIssue });
+      if (state.value?.current_word?.id === wordId) {
+        state.value.current_word.image_issue = Boolean(result.image_issue);
+      }
+    } catch (error) {
+      errorMessage.value = error.message || '图片标记失败';
+    } finally {
+      markingImageIssue.value = false;
+    }
+  }
+
   onMounted(() => loadState());
 
   return {
@@ -91,10 +115,12 @@ export function useChallengeSession(wordListId) {
     loading,
     submitting,
     markingAudioIssue,
+    markingImageIssue,
     errorMessage,
     wrongAnswer,
     submitSpelling,
     acknowledgeWrongAnswer,
     markAudioIssue,
+    markImageIssue,
   };
 }

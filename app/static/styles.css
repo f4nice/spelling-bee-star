@@ -2961,7 +2961,8 @@ a:focus-visible {
   line-height: 1;
 }
 
-.word-audio-issue-badge {
+.word-audio-issue-badge,
+.word-image-issue-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2974,6 +2975,11 @@ a:focus-visible {
   font-weight: 900;
   line-height: 1;
   white-space: nowrap;
+}
+
+.word-image-issue-badge {
+  color: var(--accent-dark);
+  background: #e4f6ee;
 }
 
 .status {
@@ -5105,35 +5111,55 @@ button.calendar-day:disabled {
   gap: 8px;
 }
 
-.challenge-audio-issue-button {
+.challenge-media-issue-actions {
   position: absolute;
-  top: -4px;
-  right: 0;
+  right: 6px;
+  bottom: 5px;
   z-index: 2;
   display: inline-flex;
   align-items: center;
+  gap: 4px;
+}
+
+.challenge-media-issue-button {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  min-height: 28px;
+  min-height: 22px;
   border: 1px solid #fecdca;
   border-radius: 999px;
-  padding: 4px 9px;
+  padding: 3px 7px;
   color: #b42318;
   background: #fff7f5;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
   line-height: 1;
   cursor: pointer;
 }
 
-.challenge-audio-issue-button:hover,
-.challenge-audio-issue-button:focus-visible,
-.challenge-audio-issue-button.active {
+.challenge-media-issue-button:hover,
+.challenge-media-issue-button:focus-visible,
+.challenge-media-issue-button.active {
   border-color: #b42318;
   color: #ffffff;
   background: #b42318;
 }
 
-.challenge-audio-issue-button:disabled {
+.challenge-image-issue-button {
+  border-color: #b7e4d5;
+  color: var(--accent-dark);
+  background: #eefaf5;
+}
+
+.challenge-image-issue-button:hover,
+.challenge-image-issue-button:focus-visible,
+.challenge-image-issue-button.active {
+  border-color: var(--accent-dark);
+  color: #ffffff;
+  background: var(--accent-dark);
+}
+
+.challenge-media-issue-button:disabled {
   cursor: wait;
   opacity: 0.7;
 }

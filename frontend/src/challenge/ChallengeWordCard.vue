@@ -23,9 +23,13 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  markingImageIssue: {
+    type: Boolean,
+    default: false,
+  },
 });
 
-const emit = defineEmits(["update:spelling", "submit", "mark-audio-issue"]);
+const emit = defineEmits(["update:spelling", "submit", "mark-audio-issue", "mark-image-issue"]);
 const { playAudio } = useAudioPlayback();
 const usSpeechPlayer = ref(null);
 const gbSpeechPlayer = ref(null);
@@ -50,6 +54,10 @@ function toggleAudioIssue() {
   emit("mark-audio-issue", !props.state.current_word?.audio_issue);
 }
 
+function toggleImageIssue() {
+  emit("mark-image-issue", !props.state.current_word?.image_issue);
+}
+
 watch(
   () => props.state.current_word?.id,
   async (wordId) => {
@@ -71,8 +79,19 @@ watch(
         <label>
           <span class="challenge-audio-label-head">
             <span>美音</span>
+          </span>
+          <span class="challenge-media-issue-actions">
             <button
-              class="challenge-audio-issue-button"
+              class="challenge-media-issue-button challenge-image-issue-button"
+              :class="{ active: state.current_word?.image_issue }"
+              type="button"
+              :disabled="markingImageIssue"
+              @click.prevent="toggleImageIssue"
+            >
+              {{ state.current_word?.image_issue ? "图片待修" : "图片不对" }}
+            </button>
+            <button
+              class="challenge-media-issue-button challenge-audio-issue-button"
               :class="{ active: state.current_word?.audio_issue }"
               type="button"
               :disabled="markingAudioIssue"

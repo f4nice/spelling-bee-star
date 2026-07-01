@@ -65,3 +65,15 @@ export async function postChallengeAudioIssue({ wordId, audioIssue }) {
   invalidateApiCacheForMutation(`/api/vue/words/${wordId}`);
   return response.json();
 }
+
+export async function postChallengeImageIssue({ wordId, imageIssue }) {
+  const url = challengeApiPaths.imageIssue(wordId);
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ image_issue: imageIssue }),
+  });
+  if (!response.ok) throw new Error(await responseErrorMessage(response, "图片标记失败"));
+  invalidateApiCacheForMutation(`/api/vue/words/${wordId}`);
+  return response.json();
+}
