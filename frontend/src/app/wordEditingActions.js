@@ -4,11 +4,16 @@ import { createWordFieldForm } from "./wordEditingForms.js";
 
 export function createWordEditSnapshot(word) {
   return {
+    phonetic: normalizePhonetic(word.phonetic || ""),
     alternate_spellings: word.alternate_spellings || "",
     english_definition: word.english_definition || "",
     chinese_definition: word.chinese_definition || "",
     english_example: word.english_example || "",
   };
+}
+
+export function normalizePhonetic(value) {
+  return String(value || "").trim().replace(/^\/+|\/+$/g, "").trim();
 }
 
 export async function saveWordEditField({ wordId, field, value, setSaving, applySavedValue }) {

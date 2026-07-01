@@ -79,8 +79,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260701-006"
-DEFAULT_PAGE_VERSION = "v20260701.6"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260701-007"
+DEFAULT_PAGE_VERSION = "v20260701.7"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2695,6 +2695,7 @@ def vue_update_word_field(
 ):
     require_word_write_access(edit_token)
     allowed = {
+        "phonetic",
         "alternate_spellings",
         "english_definition",
         "chinese_definition",
