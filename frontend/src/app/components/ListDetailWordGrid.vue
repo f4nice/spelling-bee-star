@@ -52,7 +52,8 @@ const resourceCounts = computed(() => {
     all: words.length,
     missingImage: words.filter((word) => !word.image_url).length,
     missingAudio: words.filter((word) => !hasPlayableAudio(word)).length,
-    missingAny: words.filter((word) => !word.image_url || !hasPlayableAudio(word)).length,
+    audioIssue: words.filter((word) => word.audio_issue).length,
+    missingAny: words.filter((word) => !word.image_url || !hasPlayableAudio(word) || word.audio_issue).length,
   };
 });
 
@@ -60,6 +61,7 @@ const filterOptions = computed(() => [
   { key: "all", label: "全部", count: resourceCounts.value.all },
   { key: "missingImage", label: "无图片", count: resourceCounts.value.missingImage },
   { key: "missingAudio", label: "无音频", count: resourceCounts.value.missingAudio },
+  { key: "audioIssue", label: "音频待修", count: resourceCounts.value.audioIssue },
   { key: "missingAny", label: "缺资源", count: resourceCounts.value.missingAny },
 ]);
 
@@ -70,8 +72,11 @@ const filteredWords = computed(() => {
   if (activeFilter.value === "missingAudio") {
     return indexedWords.value.filter(({ word }) => !hasPlayableAudio(word));
   }
+  if (activeFilter.value === "audioIssue") {
+    return indexedWords.value.filter(({ word }) => word.audio_issue);
+  }
   if (activeFilter.value === "missingAny") {
-    return indexedWords.value.filter(({ word }) => !word.image_url || !hasPlayableAudio(word));
+    return indexedWords.value.filter(({ word }) => !word.image_url || !hasPlayableAudio(word) || word.audio_issue);
   }
   return indexedWords.value;
 });

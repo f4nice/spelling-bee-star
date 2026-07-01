@@ -2961,6 +2961,21 @@ a:focus-visible {
   line-height: 1;
 }
 
+.word-audio-issue-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 21px;
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: #b42318;
+  background: #fee4e2;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .status {
   flex: 0 0 auto;
   border-radius: 999px;
@@ -5077,6 +5092,42 @@ button.calendar-day:disabled {
   font-weight: 800;
 }
 
+.challenge-audio-label-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.challenge-audio-issue-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  border: 1px solid #fecdca;
+  border-radius: 999px;
+  padding: 4px 9px;
+  color: #b42318;
+  background: #fff7f5;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.challenge-audio-issue-button:hover,
+.challenge-audio-issue-button:focus-visible,
+.challenge-audio-issue-button.active {
+  border-color: #b42318;
+  color: #ffffff;
+  background: #b42318;
+}
+
+.challenge-audio-issue-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
 .speech-audio-player {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto;
@@ -5223,7 +5274,7 @@ button.calendar-day:disabled {
 .challenge-answer-modal {
   position: relative;
   display: grid;
-  width: min(560px, 100%);
+  width: min(760px, 100%);
   min-height: 320px;
   gap: 14px;
   padding: 34px 34px 92px;
@@ -5245,12 +5296,15 @@ button.calendar-day:disabled {
   font-size: clamp(46px, 8vw, 78px);
   line-height: 1;
   letter-spacing: 0;
-  overflow-wrap: anywhere;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 .challenge-answer-diff {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 3px;
 }
 

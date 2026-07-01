@@ -63,6 +63,14 @@ function buildSpellingDiff(correctValue, typedValue) {
 const spellingDiff = computed(() => buildSpellingDiff(props.answer.correct_spelling, props.answer.typed));
 const diffLetters = computed(() => spellingDiff.value.aligned);
 const extraLetters = computed(() => spellingDiff.value.extras);
+const answerStyle = computed(() => {
+  const length = Math.max(Array.from(String(props.answer.correct_spelling || "")).length, 1);
+  const maxSize = length <= 10 ? 70 : length <= 14 ? 54 : length <= 18 ? 44 : 34;
+  const preferred = length <= 10 ? "7vw" : length <= 14 ? "5.2vw" : length <= 18 ? "4.2vw" : "3.4vw";
+  return {
+    fontSize: `clamp(18px, min(${preferred}, calc((100vw - 140px) / ${length})), ${maxSize}px)`,
+  };
+});
 
 function confirm() {
   emit("confirm");
@@ -90,7 +98,7 @@ onUnmounted(() => {
     <section class="challenge-answer-modal" role="dialog" aria-modal="true" aria-labelledby="wrongAnswerTitle">
       <p class="section-kicker">拼写错误</p>
       <h2 id="wrongAnswerTitle">正确答案是</h2>
-      <strong class="challenge-correct-answer challenge-answer-diff" :aria-label="props.answer.correct_spelling">
+      <strong class="challenge-correct-answer challenge-answer-diff" :style="answerStyle" :aria-label="props.answer.correct_spelling">
         <span
           v-for="(item, index) in diffLetters"
           :key="`${item.letter}-${index}`"

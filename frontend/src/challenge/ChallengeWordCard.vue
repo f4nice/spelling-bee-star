@@ -19,9 +19,13 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  markingAudioIssue: {
+    type: Boolean,
+    default: false,
+  },
 });
 
-const emit = defineEmits(["update:spelling", "submit"]);
+const emit = defineEmits(["update:spelling", "submit", "mark-audio-issue"]);
 const { playAudio } = useAudioPlayback();
 const usSpeechPlayer = ref(null);
 const gbSpeechPlayer = ref(null);
@@ -40,6 +44,10 @@ function playBritishAudio() {
     return;
   }
   gbSpeechPlayer.value?.play();
+}
+
+function toggleAudioIssue() {
+  emit("mark-audio-issue", !props.state.current_word?.audio_issue);
 }
 
 watch(
@@ -65,7 +73,18 @@ watch(
 
       <div class="challenge-audio-row">
         <label>
-          <span>美音</span>
+          <span class="challenge-audio-label-head">
+            <span>美音</span>
+            <button
+              class="challenge-audio-issue-button"
+              :class="{ active: state.current_word?.audio_issue }"
+              type="button"
+              :disabled="markingAudioIssue"
+              @click.prevent="toggleAudioIssue"
+            >
+              {{ state.current_word?.audio_issue ? "已标记待修" : "音频不准" }}
+            </button>
+          </span>
           <audio
             v-if="state.challenge_audio_sources?.us"
             id="challenge-audio-us"

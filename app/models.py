@@ -18,6 +18,7 @@ class Word(Base):
     american_audio_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     british_audio_url: Mapped[str | None] = mapped_column(String(1000))
     british_audio_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    audio_issue: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     alternate_spellings: Mapped[str | None] = mapped_column(Text)
     part_of_speech: Mapped[str | None] = mapped_column(String(120))
     english_definition: Mapped[str | None] = mapped_column(Text)

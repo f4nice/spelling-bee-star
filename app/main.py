@@ -79,8 +79,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260701-002"
-DEFAULT_PAGE_VERSION = "v20260701.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260701-003"
+DEFAULT_PAGE_VERSION = "v20260701.3"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3087,6 +3087,27 @@ def challenge_answer_api(
         raise challenge_http_error(500, "提交失败，服务器已记录错误。", trace_id)
 
 
+@app.post("/api/challenge/words/{word_id}/audio-issue")
+async def challenge_word_audio_issue_api(
+    word_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    flag = bool(payload.get("audio_issue", True)) if isinstance(payload, dict) else True
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+    word.audio_issue = flag
+    db.add(word)
+    db.commit()
+    db.refresh(word)
+    return {"ok": True, "word_id": word.id, "audio_issue": word.audio_issue}
+
+
 @app.get("/wrong-words", response_class=HTMLResponse)
 def wrong_words_page(request: Request, db: Session = Depends(get_db)):
     return vue_shell(request, db, "wrong-words")
@@ -3359,6 +3380,7 @@ def serialize_challenge_word(word: Word | None) -> dict[str, Any] | None:
         "english_definition": word.english_definition,
         "chinese_definition": word.chinese_definition,
         "english_example": word.english_example,
+        "audio_issue": word.audio_issue,
     }
 
 
@@ -3376,6 +3398,7 @@ def serialize_word(word: Word) -> dict[str, Any]:
         "image_url": word.image_url,
         "has_audio": has_audio,
         "has_playable_audio": has_playable_audio,
+        "audio_issue": word.audio_issue,
     }
 
 
@@ -4112,6 +4135,7 @@ async def word_audio_choice(
     else:
         word.american_audio_url = audio_url
         word.american_audio_locked = True
+    word.audio_issue = False
     word.enrichment_error = None
     db.add(word)
     db.commit()
@@ -4161,6 +4185,7 @@ async def word_recorded_audio(
     else:
         word.american_audio_url = audio_url
         word.american_audio_locked = True
+    word.audio_issue = False
     word.enrichment_error = None
     db.add(word)
     db.commit()
@@ -4243,6 +4268,7 @@ async def word_ai_audio(
         else:
             word.american_audio_url = audio_url
             word.american_audio_locked = True
+        word.audio_issue = False
         word.enrichment_error = None
         db.add(word)
         db.commit()
@@ -4966,6 +4992,7 @@ def ensure_schema_columns() -> None:
         column
         for column in (
             "image_locked",
+            "audio_issue",
             "american_audio_locked",
             "british_audio_locked",
             "english_definition_locked",

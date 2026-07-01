@@ -20,10 +20,12 @@ const {
   spelling,
   loading,
   submitting,
+  markingAudioIssue,
   errorMessage,
   wrongAnswer,
   submitSpelling,
   acknowledgeWrongAnswer,
+  markAudioIssue,
 } = useChallengeSession(wordListId);
 </script>
 
@@ -40,6 +42,8 @@ const {
         v-model:spelling="spelling"
         :state="state"
         :submitting="submitting"
+        :marking-audio-issue="markingAudioIssue"
+        @mark-audio-issue="markAudioIssue"
         @submit="submitSpelling"
       />
       <ChallengeComplete v-else :state="state" :restart-url="restartChallengeUrl(wordListId)" />

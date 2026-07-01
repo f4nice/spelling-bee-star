@@ -1,5 +1,5 @@
 import { onMounted, ref } from 'vue';
-import { challengeMessages, fetchChallengeState, postChallengeAnswer } from './challengeApi.js';
+import { challengeMessages, fetchChallengeState, postChallengeAnswer, postChallengeAudioIssue } from './challengeApi.js';
 import { currentChallengeParams, paramsFromChallengeResult, replaceChallengeParams } from './challengeRouteState.js';
 
 export function useChallengeSession(wordListId) {
@@ -8,6 +8,7 @@ export function useChallengeSession(wordListId) {
   const spelling = ref('');
   const loading = ref(true);
   const submitting = ref(false);
+  const markingAudioIssue = ref(false);
   const errorMessage = ref('');
   const wrongAnswer = ref(null);
   let pendingChallengeResult = null;
@@ -65,6 +66,23 @@ export function useChallengeSession(wordListId) {
     await applyChallengeResult(result);
   }
 
+  async function markAudioIssue(audioIssue) {
+    const wordId = state.value?.current_word?.id;
+    if (!wordId || markingAudioIssue.value) return;
+    markingAudioIssue.value = true;
+    errorMessage.value = '';
+    try {
+      const result = await postChallengeAudioIssue({ wordId, audioIssue });
+      if (state.value?.current_word?.id === wordId) {
+        state.value.current_word.audio_issue = Boolean(result.audio_issue);
+      }
+    } catch (error) {
+      errorMessage.value = error.message || '音频标记失败';
+    } finally {
+      markingAudioIssue.value = false;
+    }
+  }
+
   onMounted(() => loadState());
 
   return {
@@ -72,9 +90,11 @@ export function useChallengeSession(wordListId) {
     spelling,
     loading,
     submitting,
+    markingAudioIssue,
     errorMessage,
     wrongAnswer,
     submitSpelling,
     acknowledgeWrongAnswer,
+    markAudioIssue,
   };
 }

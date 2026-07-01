@@ -53,3 +53,15 @@ export async function postChallengeAnswer({ wordListId, state, spelling }) {
   invalidateApiCacheForMutation(url, { wrongDate: state?.wrong_date });
   return response.json();
 }
+
+export async function postChallengeAudioIssue({ wordId, audioIssue }) {
+  const url = challengeApiPaths.audioIssue(wordId);
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ audio_issue: audioIssue }),
+  });
+  if (!response.ok) throw new Error(await responseErrorMessage(response, "音频标记失败"));
+  invalidateApiCacheForMutation(`/api/vue/words/${wordId}`);
+  return response.json();
+}
