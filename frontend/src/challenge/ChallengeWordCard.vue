@@ -80,26 +80,6 @@ watch(
           <span class="challenge-audio-label-head">
             <span>美音</span>
           </span>
-          <span class="challenge-media-issue-actions">
-            <button
-              class="challenge-media-issue-button challenge-image-issue-button"
-              :class="{ active: state.current_word?.image_issue }"
-              type="button"
-              :disabled="markingImageIssue"
-              @click.prevent="toggleImageIssue"
-            >
-              {{ state.current_word?.image_issue ? "图片待修" : "图片不对" }}
-            </button>
-            <button
-              class="challenge-media-issue-button challenge-audio-issue-button"
-              :class="{ active: state.current_word?.audio_issue }"
-              type="button"
-              :disabled="markingAudioIssue"
-              @click.prevent="toggleAudioIssue"
-            >
-              {{ state.current_word?.audio_issue ? "已标记待修" : "音频不准" }}
-            </button>
-          </span>
           <audio
             v-if="state.challenge_audio_sources?.us"
             id="challenge-audio-us"
@@ -132,6 +112,26 @@ watch(
             label="英音"
           />
         </label>
+        <div class="challenge-media-issue-actions">
+          <button
+            class="challenge-media-issue-button challenge-image-issue-button"
+            :class="{ active: state.current_word?.image_issue }"
+            type="button"
+            :disabled="markingImageIssue"
+            @click.prevent="toggleImageIssue"
+          >
+            {{ state.current_word?.image_issue ? "图片待修" : "图片不对" }}
+          </button>
+          <button
+            class="challenge-media-issue-button challenge-audio-issue-button"
+            :class="{ active: state.current_word?.audio_issue }"
+            type="button"
+            :disabled="markingAudioIssue"
+            @click.prevent="toggleAudioIssue"
+          >
+            {{ state.current_word?.audio_issue ? "音频待修" : "音频不准" }}
+          </button>
+        </div>
       </div>
     </div>
 

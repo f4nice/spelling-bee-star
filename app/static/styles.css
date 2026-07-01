@@ -5112,13 +5112,13 @@ button.calendar-day:disabled {
 }
 
 .challenge-media-issue-actions {
-  position: absolute;
-  right: 6px;
-  bottom: 5px;
-  z-index: 2;
-  display: inline-flex;
+  grid-column: 1 / -1;
+  display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 4px;
+  min-height: 24px;
+  width: 100%;
 }
 
 .challenge-media-issue-button {
