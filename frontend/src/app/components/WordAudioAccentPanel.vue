@@ -24,6 +24,7 @@ const showManager = ref(false);
     <WordAudioManagerModal
       v-if="showManager"
       :accent="accent"
+      :data="data"
       :options="options"
       :fetch-audio-options="fetchAudioOptions"
       :choose-audio="chooseAudio"

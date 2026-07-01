@@ -14,8 +14,8 @@ export async function uploadWordAudioOption({ wordId, accent, file, loadRoute })
   await loadRoute();
 }
 
-export async function generateWordAiAudioOption({ wordId, accent, voiceGender, loadRoute }) {
-  const result = await generateAiWordAudio({ wordId, accent, voiceGender });
+export async function generateWordAiAudioOption({ wordId, accent, voiceGender, textMode = "word", loadRoute }) {
+  const result = await generateAiWordAudio({ wordId, accent, voiceGender, textMode });
   if (result?.committed) await loadRoute();
   return result;
 }

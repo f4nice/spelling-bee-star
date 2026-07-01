@@ -7,6 +7,10 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  data: {
+    type: Object,
+    required: true,
+  },
   options: {
     type: Array,
     default: () => [],
@@ -33,7 +37,7 @@ const emit = defineEmits(["close"]);
 
 const loadingOptions = ref(false);
 const savingSelection = ref(false);
-const generatingGender = ref("");
+const generatingKey = ref("");
 const selectedFile = ref(null);
 const previewUrl = ref("");
 const pendingAudio = ref(null);
@@ -41,9 +45,23 @@ const previewAudio = ref(null);
 const notice = ref("");
 
 const selectedFileName = computed(() => selectedFile.value?.name || "未选择音频文件");
-const aiButtonLabel = computed(() => {
-  const accentName = props.accent.key === "gb" ? "英式" : "美式";
-  return `生成${accentName} AI 朗读`;
+const accentName = computed(() => (props.accent.key === "gb" ? "英式" : "美式"));
+const phoneticText = computed(() => String(props.data.word?.phonetic || "").trim().replace(/^\/+|\/+$/g, "").trim());
+const hasPhoneticText = computed(() => Boolean(phoneticText.value));
+function aiButtonLabel(textMode = "word") {
+  return `生成${accentName.value} AI朗读${textMode === "phonetic" ? "音标" : "单词"}`;
+}
+function aiButtonText(textMode, voiceGender) {
+  const currentKey = `${textMode}:${voiceGender}`;
+  const voiceLabel = voiceGender === "male" ? "男声" : "女声";
+  return generatingKey.value === currentKey ? "生成中..." : `${aiButtonLabel(textMode)} · ${voiceLabel}`;
+}
+function canGenerateAi(textMode) {
+  return !generatingKey.value && (textMode !== "phonetic" || hasPhoneticText.value);
+}
+const phoneticRowHint = computed(() => {
+  if (hasPhoneticText.value) return `当前音标 /${phoneticText.value}/`;
+  return "还没有音标，先双击单词下方音标补充后再生成。";
 });
 const pendingAudioLabel = computed(() => pendingAudio.value?.label || "还没有选择试听音频");
 const canSavePendingAudio = computed(() => Boolean(pendingAudio.value?.url || pendingAudio.value?.file));
@@ -127,17 +145,20 @@ async function saveCurrentAudio() {
   }
 }
 
-async function generateAiSource(voiceGender) {
-  if (generatingGender.value) return;
-  generatingGender.value = voiceGender;
+async function generateAiSource(textMode, voiceGender) {
+  if (!canGenerateAi(textMode)) {
+    if (textMode === "phonetic") notice.value = "还没有音标，先补充音标后再生成。";
+    return;
+  }
+  generatingKey.value = `${textMode}:${voiceGender}`;
   notice.value = "";
   try {
-    const result = await props.generateAiAudio(props.accent.key, voiceGender);
+    const result = await props.generateAiAudio(props.accent.key, voiceGender, textMode);
     const voiceLabel = voiceGender === "male" ? "男声" : "女声";
     setPendingAudio({
       type: "url",
       url: result.audio_url,
-      label: `${aiButtonLabel.value} · ${voiceLabel}`,
+      label: `${aiButtonLabel(textMode)} · ${voiceLabel}`,
     });
     const played = await playPendingAudio();
     notice.value = played
@@ -146,7 +167,7 @@ async function generateAiSource(voiceGender) {
   } catch (error) {
     notice.value = error.message || "AI 朗读生成失败";
   } finally {
-    generatingGender.value = "";
+    generatingKey.value = "";
   }
 }
 
@@ -217,26 +238,50 @@ onBeforeUnmount(clearPreviewUrl);
         </section>
 
         <section class="audio-manager-section">
-          <div class="audio-manager-section-head">
+          <div class="audio-manager-ai-row">
             <div>
-              <h3>AI 朗读</h3>
+              <h3>AI朗读单词</h3>
             </div>
             <div class="audio-manager-button-group">
               <button
                 class="secondary-button"
                 type="button"
-                :disabled="Boolean(generatingGender)"
-                @click="generateAiSource('female')"
+                :disabled="!canGenerateAi('word')"
+                @click="generateAiSource('word', 'female')"
               >
-                {{ generatingGender === "female" ? "生成中..." : `${aiButtonLabel} · 女声` }}
+                {{ aiButtonText("word", "female") }}
               </button>
               <button
                 class="secondary-button"
                 type="button"
-                :disabled="Boolean(generatingGender)"
-                @click="generateAiSource('male')"
+                :disabled="!canGenerateAi('word')"
+                @click="generateAiSource('word', 'male')"
               >
-                {{ generatingGender === "male" ? "生成中..." : `${aiButtonLabel} · 男声` }}
+                {{ aiButtonText("word", "male") }}
+              </button>
+            </div>
+          </div>
+          <div class="audio-manager-ai-row">
+            <div>
+              <h3>AI朗读音标</h3>
+              <p>{{ phoneticRowHint }}</p>
+            </div>
+            <div class="audio-manager-button-group">
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="!canGenerateAi('phonetic')"
+                @click="generateAiSource('phonetic', 'female')"
+              >
+                {{ aiButtonText("phonetic", "female") }}
+              </button>
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="!canGenerateAi('phonetic')"
+                @click="generateAiSource('phonetic', 'male')"
+              >
+                {{ aiButtonText("phonetic", "male") }}
               </button>
             </div>
           </div>

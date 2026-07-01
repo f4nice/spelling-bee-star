@@ -11,9 +11,10 @@ export function createAudioChoiceForm(accent, url) {
   return form;
 }
 
-export function createAiAudioForm(accent, voiceGender = "female") {
+export function createAiAudioForm(accent, voiceGender = "female", textMode = "word") {
   const form = createAudioOptionsForm(accent);
   form.append("voice_gender", voiceGender);
+  form.append("text_mode", textMode);
   form.append("commit", "0");
   return form;
 }

@@ -6282,6 +6282,18 @@ audio {
   gap: 14px;
 }
 
+.audio-manager-ai-row {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.audio-manager-ai-row + .audio-manager-ai-row {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
 .audio-manager-section h3 {
   margin: 0 0 4px;
   font-size: 18px;
@@ -7299,7 +7311,8 @@ select {
   }
 
   .audio-manager-heading,
-  .audio-manager-section-head {
+  .audio-manager-section-head,
+  .audio-manager-ai-row {
     flex-direction: column;
   }
 

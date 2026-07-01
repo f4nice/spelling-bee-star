@@ -79,8 +79,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260702-001"
-DEFAULT_PAGE_VERSION = "v20260702.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260702-002"
+DEFAULT_PAGE_VERSION = "v20260702.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -4233,6 +4233,7 @@ async def word_ai_audio(
     word_id: int,
     accent: str = Form(...),
     voice_gender: str = Form(default="female"),
+    text_mode: str = Form(default="word"),
     commit: str = Form(default="1"),
     edit_token: str = Form(default=""),
     db: Session = Depends(get_db),
@@ -4242,17 +4243,24 @@ async def word_ai_audio(
         raise HTTPException(status_code=400, detail="Invalid accent")
     if voice_gender not in {"female", "male"}:
         raise HTTPException(status_code=400, detail="Invalid voice gender")
+    if text_mode not in {"word", "phonetic"}:
+        raise HTTPException(status_code=400, detail="Invalid text mode")
 
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
+    tts_text = word.word
+    if text_mode == "phonetic":
+        tts_text = re.sub(r"^/+|/+$", "", (word.phonetic or "").strip()).strip()
+        if not tts_text:
+            raise HTTPException(status_code=400, detail="还没有音标，先补充音标后再生成。")
 
     try:
         audio_url = await generate_word_ai_audio(
             provider=settings.ai_tts_provider,
             api_key=settings.openai_api_key,
             model=settings.openai_tts_model,
-            word=word.word,
+            word=tts_text,
             accent=accent,
             voice_gender=voice_gender,
             audio_dir=AUDIO_DIR,
@@ -4313,6 +4321,7 @@ async def word_ai_audio(
         "word": word.word,
         "accent": accent,
         "voice_gender": voice_gender,
+        "text_mode": text_mode,
         "committed": should_commit,
         "audio_url": audio_url,
     }
