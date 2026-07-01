@@ -66,10 +66,6 @@ watch(
     <div class="challenge-word-media">
       <img v-if="state.challenge_image_url" :src="state.challenge_image_url" :alt="state.current_word.word">
       <div v-else class="image-fallback large">{{ state.current_word.word.slice(0, 1).toUpperCase() }}</div>
-    </div>
-
-    <div class="challenge-word-body">
-      <ChallengeWordPrompt :word="state.current_word" :masked-example="state.masked_example" />
 
       <div class="challenge-audio-row">
         <label>
@@ -118,6 +114,10 @@ watch(
           />
         </label>
       </div>
+    </div>
+
+    <div class="challenge-word-body">
+      <ChallengeWordPrompt :word="state.current_word" :masked-example="state.masked_example" />
 
       <ChallengeAnswerPanel
         :spelling="spelling"
