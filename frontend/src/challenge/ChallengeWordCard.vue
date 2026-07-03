@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, ref, watch } from "vue";
+import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 
 import ChallengeAnswerPanel from "./ChallengeAnswerPanel.vue";
 import SpeechAudioPlayer from "./SpeechAudioPlayer.vue";
@@ -57,6 +57,37 @@ function toggleAudioIssue() {
 function toggleImageIssue() {
   emit("mark-image-issue", !props.state.current_word?.image_issue);
 }
+
+function shouldHandleAudioShortcut(event) {
+  if (!["ArrowUp", "ArrowDown"].includes(event.key)) return false;
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return false;
+  if (document.querySelector(".challenge-answer-modal")) return false;
+
+  const target = event.target;
+  if (target?.isContentEditable) return false;
+  const tagName = target?.tagName?.toLowerCase();
+  if (["textarea", "select", "button", "audio"].includes(tagName)) return false;
+  if (tagName === "input" && !target.classList?.contains("challenge-spelling-input")) return false;
+  return true;
+}
+
+function handleAudioShortcut(event) {
+  if (!shouldHandleAudioShortcut(event)) return;
+  event.preventDefault();
+  if (event.key === "ArrowUp") {
+    playCurrentAudio();
+    return;
+  }
+  playBritishAudio();
+}
+
+onMounted(() => {
+  window.addEventListener("keydown", handleAudioShortcut);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleAudioShortcut);
+});
 
 watch(
   () => props.state.current_word?.id,
