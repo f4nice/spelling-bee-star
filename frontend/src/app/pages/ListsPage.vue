@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { BookPlus, FolderPlus, Layers, Search, X } from "lucide-vue-next";
+import { ArrowLeft, BookPlus, FolderPlus, Layers, Search, X } from "lucide-vue-next";
 import ListsCreateModal from "../components/ListsCreateModal.vue";
 import ListsToolsPanel from "../components/ListsToolsPanel.vue";
 import WordListCard from "../components/WordListCard.vue";
@@ -40,6 +40,8 @@ const isSavingOrder = ref(false);
 const orderNotice = ref("");
 const dragStartOrder = ref("");
 const activeGroupId = ref("");
+const dragOverGroupId = ref("");
+const isDroppingOnGroup = ref(false);
 let dragStartCards = [];
 let searchTimer = 0;
 
@@ -57,7 +59,7 @@ const activeGroupCards = computed(() => {
 });
 const displayedCards = computed(() => (activeGroup.value ? activeGroupCards.value : ungroupedCards.value));
 const displayedWordCount = computed(() => displayedCards.value.reduce((total, card) => total + Number(card.count || 0), 0));
-const displayedListTitle = computed(() => (activeGroup.value ? activeGroup.value.name : "未归组单词表"));
+const displayedListTitle = computed(() => (activeGroup.value ? activeGroup.value.name : "我的单词表"));
 const displayedListDescription = computed(() => (
   activeGroup.value
     ? "这个专题里只显示当前单词组的单词表。"
@@ -181,6 +183,46 @@ async function moveManagingListToGroup() {
   }
 }
 
+function resetListDragState() {
+  draggedListId.value = null;
+  dragOverListId.value = null;
+  dragOverGroupId.value = "";
+  dragStartOrder.value = "";
+  dragStartCards = [];
+}
+
+async function moveDraggedListToGroup(group, event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const wordListId = draggedListId.value;
+  if (!wordListId || !group?.id) {
+    resetListDragState();
+    return;
+  }
+  const card = orderedCards.value.find((item) => Number(item.list.id) === Number(wordListId));
+  if (!card || String(card.list?.group_id || "") === String(group.id)) {
+    resetListDragState();
+    return;
+  }
+  dragOverGroupId.value = "";
+  isDroppingOnGroup.value = true;
+  try {
+    const payload = await fetchJson(listApiPaths.moveToGroup(wordListId), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ group_id: group.id }),
+      skipCache: true,
+    });
+    activeGroupId.value = String(group.id);
+    applyListPagePayload(payload);
+  } catch (error) {
+    orderNotice.value = error.message || "移动到单词组失败，请稍后再试。";
+  } finally {
+    isDroppingOnGroup.value = false;
+    resetListDragState();
+  }
+}
+
 function moveCard(fromIndex, toIndex) {
   if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
   const scopedCards = [...displayedCards.value];
@@ -204,6 +246,21 @@ function startListDrag(card, event) {
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", String(card.list.id));
+  }
+}
+
+function enterGroupDropTarget(group, event) {
+  if (!draggedListId.value) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  dragOverGroupId.value = String(group.id);
+}
+
+function leaveGroupDropTarget(group, event) {
+  const nextTarget = event?.relatedTarget;
+  if (nextTarget instanceof Node && event.currentTarget?.contains(nextTarget)) return;
+  if (dragOverGroupId.value === String(group.id)) {
+    dragOverGroupId.value = "";
   }
 }
 
@@ -241,6 +298,11 @@ async function saveListOrder(ids) {
 
 async function finishListDrag() {
   if (!draggedListId.value) return;
+  if (isDroppingOnGroup.value) return;
+  if (dragOverGroupId.value) {
+    resetListDragState();
+    return;
+  }
   const nextOrder = displayedCardIds().join(",");
   const nextIds = cardIds(orderedCards.value);
   draggedListId.value = null;
@@ -250,6 +312,7 @@ async function finishListDrag() {
   }
   dragStartOrder.value = "";
   dragStartCards = [];
+  dragOverGroupId.value = "";
 }
 
 async function runSearch() {
@@ -414,8 +477,8 @@ watch(wordListGroups, (groups) => {
     <p v-if="groupMoveNotice" class="notice">{{ groupMoveNotice }}</p>
   </ListsCreateModal>
   <section class="panel word-list-groups-panel">
-    <div class="lists-section-head">
-      <div>
+    <div class="lists-section-head word-list-groups-head">
+      <div class="lists-section-copy">
         <p class="section-kicker">Groups</p>
         <h2>我的单词组</h2>
         <span>把同一套词库收在一个组里，分表管理会更清楚。</span>
@@ -435,10 +498,17 @@ watch(wordListGroups, (groups) => {
         v-for="(group, index) in wordListGroups"
         :key="group.id"
         class="word-list-group-card"
-        :class="{ 'is-active': activeGroup?.id === group.id }"
+        :class="{
+          'is-active': activeGroup?.id === group.id,
+          'is-drop-target': dragOverGroupId === String(group.id),
+        }"
         type="button"
         :title="`查看 ${group.name}`"
         @click="selectWordListGroup(group)"
+        @dragenter="enterGroupDropTarget(group, $event)"
+        @dragover="enterGroupDropTarget(group, $event)"
+        @dragleave="leaveGroupDropTarget(group, $event)"
+        @drop="moveDraggedListToGroup(group, $event)"
       >
         <span class="word-list-group-index">{{ groupIndexLabel(index) }}</span>
         <div>
@@ -454,7 +524,7 @@ watch(wordListGroups, (groups) => {
   </section>
   <section class="panel word-list-table-panel">
     <div class="lists-section-head lists-table-head">
-      <div>
+      <div class="lists-section-copy">
         <p class="section-kicker">Word Lists</p>
         <h2>{{ displayedListTitle }}</h2>
         <span>{{ displayedListDescription }}</span>
@@ -464,7 +534,8 @@ watch(wordListGroups, (groups) => {
         <strong>{{ displayedWordCount }}</strong>
         <span>个单词</span>
       </div>
-      <button v-if="activeGroup" class="secondary-button compact-button lists-action-button" type="button" @click="clearActiveWordListGroup">
+      <button v-if="activeGroup" class="secondary-button compact-button lists-action-button lists-return-button" type="button" @click="clearActiveWordListGroup">
+        <ArrowLeft :size="16" aria-hidden="true" />
         <span>返回未归组</span>
       </button>
     </div>
@@ -583,10 +654,10 @@ watch(wordListGroups, (groups) => {
 .word-list-groups-panel {
   position: relative;
   display: grid;
-  gap: 16px;
+  gap: 18px;
   margin-bottom: 18px;
   overflow: hidden;
-  padding: 0;
+  padding: 18px;
   border-color: rgba(15, 127, 89, 0.18);
   background:
     radial-gradient(circle at 100% 0%, rgba(15, 127, 89, 0.1), transparent 30%),
@@ -607,14 +678,27 @@ watch(wordListGroups, (groups) => {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 16px;
-  min-height: 96px;
-  border-bottom: 1px solid rgba(15, 127, 89, 0.12);
-  padding: 20px 22px 18px 24px;
+  align-items: start;
+  gap: 18px;
+  min-height: 104px;
+  border: 1px solid rgba(15, 127, 89, 0.13);
+  border-radius: 16px;
+  padding: 20px 22px 18px 28px;
   background:
-    radial-gradient(circle at 94% 18%, rgba(243, 190, 95, 0.13), transparent 28%),
-    linear-gradient(135deg, rgba(247, 253, 250, 0.98), rgba(255, 255, 255, 0.92));
+    radial-gradient(circle at 92% 16%, rgba(243, 190, 95, 0.13), transparent 30%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(239, 250, 245, 0.94));
+  box-shadow: 0 12px 28px rgba(15, 28, 36, 0.05);
+}
+
+.lists-section-head::before {
+  content: "";
+  position: absolute;
+  top: 20px;
+  bottom: 20px;
+  left: 14px;
+  width: 4px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #0f7f59, rgba(243, 190, 95, 0.72));
 }
 
 .lists-section-head h2 {
@@ -624,13 +708,13 @@ watch(wordListGroups, (groups) => {
   line-height: 1.1;
 }
 
-.lists-section-head > div {
+.lists-section-copy {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
-.lists-section-head > div > span {
+.lists-section-copy > span {
   max-width: 520px;
   color: #5c6f7e;
   font-size: 13px;
@@ -666,44 +750,50 @@ watch(wordListGroups, (groups) => {
   font-weight: 900;
 }
 
+.word-list-groups-head > .lists-action-button,
+.lists-table-head > .lists-return-button {
+  align-self: start;
+  justify-self: end;
+}
+
 .word-list-group-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
-  padding: 0 18px 18px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  padding: 0;
 }
 
 .word-list-group-card {
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
-  align-items: center;
-  min-height: 92px;
-  border: 1px solid rgba(15, 127, 89, 0.16);
-  border-radius: 18px;
-  padding: 14px;
+  align-items: start;
+  min-height: 136px;
+  border: 1px solid rgba(15, 127, 89, 0.18);
+  border-radius: 20px;
+  padding: 18px;
   color: #0f172a;
   background:
-    linear-gradient(90deg, rgba(15, 127, 89, 0.08), transparent 34%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(229, 246, 238, 0.9));
-  box-shadow: 0 10px 24px rgba(15, 28, 36, 0.06);
+    radial-gradient(circle at 100% 0%, rgba(243, 190, 95, 0.15), transparent 32%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.99), rgba(229, 246, 238, 0.92));
+  box-shadow: 0 18px 36px rgba(15, 28, 36, 0.08);
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .word-list-group-card::before {
   content: "";
   position: absolute;
   top: -1px;
-  left: 20px;
-  width: 78px;
-  height: 13px;
+  left: 22px;
+  width: 86px;
+  height: 15px;
   border: 1px solid rgba(15, 127, 89, 0.16);
   border-bottom: 0;
-  border-radius: 13px 13px 0 0;
+  border-radius: 15px 15px 0 0;
   background: rgba(232, 247, 239, 0.98);
 }
 
@@ -725,9 +815,11 @@ watch(wordListGroups, (groups) => {
     radial-gradient(circle at 86% 16%, rgba(255, 255, 255, 0.18), transparent 26%),
     linear-gradient(135deg, #0f7f59, #0b5f43);
   transform: translateY(-1px);
+  box-shadow: 0 24px 48px rgba(15, 127, 89, 0.2);
 }
 
-.word-list-group-card.is-active {
+.word-list-group-card.is-active,
+.word-list-group-card.is-drop-target {
   border-color: rgba(15, 127, 89, 0.72);
   background:
     radial-gradient(circle at 86% 16%, rgba(255, 255, 255, 0.16), transparent 26%),
@@ -736,47 +828,64 @@ watch(wordListGroups, (groups) => {
   box-shadow: 0 18px 36px rgba(15, 127, 89, 0.2);
 }
 
+.word-list-group-card.is-drop-target {
+  outline: 3px solid rgba(243, 190, 95, 0.48);
+  outline-offset: 4px;
+}
+
 .word-list-group-card:hover strong,
 .word-list-group-card:hover span,
 .word-list-group-card:hover div span,
 .word-list-group-card.is-active strong,
 .word-list-group-card.is-active span,
-.word-list-group-card.is-active div span {
+.word-list-group-card.is-active div span,
+.word-list-group-card.is-drop-target strong,
+.word-list-group-card.is-drop-target span,
+.word-list-group-card.is-drop-target div span {
   color: #fff;
 }
 
 .word-list-group-card:hover::before,
-.word-list-group-card.is-active::before {
+.word-list-group-card.is-active::before,
+.word-list-group-card.is-drop-target::before {
   border-color: rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.14);
 }
 
 .word-list-group-card:hover::after,
-.word-list-group-card.is-active::after {
+.word-list-group-card.is-active::after,
+.word-list-group-card.is-drop-target::after {
   background: rgba(255, 255, 255, 0.14);
 }
 
 .word-list-group-index {
+  position: relative;
+  z-index: 1;
   display: inline-grid;
+  grid-column: 1 / -1;
   place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 16px;
+  width: fit-content;
+  min-width: 44px;
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 6px 10px;
   color: #0f6b4d;
-  background: #e8f7ef;
+  background: rgba(232, 247, 239, 0.96);
   font-size: 15px;
   font-weight: 1000;
 }
 
 .word-list-group-card:hover .word-list-group-index,
-.word-list-group-card.is-active .word-list-group-index {
+.word-list-group-card.is-active .word-list-group-index,
+.word-list-group-card.is-drop-target .word-list-group-index {
   color: #fff;
   background: rgba(255, 255, 255, 0.16);
 }
 
 .word-list-group-card div {
   display: grid;
-  gap: 5px;
+  grid-column: 1 / -1;
+  gap: 7px;
   min-width: 0;
 }
 
@@ -796,6 +905,8 @@ watch(wordListGroups, (groups) => {
 }
 
 .word-list-group-action {
+  grid-column: 1 / -1;
+  justify-self: start;
   align-self: center;
   border: 1px solid rgba(15, 127, 89, 0.12);
   border-radius: 999px;
@@ -808,7 +919,8 @@ watch(wordListGroups, (groups) => {
 }
 
 .word-list-group-card:hover .word-list-group-action,
-.word-list-group-card.is-active .word-list-group-action {
+.word-list-group-card.is-active .word-list-group-action,
+.word-list-group-card.is-drop-target .word-list-group-action {
   border-color: rgba(255, 255, 255, 0.24);
   color: #fff;
   background: rgba(255, 255, 255, 0.16);
@@ -831,7 +943,7 @@ watch(wordListGroups, (groups) => {
   gap: 16px;
   margin-bottom: 18px;
   overflow: hidden;
-  padding: 0 0 18px;
+  padding: 18px;
   border-color: rgba(15, 127, 89, 0.13);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(249, 253, 250, 0.92));
@@ -853,7 +965,7 @@ watch(wordListGroups, (groups) => {
 }
 
 .word-list-table-panel .lists-reorder-grid {
-  padding: 0 18px;
+  padding: 0;
 }
 
 .list-table-empty {
