@@ -62,11 +62,22 @@ class WordResourcePool(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class WordListGroup(Base):
+    __tablename__ = "word_list_groups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    display_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class WordList(Base):
     __tablename__ = "word_lists"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    group_id: Mapped[int | None] = mapped_column(ForeignKey("word_list_groups.id", ondelete="SET NULL"), index=True)
     display_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     sequence_offset: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

@@ -20,12 +20,20 @@ const props = defineProps([
 ]);
 
 const isCreateModalOpen = ref(false);
+const isGroupCreateModalOpen = ref(false);
 const searchQuery = ref("");
 const searchedQuery = ref("");
 const searchResults = ref([]);
 const isSearching = ref(false);
 const searchError = ref("");
 const orderedCards = ref([]);
+const newGroupName = ref("");
+const groupCreateNotice = ref("");
+const isCreatingGroup = ref(false);
+const managingCard = ref(null);
+const selectedGroupId = ref("");
+const groupMoveNotice = ref("");
+const isMovingGroup = ref(false);
 const draggedListId = ref(null);
 const dragOverListId = ref(null);
 const isSavingOrder = ref(false);
@@ -36,6 +44,16 @@ let searchTimer = 0;
 
 const trimmedSearchQuery = computed(() => searchQuery.value.trim());
 const hasSearched = computed(() => Boolean(searchedQuery.value));
+const wordListGroups = computed(() => props.data.groups || []);
+const trimmedNewGroupName = computed(() => newGroupName.value.trim());
+
+function applyListPagePayload(payload, fallbackCards = orderedCards.value) {
+  const cards = payload.cards || fallbackCards || [];
+  orderedCards.value = [...cards];
+  props.data.cards = orderedCards.value;
+  props.data.groups = payload.groups || props.data.groups || [];
+  syncUploadOptions(orderedCards.value);
+}
 
 function firstDefinition(result) {
   return result.word?.chinese_definition || result.word?.english_definition || result.word?.part_of_speech || "";
@@ -71,6 +89,64 @@ function cardIds(cards = orderedCards.value) {
 function syncUploadOptions(cards = orderedCards.value) {
   if (props.uploadOptions) {
     props.uploadOptions.word_lists = cards.map((card) => card.list);
+  }
+}
+
+function groupIndexLabel(index) {
+  return String(index + 1).padStart(2, "0");
+}
+
+function openListManager(card) {
+  managingCard.value = card;
+  selectedGroupId.value = card.list?.group_id ? String(card.list.group_id) : "";
+  groupMoveNotice.value = "";
+}
+
+function closeListManager() {
+  managingCard.value = null;
+  selectedGroupId.value = "";
+  groupMoveNotice.value = "";
+}
+
+async function createWordListGroup() {
+  const name = trimmedNewGroupName.value;
+  if (!name || isCreatingGroup.value) return;
+  isCreatingGroup.value = true;
+  groupCreateNotice.value = "";
+  try {
+    const payload = await fetchJson(listApiPaths.createGroup(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+      skipCache: true,
+    });
+    applyListPagePayload(payload);
+    newGroupName.value = "";
+    isGroupCreateModalOpen.value = false;
+  } catch (error) {
+    groupCreateNotice.value = error.message || "单词组创建失败，请稍后再试。";
+  } finally {
+    isCreatingGroup.value = false;
+  }
+}
+
+async function moveManagingListToGroup() {
+  if (!managingCard.value || isMovingGroup.value) return;
+  isMovingGroup.value = true;
+  groupMoveNotice.value = "";
+  try {
+    const payload = await fetchJson(listApiPaths.moveToGroup(managingCard.value.list.id), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ group_id: selectedGroupId.value || null }),
+      skipCache: true,
+    });
+    applyListPagePayload(payload);
+    closeListManager();
+  } catch (error) {
+    groupMoveNotice.value = error.message || "移动失败，请稍后再试。";
+  } finally {
+    isMovingGroup.value = false;
   }
 }
 
@@ -114,9 +190,7 @@ async function saveListOrder(ids) {
       body: JSON.stringify({ ordered_ids: ids }),
       skipCache: true,
     });
-    orderedCards.value = payload.cards || orderedCards.value;
-    props.data.cards = orderedCards.value;
-    syncUploadOptions();
+    applyListPagePayload(payload);
   } catch (error) {
     orderedCards.value = dragStartCards;
     props.data.cards = dragStartCards;
@@ -188,9 +262,14 @@ watch(
       <p class="section-kicker">SpeakEasy</p>
       <h1>我的单词表</h1>
     </div>
-    <button class="primary-action-button" type="button" @click="isCreateModalOpen = true">
-      新建单词表
-    </button>
+    <div class="lists-page-heading-actions">
+      <button class="secondary-button" type="button" @click="isGroupCreateModalOpen = true">
+        新建单词组
+      </button>
+      <button class="primary-action-button" type="button" @click="isCreateModalOpen = true">
+        新建单词表
+      </button>
+    </div>
   </section>
   <section class="panel list-word-search-panel">
     <form class="list-word-search-form" @submit.prevent="runSearch">
@@ -240,6 +319,75 @@ watch(
       :submit-batch-images="submitBatchImages"
     />
   </ListsCreateModal>
+  <ListsCreateModal
+    v-if="isGroupCreateModalOpen"
+    title="新建单词组"
+    description="把多个单词表放到同一个组里，适合管理自动分表或同一套词库。"
+    @close="isGroupCreateModalOpen = false"
+  >
+    <form class="list-group-create-form" @submit.prevent="createWordListGroup">
+      <label>
+        <span>单词组名称</span>
+        <input v-model="newGroupName" type="text" placeholder="例如：个人赛冠军词库" autocomplete="off" autofocus>
+      </label>
+      <button class="primary-action-button" type="submit" :disabled="!trimmedNewGroupName || isCreatingGroup">
+        {{ isCreatingGroup ? "创建中" : "创建单词组" }}
+      </button>
+    </form>
+    <p v-if="groupCreateNotice" class="notice">{{ groupCreateNotice }}</p>
+  </ListsCreateModal>
+  <ListsCreateModal
+    v-if="managingCard"
+    title="管理单词表"
+    :description="managingCard.list.name"
+    @close="closeListManager"
+  >
+    <form class="list-group-manage-form" @submit.prevent="moveManagingListToGroup">
+      <label>
+        <span>移动到单词组</span>
+        <select v-model="selectedGroupId">
+          <option value="">不放入单词组</option>
+          <option v-for="group in wordListGroups" :key="group.id" :value="String(group.id)">
+            {{ group.name }}
+          </option>
+        </select>
+      </label>
+      <button class="primary-action-button" type="submit" :disabled="isMovingGroup">
+        {{ isMovingGroup ? "保存中" : "保存分组" }}
+      </button>
+    </form>
+    <p v-if="groupMoveNotice" class="notice">{{ groupMoveNotice }}</p>
+  </ListsCreateModal>
+  <section class="panel word-list-groups-panel">
+    <div class="lists-section-head">
+      <div>
+        <p class="section-kicker">Groups</p>
+        <h2>我的单词组</h2>
+      </div>
+      <button class="secondary-button compact-button" type="button" @click="isGroupCreateModalOpen = true">
+        新建单词组
+      </button>
+    </div>
+    <div v-if="wordListGroups.length" class="word-list-group-grid">
+      <article v-for="(group, index) in wordListGroups" :key="group.id" class="word-list-group-card">
+        <span class="word-list-group-index">{{ groupIndexLabel(index) }}</span>
+        <div>
+          <strong>{{ group.name }}</strong>
+          <span>{{ group.list_count }} 个单词表 · {{ group.word_count }} 个单词</span>
+        </div>
+      </article>
+    </div>
+    <p v-else class="empty-state list-group-empty">
+      还没有单词组。新建后，可以在单词表右上角点“管理”移入。
+    </p>
+  </section>
+  <section class="lists-section-head lists-table-head">
+    <div>
+      <p class="section-kicker">Word Lists</p>
+      <h2>我的单词表</h2>
+    </div>
+    <span>{{ orderedCards.length }} 个单词表</span>
+  </section>
   <section class="word-grid lists-reorder-grid" role="list" @dragover.prevent>
     <WordListCard
       v-for="(card, index) in orderedCards"
@@ -252,10 +400,13 @@ watch(
       :card="card"
       :fallback-letter="fallbackLetter"
       :go="go"
+      :sequence="index + 1"
+      show-manage
       draggable="true"
       role="listitem"
       :aria-grabbed="draggedListId === card.list.id ? 'true' : 'false'"
       show-challenge
+      @manage="openListManager"
       @dragstart="startListDrag(card, $event)"
       @dragover="moveDraggedList(index, $event)"
       @drop.prevent="finishListDrag"
@@ -270,6 +421,156 @@ watch(
 <style scoped>
 .lists-reorder-grid {
   align-items: stretch;
+}
+
+.lists-page-heading-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.word-list-groups-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 18px;
+  border-color: rgba(15, 127, 89, 0.18);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(235, 248, 242, 0.96));
+}
+
+.lists-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.lists-section-head h2 {
+  margin: 0;
+  color: #111827;
+  font-size: clamp(22px, 3vw, 30px);
+  line-height: 1.1;
+}
+
+.lists-section-head > span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #0f6b4d;
+  background: rgba(29, 127, 91, 0.11);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.word-list-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.word-list-group-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 88px;
+  border: 1px solid rgba(15, 127, 89, 0.16);
+  border-radius: 16px;
+  padding: 14px;
+  color: #0f172a;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(229, 246, 238, 0.92));
+  box-shadow: 0 10px 24px rgba(15, 28, 36, 0.06);
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.word-list-group-card:hover {
+  border-color: rgba(15, 127, 89, 0.78);
+  color: #fff;
+  background: linear-gradient(135deg, #0f7f59, #0b5f43);
+  transform: translateY(-1px);
+}
+
+.word-list-group-card:hover strong,
+.word-list-group-card:hover span {
+  color: #fff;
+}
+
+.word-list-group-index {
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  color: #0f6b4d;
+  background: rgba(15, 127, 89, 0.1);
+  font-size: 15px;
+  font-weight: 1000;
+}
+
+.word-list-group-card:hover .word-list-group-index {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.word-list-group-card div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.word-list-group-card strong {
+  overflow: hidden;
+  color: #111827;
+  font-size: 18px;
+  font-weight: 1000;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.word-list-group-card div span {
+  color: #536579;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.list-group-empty {
+  margin: 0;
+}
+
+.lists-table-head {
+  margin: 6px 0 12px;
+  padding: 0 2px;
+}
+
+.list-group-create-form,
+.list-group-manage-form {
+  display: grid;
+  gap: 14px;
+}
+
+.list-group-create-form label,
+.list-group-manage-form label {
+  display: grid;
+  gap: 7px;
+  color: #536579;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.list-group-create-form input,
+.list-group-manage-form select {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0 12px;
+  color: var(--text);
+  background: #fff;
+  font: inherit;
+  font-weight: 850;
 }
 
 .lists-reorder-card {
@@ -309,5 +610,18 @@ watch(
 
 .lists-order-notice.is-error {
   color: #b42318;
+}
+
+@media (max-width: 720px) {
+  .lists-page-heading-actions,
+  .lists-section-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lists-page-heading-actions > button,
+  .lists-section-head > button {
+    width: 100%;
+  }
 }
 </style>

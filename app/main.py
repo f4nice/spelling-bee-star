@@ -36,6 +36,7 @@ from app.models import (
     LearningGrowthMetric,
     Word,
     WordList,
+    WordListGroup,
     WordListItem,
     WordResourcePool,
     WrongWord,
@@ -79,8 +80,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-011"
-DEFAULT_PAGE_VERSION = "v20260704.10"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-012"
+DEFAULT_PAGE_VERSION = "v20260704.11"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2492,8 +2493,51 @@ def vue_shell_api(db: Session = Depends(get_db)):
 
 @app.get("/api/vue/lists")
 def vue_lists_api(db: Session = Depends(get_db)):
-    cards = [serialize_word_list_card(word_list_card(db, word_list)) for word_list in regular_word_lists(db)]
-    return {"cards": cards}
+    return lists_payload(db)
+
+
+@app.post("/api/vue/lists/groups")
+async def vue_create_word_list_group_api(request: Request, db: Session = Depends(get_db)):
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="单词组数据不是有效 JSON。") from exc
+
+    name = clean_list_name(str((payload or {}).get("name") or ""))
+    if not name:
+        raise HTTPException(status_code=400, detail="请输入单词组名称。")
+
+    group = get_or_create_word_list_group_by_name(db, name)
+    response = lists_payload(db)
+    response["group"] = serialize_word_list_group(db, group)
+    return response
+
+
+@app.post("/api/vue/lists/{word_list_id}/group")
+async def vue_move_word_list_group_api(word_list_id: int, request: Request, db: Session = Depends(get_db)):
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="单词组数据不是有效 JSON。") from exc
+
+    word_list = db.get(WordList, word_list_id)
+    if not word_list or is_wrong_word_list_name(word_list.name):
+        raise HTTPException(status_code=404, detail="没有找到这个单词表。")
+
+    raw_group_id = (payload or {}).get("group_id")
+    group_id: int | None = None
+    if raw_group_id not in (None, "", 0, "0", "none", "null"):
+        try:
+            group_id = int(raw_group_id)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="单词组编号无效。") from exc
+        if not db.get(WordListGroup, group_id):
+            raise HTTPException(status_code=404, detail="没有找到这个单词组。")
+
+    word_list.group_id = group_id
+    db.add(word_list)
+    db.commit()
+    return lists_payload(db)
 
 
 @app.post("/api/vue/lists/reorder")
@@ -2530,8 +2574,9 @@ async def vue_reorder_lists_api(request: Request, db: Session = Depends(get_db))
         db.add(word_list)
     db.commit()
 
-    cards = [serialize_word_list_card(word_list_card(db, word_list)) for word_list in regular_word_lists(db)]
-    return {"ok": True, "cards": cards}
+    response = lists_payload(db)
+    response["ok"] = True
+    return response
 
 
 @app.get("/api/vue/lists/search")
@@ -2854,10 +2899,12 @@ async def vue_import_preview(
     word_ids: list[int] = []
     split_lists: list[WordList] = []
     if len(rows) > chunk_size:
+        split_group = get_or_create_word_list_group_by_name(db, base_name)
         for chunk_index in range(0, len(rows), chunk_size):
             chunk_number = (chunk_index // chunk_size) + 1
             chunk_list = get_or_create_word_list_by_name(db, f"{base_name}-{chunk_number}")
             clear_word_list_items(db, chunk_list.id)
+            chunk_list.group_id = split_group.id
             chunk_list.sequence_offset = chunk_index
             db.add(chunk_list)
             db.commit()
@@ -3765,15 +3812,69 @@ def serialize_word(word: Word) -> dict[str, Any]:
     }
 
 
-def serialize_word_list_card(card: dict[str, Any]) -> dict[str, Any]:
+def serialize_word_list_group(db: Session, group: WordListGroup) -> dict[str, Any]:
+    word_lists = [
+        word_list
+        for word_list in regular_word_lists(db)
+        if word_list.group_id == group.id
+    ]
+    total_words = sum(
+        db.scalar(select(func.count(WordListItem.id)).where(WordListItem.word_list_id == word_list.id)) or 0
+        for word_list in word_lists
+    )
+    return {
+        "id": group.id,
+        "name": group.name,
+        "display_order": group.display_order,
+        "list_count": len(word_lists),
+        "word_count": int(total_words),
+        "list_ids": [word_list.id for word_list in word_lists],
+    }
+
+
+def serialize_word_list_group_brief(group: WordListGroup | None) -> dict[str, Any] | None:
+    if not group:
+        return None
+    return {"id": group.id, "name": group.name}
+
+
+def serialize_word_list_card(card: dict[str, Any], group: WordListGroup | None = None) -> dict[str, Any]:
     word_list = card["list"]
     cover_word = card.get("cover_word")
     return {
-        "list": {"id": word_list.id, "name": word_list.name, "display_order": word_list.display_order},
+        "list": {
+            "id": word_list.id,
+            "name": word_list.name,
+            "display_order": word_list.display_order,
+            "group_id": word_list.group_id,
+            "group": serialize_word_list_group_brief(group),
+        },
         "count": card["count"],
         "cover_word": serialize_word(cover_word) if cover_word else None,
         "challenge": card["challenge"],
     }
+
+
+def word_list_group_map(db: Session) -> dict[int, WordListGroup]:
+    return {group.id: group for group in word_list_groups(db)}
+
+
+def lists_payload(db: Session) -> dict[str, Any]:
+    groups = [serialize_word_list_group(db, group) for group in word_list_groups(db)]
+    groups_by_id = {group["id"]: group for group in groups}
+    model_groups = word_list_group_map(db)
+    cards: list[dict[str, Any]] = []
+    for index, word_list in enumerate(regular_word_lists(db), start=1):
+        group = model_groups.get(word_list.group_id or 0)
+        card = serialize_word_list_card(word_list_card(db, word_list), group)
+        card["sequence"] = index
+        if word_list.group_id and word_list.group_id in groups_by_id:
+            card["list"]["group"] = {
+                "id": word_list.group_id,
+                "name": groups_by_id[word_list.group_id]["name"],
+            }
+        cards.append(card)
+    return {"groups": groups, "cards": cards}
 
 
 def spb_word_lists_for_group(db: Session, group: dict[str, Any]) -> list[WordList]:
@@ -4393,10 +4494,12 @@ def import_spb_word_bank_rows(db: Session, group: dict[str, Any], source_rows: l
     word_ids: list[int] = []
     split_lists: list[WordList] = []
     if len(rows) > chunk_size:
+        split_group = get_or_create_word_list_group_by_name(db, base_name)
         for chunk_index in range(0, len(rows), chunk_size):
             chunk_number = (chunk_index // chunk_size) + 1
             word_list = get_or_create_word_list_by_name(db, f"{base_name}-{chunk_number}")
             clear_word_list_items(db, word_list.id)
+            word_list.group_id = split_group.id
             word_list.sequence_offset = chunk_index
             db.add(word_list)
             db.commit()
@@ -6174,6 +6277,8 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE word_lists ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0"))
         if "word_lists" in table_names and "sequence_offset" not in word_list_columns:
             connection.execute(text("ALTER TABLE word_lists ADD COLUMN sequence_offset INTEGER NOT NULL DEFAULT 0"))
+        if "word_lists" in table_names and "group_id" not in word_list_columns:
+            connection.execute(text("ALTER TABLE word_lists ADD COLUMN group_id INTEGER NULL"))
         if "challenge_progress" in table_names and "completed_rounds" not in challenge_progress_columns:
             connection.execute(text("ALTER TABLE challenge_progress ADD COLUMN completed_rounds INTEGER NOT NULL DEFAULT 0"))
         if "wrong_words" in table_names and "wrong_date" not in wrong_columns:
@@ -6219,6 +6324,24 @@ def get_daily_quote(db: Session) -> DailyQuote | None:
         return None
     index = date.today().toordinal() % len(quotes)
     return quotes[index]
+
+
+def get_or_create_word_list_group_by_name(db: Session, name: str) -> WordListGroup:
+    cleaned_name = clean_list_name(name)
+    group = db.scalar(
+        select(WordListGroup).where(WordListGroup.name == cleaned_name).order_by(WordListGroup.id.asc()).limit(1)
+    )
+    if not group:
+        group = WordListGroup(name=cleaned_name, display_order=next_word_list_group_display_order(db))
+        db.add(group)
+        db.commit()
+        db.refresh(group)
+    return group
+
+
+def next_word_list_group_display_order(db: Session) -> int:
+    current_min = db.scalar(select(func.min(WordListGroup.display_order))) or 0
+    return int(current_min) - 10
 
 
 def get_or_create_word_list(db: Session, word_list_id: str, name: str) -> WordList:
@@ -6329,6 +6452,12 @@ def regular_word_lists(db: Session) -> list[WordList]:
         select(WordList).order_by(WordList.display_order.asc(), WordList.created_at.desc(), WordList.id.desc())
     ).all()
     return [word_list for word_list in word_lists if not is_wrong_word_list_name(word_list.name)]
+
+
+def word_list_groups(db: Session) -> list[WordListGroup]:
+    return db.scalars(
+        select(WordListGroup).order_by(WordListGroup.display_order.asc(), WordListGroup.created_at.desc(), WordListGroup.id.desc())
+    ).all()
 
 
 def normalize_image_match_key(value: str | None) -> str:
