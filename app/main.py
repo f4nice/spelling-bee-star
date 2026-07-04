@@ -79,11 +79,12 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-010"
-DEFAULT_PAGE_VERSION = "v20260704.9"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-011"
+DEFAULT_PAGE_VERSION = "v20260704.10"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
+SPB_DETAIL_BACKFILL_BATCH_LIMIT = 300
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
 SCIENCE_IMAGE_VERSION = "20260629-no-text-1"
 SCIENCE_DISCOVERY_DATA_VERSION = "20260629-source-mode-1"
@@ -3460,18 +3461,20 @@ async def vue_spb_backfill_details_api(request: Request, db: Session = Depends(g
         or not (word.english_definition or "").strip()
         or not (word.english_example or "").strip()
     ]
-    queued_ids = [word.id for word in missing_words]
+    queued_ids = [word.id for word in missing_words[:SPB_DETAIL_BACKFILL_BATCH_LIMIT]]
+    remaining_after_batch = max(len(missing_words) - len(queued_ids), 0)
     if queued_ids:
         start_enrichment_thread(queued_ids, include_images=False)
 
     response = spb_payload(db, collection["key"])
     if queued_ids:
-        response["message"] = (
-            f"已从公共资源表补齐 {resource_applied} 个；后台继续补全 {len(queued_ids)} 个缺音标、词性、英文定义或英文例句的单词。"
-        )
+        response["message"] = f"已从公共资源表补齐 {resource_applied} 个；后台继续补全 {len(queued_ids)} 个缺音标、词性、英文定义或英文例句的单词。"
+        if remaining_after_batch:
+            response["message"] += f" 还有 {remaining_after_batch} 个会留到下一批，避免一次任务过大。"
     else:
         response["message"] = f"已从公共资源表补齐 {resource_applied} 个；这组音标、词性、英文定义和英文例句已经没有明显缺口。"
     response["queued_detail_count"] = len(queued_ids)
+    response["remaining_detail_count"] = remaining_after_batch
     response["resource_applied_count"] = resource_applied
     return response
 
