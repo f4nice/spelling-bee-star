@@ -79,7 +79,7 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-001"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-002"
 DEFAULT_PAGE_VERSION = "v20260704.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
@@ -3138,6 +3138,11 @@ def wrong_words_page(request: Request, db: Session = Depends(get_db)):
 @app.get("/growth", response_class=HTMLResponse)
 def growth_page(request: Request, db: Session = Depends(get_db)):
     return vue_shell(request, db, "growth")
+
+
+@app.get("/spb", response_class=HTMLResponse)
+def spb_page(request: Request, db: Session = Depends(get_db)):
+    return vue_shell(request, db, "spb")
 
 
 @app.get("/challenge-calendar/{day}", response_class=HTMLResponse)
