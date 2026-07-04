@@ -79,8 +79,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-006"
-DEFAULT_PAGE_VERSION = "v20260704.5"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-007"
+DEFAULT_PAGE_VERSION = "v20260704.6"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3150,8 +3150,10 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "key": "beginner",
         "title": "小初组",
         "subtitle": "Beginner Group(G1-G2)",
-        "status": "locked",
+        "status": "available",
         "prefix": "SPB个人赛冠军词库-小初组",
+        "source_count": 1300,
+        "source_file": "spb_individual_beginner_g1_g2_words.json",
         "spb_product_id": 1,
         "spb_flag": "BEGINNER_GROUP0",
     },
@@ -3172,6 +3174,7 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "subtitle": "Advanced Group(G5-G6)",
         "status": "available",
         "prefix": "SPB个人赛冠军词库-小高组",
+        "source_count": 2300,
         "source_file": "spb_individual_advanced_g5_g6_words.json",
         "spb_product_id": 3,
         "spb_flag": "BEGINNER_GROUP2",
@@ -3180,8 +3183,10 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "key": "middle",
         "title": "初中组",
         "subtitle": "Middle School(G7-G9)",
-        "status": "locked",
+        "status": "available",
         "prefix": "SPB个人赛冠军词库-初中组",
+        "source_count": 3400,
+        "source_file": "spb_individual_middle_g7_g9_words.json",
         "spb_product_id": 4,
         "spb_flag": "BEGINNER_GROUP3",
     },
@@ -3189,8 +3194,10 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "key": "high",
         "title": "高中组",
         "subtitle": "High School(G10-G12)",
-        "status": "locked",
+        "status": "available",
         "prefix": "SPB个人赛冠军词库-高中组",
+        "source_count": 3300,
+        "source_file": "spb_individual_high_g10_g12_words.json",
         "spb_product_id": 5,
         "spb_flag": "BEGINNER_GROUP4",
     },
@@ -3200,6 +3207,7 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "subtitle": "Language Origin",
         "status": "available",
         "prefix": "SPB个人赛冠军词库-词源单词",
+        "source_count": 2000,
         "source_file": "spb_individual_language_origin_words.json",
         "spb_product_id": 6,
         "spb_flag": "LANGUAGE_ORIGIN",
@@ -3218,19 +3226,160 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
 ]
 
 
-def spb_payload(db: Session) -> dict[str, Any]:
+SPB_RESERVE_PACKAGE_WORD_BANK_GROUPS = [
+    {
+        "key": "reserve-beginner",
+        "title": "小初组开心备赛",
+        "subtitle": "Beginner Happy Prep",
+        "status": "available",
+        "prefix": "SPB全方位备赛套餐-小初组开心备赛",
+        "spb_product_id": 10,
+        "spb_flag": "Beginner_Group0_happy",
+    },
+    {
+        "key": "reserve-intermediate",
+        "title": "小中组快乐备赛",
+        "subtitle": "Intermediate Fun Prep",
+        "status": "available",
+        "prefix": "SPB全方位备赛套餐-小中组快乐备赛",
+        "spb_product_id": 11,
+        "spb_flag": "Beginner_Group1_fun",
+    },
+    {
+        "key": "reserve-advanced",
+        "title": "小高组轻松备赛",
+        "subtitle": "Advanced Relaxed Prep",
+        "status": "available",
+        "prefix": "SPB全方位备赛套餐-小高组轻松备赛",
+        "spb_product_id": 12,
+        "spb_flag": "Beginner_Group2_relaxed",
+    },
+    {
+        "key": "reserve-middle",
+        "title": "初中组超速备赛",
+        "subtitle": "Middle School Speed Prep",
+        "status": "available",
+        "prefix": "SPB全方位备赛套餐-初中组超速备赛",
+        "spb_product_id": 13,
+        "spb_flag": "Beginner_Group4_speeding",
+    },
+    {
+        "key": "reserve-perfect",
+        "title": "课外组完美备赛",
+        "subtitle": "Perfect Extra Prep",
+        "status": "available",
+        "prefix": "SPB全方位备赛套餐-课外组完美备赛",
+        "spb_product_id": 14,
+        "spb_flag": "Beginner_Group_perfect",
+    },
+]
+
+
+SPB_BABY_WORD_BANK_GROUPS = [
+    {
+        "key": "baby",
+        "title": "SPBCNxBABY词库",
+        "subtitle": "SPBCN x BABY",
+        "status": "available",
+        "prefix": "SPB-SPBCNxBABY词库",
+        "spb_product_id": 36,
+        "spb_flag": "baby_thesaurus",
+    }
+]
+
+
+SPB_WORD_BANK_COLLECTIONS = [
+    {
+        "key": "individual",
+        "name": "个人赛冠军词库",
+        "subtitle": "Champion Word Bank for Individual Competitions",
+        "source_type": "individual_champion_thesaurus",
+        "groups": SPB_INDIVIDUAL_WORD_BANK_GROUPS,
+    },
+    {
+        "key": "reserve",
+        "name": "全方位备赛套餐",
+        "subtitle": "SPB Practice Packages",
+        "source_type": "reserve_package",
+        "groups": SPB_RESERVE_PACKAGE_WORD_BANK_GROUPS,
+    },
+    {
+        "key": "team",
+        "name": "团体赛冠军词库",
+        "subtitle": "Team Competition Word Banks",
+        "source_type": "itso_champion_thesaurus",
+        "groups": [],
+        "sync_note": "小程序公开产品接口暂未返回团体赛词库；拿到缓存或授权后会出现在这里。",
+    },
+    {
+        "key": "baby",
+        "name": "SPBCNxBABY词库",
+        "subtitle": "SPBCN x BABY Word Bank",
+        "source_type": "baby_thesaurus",
+        "groups": SPB_BABY_WORD_BANK_GROUPS,
+    },
+    {
+        "key": "toefl",
+        "name": "国际考试（托福）",
+        "subtitle": "TOEFL Word Banks",
+        "source_type": "toefl_thesaurus",
+        "groups": [],
+        "sync_note": "小程序公开产品接口暂未返回托福词库；拿到缓存或授权后会出现在这里。",
+    },
+    {
+        "key": "ielts",
+        "name": "国际考试（雅思）",
+        "subtitle": "IELTS Word Banks",
+        "source_type": "ielts_thesaurus",
+        "groups": [],
+        "sync_note": "小程序公开产品接口暂未返回雅思词库；拿到缓存或授权后会出现在这里。",
+    },
+]
+
+
+def spb_collection_by_key(collection_key: str | None) -> dict[str, Any]:
+    key = str(collection_key or "").strip() or "individual"
+    return next(
+        (collection for collection in SPB_WORD_BANK_COLLECTIONS if collection["key"] == key),
+        SPB_WORD_BANK_COLLECTIONS[0],
+    )
+
+
+def serialize_spb_word_bank_collection(db: Session, collection: dict[str, Any]) -> dict[str, Any]:
+    groups = [serialize_spb_word_bank_group(db, group) for group in collection.get("groups", [])]
+    total_count = sum(int(group.get("total_count") or 0) for group in groups)
+    list_count = sum(int(group.get("list_count") or 0) for group in groups)
+    cached_source_count = sum(int(group.get("cached_source_count") or 0) for group in groups)
     return {
-        "collection": {
-            "name": "个人赛冠军词库",
-            "subtitle": "Champion Word Bank for Individual Competitions",
-        },
-        "groups": [serialize_spb_word_bank_group(db, group) for group in SPB_INDIVIDUAL_WORD_BANK_GROUPS],
+        "key": collection["key"],
+        "name": collection["name"],
+        "subtitle": collection["subtitle"],
+        "source_type": collection.get("source_type"),
+        "sync_note": collection.get("sync_note") or "",
+        "total_count": total_count,
+        "list_count": list_count,
+        "cached_source_count": cached_source_count,
+        "groups": groups,
+    }
+
+
+def spb_payload(db: Session, collection_key: str | None = None) -> dict[str, Any]:
+    active_collection = spb_collection_by_key(collection_key)
+    collections = [serialize_spb_word_bank_collection(db, collection) for collection in SPB_WORD_BANK_COLLECTIONS]
+    active_payload = next(
+        (collection for collection in collections if collection["key"] == active_collection["key"]),
+        collections[0],
+    )
+    return {
+        "collection": active_payload,
+        "collections": collections,
+        "groups": active_payload.get("groups", []),
     }
 
 
 @app.get("/api/vue/spb")
-def vue_spb_api(db: Session = Depends(get_db)):
-    return spb_payload(db)
+def vue_spb_api(collection: str = Query(default="individual"), db: Session = Depends(get_db)):
+    return spb_payload(db, collection)
 
 
 @app.post("/api/vue/spb/sync")
@@ -3239,15 +3388,17 @@ async def vue_spb_sync_api(request: Request, db: Session = Depends(get_db)):
         payload = await request.json()
     except Exception:
         payload = {}
+    collection_key = str(payload.get("collection") or "individual").strip() or "individual"
+    collection = spb_collection_by_key(collection_key)
     group_key = str(payload.get("key") or "").strip()
-    group = next((item for item in SPB_INDIVIDUAL_WORD_BANK_GROUPS if item["key"] == group_key), None)
+    group = next((item for item in collection.get("groups", []) if item["key"] == group_key), None)
     if not group:
         raise HTTPException(status_code=404, detail="没有找到这个 SPB 词库组")
     if group.get("status") == "locked":
         raise HTTPException(status_code=400, detail="这组还在小程序里锁定，暂时不能同步")
 
-    words, source_path = load_spb_source_words(group)
-    if not words:
+    rows, source_path = load_spb_source_rows(group)
+    if not rows:
         detail = (
             f"{group['title']} 缺少小程序授权，服务器也没有这组源词库缓存。请先配置 SPB 小程序授权后再同步。"
             if not spb_miniprogram_authorization_configured()
@@ -3258,10 +3409,11 @@ async def vue_spb_sync_api(request: Request, db: Session = Depends(get_db)):
             detail=detail,
         )
 
-    word_ids, split_lists = import_spb_word_bank_rows(db, group, words)
+    rows = await prepare_spb_rows_with_local_audio(rows, group)
+    word_ids, split_lists = import_spb_word_bank_rows(db, group, rows)
     if word_ids:
         start_enrichment_thread(word_ids, include_images=False)
-    response = spb_payload(db)
+    response = spb_payload(db, collection["key"])
     response["message"] = f"已同步 {group['title']}：{len(word_ids)} 个单词，{len(split_lists)} 个分表。"
     response["source"] = source_path.name
     return response
@@ -3616,7 +3768,7 @@ def count_spb_cached_source_words(group: dict[str, Any]) -> int:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return 0
-    return len(normalize_spb_word_values(extract_spb_word_values(payload)))
+    return len(normalize_spb_word_rows(extract_spb_word_values(payload), group))
 
 
 def spb_miniprogram_authorization_configured() -> bool:
@@ -3682,6 +3834,25 @@ def spb_miniprogram_get(path: str, params: dict[str, Any], *, require_auth: bool
     return payload.get("data")
 
 
+async def spb_miniprogram_get_async(path: str, params: dict[str, Any], *, require_auth: bool = True) -> Any:
+    if require_auth and not (settings.spb_miniprogram_authorization or "").strip():
+        return None
+    try:
+        async with httpx.AsyncClient(
+            timeout=settings.spb_miniprogram_timeout_seconds,
+            headers=spb_miniprogram_headers(include_auth=require_auth),
+            follow_redirects=True,
+        ) as client:
+            response = await client.get(spb_miniprogram_api_url(path), params=params)
+        response.raise_for_status()
+        payload = response.json()
+    except (httpx.HTTPError, ValueError):
+        return None
+    if not isinstance(payload, dict) or int(payload.get("code") or 0) not in {200, 2014}:
+        return None
+    return payload.get("data")
+
+
 def spb_source_payload_from_api_data(data: Any) -> Any:
     if not data:
         return None
@@ -3719,7 +3890,7 @@ def spb_download_source_payload(source_url: str) -> Any:
         return None
 
 
-def fetch_spb_source_words_from_miniprogram(group: dict[str, Any]) -> tuple[list[str], Path]:
+def fetch_spb_source_rows_from_miniprogram(group: dict[str, Any]) -> tuple[list[dict[str, Any]], Path]:
     flag = str(group.get("spb_flag") or "").strip()
     product_id = group.get("spb_product_id")
     candidates: list[tuple[str, dict[str, Any], str]] = []
@@ -3742,21 +3913,21 @@ def fetch_spb_source_words_from_miniprogram(group: dict[str, Any]) -> tuple[list
 
     for endpoint, params, source_name in candidates:
         payload = spb_source_payload_from_api_data(spb_miniprogram_get(endpoint, params))
-        words = normalize_spb_word_values(extract_spb_word_values(payload))
-        if words:
-            return words, Path(source_name)
+        rows = normalize_spb_word_rows(extract_spb_word_values(payload), group)
+        if rows:
+            return rows, Path(source_name)
     return [], Path(f"mini-program-{flag or product_id or group.get('key')}.json")
 
 
-def load_spb_source_words(group: dict[str, Any]) -> tuple[list[str], Path]:
-    api_words, api_source = fetch_spb_source_words_from_miniprogram(group)
-    if api_words:
-        return api_words, api_source
+def load_spb_source_rows(group: dict[str, Any]) -> tuple[list[dict[str, Any]], Path]:
+    api_rows, api_source = fetch_spb_source_rows_from_miniprogram(group)
+    if api_rows:
+        return api_rows, api_source
 
     path = spb_cached_source_path(group)
     if path.exists():
         payload = json.loads(path.read_text(encoding="utf-8"))
-        return normalize_spb_word_values(extract_spb_word_values(payload)), path
+        return normalize_spb_word_rows(extract_spb_word_values(payload), group), path
     return [], path
 
 
@@ -3780,13 +3951,14 @@ def extract_spb_word_values(payload: Any) -> list[Any]:
 
 
 def normalize_spb_word_values(values: list[Any]) -> list[str]:
-    words: list[str] = []
+    return [row["word"] for row in normalize_spb_word_rows(values, {})]
+
+
+def normalize_spb_word_rows(values: list[Any], group: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
     seen: set[str] = set()
     for value in values:
-        if isinstance(value, dict):
-            raw = value.get("word") or value.get("name") or value.get("spell") or value.get("text")
-        else:
-            raw = value
+        raw = spb_word_text_from_source_value(value)
         word = " ".join(str(raw or "").strip().split())
         if not word or not re.fullmatch(r"[A-Za-z][A-Za-z' -]*", word):
             continue
@@ -3794,20 +3966,189 @@ def normalize_spb_word_values(values: list[Any]) -> list[str]:
         if normalized in seen:
             continue
         seen.add(normalized)
-        words.append(word)
-    return words
+        row: dict[str, Any] = {
+            "word": word,
+            "spb_word_id": spb_word_id_from_source_value(value),
+            "spb_product_flag": group.get("spb_flag"),
+            "spb_product_id": group.get("spb_product_id"),
+            "spb_kernel": value.get("kernel") if isinstance(value, dict) else None,
+        }
+        row.update(spb_audio_urls_from_payload(value))
+        row.update(spb_text_fields_from_payload(value))
+        rows.append(row)
+    return rows
 
 
-def import_spb_word_bank_rows(db: Session, group: dict[str, Any], words: list[str]) -> tuple[list[int], list[WordList]]:
+def spb_word_text_from_source_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        for key in ("word", "name", "spell", "text", "vocabulary"):
+            if value.get(key):
+                return value.get(key)
+        return None
+    return value
+
+
+def spb_word_id_from_source_value(value: Any) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    for key in ("id", "wordId", "word_id", "spellingId", "spellId"):
+        if value.get(key) is not None:
+            return str(value.get(key)).strip() or None
+    return None
+
+
+def spb_find_first_field(payload: Any, field_names: tuple[str, ...]) -> str | None:
+    targets = {field_name.lower() for field_name in field_names}
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if key.lower() in targets:
+                text = str(value or "").strip()
+                if text:
+                    return text
+        for value in payload.values():
+            nested = spb_find_first_field(value, field_names)
+            if nested:
+                return nested
+    elif isinstance(payload, list):
+        for value in payload:
+            nested = spb_find_first_field(value, field_names)
+            if nested:
+                return nested
+    return None
+
+
+def spb_audio_urls_from_payload(payload: Any) -> dict[str, str]:
+    us_url = spb_find_first_field(
+        payload,
+        (
+            "american_audio_url",
+            "americanAudioUrl",
+            "usAudioUrl",
+            "us_audio_url",
+            "usaudio",
+            "usUrl",
+            "us_url",
+            "purl",
+        ),
+    )
+    gb_url = spb_find_first_field(
+        payload,
+        (
+            "british_audio_url",
+            "britishAudioUrl",
+            "ukAudioUrl",
+            "uk_audio_url",
+            "ukaudio",
+            "ukUrl",
+            "uk_url",
+            "eurl",
+        ),
+    )
+    generic_url = spb_find_first_field(payload, ("audioUrl", "audio_url", "audio", "voiceUrl", "voice_url", "durl"))
+    result: dict[str, str] = {}
+    if spb_looks_like_audio_url(us_url):
+        result["american_audio_url"] = us_url
+    elif spb_looks_like_audio_url(generic_url):
+        result["american_audio_url"] = generic_url
+    if spb_looks_like_audio_url(gb_url):
+        result["british_audio_url"] = gb_url
+    return result
+
+
+def spb_looks_like_audio_url(value: str | None) -> bool:
+    if not value:
+        return False
+    lower_value = value.lower()
+    return lower_value.startswith(("http://", "https://")) and any(
+        marker in lower_value for marker in (".mp3", ".m4a", ".wav", "/audio", "voice", "sound")
+    )
+
+
+def spb_text_fields_from_payload(payload: Any) -> dict[str, str]:
+    result: dict[str, str] = {}
+    phonetic = spb_find_first_field(payload, ("phonetic", "phone", "soundmark", "usphone", "ukphone"))
+    part_of_speech = spb_find_first_field(payload, ("part_of_speech", "pos", "speech", "wordClass"))
+    english_definition = spb_find_first_field(payload, ("english_definition", "enDefinition", "definition", "释义"))
+    chinese_definition = spb_find_first_field(payload, ("chinese_definition", "cnDefinition", "translation", "chinese"))
+    english_example = spb_find_first_field(payload, ("english_example", "example", "sentence", "enExample"))
+    if phonetic:
+        result["phonetic"] = phonetic
+    if part_of_speech:
+        result["part_of_speech"] = part_of_speech
+    if english_definition:
+        result["english_definition"] = english_definition
+    if chinese_definition:
+        result["chinese_definition"] = chinese_definition
+    if english_example:
+        result["english_example"] = english_example
+    return result
+
+
+async def prepare_spb_rows_with_local_audio(rows: list[dict[str, Any]], group: dict[str, Any]) -> list[dict[str, Any]]:
+    if not rows:
+        return rows
+
+    semaphore = asyncio.Semaphore(5)
+
+    async def prepare(row: dict[str, Any]) -> dict[str, Any]:
+        async with semaphore:
+            prepared = dict(row)
+            if spb_miniprogram_authorization_configured() and prepared.get("spb_word_id"):
+                detail = await fetch_spb_word_detail_from_miniprogram(prepared, group)
+                if isinstance(detail, dict):
+                    for key, value in {**spb_audio_urls_from_payload(detail), **spb_text_fields_from_payload(detail)}.items():
+                        prepared[key] = prepared.get(key) or value
+            for accent, field_name in (("us", "american_audio_url"), ("gb", "british_audio_url")):
+                audio_url = str(prepared.get(field_name) or "").strip()
+                if not audio_url or is_local_audio_url(audio_url):
+                    continue
+                try:
+                    local_url = await store_audio_candidate(
+                        prepared["word"],
+                        accent,
+                        f"spb-{group.get('spb_flag') or group.get('key') or 'audio'}",
+                        audio_url,
+                        AUDIO_DIR,
+                    )
+                except Exception:
+                    local_url = None
+                if local_url:
+                    prepared[field_name] = local_url
+                    prepared[f"{field_name}_source"] = "spb-miniprogram"
+            return prepared
+
+    return await asyncio.gather(*(prepare(row) for row in rows))
+
+
+async def fetch_spb_word_detail_from_miniprogram(row: dict[str, Any], group: dict[str, Any]) -> Any:
+    word_id = str(row.get("spb_word_id") or "").strip()
+    if not word_id:
+        return None
+    flag = str(row.get("spb_product_flag") or group.get("spb_flag") or "").strip()
+    product_id = row.get("spb_product_id") or group.get("spb_product_id")
+    candidates: list[dict[str, Any]] = []
+    if flag:
+        candidates.append({"id": word_id, "productFlag": flag})
+    if product_id:
+        candidates.append({"id": word_id, "productId": product_id})
+    candidates.append({"id": word_id})
+    for params in candidates:
+        data = await spb_miniprogram_get_async(SPB_MINIPROGRAM_WORD_DETAIL_ENDPOINT, params)
+        if data:
+            return data
+    return None
+
+
+def import_spb_word_bank_rows(db: Session, group: dict[str, Any], source_rows: list[dict[str, Any]]) -> tuple[list[int], list[WordList]]:
     chunk_size = 500
     base_name = clean_list_name(str(group["prefix"]))
     rows = [
         {
-            "word": word,
+            **row,
             "row_number": index + 1,
             "note": f"SPB {group['title']} {group['subtitle']}",
         }
-        for index, word in enumerate(words)
+        for index, row in enumerate(source_rows)
     ]
     word_ids: list[int] = []
     split_lists: list[WordList] = []
@@ -4797,6 +5138,7 @@ def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]
             existing.chinese_definition_locked = existing.chinese_definition_locked or bool(row.get("chinese_definition"))
             existing.english_example = row.get("english_example") or existing.english_example
             existing.english_example_locked = existing.english_example_locked or bool(row.get("english_example"))
+            apply_imported_local_audio(existing, row)
             existing.note = row.get("note") or existing.note
             word = existing
             word.enrichment_status = "pending"
@@ -4813,6 +5155,10 @@ def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]
                 chinese_definition_locked=bool(row.get("chinese_definition")),
                 english_example=row.get("english_example"),
                 english_example_locked=bool(row.get("english_example")),
+                american_audio_url=local_import_audio_url(row.get("american_audio_url")),
+                american_audio_locked=bool(local_import_audio_url(row.get("american_audio_url"))),
+                british_audio_url=local_import_audio_url(row.get("british_audio_url")),
+                british_audio_locked=bool(local_import_audio_url(row.get("british_audio_url"))),
                 note=row.get("note"),
                 enrichment_status="pending",
             )
@@ -4823,7 +5169,14 @@ def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]
             db.commit()
             db.refresh(word)
             apply_word_resource(db, word, commit=False, include_image=False)
-            remember_word_resource(db, word, commit=False)
+            remember_word_resource(
+                db,
+                word,
+                american_audio_source=row.get("american_audio_url_source"),
+                british_audio_source=row.get("british_audio_url_source"),
+                override_media=bool(row.get("american_audio_url_source") or row.get("british_audio_url_source")),
+                commit=False,
+            )
             db.commit()
             db.refresh(word)
             link_word_to_list(db, word_list.id, word.id)
@@ -4834,6 +5187,26 @@ def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]
             errors.append(f"第 {row.get('row_number')} 行 {word_text}: {exc}")
 
     return word_ids
+
+
+def local_import_audio_url(value: str | None) -> str | None:
+    audio_url = str(value or "").strip()
+    return audio_url if is_local_audio_url(audio_url) else None
+
+
+def apply_imported_local_audio(word: Word, row: dict[str, Any]) -> bool:
+    changed = False
+    american_audio_url = local_import_audio_url(row.get("american_audio_url"))
+    british_audio_url = local_import_audio_url(row.get("british_audio_url"))
+    if american_audio_url and not word.american_audio_locked:
+        word.american_audio_url = american_audio_url
+        word.american_audio_locked = True
+        changed = True
+    if british_audio_url and not word.british_audio_locked:
+        word.british_audio_url = british_audio_url
+        word.british_audio_locked = True
+        changed = True
+    return changed
 
 
 def merge_spellings(existing: str | None, incoming: str | None) -> str | None:

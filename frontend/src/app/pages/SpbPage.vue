@@ -15,17 +15,25 @@ const props = defineProps({
   },
 });
 
+const activeCollectionKey = ref("");
 const activeKey = ref("");
 const pageData = ref(props.data);
 const syncingKey = ref("");
 const syncNotice = ref("");
 
-const groups = computed(() => pageData.value.groups || []);
+const collections = computed(() => pageData.value.collections || []);
+const activeCollection = computed(
+  () =>
+    collections.value.find((collection) => collection.key === activeCollectionKey.value) ||
+    pageData.value.collection ||
+    collections.value[0] ||
+    {},
+);
+const groups = computed(() => activeCollection.value.groups || pageData.value.groups || []);
 const syncedGroups = computed(() => groups.value.filter((group) => group.total_count > 0));
 const activeGroup = computed(
   () => groups.value.find((group) => group.key === activeKey.value) || syncedGroups.value[0] || groups.value[0],
 );
-const collection = computed(() => pageData.value.collection || {});
 const totalSyncedWords = computed(() => syncedGroups.value.reduce((total, group) => total + Number(group.total_count || 0), 0));
 const totalSyncedLists = computed(() => syncedGroups.value.reduce((total, group) => total + Number(group.list_count || 0), 0));
 
@@ -34,6 +42,15 @@ watch(
   (nextData) => {
     pageData.value = nextData;
   },
+);
+
+watch(
+  collections,
+  (nextCollections) => {
+    if (nextCollections.some((collection) => collection.key === activeCollectionKey.value)) return;
+    activeCollectionKey.value = pageData.value.collection?.key || nextCollections[0]?.key || "individual";
+  },
+  { immediate: true },
 );
 
 watch(
@@ -56,6 +73,24 @@ function groupMeta(group) {
   if (group.cached_source_count) return `缓存可导入 ${group.cached_source_count} 个单词`;
   if (group.sync_ready) return "可从小程序接口同步";
   return "等待获取词库";
+}
+
+function collectionStatusLabel(collection) {
+  if (collection.total_count > 0) return "已同步";
+  if (collection.cached_source_count > 0) return "有缓存";
+  return "待获取";
+}
+
+function collectionMeta(collection) {
+  if (collection.total_count > 0) return `${collection.total_count} 个单词 · ${collection.list_count} 个分表`;
+  if (collection.cached_source_count > 0) return `缓存可导入 ${collection.cached_source_count} 个`;
+  return collection.sync_note || "等待获取词库";
+}
+
+function openCollection(collection) {
+  activeCollectionKey.value = collection.key;
+  activeKey.value = collection.groups?.find((group) => group.total_count > 0)?.key || collection.groups?.[0]?.key || "";
+  syncNotice.value = "";
 }
 
 function openGroup(group) {
@@ -95,10 +130,11 @@ async function syncGroup(group) {
     const payload = await fetchJson(routeApiPaths.spbSync(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: group.key }),
+      body: JSON.stringify({ collection: activeCollection.value.key || "individual", key: group.key }),
       skipCache: true,
     });
     pageData.value = payload;
+    activeCollectionKey.value = payload.collection?.key || activeCollectionKey.value;
     activeKey.value = group.key;
     syncNotice.value = payload.message || "词库已同步。";
   } catch (error) {
@@ -114,8 +150,8 @@ async function syncGroup(group) {
     <section class="panel app-page-heading spb-heading">
       <div class="page-heading-title">
         <p class="section-kicker">SPB</p>
-        <h1>{{ collection.name || "个人赛冠军词库" }}</h1>
-        <p>{{ collection.subtitle || "Champion Word Bank for Individual Competitions" }}</p>
+        <h1>{{ activeCollection.name || "个人赛冠军词库" }}</h1>
+        <p>{{ activeCollection.subtitle || "Champion Word Bank for Individual Competitions" }}</p>
       </div>
       <div class="spb-heading-stats" aria-label="SPB 词库同步状态">
         <span>
@@ -129,7 +165,22 @@ async function syncGroup(group) {
       </div>
     </section>
 
-    <section class="spb-bank-grid" aria-label="SPB 词库组别">
+    <section class="spb-collection-grid" aria-label="SPB 词库分类">
+      <button
+        v-for="collectionItem in collections"
+        :key="collectionItem.key"
+        class="spb-collection-card"
+        :class="{ active: activeCollection?.key === collectionItem.key, synced: collectionItem.total_count > 0 }"
+        type="button"
+        @click="openCollection(collectionItem)"
+      >
+        <span>{{ collectionStatusLabel(collectionItem) }}</span>
+        <strong>{{ collectionItem.name }}</strong>
+        <small>{{ collectionMeta(collectionItem) }}</small>
+      </button>
+    </section>
+
+    <section v-if="groups.length" class="spb-bank-grid" aria-label="SPB 词库组别">
       <button
         v-for="group in groups"
         :key="group.key"
@@ -191,6 +242,13 @@ async function syncGroup(group) {
       <div v-else class="spb-empty-panel">
         <strong>{{ activeGroup.status === "locked" ? "这组在小程序里还未解锁" : "这组还没有同步到 SpeakEasy" }}</strong>
         <span>{{ activeGroup.source_count ? `已能读取到 ${activeGroup.source_count} 个源词，待导入后会在这里出现。` : activeGroup.sync_note || "获取到词库后会按 500 个单词自动拆分成多个单词表。" }}</span>
+      </div>
+    </section>
+
+    <section v-else class="panel spb-group-panel">
+      <div class="spb-empty-panel">
+        <strong>{{ activeCollection.name || "这个分类" }} 暂时没有可同步词库</strong>
+        <span>{{ activeCollection.sync_note || "等小程序接口返回词库或服务器放入缓存后，这里会自动出现可同步分表。" }}</span>
       </div>
     </section>
   </section>
