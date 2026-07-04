@@ -79,8 +79,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-009"
-DEFAULT_PAGE_VERSION = "v20260704.8"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-010"
+DEFAULT_PAGE_VERSION = "v20260704.9"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3345,6 +3345,15 @@ def spb_collection_by_key(collection_key: str | None) -> dict[str, Any]:
     )
 
 
+def spb_collection_group_by_keys(collection_key: str | None, group_key: str | None) -> tuple[dict[str, Any], dict[str, Any]]:
+    collection = spb_collection_by_key(collection_key)
+    key = str(group_key or "").strip()
+    group = next((item for item in collection.get("groups", []) if item["key"] == key), None)
+    if not group:
+        raise HTTPException(status_code=404, detail="没有找到这个 SPB 词库组")
+    return collection, group
+
+
 def serialize_spb_word_bank_collection(db: Session, collection: dict[str, Any]) -> dict[str, Any]:
     groups = [serialize_spb_word_bank_group(db, group) for group in collection.get("groups", [])]
     total_count = sum(int(group.get("total_count") or 0) for group in groups)
@@ -3389,11 +3398,8 @@ async def vue_spb_sync_api(request: Request, db: Session = Depends(get_db)):
     except Exception:
         payload = {}
     collection_key = str(payload.get("collection") or "individual").strip() or "individual"
-    collection = spb_collection_by_key(collection_key)
     group_key = str(payload.get("key") or "").strip()
-    group = next((item for item in collection.get("groups", []) if item["key"] == group_key), None)
-    if not group:
-        raise HTTPException(status_code=404, detail="没有找到这个 SPB 词库组")
+    collection, group = spb_collection_group_by_keys(collection_key, group_key)
     if group.get("status") == "locked":
         raise HTTPException(status_code=400, detail="这组还在小程序里锁定，暂时不能同步")
 
@@ -3429,6 +3435,44 @@ async def vue_spb_sync_api(request: Request, db: Session = Depends(get_db)):
         message += f" 已保存小程序音频 {local_audio_count} 个到本地。"
     response["message"] = message
     response["source"] = source_path.name
+    return response
+
+
+@app.post("/api/vue/spb/backfill-details")
+async def vue_spb_backfill_details_api(request: Request, db: Session = Depends(get_db)):
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    collection_key = str(payload.get("collection") or "individual").strip() or "individual"
+    group_key = str(payload.get("key") or "").strip()
+    collection, group = spb_collection_group_by_keys(collection_key, group_key)
+    words = spb_words_for_group(db, group)
+    if not words:
+        raise HTTPException(status_code=404, detail="这组还没有同步到 SpeakEasy，先同步词库后再补全详情。")
+
+    resource_applied = apply_word_resources(db, words, include_image=False)
+    missing_words = [
+        word
+        for word in words
+        if not (word.phonetic or "").strip()
+        or not (word.part_of_speech or "").strip()
+        or not (word.english_definition or "").strip()
+        or not (word.english_example or "").strip()
+    ]
+    queued_ids = [word.id for word in missing_words]
+    if queued_ids:
+        start_enrichment_thread(queued_ids, include_images=False)
+
+    response = spb_payload(db, collection["key"])
+    if queued_ids:
+        response["message"] = (
+            f"已从公共资源表补齐 {resource_applied} 个；后台继续补全 {len(queued_ids)} 个缺音标、词性、英文定义或英文例句的单词。"
+        )
+    else:
+        response["message"] = f"已从公共资源表补齐 {resource_applied} 个；这组音标、词性、英文定义和英文例句已经没有明显缺口。"
+    response["queued_detail_count"] = len(queued_ids)
+    response["resource_applied_count"] = resource_applied
     return response
 
 
@@ -3729,13 +3773,58 @@ def serialize_word_list_card(card: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def serialize_spb_word_bank_group(db: Session, group: dict[str, Any]) -> dict[str, Any]:
+def spb_word_lists_for_group(db: Session, group: dict[str, Any]) -> list[WordList]:
     prefix = str(group["prefix"])
-    word_lists = db.scalars(
+    return db.scalars(
         select(WordList)
         .where(or_(WordList.name == prefix, WordList.name.like(f"{prefix}-%")))
         .order_by(WordList.sequence_offset.asc(), WordList.name.asc(), WordList.id.asc())
     ).all()
+
+
+def spb_words_for_group(db: Session, group: dict[str, Any]) -> list[Word]:
+    word_lists = spb_word_lists_for_group(db, group)
+    list_ids = [word_list.id for word_list in word_lists]
+    if not list_ids:
+        return []
+    return db.scalars(
+        select(Word)
+        .join(WordListItem, WordListItem.word_id == Word.id)
+        .where(WordListItem.word_list_id.in_(list_ids))
+        .distinct()
+        .order_by(Word.word.asc(), Word.id.asc())
+    ).all()
+
+
+def spb_missing_detail_count(db: Session, group: dict[str, Any]) -> int:
+    word_lists = spb_word_lists_for_group(db, group)
+    list_ids = [word_list.id for word_list in word_lists]
+    if not list_ids:
+        return 0
+    return int(
+        db.scalar(
+            select(func.count(func.distinct(Word.id)))
+            .join(WordListItem, WordListItem.word_id == Word.id)
+            .where(
+                WordListItem.word_list_id.in_(list_ids),
+                or_(
+                    Word.phonetic.is_(None),
+                    Word.phonetic == "",
+                    Word.part_of_speech.is_(None),
+                    Word.part_of_speech == "",
+                    Word.english_definition.is_(None),
+                    Word.english_definition == "",
+                    Word.english_example.is_(None),
+                    Word.english_example == "",
+                ),
+            )
+        )
+        or 0
+    )
+
+
+def serialize_spb_word_bank_group(db: Session, group: dict[str, Any]) -> dict[str, Any]:
+    word_lists = spb_word_lists_for_group(db, group)
     cards = [serialize_word_list_card(word_list_card(db, word_list)) for word_list in word_lists]
     total_count = sum(int(card.get("count") or 0) for card in cards)
     synced = total_count > 0
@@ -3754,6 +3843,7 @@ def serialize_spb_word_bank_group(db: Session, group: dict[str, Any]) -> dict[st
         "sync_note": sync_note,
         "total_count": total_count,
         "list_count": len(cards),
+        "missing_detail_count": spb_missing_detail_count(db, group) if synced else 0,
         "cards": cards,
     }
 
@@ -5040,25 +5130,35 @@ async def word_audio_choice(
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
 
-    if accent == "gb":
-        word.british_audio_url = audio_url
-        word.british_audio_locked = True
-    else:
-        word.american_audio_url = audio_url
-        word.american_audio_locked = True
-    word.audio_issue = False
-    word.enrichment_error = None
-    db.add(word)
-    db.commit()
-    remember_word_resource(
-        db,
-        word,
-        american_audio_source="choice" if accent == "us" else None,
-        british_audio_source="choice" if accent == "gb" else None,
-        override_media=True,
-        commit=True,
-    )
-    return {"ok": True, "word": word.word, "accent": accent, "audio_url": audio_url}
+    current_audio_url = word.british_audio_url if accent == "gb" else word.american_audio_url
+    can_commit_audio = should_replace_audio(current_audio_url, audio_url, incoming_source="choice")
+    if can_commit_audio:
+        if accent == "gb":
+            word.british_audio_url = audio_url
+            word.british_audio_locked = True
+        else:
+            word.american_audio_url = audio_url
+            word.american_audio_locked = True
+        word.audio_issue = False
+        word.enrichment_error = None
+        db.add(word)
+        db.commit()
+        remember_word_resource(
+            db,
+            word,
+            american_audio_source="choice" if accent == "us" else None,
+            british_audio_source="choice" if accent == "gb" else None,
+            override_media=True,
+            commit=True,
+        )
+    return {
+        "ok": True,
+        "word": word.word,
+        "accent": accent,
+        "audio_url": audio_url,
+        "committed": can_commit_audio,
+        "message": "" if can_commit_audio else "当前音频优先级更高，已保留原音频。",
+    }
 
 
 @app.post("/api/vue/words/{word_id}/recorded-audio")
@@ -5090,25 +5190,35 @@ async def word_recorded_audio(
     target.write_bytes(content)
     audio_url = f"/media/audio/{target.name}"
 
-    if accent == "gb":
-        word.british_audio_url = audio_url
-        word.british_audio_locked = True
-    else:
-        word.american_audio_url = audio_url
-        word.american_audio_locked = True
-    word.audio_issue = False
-    word.enrichment_error = None
-    db.add(word)
-    db.commit()
-    remember_word_resource(
-        db,
-        word,
-        american_audio_source="recorded" if accent == "us" else None,
-        british_audio_source="recorded" if accent == "gb" else None,
-        override_media=True,
-        commit=True,
-    )
-    return {"ok": True, "word": word.word, "accent": accent, "audio_url": audio_url}
+    current_audio_url = word.british_audio_url if accent == "gb" else word.american_audio_url
+    can_commit_audio = should_replace_audio(current_audio_url, audio_url, incoming_source="recorded")
+    if can_commit_audio:
+        if accent == "gb":
+            word.british_audio_url = audio_url
+            word.british_audio_locked = True
+        else:
+            word.american_audio_url = audio_url
+            word.american_audio_locked = True
+        word.audio_issue = False
+        word.enrichment_error = None
+        db.add(word)
+        db.commit()
+        remember_word_resource(
+            db,
+            word,
+            american_audio_source="recorded" if accent == "us" else None,
+            british_audio_source="recorded" if accent == "gb" else None,
+            override_media=True,
+            commit=True,
+        )
+    return {
+        "ok": True,
+        "word": word.word,
+        "accent": accent,
+        "audio_url": audio_url,
+        "committed": can_commit_audio,
+        "message": "" if can_commit_audio else "当前音频优先级更高，已保留原音频。",
+    }
 
 
 @app.post("/api/vue/words/{word_id}/ai-audio")
@@ -5187,7 +5297,10 @@ async def word_ai_audio(
         raise HTTPException(status_code=502, detail=f"AI 朗读失败: {exc}") from exc
 
     should_commit = commit not in {"0", "false", "False", "no"}
-    if should_commit:
+    audio_source = ai_tts_audio_source(text_mode)
+    current_audio_url = word.british_audio_url if accent == "gb" else word.american_audio_url
+    can_commit_audio = should_replace_audio(current_audio_url, audio_url, incoming_source=audio_source)
+    if should_commit and can_commit_audio:
         if accent == "gb":
             word.british_audio_url = audio_url
             word.british_audio_locked = True
@@ -5201,8 +5314,8 @@ async def word_ai_audio(
         remember_word_resource(
             db,
             word,
-            american_audio_source="ai-tts" if accent == "us" else None,
-            british_audio_source="ai-tts" if accent == "gb" else None,
+            american_audio_source=audio_source if accent == "us" else None,
+            british_audio_source=audio_source if accent == "gb" else None,
             override_media=True,
             commit=True,
         )
@@ -5212,7 +5325,8 @@ async def word_ai_audio(
         "accent": accent,
         "voice_gender": voice_gender,
         "text_mode": text_mode,
-        "committed": should_commit,
+        "committed": should_commit and can_commit_audio,
+        "message": "" if (not should_commit or can_commit_audio) else "当前音频优先级更高，已生成试听但未替换。",
         "audio_url": audio_url,
     }
 
@@ -5342,15 +5456,53 @@ def local_import_audio_url(value: str | None) -> str | None:
     return audio_url if is_local_audio_url(audio_url) else None
 
 
+def audio_source_priority(source: str | None = None, audio_url: str | None = None) -> int:
+    marker = f"{source or ''} {audio_url or ''}".lower()
+    if "spb" in marker or "miniprogram" in marker:
+        return 300
+    if "aliyun" in marker or "dashscope" in marker or "phoneme" in marker:
+        return 200
+    if "ai-tts" in marker or "openai" in marker or re.search(r"-(female|male)-ai-", marker):
+        return 180
+    if "choice" in marker or "recorded" in marker:
+        return 150
+    if any(token in marker for token in ("free-dictionary", "youdao", "google", "dictionary", "tts")):
+        return 100
+    return 0
+
+
+def should_replace_audio(
+    current_url: str | None,
+    incoming_url: str | None,
+    *,
+    current_source: str | None = None,
+    incoming_source: str | None = None,
+) -> bool:
+    if not (incoming_url or "").strip():
+        return False
+    if not (current_url or "").strip():
+        return True
+    return audio_source_priority(incoming_source, incoming_url) > audio_source_priority(current_source, current_url)
+
+
+def ai_tts_audio_source(text_mode: str) -> str:
+    if text_mode == "phonetic":
+        return "ai-tts:dashscope"
+    provider = (settings.ai_tts_provider or "").strip().lower()
+    return f"ai-tts:{provider or 'generated'}"
+
+
 def apply_imported_local_audio(word: Word, row: dict[str, Any]) -> bool:
     changed = False
     american_audio_url = local_import_audio_url(row.get("american_audio_url"))
     british_audio_url = local_import_audio_url(row.get("british_audio_url"))
-    if american_audio_url and not word.american_audio_locked:
+    american_source = row.get("american_audio_url_source")
+    british_source = row.get("british_audio_url_source")
+    if should_replace_audio(word.american_audio_url, american_audio_url, incoming_source=american_source):
         word.american_audio_url = american_audio_url
         word.american_audio_locked = True
         changed = True
-    if british_audio_url and not word.british_audio_locked:
+    if should_replace_audio(word.british_audio_url, british_audio_url, incoming_source=british_source):
         word.british_audio_url = british_audio_url
         word.british_audio_locked = True
         changed = True
@@ -5564,11 +5716,37 @@ def remember_word_resource(
         resource.image_url = word.image_url
         resource.image_source = image_source or resource.image_source or "word"
         changed = True
-    if (word.american_audio_url or "").strip() and (override_media or not resource.american_audio_url):
+    if (word.american_audio_url or "").strip() and (
+        not resource.american_audio_url
+        or should_replace_audio(
+            resource.american_audio_url,
+            word.american_audio_url,
+            current_source=resource.american_audio_source,
+            incoming_source=american_audio_source,
+        )
+        or (
+            override_media
+            and audio_source_priority(american_audio_source, word.american_audio_url)
+            >= audio_source_priority(resource.american_audio_source, resource.american_audio_url)
+        )
+    ):
         resource.american_audio_url = word.american_audio_url
         resource.american_audio_source = american_audio_source or resource.american_audio_source or "word"
         changed = True
-    if (word.british_audio_url or "").strip() and (override_media or not resource.british_audio_url):
+    if (word.british_audio_url or "").strip() and (
+        not resource.british_audio_url
+        or should_replace_audio(
+            resource.british_audio_url,
+            word.british_audio_url,
+            current_source=resource.british_audio_source,
+            incoming_source=british_audio_source,
+        )
+        or (
+            override_media
+            and audio_source_priority(british_audio_source, word.british_audio_url)
+            >= audio_source_priority(resource.british_audio_source, resource.british_audio_url)
+        )
+    ):
         resource.british_audio_url = word.british_audio_url
         resource.british_audio_source = british_audio_source or resource.british_audio_source or "word"
         changed = True
@@ -5609,11 +5787,19 @@ def apply_word_resource(db: Session, word: Word, *, commit: bool = False, includ
         word.image_locked = True
         word.image_issue = False
         changed = True
-    if (resource.american_audio_url or "").strip() and not (word.american_audio_url or "").strip():
+    if (resource.american_audio_url or "").strip() and should_replace_audio(
+        word.american_audio_url,
+        resource.american_audio_url,
+        incoming_source=resource.american_audio_source,
+    ):
         word.american_audio_url = resource.american_audio_url
         word.american_audio_locked = True
         changed = True
-    if (resource.british_audio_url or "").strip() and not (word.british_audio_url or "").strip():
+    if (resource.british_audio_url or "").strip() and should_replace_audio(
+        word.british_audio_url,
+        resource.british_audio_url,
+        incoming_source=resource.british_audio_source,
+    ):
         word.british_audio_url = resource.british_audio_url
         word.british_audio_locked = True
         changed = True

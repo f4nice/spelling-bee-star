@@ -10,6 +10,7 @@ from app.config import Settings
 @dataclass
 class DictionaryEntry:
     phonetic: str | None = None
+    part_of_speech: str | None = None
     american_audio_url: str | None = None
     british_audio_url: str | None = None
     english_definition: str | None = None
@@ -49,6 +50,7 @@ class MerriamWebsterClient:
 
         return DictionaryEntry(
             phonetic=pronunciation.get("mw") if pronunciation else None,
+            part_of_speech=_optional_clean(entry.get("fl")),
             american_audio_url=audio,
             british_audio_url=None,
             english_definition=definition,
@@ -68,10 +70,11 @@ class FreeDictionaryClient:
 
         phonetic = _first_free_phonetic(entry)
         american_audio, british_audio = _free_audio_urls(payload)
-        definition, example = _first_free_definition_and_example(entry)
+        part_of_speech, definition, example = _first_free_meaning_fields(entry)
 
         return DictionaryEntry(
             phonetic=phonetic,
+            part_of_speech=part_of_speech,
             american_audio_url=american_audio,
             british_audio_url=british_audio,
             english_definition=definition,
@@ -107,13 +110,21 @@ def _first_free_phonetic(entry: dict) -> str | None:
     return None
 
 
-def _first_free_definition_and_example(entry: dict) -> tuple[str | None, str | None]:
+def _first_free_meaning_fields(entry: dict) -> tuple[str | None, str | None, str | None]:
+    part_of_speech = None
+    definition = None
+    example = None
     for meaning in entry.get("meanings", []):
+        if not part_of_speech and meaning.get("partOfSpeech"):
+            part_of_speech = _optional_clean(meaning.get("partOfSpeech"))
         for definition_item in meaning.get("definitions", []):
-            definition = definition_item.get("definition")
-            if definition:
-                return str(definition).strip(), _optional_clean(definition_item.get("example"))
-    return None, None
+            if not definition and definition_item.get("definition"):
+                definition = str(definition_item.get("definition")).strip()
+            if not example and definition_item.get("example"):
+                example = _optional_clean(definition_item.get("example"))
+            if part_of_speech and definition and example:
+                return part_of_speech, definition, example
+    return part_of_speech, definition, example
 
 
 def _free_audio_urls(payload: list[dict]) -> tuple[str | None, str | None]:

@@ -34,14 +34,15 @@ async def enrich_word(db: Session, word: Word, *, include_images: bool = True) -
             entry = await free_dictionary.lookup(word.word)
 
         word.phonetic = word.phonetic or entry.phonetic
+        word.part_of_speech = word.part_of_speech or entry.part_of_speech
         if not word.american_audio_locked:
             word.american_audio_url = entry.american_audio_url
         if not word.british_audio_locked:
             word.british_audio_url = entry.british_audio_url
-        if not word.english_definition_locked:
-            word.english_definition = entry.english_definition
-        if not word.english_example_locked:
-            word.english_example = entry.english_example
+        if entry.english_definition and not word.english_definition_locked:
+            word.english_definition = word.english_definition or entry.english_definition
+        if entry.english_example and not word.english_example_locked:
+            word.english_example = word.english_example or entry.english_example
         word.source = entry.source
 
         american_audio, british_audio = await audio_client.lookup_audio(word.word)
