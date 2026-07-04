@@ -534,7 +534,7 @@ watch(wordListGroups, (groups) => {
         <strong>{{ displayedWordCount }}</strong>
         <span>个单词</span>
       </div>
-      <button v-if="activeGroup" class="secondary-button compact-button lists-action-button lists-return-button" type="button" @click="clearActiveWordListGroup">
+      <button v-if="activeGroup" class="lists-action-button lists-return-button" type="button" @click="clearActiveWordListGroup">
         <ArrowLeft :size="16" aria-hidden="true" />
         <span>返回未归组</span>
       </button>
@@ -754,6 +754,34 @@ watch(wordListGroups, (groups) => {
 .lists-table-head > .lists-return-button {
   align-self: start;
   justify-self: end;
+}
+
+.lists-return-button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 14px;
+  padding: 0 18px;
+  color: #fff;
+  background: linear-gradient(135deg, #0f7f59, #0a6145);
+  box-shadow: 0 14px 30px rgba(15, 127, 89, 0.24);
+  font-size: 14px;
+  font-weight: 1000;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.lists-return-button:hover,
+.lists-return-button:focus-visible {
+  color: #fff;
+  background: linear-gradient(135deg, #0b6f4c, #074c36);
+  box-shadow: 0 18px 36px rgba(15, 127, 89, 0.3);
+  transform: translateY(-1px);
+}
+
+.lists-return-button:focus-visible {
+  outline: 3px solid rgba(15, 127, 89, 0.22);
+  outline-offset: 3px;
 }
 
 .word-list-group-grid {
