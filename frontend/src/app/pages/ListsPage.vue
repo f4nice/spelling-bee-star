@@ -39,6 +39,7 @@ const dragOverListId = ref(null);
 const isSavingOrder = ref(false);
 const orderNotice = ref("");
 const dragStartOrder = ref("");
+const activeGroupId = ref("");
 let dragStartCards = [];
 let searchTimer = 0;
 
@@ -48,6 +49,20 @@ const wordListGroups = computed(() => props.data.groups || []);
 const trimmedNewGroupName = computed(() => newGroupName.value.trim());
 const groupedListCount = computed(() => wordListGroups.value.reduce((total, group) => total + Number(group.list_count || 0), 0));
 const totalWordCount = computed(() => orderedCards.value.reduce((total, card) => total + Number(card.count || 0), 0));
+const activeGroup = computed(() => wordListGroups.value.find((group) => String(group.id) === String(activeGroupId.value)) || null);
+const ungroupedCards = computed(() => orderedCards.value.filter((card) => !card.list?.group_id));
+const activeGroupCards = computed(() => {
+  if (!activeGroup.value) return [];
+  return orderedCards.value.filter((card) => String(card.list?.group_id || "") === String(activeGroup.value.id));
+});
+const displayedCards = computed(() => (activeGroup.value ? activeGroupCards.value : ungroupedCards.value));
+const displayedWordCount = computed(() => displayedCards.value.reduce((total, card) => total + Number(card.count || 0), 0));
+const displayedListTitle = computed(() => (activeGroup.value ? activeGroup.value.name : "未归组单词表"));
+const displayedListDescription = computed(() => (
+  activeGroup.value
+    ? "这个专题里只显示当前单词组的单词表。"
+    : "已放入单词组的单词表不在这里重复显示。"
+));
 
 function applyListPagePayload(payload, fallbackCards = orderedCards.value) {
   const cards = payload.cards || fallbackCards || [];
@@ -88,6 +103,10 @@ function cardIds(cards = orderedCards.value) {
   return cards.map((card) => Number(card.list.id)).filter(Boolean);
 }
 
+function displayedCardIds() {
+  return cardIds(displayedCards.value);
+}
+
 function syncUploadOptions(cards = orderedCards.value) {
   if (props.uploadOptions) {
     props.uploadOptions.word_lists = cards.map((card) => card.list);
@@ -96,6 +115,16 @@ function syncUploadOptions(cards = orderedCards.value) {
 
 function groupIndexLabel(index) {
   return String(index + 1).padStart(2, "0");
+}
+
+function selectWordListGroup(group) {
+  activeGroupId.value = String(group.id);
+  orderNotice.value = "";
+}
+
+function clearActiveWordListGroup() {
+  activeGroupId.value = "";
+  orderNotice.value = "";
 }
 
 function openListManager(card) {
@@ -154,16 +183,22 @@ async function moveManagingListToGroup() {
 
 function moveCard(fromIndex, toIndex) {
   if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
-  const nextCards = [...orderedCards.value];
+  const scopedCards = [...displayedCards.value];
+  const targetScopeIds = new Set(scopedCards.map((card) => Number(card.list.id)));
+  const nextCards = [...scopedCards];
   const [moved] = nextCards.splice(fromIndex, 1);
   nextCards.splice(toIndex, 0, moved);
-  orderedCards.value = nextCards;
+  let nextIndex = 0;
+  orderedCards.value = orderedCards.value.map((card) => {
+    if (!targetScopeIds.has(Number(card.list.id))) return card;
+    return nextCards[nextIndex++] || card;
+  });
 }
 
 function startListDrag(card, event) {
   draggedListId.value = card.list.id;
   dragOverListId.value = card.list.id;
-  dragStartOrder.value = cardIds().join(",");
+  dragStartOrder.value = displayedCardIds().join(",");
   dragStartCards = [...orderedCards.value];
   orderNotice.value = "";
   if (event.dataTransfer) {
@@ -175,8 +210,9 @@ function startListDrag(card, event) {
 function moveDraggedList(targetIndex, event) {
   event.preventDefault();
   if (!draggedListId.value) return;
-  const fromIndex = orderedCards.value.findIndex((card) => card.list.id === draggedListId.value);
-  const targetCard = orderedCards.value[targetIndex];
+  const visibleCards = displayedCards.value;
+  const fromIndex = visibleCards.findIndex((card) => card.list.id === draggedListId.value);
+  const targetCard = visibleCards[targetIndex];
   if (!targetCard || fromIndex < 0) return;
   dragOverListId.value = targetCard.list.id;
   moveCard(fromIndex, targetIndex);
@@ -205,8 +241,8 @@ async function saveListOrder(ids) {
 
 async function finishListDrag() {
   if (!draggedListId.value) return;
-  const nextOrder = cardIds().join(",");
-  const nextIds = cardIds();
+  const nextOrder = displayedCardIds().join(",");
+  const nextIds = cardIds(orderedCards.value);
   draggedListId.value = null;
   dragOverListId.value = null;
   if (nextOrder && nextOrder !== dragStartOrder.value) {
@@ -256,6 +292,12 @@ watch(
   },
   { immediate: true }
 );
+
+watch(wordListGroups, (groups) => {
+  if (!activeGroupId.value) return;
+  const exists = groups.some((group) => String(group.id) === String(activeGroupId.value));
+  if (!exists) activeGroupId.value = "";
+});
 </script>
 
 <template>
@@ -389,13 +431,22 @@ watch(
       </button>
     </div>
     <div v-if="wordListGroups.length" class="word-list-group-grid">
-      <article v-for="(group, index) in wordListGroups" :key="group.id" class="word-list-group-card">
+      <button
+        v-for="(group, index) in wordListGroups"
+        :key="group.id"
+        class="word-list-group-card"
+        :class="{ 'is-active': activeGroup?.id === group.id }"
+        type="button"
+        :title="`查看 ${group.name}`"
+        @click="selectWordListGroup(group)"
+      >
         <span class="word-list-group-index">{{ groupIndexLabel(index) }}</span>
         <div>
           <strong>{{ group.name }}</strong>
           <span>{{ group.list_count }} 个单词表 · {{ group.word_count }} 个单词</span>
         </div>
-      </article>
+        <span class="word-list-group-action">查看专题</span>
+      </button>
     </div>
     <p v-else class="empty-state list-group-empty">
       暂无单词组
@@ -405,18 +456,21 @@ watch(
     <div class="lists-section-head lists-table-head">
       <div>
         <p class="section-kicker">Word Lists</p>
-        <h2>我的单词表</h2>
-        <span>拖动卡片调整顺序，也可以通过管理按钮移动到单词组。</span>
+        <h2>{{ displayedListTitle }}</h2>
+        <span>{{ displayedListDescription }}</span>
       </div>
       <div class="lists-section-meta">
-        <span>{{ orderedCards.length }} 个单词表</span>
-        <strong>{{ totalWordCount }}</strong>
+        <span>{{ displayedCards.length }} 个单词表</span>
+        <strong>{{ displayedWordCount }}</strong>
         <span>个单词</span>
       </div>
+      <button v-if="activeGroup" class="secondary-button compact-button lists-action-button" type="button" @click="clearActiveWordListGroup">
+        <span>返回未归组</span>
+      </button>
     </div>
-    <section class="word-grid lists-reorder-grid" role="list" @dragover.prevent>
+    <section v-if="displayedCards.length" class="word-grid lists-reorder-grid" role="list" @dragover.prevent>
       <WordListCard
-        v-for="(card, index) in orderedCards"
+        v-for="(card, index) in displayedCards"
         :key="card.list.id"
         class="lists-reorder-card"
         :class="{
@@ -439,6 +493,9 @@ watch(
         @dragend="finishListDrag"
       />
     </section>
+    <p v-else class="empty-state list-group-empty list-table-empty">
+      {{ activeGroup ? "这个单词组里还没有单词表。" : "没有未归组的单词表。" }}
+    </p>
     <p v-if="isSavingOrder || orderNotice" class="lists-order-notice" :class="{ 'is-error': orderNotice }">
       {{ orderNotice || "正在保存顺序..." }}
     </p>
@@ -619,7 +676,7 @@ watch(
 .word-list-group-card {
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   min-height: 92px;
@@ -628,9 +685,26 @@ watch(
   padding: 14px;
   color: #0f172a;
   background:
+    linear-gradient(90deg, rgba(15, 127, 89, 0.08), transparent 34%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(229, 246, 238, 0.9));
   box-shadow: 0 10px 24px rgba(15, 28, 36, 0.06);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.word-list-group-card::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 20px;
+  width: 78px;
+  height: 13px;
+  border: 1px solid rgba(15, 127, 89, 0.16);
+  border-bottom: 0;
+  border-radius: 13px 13px 0 0;
+  background: rgba(232, 247, 239, 0.98);
 }
 
 .word-list-group-card::after {
@@ -647,17 +721,38 @@ watch(
 .word-list-group-card:hover {
   border-color: rgba(15, 127, 89, 0.78);
   color: #fff;
-  background: linear-gradient(135deg, #0f7f59, #0b5f43);
+  background:
+    radial-gradient(circle at 86% 16%, rgba(255, 255, 255, 0.18), transparent 26%),
+    linear-gradient(135deg, #0f7f59, #0b5f43);
   transform: translateY(-1px);
+}
+
+.word-list-group-card.is-active {
+  border-color: rgba(15, 127, 89, 0.72);
+  background:
+    radial-gradient(circle at 86% 16%, rgba(255, 255, 255, 0.16), transparent 26%),
+    linear-gradient(135deg, #0f7f59, #0b5f43);
+  color: #fff;
+  box-shadow: 0 18px 36px rgba(15, 127, 89, 0.2);
 }
 
 .word-list-group-card:hover strong,
 .word-list-group-card:hover span,
-.word-list-group-card:hover div span {
+.word-list-group-card:hover div span,
+.word-list-group-card.is-active strong,
+.word-list-group-card.is-active span,
+.word-list-group-card.is-active div span {
   color: #fff;
 }
 
-.word-list-group-card:hover::after {
+.word-list-group-card:hover::before,
+.word-list-group-card.is-active::before {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.word-list-group-card:hover::after,
+.word-list-group-card.is-active::after {
   background: rgba(255, 255, 255, 0.14);
 }
 
@@ -673,7 +768,8 @@ watch(
   font-weight: 1000;
 }
 
-.word-list-group-card:hover .word-list-group-index {
+.word-list-group-card:hover .word-list-group-index,
+.word-list-group-card.is-active .word-list-group-index {
   color: #fff;
   background: rgba(255, 255, 255, 0.16);
 }
@@ -697,6 +793,25 @@ watch(
   color: #536579;
   font-size: 13px;
   font-weight: 850;
+}
+
+.word-list-group-action {
+  align-self: center;
+  border: 1px solid rgba(15, 127, 89, 0.12);
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: #0f6b4d;
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.word-list-group-card:hover .word-list-group-action,
+.word-list-group-card.is-active .word-list-group-action {
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .list-group-empty {
@@ -724,7 +839,7 @@ watch(
 }
 
 .lists-table-head {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   margin: 0;
 }
 
@@ -739,6 +854,10 @@ watch(
 
 .word-list-table-panel .lists-reorder-grid {
   padding: 0 18px;
+}
+
+.list-table-empty {
+  margin-top: 0;
 }
 
 .word-list-table-panel :deep(.list-card) {

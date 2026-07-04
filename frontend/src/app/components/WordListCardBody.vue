@@ -20,7 +20,7 @@ const completedRoundCount = computed(() => Number(props.card.challenge?.complete
 <template>
   <div class="word-card-body">
     <div class="word-card-title">
-      <strong>{{ card.list.name }}</strong>
+      <strong :title="card.list.name">{{ card.list.name }}</strong>
       <span v-if="showChallenge && card.challenge" class="challenge-round-inline" title="挑战次数">
         <img class="challenge-round-crown" :src="crownImageUrl" alt="" aria-hidden="true">
         <strong>X{{ completedRoundCount }}</strong>
