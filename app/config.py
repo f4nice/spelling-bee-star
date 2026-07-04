@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     tencentcloud_secret_key: str = ""
     tencentcloud_region: str = "ap-guangzhou"
     tencent_hunyuan_image_action: str = "TextToImageRapid"
+    spb_miniprogram_api_base: str = "https://dev.spbcn.org/applets/"
+    spb_miniprogram_authorization: str = ""
+    spb_miniprogram_timeout_seconds: float = 30.0
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

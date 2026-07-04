@@ -79,8 +79,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-003"
-DEFAULT_PAGE_VERSION = "v20260704.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-004"
+DEFAULT_PAGE_VERSION = "v20260704.3"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3152,6 +3152,8 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "subtitle": "Beginner Group(G1-G2)",
         "status": "locked",
         "prefix": "SPB个人赛冠军词库-小初组",
+        "spb_product_id": 1,
+        "spb_flag": "BEGINNER_GROUP0",
     },
     {
         "key": "intermediate",
@@ -3160,6 +3162,9 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "status": "available",
         "prefix": "SPB个人赛冠军词库-小中组",
         "source_count": 1900,
+        "source_file": "spb_individual_intermediate_g3_g4_words.json",
+        "spb_product_id": 2,
+        "spb_flag": "BEGINNER_GROUP1",
     },
     {
         "key": "advanced",
@@ -3167,6 +3172,9 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "subtitle": "Advanced Group(G5-G6)",
         "status": "available",
         "prefix": "SPB个人赛冠军词库-小高组",
+        "source_file": "spb_individual_advanced_g5_g6_words.json",
+        "spb_product_id": 3,
+        "spb_flag": "BEGINNER_GROUP2",
     },
     {
         "key": "middle",
@@ -3174,6 +3182,8 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "subtitle": "Middle School(G7-G9)",
         "status": "locked",
         "prefix": "SPB个人赛冠军词库-初中组",
+        "spb_product_id": 4,
+        "spb_flag": "BEGINNER_GROUP3",
     },
     {
         "key": "high",
@@ -3181,6 +3191,8 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "subtitle": "High School(G10-G12)",
         "status": "locked",
         "prefix": "SPB个人赛冠军词库-高中组",
+        "spb_product_id": 5,
+        "spb_flag": "BEGINNER_GROUP4",
     },
     {
         "key": "origin",
@@ -3188,6 +3200,9 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "subtitle": "Language Origin",
         "status": "available",
         "prefix": "SPB个人赛冠军词库-词源单词",
+        "source_file": "spb_individual_language_origin_words.json",
+        "spb_product_id": 6,
+        "spb_flag": "LANGUAGE_ORIGIN",
     },
     {
         "key": "challenge",
@@ -3196,12 +3211,14 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "status": "available",
         "prefix": "SPB个人赛冠军词库-挑战词汇",
         "source_count": 1300,
+        "source_file": "spb_individual_challenge_words.json",
+        "spb_product_id": 7,
+        "spb_flag": "CHALLENGE_WORDS",
     },
 ]
 
 
-@app.get("/api/vue/spb")
-def vue_spb_api(db: Session = Depends(get_db)):
+def spb_payload(db: Session) -> dict[str, Any]:
     return {
         "collection": {
             "name": "个人赛冠军词库",
@@ -3209,6 +3226,40 @@ def vue_spb_api(db: Session = Depends(get_db)):
         },
         "groups": [serialize_spb_word_bank_group(db, group) for group in SPB_INDIVIDUAL_WORD_BANK_GROUPS],
     }
+
+
+@app.get("/api/vue/spb")
+def vue_spb_api(db: Session = Depends(get_db)):
+    return spb_payload(db)
+
+
+@app.post("/api/vue/spb/sync")
+async def vue_spb_sync_api(request: Request, db: Session = Depends(get_db)):
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    group_key = str(payload.get("key") or "").strip()
+    group = next((item for item in SPB_INDIVIDUAL_WORD_BANK_GROUPS if item["key"] == group_key), None)
+    if not group:
+        raise HTTPException(status_code=404, detail="没有找到这个 SPB 词库组")
+    if group.get("status") == "locked":
+        raise HTTPException(status_code=400, detail="这组还在小程序里锁定，暂时不能同步")
+
+    words, source_path = load_spb_source_words(group)
+    if not words:
+        raise HTTPException(
+            status_code=404,
+            detail=f"{group['title']} 暂时没有可同步词库。后端会优先调用小程序接口；如果未配置小程序授权，请先配置后端授权或放入源词库缓存。",
+        )
+
+    word_ids, split_lists = import_spb_word_bank_rows(db, group, words)
+    if word_ids:
+        start_enrichment_thread(word_ids, include_images=False)
+    response = spb_payload(db)
+    response["message"] = f"已同步 {group['title']}：{len(word_ids)} 个单词，{len(split_lists)} 个分表。"
+    response["source"] = source_path.name
+    return response
 
 
 @app.get("/challenge-calendar/{day}", response_class=HTMLResponse)
@@ -3528,6 +3579,207 @@ def serialize_spb_word_bank_group(db: Session, group: dict[str, Any]) -> dict[st
         "list_count": len(cards),
         "cards": cards,
     }
+
+
+def spb_source_dirs() -> list[Path]:
+    return [MEDIA_DIR / "spb", BASE_DIR.parent / "spb_sources"]
+
+
+SPB_MINIPROGRAM_WORD_FILE_ENDPOINT = "wordThesaurus/spbcnInfoFile"
+SPB_MINIPROGRAM_WORD_FILE_BY_ID_ENDPOINT = "wordThesaurus/spbcnInfoByIdFile"
+SPB_MINIPROGRAM_WORD_DETAIL_ENDPOINT = "wordThesaurus/getWordInfo"
+
+
+def spb_miniprogram_api_url(path: str) -> str:
+    if path.startswith(("http://", "https://")):
+        return path
+    return f"{settings.spb_miniprogram_api_base.rstrip('/')}/{path.lstrip('/')}"
+
+
+def spb_miniprogram_headers(include_auth: bool = True) -> dict[str, str]:
+    headers = {
+        "Terminal": "WECHAT_APP",
+        "content-type": "application/x-www-form-urlencoded;charset=UTF-8;",
+    }
+    authorization = (settings.spb_miniprogram_authorization or "").strip()
+    if include_auth and authorization:
+        headers["Authorization"] = authorization
+    return headers
+
+
+def spb_miniprogram_get(path: str, params: dict[str, Any], *, require_auth: bool = True) -> Any:
+    if require_auth and not (settings.spb_miniprogram_authorization or "").strip():
+        return None
+    try:
+        response = httpx.get(
+            spb_miniprogram_api_url(path),
+            params=params,
+            headers=spb_miniprogram_headers(include_auth=require_auth),
+            timeout=settings.spb_miniprogram_timeout_seconds,
+            follow_redirects=True,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (httpx.HTTPError, ValueError):
+        return None
+    if not isinstance(payload, dict) or int(payload.get("code") or 0) not in {200, 2014}:
+        return None
+    return payload.get("data")
+
+
+def spb_source_payload_from_api_data(data: Any) -> Any:
+    if not data:
+        return None
+    if isinstance(data, dict):
+        if extract_spb_word_values(data):
+            return data
+        for key in ("url", "fileUrl", "file_url", "jsonUrl", "json_url", "downloadUrl", "download_url"):
+            value = str(data.get(key) or "").strip()
+            if value:
+                return spb_download_source_payload(value)
+        return data
+    if isinstance(data, str):
+        value = data.strip()
+        if value.startswith(("http://", "https://")):
+            return spb_download_source_payload(value)
+        try:
+            return json.loads(value)
+        except ValueError:
+            return None
+    return data
+
+
+def spb_download_source_payload(source_url: str) -> Any:
+    if not source_url.startswith(("http://", "https://")):
+        source_url = spb_miniprogram_api_url(source_url)
+    try:
+        response = httpx.get(
+            source_url,
+            timeout=settings.spb_miniprogram_timeout_seconds,
+            follow_redirects=True,
+        )
+        response.raise_for_status()
+        return response.json()
+    except (httpx.HTTPError, ValueError):
+        return None
+
+
+def fetch_spb_source_words_from_miniprogram(group: dict[str, Any]) -> tuple[list[str], Path]:
+    flag = str(group.get("spb_flag") or "").strip()
+    product_id = group.get("spb_product_id")
+    candidates: list[tuple[str, dict[str, Any], str]] = []
+    if flag:
+        candidates.append(
+            (
+                SPB_MINIPROGRAM_WORD_FILE_ENDPOINT,
+                {"terminal": "WECHAT", "code": flag},
+                f"mini-program-{flag}.json",
+            )
+        )
+    if product_id:
+        candidates.append(
+            (
+                SPB_MINIPROGRAM_WORD_FILE_BY_ID_ENDPOINT,
+                {"terminal": "WECHAT", "id": product_id},
+                f"mini-program-product-{product_id}.json",
+            )
+        )
+
+    for endpoint, params, source_name in candidates:
+        payload = spb_source_payload_from_api_data(spb_miniprogram_get(endpoint, params))
+        words = normalize_spb_word_values(extract_spb_word_values(payload))
+        if words:
+            return words, Path(source_name)
+    return [], Path(f"mini-program-{flag or product_id or group.get('key')}.json")
+
+
+def load_spb_source_words(group: dict[str, Any]) -> tuple[list[str], Path]:
+    api_words, api_source = fetch_spb_source_words_from_miniprogram(group)
+    if api_words:
+        return api_words, api_source
+
+    source_file = str(group.get("source_file") or "").strip()
+    if not source_file:
+        return [], Path("")
+    for source_dir in spb_source_dirs():
+        path = source_dir / source_file
+        if not path.exists():
+            continue
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return normalize_spb_word_values(extract_spb_word_values(payload)), path
+    return [], Path(source_file)
+
+
+def extract_spb_word_values(payload: Any) -> list[Any]:
+    if isinstance(payload, dict):
+        for key in ("words", "spellGroup", "spell_group", "items", "list"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return value
+            if isinstance(value, dict):
+                return extract_spb_word_values(value)
+        values: list[Any] = []
+        for value in payload.values():
+            nested = extract_spb_word_values(value)
+            if nested:
+                values.extend(nested)
+        return values
+    if isinstance(payload, list):
+        return payload
+    return []
+
+
+def normalize_spb_word_values(values: list[Any]) -> list[str]:
+    words: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if isinstance(value, dict):
+            raw = value.get("word") or value.get("name") or value.get("spell") or value.get("text")
+        else:
+            raw = value
+        word = " ".join(str(raw or "").strip().split())
+        if not word or not re.fullmatch(r"[A-Za-z][A-Za-z' -]*", word):
+            continue
+        normalized = word.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        words.append(word)
+    return words
+
+
+def import_spb_word_bank_rows(db: Session, group: dict[str, Any], words: list[str]) -> tuple[list[int], list[WordList]]:
+    chunk_size = 500
+    base_name = clean_list_name(str(group["prefix"]))
+    rows = [
+        {
+            "word": word,
+            "row_number": index + 1,
+            "note": f"SPB {group['title']} {group['subtitle']}",
+        }
+        for index, word in enumerate(words)
+    ]
+    word_ids: list[int] = []
+    split_lists: list[WordList] = []
+    if len(rows) > chunk_size:
+        for chunk_index in range(0, len(rows), chunk_size):
+            chunk_number = (chunk_index // chunk_size) + 1
+            word_list = get_or_create_word_list_by_name(db, f"{base_name}-{chunk_number}")
+            clear_word_list_items(db, word_list.id)
+            word_list.sequence_offset = chunk_index
+            db.add(word_list)
+            db.commit()
+            split_lists.append(word_list)
+            word_ids.extend(import_rows(rows[chunk_index : chunk_index + chunk_size], db, word_list))
+    else:
+        word_list = get_or_create_word_list_by_name(db, base_name)
+        clear_word_list_items(db, word_list.id)
+        word_list.sequence_offset = 0
+        db.add(word_list)
+        db.commit()
+        split_lists.append(word_list)
+        word_ids.extend(import_rows(rows, db, word_list))
+    return word_ids, split_lists
 
 
 def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:

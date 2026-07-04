@@ -1,6 +1,9 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 
+import { routeApiPaths } from "../routeApiPaths.js";
+import { fetchJson } from "../utils.js";
+
 const props = defineProps({
   data: {
     type: Object,
@@ -13,15 +16,25 @@ const props = defineProps({
 });
 
 const activeKey = ref("");
+const pageData = ref(props.data);
+const syncingKey = ref("");
+const syncNotice = ref("");
 
-const groups = computed(() => props.data.groups || []);
+const groups = computed(() => pageData.value.groups || []);
 const syncedGroups = computed(() => groups.value.filter((group) => group.total_count > 0));
 const activeGroup = computed(
   () => groups.value.find((group) => group.key === activeKey.value) || syncedGroups.value[0] || groups.value[0],
 );
-const collection = computed(() => props.data.collection || {});
+const collection = computed(() => pageData.value.collection || {});
 const totalSyncedWords = computed(() => syncedGroups.value.reduce((total, group) => total + Number(group.total_count || 0), 0));
 const totalSyncedLists = computed(() => syncedGroups.value.reduce((total, group) => total + Number(group.list_count || 0), 0));
+
+watch(
+  () => props.data,
+  (nextData) => {
+    pageData.value = nextData;
+  },
+);
 
 watch(
   groups,
@@ -46,6 +59,7 @@ function groupMeta(group) {
 
 function openGroup(group) {
   activeKey.value = group.key;
+  syncNotice.value = "";
 }
 
 function openList(card) {
@@ -59,6 +73,31 @@ function openChallenge(card) {
 function challengeRemain(card) {
   const challenge = card?.challenge || {};
   return Number(challenge.remaining_count ?? challenge.remaining ?? 0);
+}
+
+function canSyncGroup(group) {
+  return Boolean(group && group.status !== "locked" && !group.total_count);
+}
+
+async function syncGroup(group) {
+  if (!canSyncGroup(group) || syncingKey.value) return;
+  syncingKey.value = group.key;
+  syncNotice.value = "";
+  try {
+    const payload = await fetchJson(routeApiPaths.spbSync(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: group.key }),
+      skipCache: true,
+    });
+    pageData.value = payload;
+    activeKey.value = group.key;
+    syncNotice.value = payload.message || "词库已同步。";
+  } catch (error) {
+    syncNotice.value = error.message || "同步失败，请稍后再试。";
+  } finally {
+    syncingKey.value = "";
+  }
 }
 </script>
 
@@ -105,8 +144,21 @@ function challengeRemain(card) {
           <h2>{{ activeGroup.title }}</h2>
           <span>{{ activeGroup.subtitle }}</span>
         </div>
-        <strong>{{ groupStatusLabel(activeGroup) }}</strong>
+        <div class="spb-group-actions">
+          <button
+            v-if="canSyncGroup(activeGroup)"
+            class="primary-action-button"
+            type="button"
+            :disabled="syncingKey === activeGroup.key"
+            @click="syncGroup(activeGroup)"
+          >
+            {{ syncingKey === activeGroup.key ? "同步中..." : "同步词库" }}
+          </button>
+          <strong>{{ groupStatusLabel(activeGroup) }}</strong>
+        </div>
       </header>
+
+      <p v-if="syncNotice" class="notice spb-sync-notice">{{ syncNotice }}</p>
 
       <div v-if="activeGroup.cards?.length" class="spb-list-grid">
         <article v-for="card in activeGroup.cards" :key="card.list.id" class="spb-list-card">
