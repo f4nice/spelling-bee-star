@@ -165,35 +165,69 @@ async function syncGroup(group) {
       </div>
     </section>
 
-    <section class="spb-collection-grid" aria-label="SPB 词库分类">
-      <button
-        v-for="collectionItem in collections"
-        :key="collectionItem.key"
-        class="spb-collection-card"
-        :class="{ active: activeCollection?.key === collectionItem.key, synced: collectionItem.total_count > 0 }"
-        type="button"
-        @click="openCollection(collectionItem)"
-      >
-        <span>{{ collectionStatusLabel(collectionItem) }}</span>
-        <strong>{{ collectionItem.name }}</strong>
-        <small>{{ collectionMeta(collectionItem) }}</small>
-      </button>
+    <section class="panel spb-collection-panel">
+      <div class="spb-collection-hero">
+        <div>
+          <p class="section-kicker">WORD LIBRARY</p>
+          <h2>SPB 词库中心</h2>
+          <span>{{ activeCollection.name || "个人赛冠军词库" }}</span>
+        </div>
+        <div class="spb-hero-picture" aria-hidden="true">
+          <div class="spb-hero-book">
+            <span>S</span>
+            <span>P</span>
+            <span>B</span>
+          </div>
+          <div class="spb-hero-ribbon"></div>
+          <div class="spb-hero-lines">
+            <i></i>
+            <i></i>
+            <i></i>
+          </div>
+        </div>
+      </div>
+
+      <section class="spb-collection-grid" aria-label="SPB 词库分类">
+        <button
+          v-for="collectionItem in collections"
+          :key="collectionItem.key"
+          class="spb-collection-card"
+          :class="{ active: activeCollection?.key === collectionItem.key, synced: collectionItem.total_count > 0 }"
+          type="button"
+          @click="openCollection(collectionItem)"
+        >
+          <span>{{ collectionStatusLabel(collectionItem) }}</span>
+          <strong>{{ collectionItem.name }}</strong>
+          <small>{{ collectionMeta(collectionItem) }}</small>
+        </button>
+      </section>
     </section>
 
-    <section v-if="groups.length" class="spb-bank-grid" aria-label="SPB 词库组别">
-      <button
-        v-for="group in groups"
-        :key="group.key"
-        class="spb-bank-card"
-        :class="{ active: activeGroup?.key === group.key, synced: group.total_count > 0, locked: group.status === 'locked' && !group.total_count }"
-        type="button"
-        @click="openGroup(group)"
-      >
-        <span class="spb-bank-status">{{ groupStatusLabel(group) }}</span>
-        <strong>{{ group.title }}</strong>
-        <em>{{ group.subtitle }}</em>
-        <small>{{ groupMeta(group) }}</small>
-      </button>
+    <section v-if="groups.length" class="panel spb-category-panel">
+      <header class="spb-category-head">
+        <div>
+          <p class="section-kicker">CATEGORY</p>
+          <h2>{{ activeCollection.name || "个人赛冠军词库" }}</h2>
+          <span>{{ activeCollection.subtitle || "Champion Word Bank for Individual Competitions" }}</span>
+        </div>
+        <strong>{{ groups.length }} 个组别</strong>
+      </header>
+
+      <section class="spb-bank-grid" aria-label="SPB 词库组别">
+        <button
+          v-for="group in groups"
+          :key="group.key"
+          class="spb-bank-card"
+          :class="{ active: activeGroup?.key === group.key, synced: group.total_count > 0, locked: group.status === 'locked' && !group.total_count }"
+          type="button"
+          @click="openGroup(group)"
+        >
+          <span class="spb-bank-status">{{ groupStatusLabel(group) }}</span>
+          <strong>{{ group.title }}</strong>
+          <em>{{ group.subtitle }}</em>
+          <small>{{ groupMeta(group) }}</small>
+        </button>
+      </section>
     </section>
 
     <section v-if="activeGroup" class="panel spb-group-panel">
