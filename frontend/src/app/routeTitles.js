@@ -2,6 +2,7 @@ export function routeTitle(route, data) {
   if (route.name === "lists") return "我的单词表";
   if (route.name === "listDetail") return data?.word_list?.name || "单词表";
   if (route.name === "wrongWords") return "我的生词本";
+  if (route.name === "spb") return "SPB";
   if (route.name === "growth") return "成长体系";
   if (route.name === "challengeDay") return `${route.params.day} 挑战词汇`;
   if (route.name === "challenge") return "拼写挑战";

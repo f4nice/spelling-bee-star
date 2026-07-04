@@ -4,6 +4,7 @@ export const sidebarNavItems = [
   { label: "英文小报", path: "/newspaper", routePrefix: "newspaper" },
   { label: "好词好句", path: "/booklearner", routes: ["booklearner", "booklearnerQuotes", "booklearnerUpload", "booklearnerDetail"] },
   { label: "科学探索", path: "/booklearner/science", routes: ["booklearnerScienceHome", "booklearnerScience"] },
+  { label: "SPB", path: "/spb", routes: ["spb"] },
   { label: "我的生词本", path: "/wrong-words", routes: ["wrongWords"], countKey: "wrongWordCount" },
 ];
 

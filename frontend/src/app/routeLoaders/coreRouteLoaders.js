@@ -10,6 +10,13 @@ export const coreRouteLoaders = {
     data.value = await fetchJson(routeApiPaths.growth());
   },
 
+  async spb({ data }) {
+    data.value = {
+      collectionName: "个人赛冠军词库",
+      collectionSlug: "spb-personal-champion-word-bank",
+    };
+  },
+
   async challengeDay({ route, data }) {
     data.value = await fetchJson(routeApiPaths.challengeDay(route));
   },
