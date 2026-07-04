@@ -2993,10 +2993,11 @@ a:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 12px;
+  min-height: 82px;
+  padding: 12px 14px;
   background: #fff;
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
   transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease, background 0.16s ease, color 0.16s ease;
@@ -3013,14 +3014,13 @@ a:focus-visible {
 
 .spb-list-main {
   display: grid;
-  gap: 4px;
+  gap: 7px;
   min-width: 0;
   color: inherit;
   text-align: left;
 }
 
 .spb-list-main span,
-.spb-list-main strong,
 .spb-list-main small {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3029,13 +3029,8 @@ a:focus-visible {
 
 .spb-list-main span {
   color: var(--ink);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 900;
-}
-
-.spb-list-main strong {
-  color: var(--accent-dark);
-  font-size: 18px;
 }
 
 .spb-list-main small {
@@ -3044,13 +3039,52 @@ a:focus-visible {
   font-weight: 900;
 }
 
+.spb-list-count {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  min-width: 74px;
+  border-radius: 999px;
+  padding: 8px 11px;
+  color: var(--accent-dark);
+  background: #e9f8f1;
+  line-height: 1;
+}
+
+.spb-list-count strong {
+  color: var(--accent-dark);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.spb-list-count span {
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.spb-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .spb-list-card:hover .spb-list-main span,
-.spb-list-card:hover .spb-list-main strong,
 .spb-list-card:hover .spb-list-main small,
 .spb-list-card:focus-within .spb-list-main span,
-.spb-list-card:focus-within .spb-list-main strong,
 .spb-list-card:focus-within .spb-list-main small {
   color: #fff;
+}
+
+.spb-list-card:hover .spb-list-count,
+.spb-list-card:focus-within .spb-list-count {
+  color: #0f5d43;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.spb-list-card:hover .spb-list-count strong,
+.spb-list-card:focus-within .spb-list-count strong {
+  color: #0f5d43;
 }
 
 .spb-list-card:hover .secondary-button,
@@ -7614,6 +7648,19 @@ select {
   .spb-list-card {
     grid-template-columns: 1fr;
     justify-content: stretch;
+  }
+
+  .spb-list-count {
+    justify-items: start;
+    width: fit-content;
+  }
+
+  .spb-list-actions {
+    justify-content: stretch;
+  }
+
+  .spb-list-actions > button {
+    flex: 1;
   }
 
   .spb-heading-stats {

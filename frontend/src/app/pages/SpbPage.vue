@@ -174,12 +174,17 @@ async function syncGroup(group) {
         <article v-for="card in activeGroup.cards" :key="card.list.id" class="spb-list-card">
           <button class="plain-card-button spb-list-main" type="button" @click="openList(card)">
             <span>{{ card.list.name }}</span>
-            <strong>{{ card.count }} 个单词</strong>
-            <small v-if="challengeRemain(card) > 0">剩余 {{ challengeRemain(card) }} 个</small>
+            <small v-if="challengeRemain(card) > 0">剩余 {{ challengeRemain(card) }} 个待挑战</small>
             <small v-else>可复习</small>
           </button>
-          <button class="secondary-button" type="button" @click="openList(card)">查看</button>
-          <button class="primary-action-button" type="button" @click="openChallenge(card)">挑战</button>
+          <div class="spb-list-count">
+            <strong>{{ card.count }}</strong>
+            <span>个单词</span>
+          </div>
+          <div class="spb-list-actions">
+            <button class="secondary-button compact-button" type="button" @click="openList(card)">查看</button>
+            <button class="primary-action-button compact-button" type="button" @click="openChallenge(card)">挑战</button>
+          </div>
         </article>
       </div>
 
