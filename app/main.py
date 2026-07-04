@@ -79,8 +79,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-002"
-DEFAULT_PAGE_VERSION = "v20260704.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-003"
+DEFAULT_PAGE_VERSION = "v20260704.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3145,6 +3145,72 @@ def spb_page(request: Request, db: Session = Depends(get_db)):
     return vue_shell(request, db, "spb")
 
 
+SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
+    {
+        "key": "beginner",
+        "title": "小初组",
+        "subtitle": "Beginner Group(G1-G2)",
+        "status": "locked",
+        "prefix": "SPB个人赛冠军词库-小初组",
+    },
+    {
+        "key": "intermediate",
+        "title": "小中组",
+        "subtitle": "Intermediate Group(G3-G4)",
+        "status": "available",
+        "prefix": "SPB个人赛冠军词库-小中组",
+        "source_count": 1900,
+    },
+    {
+        "key": "advanced",
+        "title": "小高组",
+        "subtitle": "Advanced Group(G5-G6)",
+        "status": "available",
+        "prefix": "SPB个人赛冠军词库-小高组",
+    },
+    {
+        "key": "middle",
+        "title": "初中组",
+        "subtitle": "Middle School(G7-G9)",
+        "status": "locked",
+        "prefix": "SPB个人赛冠军词库-初中组",
+    },
+    {
+        "key": "high",
+        "title": "高中组",
+        "subtitle": "High School(G10-G12)",
+        "status": "locked",
+        "prefix": "SPB个人赛冠军词库-高中组",
+    },
+    {
+        "key": "origin",
+        "title": "词源单词",
+        "subtitle": "Language Origin",
+        "status": "available",
+        "prefix": "SPB个人赛冠军词库-词源单词",
+    },
+    {
+        "key": "challenge",
+        "title": "挑战词汇",
+        "subtitle": "Challenge Words",
+        "status": "available",
+        "prefix": "SPB个人赛冠军词库-挑战词汇",
+        "source_count": 1300,
+    },
+]
+
+
+@app.get("/api/vue/spb")
+def vue_spb_api(db: Session = Depends(get_db)):
+    return {
+        "collection": {
+            "name": "个人赛冠军词库",
+            "subtitle": "Champion Word Bank for Individual Competitions",
+        },
+        "groups": [serialize_spb_word_bank_group(db, group) for group in SPB_INDIVIDUAL_WORD_BANK_GROUPS],
+    }
+
+
 @app.get("/challenge-calendar/{day}", response_class=HTMLResponse)
 def challenge_calendar_detail_page(day: str, request: Request, db: Session = Depends(get_db)):
     challenge_date = parse_wrong_date(day)
@@ -3439,6 +3505,28 @@ def serialize_word_list_card(card: dict[str, Any]) -> dict[str, Any]:
         "count": card["count"],
         "cover_word": serialize_word(cover_word) if cover_word else None,
         "challenge": card["challenge"],
+    }
+
+
+def serialize_spb_word_bank_group(db: Session, group: dict[str, Any]) -> dict[str, Any]:
+    prefix = str(group["prefix"])
+    word_lists = db.scalars(
+        select(WordList)
+        .where(or_(WordList.name == prefix, WordList.name.like(f"{prefix}-%")))
+        .order_by(WordList.sequence_offset.asc(), WordList.name.asc(), WordList.id.asc())
+    ).all()
+    cards = [serialize_word_list_card(word_list_card(db, word_list)) for word_list in word_lists]
+    total_count = sum(int(card.get("count") or 0) for card in cards)
+    synced = total_count > 0
+    return {
+        "key": group["key"],
+        "title": group["title"],
+        "subtitle": group["subtitle"],
+        "status": "synced" if synced else group.get("status", "available"),
+        "source_count": group.get("source_count"),
+        "total_count": total_count,
+        "list_count": len(cards),
+        "cards": cards,
     }
 
 

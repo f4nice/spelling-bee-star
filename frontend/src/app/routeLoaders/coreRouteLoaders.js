@@ -11,10 +11,7 @@ export const coreRouteLoaders = {
   },
 
   async spb({ data }) {
-    data.value = {
-      collectionName: "个人赛冠军词库",
-      collectionSlug: "spb-personal-champion-word-bank",
-    };
+    data.value = await fetchJson(routeApiPaths.spb());
   },
 
   async challengeDay({ route, data }) {

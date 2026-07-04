@@ -2820,156 +2820,197 @@ a:focus-visible {
     var(--panel);
 }
 
-.spb-target-pill {
-  justify-self: end;
-  border: 1px solid #b9dfd0;
-  border-radius: 999px;
-  padding: 8px 12px;
-  color: var(--accent-dark);
-  background: #e9f8f1;
-  font-size: 13px;
-  font-weight: 900;
-  white-space: nowrap;
+.spb-heading h1 {
+  margin-bottom: 4px;
 }
 
-.spb-workbench {
+.spb-heading p:not(.section-kicker) {
+  margin: 0;
+  color: #526176;
+  font-weight: 800;
+}
+
+.spb-heading-stats {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  justify-self: end;
+}
+
+.spb-heading-stats span {
+  display: grid;
+  min-width: 112px;
+  border: 1px solid #cfe8dd;
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  color: #526176;
+  background: #f5fbf8;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.spb-heading-stats strong {
+  color: var(--accent-dark);
+  font-size: 28px;
+  line-height: 1;
+}
+
+.spb-bank-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.spb-bank-card {
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  min-height: 138px;
+  color: var(--ink);
+  background: #fff;
+  text-align: left;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease, background 0.16s ease;
+}
+
+.spb-bank-card:hover,
+.spb-bank-card:focus-visible,
+.spb-bank-card.active {
+  border-color: #8dc9b0;
+  background: #f3fbf7;
+  box-shadow: 0 16px 34px rgba(15, 127, 89, 0.13);
+  transform: translateY(-2px);
+}
+
+.spb-bank-card.locked {
+  opacity: 0.68;
+}
+
+.spb-bank-status {
+  justify-self: start;
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #526176;
+  background: #eef3f0;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.spb-bank-card.synced .spb-bank-status,
+.spb-group-head > strong {
+  color: #096b4a;
+  background: #dff6eb;
+}
+
+.spb-bank-card strong {
+  margin-top: 12px;
+  font-size: 25px;
+  line-height: 1.1;
+}
+
+.spb-bank-card em,
+.spb-bank-card small {
+  color: #526176;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.spb-bank-card small {
+  margin-top: 12px;
+  color: var(--accent-dark);
+}
+
+.spb-group-panel {
   display: grid;
   gap: 16px;
   padding: 18px;
 }
 
-.spb-workbench-head {
+.spb-group-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
 }
 
-.spb-workbench-head h2 {
-  margin: 4px 0 0;
-  font-size: 24px;
+.spb-group-head h2 {
+  margin: 4px 0;
+  font-size: 26px;
   letter-spacing: 0;
 }
 
-.spb-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
+.spb-group-head span {
+  color: #526176;
+  font-weight: 800;
 }
 
-.spb-actions .primary-action-button,
-.spb-actions .secondary-button {
-  min-height: 38px;
-}
-
-.spb-import-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 180px;
-  gap: 14px;
-  align-items: stretch;
-}
-
-.spb-paste-panel {
-  display: grid;
-  gap: 8px;
-}
-
-.spb-paste-panel > span,
-.spb-summary-panel > span {
-  color: #4e6072;
+.spb-group-head > strong {
+  border-radius: 999px;
+  padding: 7px 11px;
   font-size: 13px;
   font-weight: 900;
+  white-space: nowrap;
 }
 
-.spb-paste-panel textarea {
-  width: 100%;
-  min-height: 188px;
-  resize: vertical;
+.spb-list-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.spb-list-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 12px;
-  color: var(--ink);
-  background: #fbfdfb;
-  font: inherit;
-  line-height: 1.6;
+  background: #fff;
 }
 
-.spb-paste-panel textarea:focus {
-  outline: none;
-  border-color: #8dc9b0;
-  box-shadow: var(--focus-ring);
-}
-
-.spb-summary-panel {
+.spb-list-main {
   display: grid;
-  align-content: center;
-  gap: 8px;
-  border: 1px solid #cfe8dd;
-  border-radius: var(--radius);
-  padding: 16px;
-  background: linear-gradient(145deg, #effaf5, #ffffff);
+  gap: 4px;
+  min-width: 0;
+  color: inherit;
+  text-align: left;
 }
 
-.spb-summary-panel strong {
-  color: var(--accent-dark);
-  font-size: 42px;
-  line-height: 1;
+.spb-list-main span,
+.spb-list-main strong,
+.spb-list-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.spb-summary-panel em {
-  color: #4e6072;
-  font-size: 13px;
-  font-style: normal;
+.spb-list-main span {
+  color: var(--ink);
+  font-size: 16px;
   font-weight: 900;
 }
 
-.spb-table-wrap {
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+.spb-list-main strong {
+  color: var(--accent-dark);
+  font-size: 18px;
 }
 
-.spb-word-table {
-  width: 100%;
-  min-width: 660px;
-  border-collapse: collapse;
-}
-
-.spb-word-table th,
-.spb-word-table td {
-  border-bottom: 1px solid var(--line);
-  padding: 11px 12px;
-  text-align: left;
-  vertical-align: top;
-}
-
-.spb-word-table th {
-  color: #4e6072;
-  background: #f3f8f5;
+.spb-list-main small {
+  color: #526176;
   font-size: 12px;
   font-weight: 900;
 }
 
-.spb-word-table td:first-child {
-  width: 64px;
-  color: var(--muted);
-  font-weight: 900;
-}
-
-.spb-word-table td:nth-child(2) {
-  width: 210px;
-}
-
-.spb-word-table strong {
-  color: var(--ink);
-  font-size: 16px;
-}
-
-.spb-empty-row {
-  height: 72px;
-  color: var(--muted);
-  text-align: center;
+.spb-empty-panel {
+  display: grid;
+  gap: 8px;
+  border: 1px dashed #b9daca;
+  border-radius: var(--radius);
+  padding: 24px;
+  color: #526176;
+  background: #f8fcfa;
   font-weight: 900;
 }
 
@@ -7501,21 +7542,24 @@ select {
   }
 
   .spb-heading,
-  .spb-workbench-head {
+  .spb-group-head {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .spb-target-pill {
-    justify-self: start;
-    width: max-content;
+  .spb-heading-stats,
+  .spb-list-card {
+    grid-template-columns: 1fr;
+    justify-content: stretch;
   }
 
-  .spb-actions {
-    justify-content: flex-start;
+  .spb-heading-stats {
+    display: grid;
+    justify-self: stretch;
   }
 
-  .spb-import-grid {
+  .spb-bank-grid,
+  .spb-list-grid {
     grid-template-columns: 1fr;
   }
 
