@@ -53,7 +53,8 @@ function groupStatusLabel(group) {
 
 function groupMeta(group) {
   if (group.total_count > 0) return `${group.total_count} 个单词 · ${group.list_count} 个分表`;
-  if (group.source_count) return `缓存可见 ${group.source_count} 个单词`;
+  if (group.cached_source_count) return `缓存可导入 ${group.cached_source_count} 个单词`;
+  if (group.sync_ready) return "可从小程序接口同步";
   return "等待获取词库";
 }
 
@@ -79,10 +80,17 @@ function canSyncGroup(group) {
   return Boolean(group && group.status !== "locked" && !group.total_count);
 }
 
+function syncButtonText(group) {
+  if (syncingKey.value === group?.key) return "同步中...";
+  if (group?.sync_ready) return "同步词库";
+  if (group?.cached_source_count) return "导入缓存";
+  return "检查同步";
+}
+
 async function syncGroup(group) {
   if (!canSyncGroup(group) || syncingKey.value) return;
   syncingKey.value = group.key;
-  syncNotice.value = "";
+  syncNotice.value = group.sync_ready || group.cached_source_count ? "" : group.sync_note || "";
   try {
     const payload = await fetchJson(routeApiPaths.spbSync(), {
       method: "POST",
@@ -152,13 +160,15 @@ async function syncGroup(group) {
             :disabled="syncingKey === activeGroup.key"
             @click="syncGroup(activeGroup)"
           >
-            {{ syncingKey === activeGroup.key ? "同步中..." : "同步词库" }}
+            {{ syncButtonText(activeGroup) }}
           </button>
           <strong>{{ groupStatusLabel(activeGroup) }}</strong>
         </div>
       </header>
 
-      <p v-if="syncNotice" class="notice spb-sync-notice">{{ syncNotice }}</p>
+      <p v-if="syncNotice || activeGroup.sync_note" class="notice spb-sync-notice">
+        {{ syncNotice || activeGroup.sync_note }}
+      </p>
 
       <div v-if="activeGroup.cards?.length" class="spb-list-grid">
         <article v-for="card in activeGroup.cards" :key="card.list.id" class="spb-list-card">
@@ -175,7 +185,7 @@ async function syncGroup(group) {
 
       <div v-else class="spb-empty-panel">
         <strong>{{ activeGroup.status === "locked" ? "这组在小程序里还未解锁" : "这组还没有同步到 SpeakEasy" }}</strong>
-        <span>{{ activeGroup.source_count ? `已能读取到 ${activeGroup.source_count} 个源词，待导入后会在这里出现。` : "获取到词库后会按 500 个单词自动拆分成多个单词表。" }}</span>
+        <span>{{ activeGroup.source_count ? `已能读取到 ${activeGroup.source_count} 个源词，待导入后会在这里出现。` : activeGroup.sync_note || "获取到词库后会按 500 个单词自动拆分成多个单词表。" }}</span>
       </div>
     </section>
   </section>

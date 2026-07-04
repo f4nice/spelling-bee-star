@@ -13,7 +13,7 @@ export async function fetchJson(url, options) {
   const response = await fetch(url, requestOptions);
   const isJson = response.headers.get("content-type")?.includes("application/json");
   const payload = isJson ? await response.json() : null;
-  if (!response.ok) throw new Error(payload?.detail || payload?.error || "页面数据加载失败");
+  if (!response.ok) throw new Error(payloadErrorMessage(payload));
 
   if (method === "GET" && !skipCache) {
     writeApiCache(url, payload);
@@ -21,6 +21,15 @@ export async function fetchJson(url, options) {
     invalidateApiCacheForMutation(url);
   }
   return payload;
+}
+
+function payloadErrorMessage(payload) {
+  const detail = payload?.detail || payload?.error;
+  if (!detail) return "页面数据加载失败";
+  if (typeof detail === "string") return detail;
+  if (typeof detail.message === "string") return detail.message;
+  if (typeof detail.msg === "string") return detail.msg;
+  return "页面数据加载失败";
 }
 
 export function imageForWord(word) {

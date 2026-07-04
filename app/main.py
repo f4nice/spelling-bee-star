@@ -79,8 +79,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-004"
-DEFAULT_PAGE_VERSION = "v20260704.3"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-005"
+DEFAULT_PAGE_VERSION = "v20260704.4"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3248,9 +3248,14 @@ async def vue_spb_sync_api(request: Request, db: Session = Depends(get_db)):
 
     words, source_path = load_spb_source_words(group)
     if not words:
+        detail = (
+            f"{group['title']} 缺少小程序授权，服务器也没有这组源词库缓存。请先配置 SPB 小程序授权后再同步。"
+            if not spb_miniprogram_authorization_configured()
+            else f"{group['title']} 已尝试调用小程序接口，但没有拿到可导入词库；请确认小程序账号已开通这组词库。"
+        )
         raise HTTPException(
             status_code=404,
-            detail=f"{group['title']} 暂时没有可同步词库。后端会优先调用小程序接口；如果未配置小程序授权，请先配置后端授权或放入源词库缓存。",
+            detail=detail,
         )
 
     word_ids, split_lists = import_spb_word_bank_rows(db, group, words)
@@ -3569,12 +3574,19 @@ def serialize_spb_word_bank_group(db: Session, group: dict[str, Any]) -> dict[st
     cards = [serialize_word_list_card(word_list_card(db, word_list)) for word_list in word_lists]
     total_count = sum(int(card.get("count") or 0) for card in cards)
     synced = total_count > 0
+    cached_source_count = count_spb_cached_source_words(group)
+    authorization_configured = spb_miniprogram_authorization_configured()
+    sync_ready = group.get("status") != "locked" and not synced and (authorization_configured or cached_source_count > 0)
+    sync_note = spb_group_sync_note(group, synced, cached_source_count, authorization_configured)
     return {
         "key": group["key"],
         "title": group["title"],
         "subtitle": group["subtitle"],
         "status": "synced" if synced else group.get("status", "available"),
-        "source_count": group.get("source_count"),
+        "source_count": group.get("source_count") or cached_source_count or None,
+        "cached_source_count": cached_source_count,
+        "sync_ready": sync_ready,
+        "sync_note": sync_note,
         "total_count": total_count,
         "list_count": len(cards),
         "cards": cards,
@@ -3583,6 +3595,49 @@ def serialize_spb_word_bank_group(db: Session, group: dict[str, Any]) -> dict[st
 
 def spb_source_dirs() -> list[Path]:
     return [MEDIA_DIR / "spb", BASE_DIR.parent / "spb_sources"]
+
+
+def spb_cached_source_path(group: dict[str, Any]) -> Path:
+    source_file = str(group.get("source_file") or "").strip()
+    if not source_file:
+        return Path("")
+    for source_dir in spb_source_dirs():
+        path = source_dir / source_file
+        if path.exists():
+            return path
+    return Path(source_file)
+
+
+def count_spb_cached_source_words(group: dict[str, Any]) -> int:
+    path = spb_cached_source_path(group)
+    if not path.exists():
+        return 0
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 0
+    return len(normalize_spb_word_values(extract_spb_word_values(payload)))
+
+
+def spb_miniprogram_authorization_configured() -> bool:
+    return bool((settings.spb_miniprogram_authorization or "").strip())
+
+
+def spb_group_sync_note(
+    group: dict[str, Any],
+    synced: bool,
+    cached_source_count: int,
+    authorization_configured: bool,
+) -> str:
+    if synced:
+        return "已同步到 SpeakEasy。"
+    if group.get("status") == "locked":
+        return "这组仍在小程序里锁定，暂时不能同步。"
+    if authorization_configured:
+        return "可从小程序接口同步；如果接口返回空结果，会自动尝试本地缓存。"
+    if cached_source_count:
+        return f"已找到本地源词库缓存，可导入 {cached_source_count} 个单词。"
+    return "缺少小程序授权，且本地没有这组源词库缓存；请先配置服务器小程序授权。"
 
 
 SPB_MINIPROGRAM_WORD_FILE_ENDPOINT = "wordThesaurus/spbcnInfoFile"
@@ -3698,16 +3753,11 @@ def load_spb_source_words(group: dict[str, Any]) -> tuple[list[str], Path]:
     if api_words:
         return api_words, api_source
 
-    source_file = str(group.get("source_file") or "").strip()
-    if not source_file:
-        return [], Path("")
-    for source_dir in spb_source_dirs():
-        path = source_dir / source_file
-        if not path.exists():
-            continue
+    path = spb_cached_source_path(group)
+    if path.exists():
         payload = json.loads(path.read_text(encoding="utf-8"))
         return normalize_spb_word_values(extract_spb_word_values(payload)), path
-    return [], Path(source_file)
+    return [], path
 
 
 def extract_spb_word_values(payload: Any) -> list[Any]:
