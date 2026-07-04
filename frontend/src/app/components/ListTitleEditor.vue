@@ -18,11 +18,21 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  groups: {
+    type: Array,
+    default: () => [],
+  },
+  moveListToGroup: {
+    type: Function,
+    required: true,
+  },
 });
 
 const input = ref(null);
 const isEditing = ref(false);
 const originalName = ref("");
+const isMovingGroup = ref(false);
+const groupMoveNotice = ref("");
 
 async function startEditing() {
   originalName.value = props.wordList.name || "";
@@ -48,6 +58,25 @@ async function saveTitle() {
 function cancelEditing() {
   props.wordList.name = originalName.value;
   isEditing.value = false;
+}
+
+async function changeGroup(event) {
+  const nextGroupId = event.target.value;
+  if (String(props.wordList.group_id || "") === String(nextGroupId || "")) return;
+  isMovingGroup.value = true;
+  groupMoveNotice.value = "";
+  try {
+    await props.moveListToGroup(nextGroupId || null);
+    groupMoveNotice.value = "已更新单词组";
+    window.setTimeout(() => {
+      groupMoveNotice.value = "";
+    }, 1800);
+  } catch (error) {
+    groupMoveNotice.value = error.message || "单词组更新失败";
+    event.target.value = String(props.wordList.group_id || "");
+  } finally {
+    isMovingGroup.value = false;
+  }
 }
 </script>
 
@@ -80,6 +109,14 @@ function cancelEditing() {
     <div class="word-list-meta">
       <p>{{ wordCount }} 个单词</p>
       <button class="ghost-button compact-button" type="button" @click="openImportModal">继续导入</button>
+      <label class="word-list-group-picker">
+        <span>单词组</span>
+        <select :value="wordList.group_id || ''" :disabled="isMovingGroup" @change="changeGroup">
+          <option value="">未归组</option>
+          <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
+        </select>
+      </label>
+      <span v-if="groupMoveNotice" class="word-list-group-notice">{{ groupMoveNotice }}</span>
     </div>
   </div>
 </template>

@@ -20,6 +20,10 @@ defineProps({
     type: Function,
     required: true,
   },
+  moveListToGroup: {
+    type: Function,
+    required: true,
+  },
   openImportModal: {
     type: Function,
     required: true,
@@ -32,6 +36,8 @@ defineProps({
     <ListTitleEditor
       :word-list="data.word_list"
       :word-count="data.words.length"
+      :groups="data.groups || []"
+      :move-list-to-group="moveListToGroup"
       :rename-list="renameList"
       :open-import-modal="openImportModal"
     />

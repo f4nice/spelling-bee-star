@@ -15,6 +15,7 @@ const props = defineProps([
   "submitUpload",
   "renameList",
   "deleteList",
+  "moveListToGroup",
   "generateListAiImages",
   "wordDetailUrl",
   "imageForWord",
@@ -42,6 +43,7 @@ function openImportModal() {
     :delete-list-state="deleteListState"
     :rename-list="renameList"
     :delete-list="deleteList"
+    :move-list-to-group="moveListToGroup"
     :open-import-modal="openImportModal"
   />
   <ListsCreateModal

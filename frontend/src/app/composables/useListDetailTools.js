@@ -1,5 +1,6 @@
 import { ref } from "vue";
 import { routeApiPaths } from "../routeApiPaths.js";
+import { listApiPaths } from "../listApiPaths.js";
 import { generateWordListAiImages, renameWordList } from "../listDetailActions.js";
 import { deleteCurrentWordList } from "../listDeleteBinding.js";
 import { createDeleteListState } from "../listDeleteState.js";
@@ -30,6 +31,18 @@ export function useListDetailTools({ data, go, loadRoute }) {
     });
   }
 
+  async function moveListToGroup(groupId) {
+    const wordListId = data.value?.word_list?.id;
+    if (!wordListId) return;
+    await fetchJson(listApiPaths.moveToGroup(wordListId), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ group_id: groupId || null }),
+      skipCache: true,
+    });
+    await refreshCurrentListDetail();
+  }
+
   async function generateListAiImages({ allowPaid = false } = {}) {
     await generateWordListAiImages({
       wordListId: data.value.word_list.id,
@@ -48,6 +61,7 @@ export function useListDetailTools({ data, go, loadRoute }) {
     renameList,
     deleteList,
     syncListImages,
+    moveListToGroup,
     generateListAiImages,
   };
 }

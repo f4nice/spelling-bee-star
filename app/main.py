@@ -80,8 +80,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-018"
-DEFAULT_PAGE_VERSION = "v20260704.17"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260705-001"
+DEFAULT_PAGE_VERSION = "v20260705.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2626,6 +2626,8 @@ def vue_list_detail_api(word_list_id: int, db: Session = Depends(get_db)):
     word_list = db.get(WordList, word_list_id)
     if not word_list:
         raise HTTPException(status_code=404, detail="Word list not found")
+    groups = [serialize_word_list_group(db, group) for group in word_list_groups(db)]
+    current_group = db.get(WordListGroup, word_list.group_id) if word_list.group_id else None
     words = db.scalars(
         select(Word)
         .join(WordListItem, WordListItem.word_id == Word.id)
@@ -2635,7 +2637,15 @@ def vue_list_detail_api(word_list_id: int, db: Session = Depends(get_db)):
     apply_word_resources(db, words, include_image=False)
     stats = challenge_counts_for_words(db, [word.id for word in words])
     return {
-        "word_list": {"id": word_list.id, "name": word_list.name, "sequence_offset": word_list.sequence_offset},
+        "word_list": {
+            "id": word_list.id,
+            "name": word_list.name,
+            "sequence_offset": word_list.sequence_offset,
+            "group_id": word_list.group_id,
+            "group": serialize_word_list_group_brief(current_group),
+        },
+        "groups": groups,
+        "current_group": serialize_word_list_group_brief(current_group),
         "challenge": challenge_state(db, word_list),
         "ai_image_quota": ai_image_quota_status(db, model=LIST_AI_IMAGE_DEFAULT_MODEL),
         "words": [

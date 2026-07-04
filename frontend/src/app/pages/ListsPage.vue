@@ -488,10 +488,6 @@ watch(wordListGroups, (groups) => {
         <strong>{{ groupedListCount }}</strong>
         <span>个单词表已归组</span>
       </div>
-      <button class="secondary-button compact-button lists-action-button" type="button" @click="isGroupCreateModalOpen = true">
-        <FolderPlus :size="16" aria-hidden="true" />
-        <span>新建单词组</span>
-      </button>
     </div>
     <div v-if="wordListGroups.length" class="word-list-group-grid">
       <button

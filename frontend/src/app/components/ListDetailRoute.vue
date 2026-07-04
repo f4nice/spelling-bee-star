@@ -20,6 +20,7 @@ defineProps({
     :submit-upload="ctx.submitUpload"
     :rename-list="ctx.renameList"
     :delete-list="ctx.deleteList"
+    :move-list-to-group="ctx.moveListToGroup"
     :generate-list-ai-images="ctx.generateListAiImages"
     :word-detail-url="ctx.wordDetailUrl"
     :image-for-word="ctx.imageForWord"
