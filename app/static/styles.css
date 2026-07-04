@@ -3956,19 +3956,24 @@ a:focus-visible {
   display: grid;
   place-items: center;
   padding: 28px;
-  background: rgba(21, 31, 43, 0.56);
+  background:
+    radial-gradient(circle at 50% 10%, rgba(15, 127, 89, 0.14), transparent 34%),
+    rgba(21, 31, 43, 0.58);
+  backdrop-filter: blur(7px);
 }
 
 .lists-create-modal {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(960px, 100%);
+  width: min(780px, 100%);
   max-height: min(760px, calc(100vh - 56px));
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
-  box-shadow: 0 24px 70px rgba(21, 31, 43, 0.28);
+  border: 1px solid rgba(15, 127, 89, 0.16);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(243, 190, 95, 0.13), transparent 28%),
+    var(--panel);
+  box-shadow: 0 26px 80px rgba(21, 31, 43, 0.3);
 }
 
 .lists-create-heading {
@@ -3976,8 +3981,9 @@ a:focus-visible {
   align-items: start;
   justify-content: space-between;
   gap: 16px;
-  border-bottom: 1px solid var(--line);
-  padding: 18px;
+  border-bottom: 1px solid rgba(15, 127, 89, 0.12);
+  padding: 22px 24px 18px;
+  background: linear-gradient(135deg, rgba(246, 253, 250, 0.98), rgba(255, 255, 255, 0.94));
 }
 
 .lists-create-heading h2,
@@ -3986,7 +3992,9 @@ a:focus-visible {
 }
 
 .lists-create-heading h2 {
-  font-size: 24px;
+  color: var(--ink);
+  font-size: 26px;
+  line-height: 1.08;
 }
 
 .lists-create-heading p:not(.section-kicker) {
@@ -3998,7 +4006,8 @@ a:focus-visible {
 .lists-create-body {
   min-height: 0;
   overflow: auto;
-  padding: 18px;
+  padding: 24px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(247, 251, 248, 0.72));
 }
 
 .lists-create-body .lists-tools-panel {

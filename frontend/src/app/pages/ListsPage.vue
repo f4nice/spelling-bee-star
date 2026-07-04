@@ -342,8 +342,9 @@ watch(
         <span>单词组名称</span>
         <input v-model="newGroupName" type="text" placeholder="例如：个人赛冠军词库" autocomplete="off" autofocus>
       </label>
-      <button class="primary-action-button" type="submit" :disabled="!trimmedNewGroupName || isCreatingGroup">
-        {{ isCreatingGroup ? "创建中" : "创建单词组" }}
+      <button class="primary-action-button list-group-create-submit" type="submit" :disabled="!trimmedNewGroupName || isCreatingGroup">
+        <FolderPlus :size="17" aria-hidden="true" />
+        <span>{{ isCreatingGroup ? "创建中" : "创建单词组" }}</span>
       </button>
     </form>
     <p v-if="groupCreateNotice" class="notice">{{ groupCreateNotice }}</p>
@@ -375,7 +376,12 @@ watch(
       <div>
         <p class="section-kicker">Groups</p>
         <h2>我的单词组</h2>
-        <span>{{ groupedListCount }} 个单词表已归组</span>
+        <span>把同一套词库收在一个组里，分表管理会更清楚。</span>
+      </div>
+      <div class="lists-section-meta">
+        <span>{{ wordListGroups.length }} 个组</span>
+        <strong>{{ groupedListCount }}</strong>
+        <span>个单词表已归组</span>
       </div>
       <button class="secondary-button compact-button lists-action-button" type="button" @click="isGroupCreateModalOpen = true">
         <FolderPlus :size="16" aria-hidden="true" />
@@ -400,7 +406,12 @@ watch(
       <div>
         <p class="section-kicker">Word Lists</p>
         <h2>我的单词表</h2>
-        <span>{{ orderedCards.length }} 个单词表 · {{ totalWordCount }} 个单词</span>
+        <span>拖动卡片调整顺序，也可以通过管理按钮移动到单词组。</span>
+      </div>
+      <div class="lists-section-meta">
+        <span>{{ orderedCards.length }} 个单词表</span>
+        <strong>{{ totalWordCount }}</strong>
+        <span>个单词</span>
       </div>
     </div>
     <section class="word-grid lists-reorder-grid" role="list" @dragover.prevent>
@@ -515,10 +526,10 @@ watch(
 .word-list-groups-panel {
   position: relative;
   display: grid;
-  gap: 14px;
+  gap: 16px;
   margin-bottom: 18px;
   overflow: hidden;
-  padding: 18px;
+  padding: 0;
   border-color: rgba(15, 127, 89, 0.18);
   background:
     radial-gradient(circle at 100% 0%, rgba(15, 127, 89, 0.1), transparent 30%),
@@ -529,17 +540,24 @@ watch(
 .word-list-groups-panel::before {
   content: "";
   position: absolute;
-  inset: auto 18px 0 18px;
-  height: 3px;
-  border-radius: 999px 999px 0 0;
-  background: linear-gradient(90deg, rgba(15, 127, 89, 0.52), rgba(243, 190, 95, 0.35), transparent);
+  inset: 0 auto 0 0;
+  width: 5px;
+  border-radius: 18px 0 0 18px;
+  background: linear-gradient(180deg, #0f7f59, rgba(243, 190, 95, 0.76), rgba(15, 127, 89, 0.18));
 }
 
 .lists-section-head {
-  display: flex;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+  gap: 16px;
+  min-height: 96px;
+  border-bottom: 1px solid rgba(15, 127, 89, 0.12);
+  padding: 20px 22px 18px 24px;
+  background:
+    radial-gradient(circle at 94% 18%, rgba(243, 190, 95, 0.13), transparent 28%),
+    linear-gradient(135deg, rgba(247, 253, 250, 0.98), rgba(255, 255, 255, 0.92));
 }
 
 .lists-section-head h2 {
@@ -555,26 +573,47 @@ watch(
   min-width: 0;
 }
 
-.lists-section-head > span {
-  flex: 0 0 auto;
-  border-radius: 999px;
-  padding: 6px 10px;
-  color: #0f6b4d;
-  background: rgba(29, 127, 91, 0.11);
+.lists-section-head > div > span {
+  max-width: 520px;
+  color: #5c6f7e;
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 800;
+  line-height: 1.45;
 }
 
-.lists-section-head > div > span {
-  color: #536579;
-  font-size: 13px;
-  font-weight: 850;
+.lists-section-meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 190px;
+  border: 1px solid rgba(15, 127, 89, 0.14);
+  border-radius: 18px;
+  padding: 10px 12px;
+  color: #0f6b4d;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 10px 24px rgba(15, 28, 36, 0.05);
+  white-space: nowrap;
+}
+
+.lists-section-meta strong {
+  color: #0f7f59;
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 1000;
+}
+
+.lists-section-meta span {
+  color: #496073;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .word-list-group-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 12px;
+  padding: 0 18px 18px;
 }
 
 .word-list-group-card {
@@ -664,7 +703,7 @@ watch(
   display: grid;
   place-items: center;
   min-height: 84px;
-  margin: 0;
+  margin: 0 18px 18px;
   border: 1px dashed rgba(15, 127, 89, 0.2);
   border-radius: 16px;
   color: #6b7c8d;
@@ -676,7 +715,8 @@ watch(
   display: grid;
   gap: 16px;
   margin-bottom: 18px;
-  padding: 18px;
+  overflow: hidden;
+  padding: 0 0 18px;
   border-color: rgba(15, 127, 89, 0.13);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(249, 253, 250, 0.92));
@@ -684,8 +724,21 @@ watch(
 }
 
 .lists-table-head {
+  grid-template-columns: minmax(0, 1fr) auto;
   margin: 0;
-  padding: 0;
+}
+
+.lists-table-head::after {
+  content: "";
+  position: absolute;
+  inset: auto 22px 0 24px;
+  height: 3px;
+  border-radius: 999px 999px 0 0;
+  background: linear-gradient(90deg, rgba(15, 127, 89, 0.58), rgba(96, 165, 250, 0.28), transparent);
+}
+
+.word-list-table-panel .lists-reorder-grid {
+  padding: 0 18px;
 }
 
 .word-list-table-panel :deep(.list-card) {
@@ -711,13 +764,13 @@ watch(
 .list-group-create-form,
 .list-group-manage-form {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .list-group-create-form label,
 .list-group-manage-form label {
   display: grid;
-  gap: 7px;
+  gap: 8px;
   color: #536579;
   font-size: 13px;
   font-weight: 900;
@@ -725,14 +778,27 @@ watch(
 
 .list-group-create-form input,
 .list-group-manage-form select {
-  min-height: 44px;
+  min-height: 48px;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 0 12px;
+  border-radius: 14px;
+  padding: 0 14px;
   color: var(--text);
-  background: #fff;
+  background: rgba(255, 255, 255, 0.94);
   font: inherit;
   font-weight: 850;
+  box-shadow: 0 10px 22px rgba(15, 28, 36, 0.04);
+}
+
+.list-group-create-form input:focus,
+.list-group-manage-form select:focus {
+  border-color: rgba(15, 127, 89, 0.55);
+  outline: 3px solid rgba(15, 127, 89, 0.12);
+}
+
+.list-group-create-submit {
+  justify-content: center;
+  min-height: 48px;
+  border-radius: 14px;
 }
 
 .lists-reorder-card {
@@ -778,7 +844,7 @@ watch(
   .lists-page-heading-actions,
   .lists-section-head {
     align-items: stretch;
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .lists-page-heading {
@@ -792,6 +858,12 @@ watch(
 
   .lists-page-heading-actions > button,
   .lists-section-head > button {
+    width: 100%;
+  }
+
+  .lists-section-meta {
+    justify-content: flex-start;
+    min-width: 0;
     width: 100%;
   }
 
