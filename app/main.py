@@ -79,8 +79,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-008"
-DEFAULT_PAGE_VERSION = "v20260704.7"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260704-009"
+DEFAULT_PAGE_VERSION = "v20260704.8"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3410,11 +3410,24 @@ async def vue_spb_sync_api(request: Request, db: Session = Depends(get_db)):
         )
 
     rows = await prepare_spb_rows_with_local_audio(rows, group)
+    text_detail_count = sum(1 for row in rows if spb_has_text_fields(row))
+    local_audio_count = sum(
+        1
+        for row in rows
+        if is_local_audio_url(row.get("american_audio_url")) or is_local_audio_url(row.get("british_audio_url"))
+    )
     word_ids, split_lists = import_spb_word_bank_rows(db, group, rows)
     if word_ids:
         start_enrichment_thread(word_ids, include_images=False)
     response = spb_payload(db, collection["key"])
-    response["message"] = f"已同步 {group['title']}：{len(word_ids)} 个单词，{len(split_lists)} 个分表。"
+    message = f"已同步 {group['title']}：{len(word_ids)} 个单词，{len(split_lists)} 个分表。"
+    if text_detail_count:
+        message += f" 已写入详情字段 {text_detail_count} 个。"
+    elif not spb_miniprogram_authorization_configured():
+        message += " 服务器未配置 SPB 小程序授权，暂时只能导入词表，不能读取小程序详情字段。"
+    if local_audio_count:
+        message += f" 已保存小程序音频 {local_audio_count} 个到本地。"
+    response["message"] = message
     response["source"] = source_path.name
     return response
 
@@ -3795,6 +3808,7 @@ def spb_group_sync_note(
 SPB_MINIPROGRAM_WORD_FILE_ENDPOINT = "wordThesaurus/spbcnInfoFile"
 SPB_MINIPROGRAM_WORD_FILE_BY_ID_ENDPOINT = "wordThesaurus/spbcnInfoByIdFile"
 SPB_MINIPROGRAM_WORD_DETAIL_ENDPOINT = "wordThesaurus/getWordInfo"
+SPB_TEXT_IMPORT_FIELDS = ("phonetic", "part_of_speech", "english_definition", "chinese_definition", "english_example")
 
 
 def spb_miniprogram_api_url(path: str) -> str:
@@ -3974,7 +3988,10 @@ def normalize_spb_word_rows(values: list[Any], group: dict[str, Any]) -> list[di
             "spb_kernel": value.get("kernel") if isinstance(value, dict) else None,
         }
         row.update(spb_audio_urls_from_payload(value))
-        row.update(spb_text_fields_from_payload(value))
+        text_fields = spb_text_fields_from_payload(value)
+        if text_fields:
+            row.update(text_fields)
+            row["spb_text_source"] = "spb-source-cache"
         rows.append(row)
     return rows
 
@@ -4002,7 +4019,7 @@ def spb_find_first_field(payload: Any, field_names: tuple[str, ...]) -> str | No
     if isinstance(payload, dict):
         for key, value in payload.items():
             if key.lower() in targets:
-                text = str(value or "").strip()
+                text = spb_clean_field_text(value)
                 if text:
                     return text
         for value in payload.values():
@@ -4015,6 +4032,45 @@ def spb_find_first_field(payload: Any, field_names: tuple[str, ...]) -> str | No
             if nested:
                 return nested
     return None
+
+
+def spb_clean_field_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = html_to_text(value)
+    elif isinstance(value, (int, float)):
+        text = str(value)
+    elif isinstance(value, list):
+        parts = [spb_clean_field_text(item) for item in value]
+        text = "\n".join(part for part in parts if part)
+    elif isinstance(value, dict):
+        for key in (
+            "text",
+            "value",
+            "content",
+            "definition",
+            "meaning",
+            "translation",
+            "sentence",
+            "example",
+            "en",
+            "cn",
+            "zh",
+            "name",
+        ):
+            if value.get(key) is not None:
+                text = spb_clean_field_text(value.get(key))
+                if text:
+                    return text
+        parts = [spb_clean_field_text(item) for item in value.values()]
+        text = "\n".join(part for part in parts if part)
+    else:
+        text = str(value)
+    text = re.sub(r"\s+\n", "\n", text)
+    text = re.sub(r"\n\s+", "\n", text)
+    text = re.sub(r"[ \t\r\f\v]+", " ", text).strip()
+    return text[:4000] if text else None
 
 
 def spb_audio_urls_from_payload(payload: Any) -> dict[str, str]:
@@ -4066,11 +4122,95 @@ def spb_looks_like_audio_url(value: str | None) -> bool:
 
 def spb_text_fields_from_payload(payload: Any) -> dict[str, str]:
     result: dict[str, str] = {}
-    phonetic = spb_find_first_field(payload, ("phonetic", "phone", "soundmark", "usphone", "ukphone"))
-    part_of_speech = spb_find_first_field(payload, ("part_of_speech", "pos", "speech", "wordClass"))
-    english_definition = spb_find_first_field(payload, ("english_definition", "enDefinition", "definition", "释义"))
-    chinese_definition = spb_find_first_field(payload, ("chinese_definition", "cnDefinition", "translation", "chinese"))
-    english_example = spb_find_first_field(payload, ("english_example", "example", "sentence", "enExample"))
+    phonetic = spb_find_first_field(
+        payload,
+        (
+            "phonetic",
+            "phoneticSymbol",
+            "phonetic_symbol",
+            "phone",
+            "soundmark",
+            "soundMark",
+            "pronunciation",
+            "pron",
+            "ipa",
+            "usphone",
+            "usPhone",
+            "ukphone",
+            "ukPhone",
+            "音标",
+            "英标",
+        ),
+    )
+    part_of_speech = spb_find_first_field(
+        payload,
+        (
+            "part_of_speech",
+            "partOfSpeech",
+            "pos",
+            "speech",
+            "wordClass",
+            "word_class",
+            "wordType",
+            "property",
+            "cixing",
+            "词性",
+        ),
+    )
+    english_definition = spb_find_first_field(
+        payload,
+        (
+            "english_definition",
+            "englishDefinition",
+            "enDefinition",
+            "definitionEn",
+            "enExplain",
+            "englishExplain",
+            "enMeaning",
+            "englishMeaning",
+            "definition",
+            "meaning",
+            "英文释义",
+        ),
+    )
+    chinese_definition = spb_find_first_field(
+        payload,
+        (
+            "chinese_definition",
+            "chineseDefinition",
+            "cnDefinition",
+            "zhDefinition",
+            "definitionCn",
+            "cnExplain",
+            "zhExplain",
+            "chineseExplain",
+            "translation",
+            "trans",
+            "chinese",
+            "meaningCn",
+            "cnMeaning",
+            "zhMeaning",
+            "中文释义",
+            "中文",
+            "释义",
+        ),
+    )
+    english_example = spb_find_first_field(
+        payload,
+        (
+            "english_example",
+            "englishExample",
+            "enExample",
+            "exampleEn",
+            "sentenceEn",
+            "exampleSentence",
+            "example",
+            "examples",
+            "sentence",
+            "sentences",
+            "例句",
+        ),
+    )
     if phonetic:
         result["phonetic"] = phonetic
     if part_of_speech:
@@ -4082,6 +4222,10 @@ def spb_text_fields_from_payload(payload: Any) -> dict[str, str]:
     if english_example:
         result["english_example"] = english_example
     return result
+
+
+def spb_has_text_fields(row: dict[str, Any]) -> bool:
+    return any(str(row.get(field) or "").strip() for field in SPB_TEXT_IMPORT_FIELDS)
 
 
 async def prepare_spb_rows_with_local_audio(rows: list[dict[str, Any]], group: dict[str, Any]) -> list[dict[str, Any]]:
@@ -4096,7 +4240,10 @@ async def prepare_spb_rows_with_local_audio(rows: list[dict[str, Any]], group: d
             if spb_miniprogram_authorization_configured() and prepared.get("spb_word_id"):
                 detail = await fetch_spb_word_detail_from_miniprogram(prepared, group)
                 if isinstance(detail, dict):
-                    for key, value in {**spb_audio_urls_from_payload(detail), **spb_text_fields_from_payload(detail)}.items():
+                    detail_text_fields = spb_text_fields_from_payload(detail)
+                    if detail_text_fields:
+                        prepared["spb_text_source"] = "spb-miniprogram"
+                    for key, value in {**spb_audio_urls_from_payload(detail), **detail_text_fields}.items():
                         prepared[key] = prepared.get(key) or value
             for accent, field_name in (("us", "american_audio_url"), ("gb", "british_audio_url")):
                 audio_url = str(prepared.get(field_name) or "").strip()
@@ -5174,6 +5321,7 @@ def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]
                 word,
                 american_audio_source=row.get("american_audio_url_source"),
                 british_audio_source=row.get("british_audio_url_source"),
+                override_text=bool(row.get("spb_text_source")),
                 override_media=bool(row.get("american_audio_url_source") or row.get("british_audio_url_source")),
                 commit=False,
             )

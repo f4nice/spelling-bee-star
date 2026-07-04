@@ -112,11 +112,12 @@ function challengeRemain(card) {
 }
 
 function canSyncGroup(group) {
-  return Boolean(group && group.status !== "locked" && !group.total_count);
+  return Boolean(group && group.status !== "locked" && (group.total_count || group.sync_ready || group.cached_source_count));
 }
 
 function syncButtonText(group) {
   if (syncingKey.value === group?.key) return "同步中...";
+  if (group?.total_count) return "更新详情";
   if (group?.sync_ready) return "同步词库";
   if (group?.cached_source_count) return "导入缓存";
   return "检查同步";
