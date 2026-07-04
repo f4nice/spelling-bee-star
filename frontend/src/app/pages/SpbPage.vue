@@ -19,7 +19,6 @@ const activeCollectionKey = ref("");
 const activeKey = ref("");
 const pageData = ref(props.data);
 const syncingKey = ref("");
-const backfillingKey = ref("");
 const syncNotice = ref("");
 
 const collections = computed(() => pageData.value.collections || []);
@@ -124,16 +123,6 @@ function syncButtonText(group) {
   return "检查同步";
 }
 
-function canBackfillGroup(group) {
-  return Boolean(group?.total_count && Number(group.missing_detail_count || 0) > 0);
-}
-
-function backfillButtonText(group) {
-  if (backfillingKey.value === group?.key) return "补全中...";
-  const count = Number(group?.missing_detail_count || 0);
-  return count > 0 ? `补全缺失 ${count}` : "补全缺失";
-}
-
 async function syncGroup(group) {
   if (!canSyncGroup(group) || syncingKey.value) return;
   syncingKey.value = group.key;
@@ -156,27 +145,6 @@ async function syncGroup(group) {
   }
 }
 
-async function backfillGroup(group) {
-  if (!canBackfillGroup(group) || backfillingKey.value) return;
-  backfillingKey.value = group.key;
-  syncNotice.value = "";
-  try {
-    const payload = await fetchJson(routeApiPaths.spbBackfillDetails(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ collection: activeCollection.value.key || "individual", key: group.key }),
-      skipCache: true,
-    });
-    pageData.value = payload;
-    activeCollectionKey.value = payload.collection?.key || activeCollectionKey.value;
-    activeKey.value = group.key;
-    syncNotice.value = payload.message || "已开始补全缺失的音标、词性、英文定义和英文例句。";
-  } catch (error) {
-    syncNotice.value = error.message || "补全失败，请稍后再试。";
-  } finally {
-    backfillingKey.value = "";
-  }
-}
 </script>
 
 <template>
@@ -272,15 +240,6 @@ async function backfillGroup(group) {
           <span>{{ activeGroup.subtitle }}</span>
         </div>
         <div class="spb-group-actions">
-          <button
-            v-if="canBackfillGroup(activeGroup)"
-            class="secondary-button compact-button"
-            type="button"
-            :disabled="backfillingKey === activeGroup.key"
-            @click="backfillGroup(activeGroup)"
-          >
-            {{ backfillButtonText(activeGroup) }}
-          </button>
           <button
             v-if="canSyncGroup(activeGroup)"
             class="primary-action-button"

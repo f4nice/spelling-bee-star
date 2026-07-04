@@ -3,7 +3,6 @@ export const routeApiPaths = {
   growth: () => "/api/vue/growth",
   spb: () => "/api/vue/spb",
   spbSync: () => "/api/vue/spb/sync",
-  spbBackfillDetails: () => "/api/vue/spb/backfill-details",
   lists: () => "/api/vue/lists",
   listSearch: (query) => `/api/vue/lists/search?q=${encodeURIComponent(query)}`,
   listDetail: (route) => `/api/vue/lists/${route.params.id}`,

@@ -16,6 +16,20 @@ IMAGE_DIR = UPLOAD_DIR / "images"
 AUDIO_DIR = UPLOAD_DIR / "audio"
 
 
+NATURAL_CHINESE_DEFINITION_OVERRIDES = {
+    "abandon": "放弃；抛弃；停止支持或使用。",
+    "abandoned": "被遗弃的；无人照管的；废弃不用的。",
+    "abandonment": "放弃；抛弃；遗弃。",
+}
+
+
+BAD_CHINESE_DEFINITION_PATTERNS = (
+    "放弃或放弃对自己的控制",
+    "屈服于自己的情绪",
+    "屈服于自己",
+)
+
+
 async def enrich_word(db: Session, word: Word, *, include_images: bool = True) -> Word:
     settings = get_settings()
     merriam_webster = MerriamWebsterClient(settings)
@@ -52,9 +66,25 @@ async def enrich_word(db: Session, word: Word, *, include_images: bool = True) -
             word.british_audio_url = word.british_audio_url or british_audio
 
         optional_errors: list[str] = []
-        if not word.chinese_definition and not word.chinese_definition_locked:
+        current_chinese_definition = word.chinese_definition
+        natural_definition = naturalize_chinese_definition(word.word, entry.english_definition, None)
+        if natural_definition and should_refresh_chinese_definition(
+            word.word,
+            current_chinese_definition,
+            entry.english_definition,
+        ):
+            word.chinese_definition = natural_definition
+        elif (
+            not word.chinese_definition_locked
+            and should_refresh_chinese_definition(word.word, current_chinese_definition, entry.english_definition)
+        ):
             try:
-                word.chinese_definition = await translator.translate_definition(entry.english_definition)
+                translated_definition = await translator.translate_definition(entry.english_definition)
+                word.chinese_definition = (
+                    naturalize_chinese_definition(word.word, entry.english_definition, translated_definition)
+                    or translated_definition
+                    or word.chinese_definition
+                )
             except Exception as exc:
                 optional_errors.append(f"中文翻译暂不可用: {exc}")
 
@@ -101,3 +131,56 @@ def _friendly_enrichment_error(error: str) -> str:
     if "client error" in lower_error and "404" in lower_error:
         return "词典暂未收录这个词，可以手动编辑定义、例句和音频。"
     return error
+
+
+def naturalize_chinese_definition(
+    word_text: str | None,
+    english_definition: str | None,
+    translated_definition: str | None,
+) -> str | None:
+    normalized_word = (word_text or "").strip().lower()
+    if normalized_word in NATURAL_CHINESE_DEFINITION_OVERRIDES:
+        return NATURAL_CHINESE_DEFINITION_OVERRIDES[normalized_word]
+
+    text = _clean_chinese_definition(translated_definition)
+    if not text:
+        return None
+
+    if _looks_like_literal_translation(text):
+        return _fallback_chinese_gloss(normalized_word, english_definition) or text
+    return text
+
+
+def should_refresh_chinese_definition(
+    word_text: str | None,
+    chinese_definition: str | None,
+    english_definition: str | None = None,
+) -> bool:
+    current = _clean_chinese_definition(chinese_definition)
+    normalized_word = (word_text or "").strip().lower()
+    if not current:
+        return True
+    override = NATURAL_CHINESE_DEFINITION_OVERRIDES.get(normalized_word)
+    if override and current != override:
+        return True
+    return _looks_like_literal_translation(current)
+
+
+def _clean_chinese_definition(text: str | None) -> str | None:
+    cleaned = " ".join((text or "").replace("\r", "\n").split())
+    return cleaned or None
+
+
+def _looks_like_literal_translation(text: str) -> bool:
+    if any(pattern in text for pattern in BAD_CHINESE_DEFINITION_PATTERNS):
+        return True
+    return text.count("自己") >= 2 and text.count("或") >= 2 and len(text) > 30
+
+
+def _fallback_chinese_gloss(normalized_word: str, english_definition: str | None) -> str | None:
+    lower_definition = (english_definition or "").lower()
+    if "give up" in lower_definition and "control" in lower_definition:
+        return "放弃；让出控制；不再坚持。"
+    if normalized_word.endswith("ed") and "abandon" in lower_definition:
+        return "被遗弃的；无人照管的。"
+    return None

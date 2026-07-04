@@ -41,7 +41,7 @@ from app.models import (
     WordResourcePool,
     WrongWord,
 )
-from app.services.enrichment import enrich_word
+from app.services.enrichment import enrich_word, naturalize_chinese_definition, should_refresh_chinese_definition
 from app.services.excel_importer import parse_preview_from_excel, parse_words_from_preview
 from app.services.audio_storage import audio_candidates_with_dictionary, is_local_audio_url, store_audio_candidate
 from app.services.ai_image_generation import generate_dashscope_prompt_image, generate_word_image
@@ -80,8 +80,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260705-001"
-DEFAULT_PAGE_VERSION = "v20260705.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260705-002"
+DEFAULT_PAGE_VERSION = "v20260705.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2781,13 +2781,19 @@ def vue_update_word_field(
 async def vue_refresh_word(
     word_id: int,
     edit_token: str = Form(default=""),
+    list_id: int | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     require_word_write_access(edit_token)
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
-    await enrich_word(db, word)
+    apply_word_resource(db, word, commit=False, include_image=False)
+    await apply_spb_details_to_word(db, word, list_id=list_id)
+    db.add(word)
+    db.commit()
+    db.refresh(word)
+    await enrich_word(db, word, include_images=False)
     remember_word_resource(db, word, commit=True)
     return {"ok": True, "word": serialize_word(word)}
 
@@ -3889,9 +3895,13 @@ def lists_payload(db: Session) -> dict[str, Any]:
 
 def spb_word_lists_for_group(db: Session, group: dict[str, Any]) -> list[WordList]:
     prefix = str(group["prefix"])
+    group_model = db.scalar(select(WordListGroup).where(WordListGroup.name == prefix).limit(1))
+    conditions = [WordList.name == prefix, WordList.name.like(f"{prefix}-%")]
+    if group_model:
+        conditions.append(WordList.group_id == group_model.id)
     return db.scalars(
         select(WordList)
-        .where(or_(WordList.name == prefix, WordList.name.like(f"{prefix}-%")))
+        .where(or_(*conditions))
         .order_by(WordList.sequence_offset.asc(), WordList.name.asc(), WordList.id.asc())
     ).all()
 
@@ -3957,7 +3967,6 @@ def serialize_spb_word_bank_group(db: Session, group: dict[str, Any]) -> dict[st
         "sync_note": sync_note,
         "total_count": total_count,
         "list_count": len(cards),
-        "missing_detail_count": spb_missing_detail_count(db, group) if synced else 0,
         "cards": cards,
     }
 
@@ -4490,6 +4499,131 @@ async def fetch_spb_word_detail_from_miniprogram(row: dict[str, Any], group: dic
     return None
 
 
+def all_spb_word_bank_groups() -> list[dict[str, Any]]:
+    groups: list[dict[str, Any]] = []
+    for collection in SPB_WORD_BANK_COLLECTIONS:
+        groups.extend(collection.get("groups", []))
+    return groups
+
+
+def spb_group_matches_name(group: dict[str, Any], name: str | None) -> bool:
+    prefix = str(group.get("prefix") or "").strip()
+    text_value = str(name or "").strip()
+    return bool(prefix and (text_value == prefix or text_value.startswith(f"{prefix}-")))
+
+
+def spb_group_from_word_list(db: Session, word_list: WordList | None) -> dict[str, Any] | None:
+    if not word_list:
+        return None
+    group_name = None
+    if word_list.group_id:
+        word_list_group = db.get(WordListGroup, word_list.group_id)
+        group_name = word_list_group.name if word_list_group else None
+    for group in all_spb_word_bank_groups():
+        if spb_group_matches_name(group, word_list.name) or spb_group_matches_name(group, group_name):
+            return group
+    return None
+
+
+def spb_candidate_groups_for_word(db: Session, word: Word, list_id: int | None = None) -> list[dict[str, Any]]:
+    groups: list[dict[str, Any]] = []
+
+    def add_group(group: dict[str, Any] | None) -> None:
+        if group and all(existing.get("prefix") != group.get("prefix") for existing in groups):
+            groups.append(group)
+
+    if list_id:
+        add_group(spb_group_from_word_list(db, db.get(WordList, list_id)))
+
+    word_lists = db.scalars(
+        select(WordList)
+        .join(WordListItem, WordListItem.word_list_id == WordList.id)
+        .where(WordListItem.word_id == word.id)
+        .order_by(WordList.id.asc())
+    ).all()
+    for word_list in word_lists:
+        add_group(spb_group_from_word_list(db, word_list))
+    return groups
+
+
+def find_spb_source_row_for_word(group: dict[str, Any], word_text: str | None) -> dict[str, Any] | None:
+    normalized_word = normalize_resource_word(word_text)
+    if not normalized_word:
+        return None
+    rows, _source_path = load_spb_source_rows(group)
+    return next((row for row in rows if normalize_resource_word(row.get("word")) == normalized_word), None)
+
+
+async def apply_spb_details_to_word(db: Session, word: Word, *, list_id: int | None = None) -> bool:
+    changed = False
+    for group in spb_candidate_groups_for_word(db, word, list_id):
+        row = find_spb_source_row_for_word(group, word.word)
+        if not row:
+            continue
+        prepared = dict(row)
+        if spb_miniprogram_authorization_configured() and prepared.get("spb_word_id"):
+            detail = await fetch_spb_word_detail_from_miniprogram(prepared, group)
+            if isinstance(detail, dict):
+                detail_text_fields = spb_text_fields_from_payload(detail)
+                if detail_text_fields:
+                    prepared["spb_text_source"] = "spb-miniprogram"
+                prepared.update(spb_audio_urls_from_payload(detail))
+                prepared.update(detail_text_fields)
+
+        prepared_rows = await prepare_spb_rows_with_local_audio([prepared], group)
+        prepared = prepared_rows[0] if prepared_rows else prepared
+        if apply_spb_text_fields_to_word(word, prepared):
+            changed = True
+        if apply_imported_local_audio(word, prepared):
+            changed = True
+        if changed:
+            remember_word_resource(
+                db,
+                word,
+                american_audio_source=prepared.get("american_audio_url_source"),
+                british_audio_source=prepared.get("british_audio_url_source"),
+                override_text=bool(prepared.get("spb_text_source")),
+                override_media=bool(prepared.get("american_audio_url_source") or prepared.get("british_audio_url_source")),
+                commit=False,
+            )
+            return True
+    return changed
+
+
+def apply_spb_text_fields_to_word(word: Word, row: dict[str, Any]) -> bool:
+    changed = False
+    for field in ("phonetic", "part_of_speech"):
+        value = str(row.get(field) or "").strip()
+        if value and not (getattr(word, field, None) or "").strip():
+            setattr(word, field, value)
+            changed = True
+
+    for field, lock_field in (
+        ("english_definition", "english_definition_locked"),
+        ("english_example", "english_example_locked"),
+    ):
+        value = str(row.get(field) or "").strip()
+        if value and not (getattr(word, field, None) or "").strip():
+            setattr(word, field, value)
+            setattr(word, lock_field, True)
+            changed = True
+
+    chinese_value = str(row.get("chinese_definition") or "").strip()
+    if chinese_value:
+        chinese_value = (
+            naturalize_chinese_definition(word.word, word.english_definition or row.get("english_definition"), chinese_value)
+            or chinese_value
+        )
+    if chinese_value and (
+        not (word.chinese_definition or "").strip()
+        or should_refresh_chinese_definition(word.word, word.chinese_definition, word.english_definition)
+    ):
+        word.chinese_definition = chinese_value
+        word.chinese_definition_locked = True
+        changed = True
+    return changed
+
+
 def import_spb_word_bank_rows(db: Session, group: dict[str, Any], source_rows: list[dict[str, Any]]) -> tuple[list[int], list[WordList]]:
     chunk_size = 500
     base_name = clean_list_name(str(group["prefix"]))
@@ -4507,7 +4641,12 @@ def import_spb_word_bank_rows(db: Session, group: dict[str, Any], source_rows: l
         split_group = get_or_create_word_list_group_by_name(db, base_name)
         for chunk_index in range(0, len(rows), chunk_size):
             chunk_number = (chunk_index // chunk_size) + 1
-            word_list = get_or_create_word_list_by_name(db, f"{base_name}-{chunk_number}")
+            word_list = get_or_create_spb_word_list(
+                db,
+                f"{base_name}-{chunk_number}",
+                group_id=split_group.id,
+                sequence_offset=chunk_index,
+            )
             clear_word_list_items(db, word_list.id)
             word_list.group_id = split_group.id
             word_list.sequence_offset = chunk_index
@@ -6376,6 +6515,41 @@ def get_or_create_word_list_by_name(db: Session, name: str) -> WordList:
         db.add(word_list)
         db.commit()
         db.refresh(word_list)
+    return word_list
+
+
+def get_or_create_spb_word_list(
+    db: Session,
+    name: str,
+    *,
+    group_id: int | None,
+    sequence_offset: int,
+) -> WordList:
+    cleaned_name = clean_list_name(name)
+    word_list = None
+    if group_id:
+        word_list = db.scalar(
+            select(WordList)
+            .where(
+                WordList.group_id == group_id,
+                WordList.sequence_offset == sequence_offset,
+            )
+            .order_by(WordList.id.asc())
+            .limit(1)
+        )
+    if not word_list:
+        word_list = db.scalar(
+            select(WordList).where(WordList.name == cleaned_name).order_by(WordList.id.asc()).limit(1)
+        )
+    if not word_list:
+        word_list = WordList(name=cleaned_name, display_order=next_word_list_display_order(db))
+        db.add(word_list)
+    if group_id and word_list.group_id != group_id:
+        word_list.group_id = group_id
+    if word_list.sequence_offset != sequence_offset:
+        word_list.sequence_offset = sequence_offset
+    db.commit()
+    db.refresh(word_list)
     return word_list
 
 

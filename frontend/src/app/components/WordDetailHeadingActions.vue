@@ -13,6 +13,6 @@ defineProps({
 
 <template>
   <div class="detail-heading-actions">
-    <button v-if="canEdit" type="button" @click="refreshWord">重新补全</button>
+    <button v-if="canEdit" type="button" @click="refreshWord">补全当前词</button>
   </div>
 </template>
