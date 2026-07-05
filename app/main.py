@@ -4211,7 +4211,7 @@ def normalize_spb_word_rows(values: list[Any], group: dict[str, Any]) -> list[di
     seen: set[str] = set()
     for value in values:
         raw = spb_word_text_from_source_value(value)
-        word = normalize_spb_source_word_text(raw)
+        word, alternate_spellings = split_spb_word_spellings(raw)
         if not is_valid_spb_word_text(word):
             continue
         normalized = normalize_resource_word(word).casefold()
@@ -4225,6 +4225,8 @@ def normalize_spb_word_rows(values: list[Any], group: dict[str, Any]) -> list[di
             "spb_product_id": group.get("spb_product_id"),
             "spb_kernel": value.get("kernel") if isinstance(value, dict) else None,
         }
+        if alternate_spellings:
+            row["alternate_spellings"] = alternate_spellings
         row.update(spb_audio_urls_from_payload(value))
         text_fields = spb_text_fields_from_payload(value)
         if text_fields:
@@ -4240,6 +4242,22 @@ SPB_WORD_PUNCTUATION = {" ", "'", "’", "-", "‐", "‑", "–", "—", "."}
 def normalize_spb_source_word_text(value: Any) -> str:
     text = " ".join(str(value or "").strip().split())
     return unicodedata.normalize("NFC", text)[:128]
+
+
+def split_spb_word_spellings(value: Any) -> tuple[str, str | None]:
+    text = normalize_spb_source_word_text(value)
+    if "/" not in text and "／" not in text:
+        return text, None
+
+    candidates = [
+        normalize_spb_source_word_text(part)
+        for part in re.split(r"[/／]+", text)
+        if normalize_spb_source_word_text(part)
+    ]
+    valid_spellings = [part for part in candidates if is_valid_spb_word_text(part)]
+    if not valid_spellings:
+        return text, None
+    return valid_spellings[0], "\n".join(valid_spellings[1:]) or None
 
 
 def is_valid_spb_word_text(word: str) -> bool:
