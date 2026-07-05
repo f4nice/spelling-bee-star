@@ -3234,6 +3234,13 @@ def spb_page(request: Request, db: Session = Depends(get_db)):
     return vue_shell(request, db, "spb")
 
 
+@app.get("/spb/{collection_key}", response_class=HTMLResponse)
+def spb_collection_page(collection_key: str, request: Request, db: Session = Depends(get_db)):
+    if collection_key not in {"team"}:
+        raise HTTPException(status_code=404, detail="SPB collection not found")
+    return vue_shell(request, db, f"spb/{collection_key}")
+
+
 SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
     {
         "key": "beginner",

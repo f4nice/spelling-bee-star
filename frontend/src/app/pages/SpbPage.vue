@@ -24,10 +24,9 @@ const syncNotice = ref("");
 const collections = computed(() => pageData.value.collections || []);
 const activeCollection = computed(
   () =>
-    collections.value.find((collection) => collection.key === INDIVIDUAL_COLLECTION_KEY) ||
-    (pageData.value.collection?.key === INDIVIDUAL_COLLECTION_KEY ? pageData.value.collection : null) ||
-    collections.value[0] ||
     pageData.value.collection ||
+    collections.value.find((collection) => collection.key === INDIVIDUAL_COLLECTION_KEY) ||
+    collections.value[0] ||
     {},
 );
 const groups = computed(() => activeCollection.value.groups || pageData.value.groups || []);
@@ -105,7 +104,7 @@ async function syncGroup(group) {
     const payload = await fetchJson(routeApiPaths.spbSync(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ collection: INDIVIDUAL_COLLECTION_KEY, key: group.key }),
+      body: JSON.stringify({ collection: activeCollection.value.key || INDIVIDUAL_COLLECTION_KEY, key: group.key }),
       skipCache: true,
     });
     pageData.value = payload;

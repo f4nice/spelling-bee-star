@@ -15,9 +15,9 @@ const DEFAULT_SHELL_CONTEXT = {
   sidebarChallenges: [],
   learningGrowth: DEFAULT_LEARNING_GROWTH,
   versionMatrix: {
-    version: "BIZ-REL-20260705-008",
+    version: "BIZ-REL-20260705-009",
     releaseName: "Vue 全站版",
-    pageVersion: "v20260705.8",
+    pageVersion: "v20260705.9",
     footerText: "SpeakEasy",
     modules: [],
   },

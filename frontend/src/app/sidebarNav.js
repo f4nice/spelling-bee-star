@@ -4,12 +4,17 @@ export const sidebarNavItems = [
   { label: "英文小报", path: "/newspaper", routePrefix: "newspaper" },
   { label: "好词好句", path: "/booklearner", routes: ["booklearner", "booklearnerQuotes", "booklearnerUpload", "booklearnerDetail"] },
   { label: "科学探索", path: "/booklearner/science", routes: ["booklearnerScienceHome", "booklearnerScience"] },
-  { label: "SPB", path: "/spb", routes: ["spb"] },
+  { label: "SPB-个人赛冠军词库", path: "/spb", routes: ["spb"], collection: "individual" },
+  { label: "SPB-团队赛冠军词组", path: "/spb/team", routes: ["spb"], collection: "team" },
   { label: "我的生词本", path: "/wrong-words", routes: ["wrongWords"], countKey: "wrongWordCount" },
 ];
 
 export function isSidebarNavItemActive(item, route) {
-  if (item.routes?.includes(route.name)) return true;
+  if (item.routes?.includes(route.name)) {
+    if (!item.collection) return true;
+    const routeCollection = route.params?.collection || "individual";
+    return routeCollection === item.collection;
+  }
   return Boolean(item.routePrefix && route.name.startsWith(item.routePrefix));
 }
 

@@ -10,8 +10,8 @@ export const coreRouteLoaders = {
     data.value = await fetchJson(routeApiPaths.growth());
   },
 
-  async spb({ data }) {
-    data.value = await fetchJson(routeApiPaths.spb());
+  async spb({ route, data }) {
+    data.value = await fetchJson(routeApiPaths.spb(route));
   },
 
   async challengeDay({ route, data }) {

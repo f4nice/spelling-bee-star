@@ -1,7 +1,7 @@
 export const routeApiPaths = {
   home: () => "/api/vue/home",
   growth: () => "/api/vue/growth",
-  spb: () => "/api/vue/spb",
+  spb: (route = {}) => `/api/vue/spb?collection=${encodeURIComponent(route.params?.collection || "individual")}`,
   spbSync: () => "/api/vue/spb/sync",
   lists: () => "/api/vue/lists",
   listSearch: (query) => `/api/vue/lists/search?q=${encodeURIComponent(query)}`,
