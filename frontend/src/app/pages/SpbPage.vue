@@ -15,7 +15,7 @@ const props = defineProps({
   },
 });
 
-const activeCollectionKey = ref("");
+const INDIVIDUAL_COLLECTION_KEY = "individual";
 const activeKey = ref("");
 const pageData = ref(props.data);
 const syncingKey = ref("");
@@ -24,9 +24,10 @@ const syncNotice = ref("");
 const collections = computed(() => pageData.value.collections || []);
 const activeCollection = computed(
   () =>
-    collections.value.find((collection) => collection.key === activeCollectionKey.value) ||
-    pageData.value.collection ||
+    collections.value.find((collection) => collection.key === INDIVIDUAL_COLLECTION_KEY) ||
+    (pageData.value.collection?.key === INDIVIDUAL_COLLECTION_KEY ? pageData.value.collection : null) ||
     collections.value[0] ||
+    pageData.value.collection ||
     {},
 );
 const groups = computed(() => activeCollection.value.groups || pageData.value.groups || []);
@@ -42,15 +43,6 @@ watch(
   (nextData) => {
     pageData.value = nextData;
   },
-);
-
-watch(
-  collections,
-  (nextCollections) => {
-    if (nextCollections.some((collection) => collection.key === activeCollectionKey.value)) return;
-    activeCollectionKey.value = pageData.value.collection?.key || nextCollections[0]?.key || "individual";
-  },
-  { immediate: true },
 );
 
 watch(
@@ -73,24 +65,6 @@ function groupMeta(group) {
   if (group.cached_source_count) return `缓存可导入 ${group.cached_source_count} 个单词`;
   if (group.sync_ready) return "可从小程序接口同步";
   return "等待获取词库";
-}
-
-function collectionStatusLabel(collection) {
-  if (collection.total_count > 0) return "已同步";
-  if (collection.cached_source_count > 0) return "有缓存";
-  return "待获取";
-}
-
-function collectionMeta(collection) {
-  if (collection.total_count > 0) return `${collection.total_count} 个单词 · ${collection.list_count} 个分表`;
-  if (collection.cached_source_count > 0) return `缓存可导入 ${collection.cached_source_count} 个`;
-  return collection.sync_note || "等待获取词库";
-}
-
-function openCollection(collection) {
-  activeCollectionKey.value = collection.key;
-  activeKey.value = collection.groups?.find((group) => group.total_count > 0)?.key || collection.groups?.[0]?.key || "";
-  syncNotice.value = "";
 }
 
 function openGroup(group) {
@@ -131,11 +105,10 @@ async function syncGroup(group) {
     const payload = await fetchJson(routeApiPaths.spbSync(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ collection: activeCollection.value.key || "individual", key: group.key }),
+      body: JSON.stringify({ collection: INDIVIDUAL_COLLECTION_KEY, key: group.key }),
       skipCache: true,
     });
     pageData.value = payload;
-    activeCollectionKey.value = payload.collection?.key || activeCollectionKey.value;
     activeKey.value = group.key;
     syncNotice.value = payload.message || "词库已同步。";
   } catch (error) {
@@ -165,44 +138,6 @@ async function syncGroup(group) {
           分表
         </span>
       </div>
-    </section>
-
-    <section class="panel spb-collection-panel">
-      <div class="spb-collection-hero">
-        <div>
-          <p class="section-kicker">WORD LIBRARY</p>
-          <h2>SPB 词库中心</h2>
-          <span>{{ activeCollection.name || "个人赛冠军词库" }}</span>
-        </div>
-        <div class="spb-hero-picture" aria-hidden="true">
-          <div class="spb-hero-book">
-            <span>S</span>
-            <span>P</span>
-            <span>B</span>
-          </div>
-          <div class="spb-hero-ribbon"></div>
-          <div class="spb-hero-lines">
-            <i></i>
-            <i></i>
-            <i></i>
-          </div>
-        </div>
-      </div>
-
-      <section class="spb-collection-grid" aria-label="SPB 词库分类">
-        <button
-          v-for="collectionItem in collections"
-          :key="collectionItem.key"
-          class="spb-collection-card"
-          :class="{ active: activeCollection?.key === collectionItem.key, synced: collectionItem.total_count > 0 }"
-          type="button"
-          @click="openCollection(collectionItem)"
-        >
-          <span>{{ collectionStatusLabel(collectionItem) }}</span>
-          <strong>{{ collectionItem.name }}</strong>
-          <small>{{ collectionMeta(collectionItem) }}</small>
-        </button>
-      </section>
     </section>
 
     <section v-if="groups.length" class="panel spb-category-panel">

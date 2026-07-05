@@ -80,8 +80,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260705-002"
-DEFAULT_PAGE_VERSION = "v20260705.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260705-003"
+DEFAULT_PAGE_VERSION = "v20260705.3"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -4456,7 +4456,12 @@ async def prepare_spb_rows_with_local_audio(rows: list[dict[str, Any]], group: d
                     detail_text_fields = spb_text_fields_from_payload(detail)
                     if detail_text_fields:
                         prepared["spb_text_source"] = "spb-miniprogram"
-                    for key, value in {**spb_audio_urls_from_payload(detail), **detail_text_fields}.items():
+                    detail_audio_fields = spb_audio_urls_from_payload(detail)
+                    if detail_audio_fields.get("american_audio_url"):
+                        prepared["american_audio_url_source"] = "spb-miniprogram"
+                    if detail_audio_fields.get("british_audio_url"):
+                        prepared["british_audio_url_source"] = "spb-miniprogram"
+                    for key, value in {**detail_audio_fields, **detail_text_fields}.items():
                         prepared[key] = prepared.get(key) or value
             for accent, field_name in (("us", "american_audio_url"), ("gb", "british_audio_url")):
                 audio_url = str(prepared.get(field_name) or "").strip()
@@ -4567,7 +4572,12 @@ async def apply_spb_details_to_word(db: Session, word: Word, *, list_id: int | N
                 detail_text_fields = spb_text_fields_from_payload(detail)
                 if detail_text_fields:
                     prepared["spb_text_source"] = "spb-miniprogram"
-                prepared.update(spb_audio_urls_from_payload(detail))
+                detail_audio_fields = spb_audio_urls_from_payload(detail)
+                if detail_audio_fields.get("american_audio_url"):
+                    prepared["american_audio_url_source"] = "spb-miniprogram"
+                if detail_audio_fields.get("british_audio_url"):
+                    prepared["british_audio_url_source"] = "spb-miniprogram"
+                prepared.update(detail_audio_fields)
                 prepared.update(detail_text_fields)
 
         prepared_rows = await prepare_spb_rows_with_local_audio([prepared], group)
