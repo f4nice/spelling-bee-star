@@ -5728,7 +5728,11 @@ def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]
             if existing.word != word_text:
                 existing.word = word_text
             existing.phonetic = row.get("phonetic") or existing.phonetic
-            existing.alternate_spellings = merge_spellings(existing.alternate_spellings, row.get("alternate_spellings"))
+            existing.alternate_spellings = merge_spellings(
+                existing.alternate_spellings,
+                row.get("alternate_spellings"),
+                primary=word_text,
+            )
             existing.part_of_speech = row.get("part_of_speech") or existing.part_of_speech
             existing.english_definition = row.get("english_definition") or existing.english_definition
             existing.english_definition_locked = existing.english_definition_locked or bool(row.get("english_definition"))
@@ -5745,7 +5749,7 @@ def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]
             word = Word(
                 word=word_text,
                 phonetic=row.get("phonetic"),
-                alternate_spellings=row.get("alternate_spellings"),
+                alternate_spellings=merge_spellings(None, row.get("alternate_spellings"), primary=word_text),
                 part_of_speech=row.get("part_of_speech"),
                 english_definition=row.get("english_definition"),
                 english_definition_locked=bool(row.get("english_definition")),
@@ -5846,16 +5850,17 @@ def apply_imported_local_audio(word: Word, row: dict[str, Any]) -> bool:
     return changed
 
 
-def merge_spellings(existing: str | None, incoming: str | None) -> str | None:
+def merge_spellings(existing: str | None, incoming: str | None, *, primary: str | None = None) -> str | None:
     values: list[str] = []
     seen: set[str] = set()
+    primary_normalized = unicodedata.normalize("NFC", (primary or "").strip()).casefold()
     for text in (existing, incoming):
         if not text:
             continue
         for item in re.split(r"[,;/；，、\n\r]+", text):
             spelling = item.strip()
-            normalized = spelling.lower()
-            if spelling and normalized not in seen:
+            normalized = unicodedata.normalize("NFC", spelling).casefold()
+            if spelling and normalized != primary_normalized and normalized not in seen:
                 seen.add(normalized)
                 values.append(spelling)
     return "\n".join(values) if values else None
