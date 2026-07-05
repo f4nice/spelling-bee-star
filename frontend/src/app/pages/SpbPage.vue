@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
@@ -20,6 +20,8 @@ const activeKey = ref("");
 const pageData = ref(props.data);
 const syncingKey = ref("");
 const syncNotice = ref("");
+const syncJob = ref(null);
+let syncPollTimer = null;
 
 const collections = computed(() => pageData.value.collections || []);
 const activeCollection = computed(
@@ -36,6 +38,28 @@ const activeGroup = computed(
 );
 const totalSyncedWords = computed(() => syncedGroups.value.reduce((total, group) => total + Number(group.total_count || 0), 0));
 const totalSyncedLists = computed(() => syncedGroups.value.reduce((total, group) => total + Number(group.list_count || 0), 0));
+const activeSyncJob = computed(() => {
+  if (!syncJob.value || syncJob.value.key !== activeGroup.value?.key) return null;
+  return syncJob.value;
+});
+const syncProgressPercent = computed(() => {
+  const job = activeSyncJob.value;
+  if (!job) return 0;
+  if (job.status === "complete") return 100;
+  if (job.stage === "importing") return 96;
+  const total = Number(job.total || 0);
+  const processed = Number(job.processed || 0);
+  return total > 0 ? Math.max(4, Math.min(95, Math.round((processed / total) * 100))) : 4;
+});
+const syncProgressLabel = computed(() => {
+  const job = activeSyncJob.value;
+  if (!job) return "";
+  const total = Number(job.total || 0);
+  const processed = Number(job.processed || 0);
+  if (job.status === "complete") return "100%";
+  if (job.stage === "importing") return "写入中";
+  return total > 0 ? `${processed} / ${total}` : "排队中";
+});
 
 watch(
   () => props.data,
@@ -97,9 +121,45 @@ function syncButtonText(group) {
   return "检查同步";
 }
 
+function clearSyncPoll() {
+  if (syncPollTimer) {
+    window.clearTimeout(syncPollTimer);
+    syncPollTimer = null;
+  }
+}
+
+async function pollSyncJob(jobId, groupKey) {
+  clearSyncPoll();
+  try {
+    const payload = await fetchJson(routeApiPaths.spbSyncStatus(jobId), { skipCache: true });
+    if (payload.job) syncJob.value = payload.job;
+    if (payload.collection) {
+      pageData.value = payload;
+      activeKey.value = groupKey;
+    }
+    const status = payload.job?.status;
+    if (status === "complete") {
+      syncingKey.value = "";
+      syncNotice.value = payload.message || "词库已同步。";
+      return;
+    }
+    if (status === "failed") {
+      syncingKey.value = "";
+      syncNotice.value = payload.message || "同步失败，请稍后再试。";
+      return;
+    }
+    syncPollTimer = window.setTimeout(() => pollSyncJob(jobId, groupKey), 1200);
+  } catch (error) {
+    syncingKey.value = "";
+    syncNotice.value = error.message || "同步状态获取失败，请稍后再试。";
+  }
+}
+
 async function syncGroup(group) {
   if (!canSyncGroup(group) || syncingKey.value) return;
+  clearSyncPoll();
   syncingKey.value = group.key;
+  syncJob.value = null;
   syncNotice.value = group.sync_ready || group.cached_source_count ? "" : group.sync_note || "";
   try {
     const payload = await fetchJson(routeApiPaths.spbSync(), {
@@ -108,15 +168,23 @@ async function syncGroup(group) {
       body: JSON.stringify({ collection: activeCollection.value.key || INDIVIDUAL_COLLECTION_KEY, key: group.key }),
       skipCache: true,
     });
-    pageData.value = payload;
+    if (payload.collection) pageData.value = payload;
     activeKey.value = group.key;
+    if (payload.job) {
+      syncJob.value = payload.job;
+      syncNotice.value = payload.message || "同步任务已开始。";
+      pollSyncJob(payload.job.id, group.key);
+      return;
+    }
     syncNotice.value = payload.message || "词库已同步。";
+    syncingKey.value = "";
   } catch (error) {
     syncNotice.value = error.message || "同步失败，请稍后再试。";
-  } finally {
     syncingKey.value = "";
   }
 }
+
+onBeforeUnmount(clearSyncPoll);
 
 </script>
 
@@ -191,6 +259,23 @@ async function syncGroup(group) {
       <p v-if="syncNotice || activeGroup.sync_note" class="notice spb-sync-notice">
         {{ syncNotice || activeGroup.sync_note }}
       </p>
+
+      <div
+        v-if="activeSyncJob"
+        class="spb-sync-progress"
+        :class="{ 'is-syncing': activeSyncJob.status === 'queued' || activeSyncJob.status === 'running', 'has-error': activeSyncJob.status === 'failed', 'is-complete': activeSyncJob.status === 'complete' }"
+      >
+        <div class="spb-sync-progress-meta">
+          <span>{{ activeSyncJob.message || "正在同步词库..." }}</span>
+          <strong>{{ syncProgressLabel }}</strong>
+        </div>
+        <div class="sync-progress" aria-label="SPB 同步进度">
+          <span :style="{ width: `${syncProgressPercent}%` }"></span>
+        </div>
+        <p v-if="activeSyncJob.current_word" class="spb-sync-progress-current">
+          当前处理：{{ activeSyncJob.current_word }}
+        </p>
+      </div>
 
       <div v-if="activeGroup.cards?.length" class="spb-list-grid">
         <article v-for="card in activeGroup.cards" :key="card.list.id" class="spb-list-card">

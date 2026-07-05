@@ -81,8 +81,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260705-005"
-DEFAULT_PAGE_VERSION = "v20260705.5"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260705-011"
+DEFAULT_PAGE_VERSION = "v20260705.11"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -167,6 +167,8 @@ SCIENCE_PUBLIC_BOOK_FALLBACKS = [
 ]
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
 LIST_AI_IMAGE_JOBS: dict[str, dict] = {}
+SPB_SYNC_JOBS: dict[str, dict] = {}
+SPB_SYNC_BATCH_SIZE = 80
 LIST_AI_IMAGE_DEFAULT_MODEL = "wan2.6-t2i"
 LIST_AI_IMAGE_MODEL_LABELS = {
     "wan2.7-image-pro": "阿里 · wan2.7-image-pro",
@@ -3566,6 +3568,124 @@ def spb_payload(db: Session, collection_key: str | None = None) -> dict[str, Any
     }
 
 
+def update_spb_sync_job(job_id: str, **changes) -> None:
+    with IMAGE_SYNC_LOCK:
+        job = SPB_SYNC_JOBS.get(job_id)
+        if not job:
+            return
+        job.update(changes)
+        job["updated_at"] = datetime.utcnow().isoformat()
+
+
+def spb_sync_job_snapshot(job_id: str) -> dict[str, Any] | None:
+    with IMAGE_SYNC_LOCK:
+        job = SPB_SYNC_JOBS.get(job_id)
+        return dict(job) if job else None
+
+
+def spb_sync_response(db: Session, job: dict[str, Any]) -> dict[str, Any]:
+    response = spb_payload(db, str(job.get("collection") or "individual"))
+    response["job"] = dict(job)
+    response["message"] = job.get("message") or ""
+    response["source"] = job.get("source") or ""
+    return response
+
+
+def run_spb_sync_job(
+    job_id: str,
+    collection_key: str,
+    group_key: str,
+    rows: list[dict[str, Any]],
+    source_name: str,
+) -> None:
+    db = SessionLocal()
+    try:
+        collection, group = spb_collection_group_by_keys(collection_key, group_key)
+        total = len(rows)
+        prepared_rows: list[dict[str, Any]] = []
+        update_spb_sync_job(
+            job_id,
+            status="running",
+            stage="preparing",
+            total=total,
+            processed=0,
+            current_word="",
+            message=f"正在准备 {group['title']}，共 {total} 个单词。",
+        )
+        for start in range(0, total, SPB_SYNC_BATCH_SIZE):
+            batch = rows[start : start + SPB_SYNC_BATCH_SIZE]
+            first_word = str(batch[0].get("word") or "") if batch else ""
+            update_spb_sync_job(
+                job_id,
+                current_word=first_word,
+                message=f"正在补充详情和下载小程序音频：{len(prepared_rows)} / {total}",
+            )
+            prepared_batch = asyncio.run(prepare_spb_rows_with_local_audio(batch, group))
+            prepared_rows.extend(prepared_batch)
+            update_spb_sync_job(
+                job_id,
+                processed=len(prepared_rows),
+                text_detail_count=sum(1 for row in prepared_rows if spb_has_text_fields(row)),
+                local_audio_count=sum(
+                    1
+                    for row in prepared_rows
+                    if is_local_audio_url(row.get("american_audio_url"))
+                    or is_local_audio_url(row.get("british_audio_url"))
+                ),
+                message=f"正在补充详情和下载小程序音频：{len(prepared_rows)} / {total}",
+            )
+
+        update_spb_sync_job(
+            job_id,
+            status="running",
+            stage="importing",
+            current_word="",
+            message="正在写入数据库并按 500 个单词拆分分表。",
+        )
+        text_detail_count = sum(1 for row in prepared_rows if spb_has_text_fields(row))
+        local_audio_count = sum(
+            1
+            for row in prepared_rows
+            if is_local_audio_url(row.get("american_audio_url")) or is_local_audio_url(row.get("british_audio_url"))
+        )
+        word_ids, split_lists = import_spb_word_bank_rows(db, group, prepared_rows)
+        if word_ids:
+            start_enrichment_thread(word_ids, include_images=False)
+        message = f"已同步 {group['title']}：{len(word_ids)} 个单词，{len(split_lists)} 个分表。"
+        if text_detail_count:
+            message += f" 已写入详情字段 {text_detail_count} 个。"
+        elif not spb_miniprogram_authorization_configured():
+            message += " 服务器未配置 SPB 小程序授权，暂时只能导入词表，不能读取小程序详情字段。"
+        if local_audio_count:
+            message += f" 已保存小程序音频 {local_audio_count} 个到本地。"
+        update_spb_sync_job(
+            job_id,
+            status="complete",
+            stage="complete",
+            processed=total,
+            current_word="",
+            word_count=len(word_ids),
+            list_count=len(split_lists),
+            text_detail_count=text_detail_count,
+            local_audio_count=local_audio_count,
+            message=message,
+            source=source_name,
+            collection=collection["key"],
+            key=group["key"],
+        )
+    except Exception as exc:
+        db.rollback()
+        update_spb_sync_job(
+            job_id,
+            status="failed",
+            stage="failed",
+            current_word="",
+            message=f"同步失败：{str(exc)[:240]}",
+        )
+    finally:
+        db.close()
+
+
 @app.get("/api/vue/spb")
 def vue_spb_api(collection: str = Query(default="individual"), db: Session = Depends(get_db)):
     return spb_payload(db, collection)
@@ -3595,27 +3715,48 @@ async def vue_spb_sync_api(request: Request, db: Session = Depends(get_db)):
             detail=detail,
         )
 
-    rows = await prepare_spb_rows_with_local_audio(rows, group)
-    text_detail_count = sum(1 for row in rows if spb_has_text_fields(row))
-    local_audio_count = sum(
-        1
-        for row in rows
-        if is_local_audio_url(row.get("american_audio_url")) or is_local_audio_url(row.get("british_audio_url"))
-    )
-    word_ids, split_lists = import_spb_word_bank_rows(db, group, rows)
-    if word_ids:
-        start_enrichment_thread(word_ids, include_images=False)
-    response = spb_payload(db, collection["key"])
-    message = f"已同步 {group['title']}：{len(word_ids)} 个单词，{len(split_lists)} 个分表。"
-    if text_detail_count:
-        message += f" 已写入详情字段 {text_detail_count} 个。"
-    elif not spb_miniprogram_authorization_configured():
-        message += " 服务器未配置 SPB 小程序授权，暂时只能导入词表，不能读取小程序详情字段。"
-    if local_audio_count:
-        message += f" 已保存小程序音频 {local_audio_count} 个到本地。"
-    response["message"] = message
-    response["source"] = source_path.name
-    return response
+    job_id = uuid4().hex
+    job = {
+        "id": job_id,
+        "collection": collection["key"],
+        "key": group["key"],
+        "title": group["title"],
+        "status": "queued",
+        "stage": "queued",
+        "total": len(rows),
+        "processed": 0,
+        "word_count": 0,
+        "list_count": 0,
+        "text_detail_count": 0,
+        "local_audio_count": 0,
+        "current_word": "",
+        "source": source_path.name,
+        "message": f"已创建同步任务：{group['title']}，共 {len(rows)} 个单词。",
+        "created_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    with IMAGE_SYNC_LOCK:
+        SPB_SYNC_JOBS[job_id] = job
+    Thread(
+        target=run_spb_sync_job,
+        args=(job_id, collection["key"], group["key"], rows, source_path.name),
+        daemon=True,
+    ).start()
+    return spb_sync_response(db, job)
+
+
+@app.get("/api/vue/spb/sync/{job_id}")
+def vue_spb_sync_status_api(job_id: str, db: Session = Depends(get_db)):
+    job = spb_sync_job_snapshot(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="同步任务不存在或已过期")
+    if job.get("status") in {"complete", "failed"}:
+        return spb_sync_response(db, job)
+    return {
+        "job": job,
+        "message": job.get("message") or "",
+        "source": job.get("source") or "",
+    }
 
 
 @app.post("/api/vue/spb/backfill-details")
@@ -4787,6 +4928,42 @@ async def apply_spb_details_to_word(db: Session, word: Word, *, list_id: int | N
     return changed
 
 
+async def spb_audio_options_for_word(db: Session, word: Word, accent: str, list_id: int | None = None) -> list[dict[str, str]]:
+    field_name = "british_audio_url" if accent == "gb" else "american_audio_url"
+    accent_label = "英式" if accent == "gb" else "美式"
+    options: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+
+    for group in spb_candidate_groups_for_word(db, word, list_id):
+        row = find_spb_source_row_for_word(group, word.word)
+        if not row:
+            continue
+        prepared = dict(row)
+        if spb_miniprogram_authorization_configured() and prepared.get("spb_word_id"):
+            detail = await fetch_spb_word_detail_from_miniprogram(prepared, group)
+            if isinstance(detail, dict):
+                detail_audio_fields = spb_audio_urls_from_payload(detail)
+                if detail_audio_fields.get("american_audio_url"):
+                    prepared["american_audio_url_source"] = "spb-miniprogram"
+                if detail_audio_fields.get("british_audio_url"):
+                    prepared["british_audio_url_source"] = "spb-miniprogram"
+                prepared.update(detail_audio_fields)
+
+        prepared_rows = await prepare_spb_rows_with_local_audio([prepared], group)
+        prepared = prepared_rows[0] if prepared_rows else prepared
+        audio_url = local_import_audio_url(prepared.get(field_name))
+        if audio_url and audio_url not in seen_urls:
+            seen_urls.add(audio_url)
+            options.append(
+                {
+                    "label": f"SPB小程序音频 · {accent_label} · {group.get('title') or '词库'}",
+                    "url": audio_url,
+                    "source": "spb-miniprogram",
+                }
+            )
+    return options
+
+
 def apply_spb_text_fields_to_word(word: Word, row: dict[str, Any]) -> bool:
     changed = False
     for field in ("phonetic", "part_of_speech"):
@@ -5533,6 +5710,8 @@ def word_image_view(word_id: int, db: Session = Depends(get_db)):
 async def word_audio_options(
     word_id: int,
     accent: str = Form(...),
+    source: str = Form(default="dictionary"),
+    list_id: str = Form(default=""),
     edit_token: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
@@ -5542,6 +5721,23 @@ async def word_audio_options(
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
+
+    selected_source = str(source or "dictionary").strip().lower()
+    source_list_id = None
+    if str(list_id or "").strip().isdigit():
+        source_list_id = int(str(list_id).strip())
+
+    if selected_source == "spb":
+        options = await spb_audio_options_for_word(db, word, accent, source_list_id)
+        if not options:
+            if not spb_candidate_groups_for_word(db, word, source_list_id):
+                error = "没有找到这个单词对应的 SPB 词库"
+            elif not spb_miniprogram_authorization_configured():
+                error = "服务器还没有配置 SPB 小程序授权，无法读取小程序音频"
+            else:
+                error = "没有从小程序拿到可用音频"
+            return {"ok": False, "word": word.word, "accent": accent, "source": "spb", "options": [], "error": error}
+        return {"ok": True, "word": word.word, "accent": accent, "source": "spb", "options": options}
 
     options = []
     current_audio_url = word.british_audio_url if accent == "gb" else word.american_audio_url
@@ -5560,8 +5756,8 @@ async def word_audio_options(
             options.append({"label": candidate["label"], "url": local_url})
 
     if not options:
-        return {"ok": False, "word": word.word, "accent": accent, "options": [], "error": "没有找到可用音频"}
-    return {"ok": True, "word": word.word, "accent": accent, "options": options}
+        return {"ok": False, "word": word.word, "accent": accent, "source": "dictionary", "options": [], "error": "没有找到可用音频"}
+    return {"ok": True, "word": word.word, "accent": accent, "source": "dictionary", "options": options}
 
 
 @app.post("/api/vue/words/{word_id}/audio-choice")

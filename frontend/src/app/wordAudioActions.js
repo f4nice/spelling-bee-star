@@ -2,8 +2,8 @@ import { fetchJson } from "./utils.js";
 import { wordApiPaths } from "./wordApiPaths.js";
 import { createAiAudioForm, createAudioChoiceForm, createAudioOptionsForm, createUploadedAudioForm } from "./wordAudioForms.js";
 
-export async function loadWordAudioOptions({ wordId, accent }) {
-  const form = createAudioOptionsForm(accent);
+export async function loadWordAudioOptions({ wordId, accent, source = "dictionary", listId = "" }) {
+  const form = createAudioOptionsForm(accent, source, listId);
   const result = await fetchJson(wordApiPaths.audioOptions(wordId), { method: "POST", body: form });
   if (result.error) throw new Error(result.error);
   return result.options || [];

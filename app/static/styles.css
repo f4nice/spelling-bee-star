@@ -3288,6 +3288,65 @@ a:focus-visible {
   margin: 0;
 }
 
+.spb-sync-progress {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(15, 127, 89, 0.16);
+  border-radius: 14px;
+  padding: 12px;
+  background: linear-gradient(135deg, #f8fffb 0%, #eff9f3 100%);
+}
+
+.spb-sync-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--accent-dark);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.spb-sync-progress-meta span {
+  min-width: 0;
+}
+
+.spb-sync-progress-meta strong {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.spb-sync-progress-current {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.spb-sync-progress.is-syncing .sync-progress span {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.24) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.24) 50%,
+    rgba(255, 255, 255, 0.24) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 22px 22px;
+  animation: sync-stripes 0.8s linear infinite;
+}
+
+.spb-sync-progress.has-error {
+  border-color: #ffd8d3;
+  background: #fff8f7;
+}
+
+.spb-sync-progress.has-error .sync-progress span {
+  background: var(--warn);
+}
+
 .spb-list-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

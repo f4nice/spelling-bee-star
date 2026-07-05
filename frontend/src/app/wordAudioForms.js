@@ -1,7 +1,9 @@
-export function createAudioOptionsForm(accent) {
+export function createAudioOptionsForm(accent, source = "dictionary", listId = "") {
   const form = new FormData();
   form.append("edit_token", "1");
   form.append("accent", accent);
+  form.append("source", source || "dictionary");
+  if (listId) form.append("list_id", listId);
   return form;
 }
 

@@ -22,8 +22,14 @@ export function useWordAudio({ data, loadRoute }) {
     audioOptions.value = { us: [], gb: [] };
   }
 
-  async function fetchAudioOptions(accent) {
-    await updateWordAudioOptions({ wordId: data.value.word.id, audioOptions, accent });
+  async function fetchAudioOptions(accent, source = "dictionary") {
+    await updateWordAudioOptions({
+      wordId: data.value.word.id,
+      audioOptions,
+      accent,
+      source,
+      listId: data.value.navigation?.list_id || "",
+    });
   }
 
   async function chooseAudio(accent, url) {

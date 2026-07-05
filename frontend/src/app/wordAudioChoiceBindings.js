@@ -1,7 +1,7 @@
 import { generateAiWordAudio, loadWordAudioOptions, saveUploadedWordAudio, saveWordAudioChoice } from "./wordAudioActions.js";
 
-export async function updateWordAudioOptions({ wordId, audioOptions, accent }) {
-  audioOptions.value[accent] = await loadWordAudioOptions({ wordId, accent });
+export async function updateWordAudioOptions({ wordId, audioOptions, accent, source = "dictionary", listId = "" }) {
+  audioOptions.value[accent] = await loadWordAudioOptions({ wordId, accent, source, listId });
 }
 
 export async function chooseWordAudioOption({ wordId, accent, url, loadRoute }) {

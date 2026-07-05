@@ -36,6 +36,7 @@ const props = defineProps({
 const emit = defineEmits(["close"]);
 
 const loadingOptions = ref(false);
+const loadingSpbOptions = ref(false);
 const savingSelection = ref(false);
 const generatingKey = ref("");
 const selectedFile = ref(null);
@@ -108,12 +109,25 @@ async function refreshOptions() {
   loadingOptions.value = true;
   notice.value = "";
   try {
-    await props.fetchAudioOptions(props.accent.key);
+    await props.fetchAudioOptions(props.accent.key, "dictionary");
     notice.value = "已更新可选音源";
   } catch (error) {
     notice.value = error.message || "获取音源失败";
   } finally {
     loadingOptions.value = false;
+  }
+}
+
+async function refreshSpbOptions() {
+  loadingSpbOptions.value = true;
+  notice.value = "";
+  try {
+    await props.fetchAudioOptions(props.accent.key, "spb");
+    notice.value = "已获取小程序音频候选，试听后可以保存。";
+  } catch (error) {
+    notice.value = error.message || "获取小程序音频失败";
+  } finally {
+    loadingSpbOptions.value = false;
   }
 }
 
@@ -216,11 +230,16 @@ onBeforeUnmount(clearPreviewUrl);
           <div class="audio-manager-section-head">
             <div>
               <h3>重新获取</h3>
-              <p>从多个词典音频源查找，试听后选择一个保存。</p>
+              <p>从多个词典音频源查找，也可以直接读取 SPB 小程序音频。</p>
             </div>
-            <button class="secondary-button" type="button" :disabled="loadingOptions" @click="refreshOptions">
-              {{ loadingOptions ? "获取中..." : "重新获取音源" }}
-            </button>
+            <div class="audio-manager-button-group">
+              <button class="secondary-button" type="button" :disabled="loadingOptions || loadingSpbOptions" @click="refreshOptions">
+                {{ loadingOptions ? "获取中..." : "重新获取音源" }}
+              </button>
+              <button class="secondary-button" type="button" :disabled="loadingOptions || loadingSpbOptions" @click="refreshSpbOptions">
+                {{ loadingSpbOptions ? "获取中..." : "获取小程序音频" }}
+              </button>
+            </div>
           </div>
           <div v-if="options.length" class="audio-manager-options">
             <article v-for="option in options" :key="option.url" class="audio-manager-option">
