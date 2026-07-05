@@ -61,6 +61,7 @@ function groupStatusLabel(group) {
 
 function groupMeta(group) {
   if (group.total_count > 0) return `${group.total_count} 个单词 · ${group.list_count} 个分表`;
+  if (group.source_url_configured) return `公开源可导入 ${group.source_count || 0} 个单词`;
   if (group.cached_source_count) return `缓存可导入 ${group.cached_source_count} 个单词`;
   if (group.sync_ready) return "可从小程序接口同步";
   return "等待获取词库";

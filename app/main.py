@@ -3314,7 +3314,7 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "subtitle": "Challenge Words",
         "status": "available",
         "prefix": "SPB个人赛冠军词库-挑战词汇",
-        "source_count": 1300,
+        "source_count": 1299,
         "source_file": "spb_individual_challenge_words.json",
         "spb_product_id": 7,
         "spb_flag": "CHALLENGE_WORDS",
@@ -3384,6 +3384,90 @@ SPB_BABY_WORD_BANK_GROUPS = [
 ]
 
 
+SPB_TEAM_WORD_BANK_GROUPS = [
+    {
+        "key": "team-beginner-basic",
+        "title": "小学组基础",
+        "subtitle": "Beginner Group(G1-G2)",
+        "status": "available",
+        "prefix": "SPB团队赛冠军词库-小学组基础",
+        "source_count": 1299,
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_BEGINNER_GROUP0_null.txt?v=1783238815790",
+        "spb_flag": "BEGINNER_GROUP",
+    },
+    {
+        "key": "team-beginner-intermediate",
+        "title": "小学组进阶",
+        "subtitle": "Intermediate Group(G3-G4)",
+        "status": "available",
+        "prefix": "SPB团队赛冠军词库-小学组进阶",
+        "source_count": 1900,
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_BEGINNER_GROUP1_null.txt?v=1783238948991",
+        "spb_flag": "BEGINNER_GROUP",
+    },
+    {
+        "key": "team-beginner-advanced",
+        "title": "小学组高阶",
+        "subtitle": "Advanced Group(G5-G6)",
+        "status": "available",
+        "prefix": "SPB团队赛冠军词库-小学组高阶",
+        "source_count": 2300,
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_BEGINNER_GROUP2_null.txt?v=1783238959379",
+        "spb_flag": "BEGINNER_GROUP",
+    },
+    {
+        "key": "team-beginner-core",
+        "title": "小学组核心词汇",
+        "subtitle": "Core Words",
+        "status": "available",
+        "prefix": "SPB团队赛冠军词库-小学组核心词汇",
+        "source_count": 500,
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_BEGINNER_GROUP0_true.txt?v=1783238968660",
+        "spb_flag": "BEGINNER_GROUP",
+    },
+    {
+        "key": "team-middle-all",
+        "title": "初中组全部词汇",
+        "subtitle": "Middle School(G7-G9)",
+        "status": "available",
+        "prefix": "SPB团队赛冠军词库-初中组全部词汇",
+        "source_count": 3398,
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Itso_middle_School_null.txt?v=1783238979259",
+        "spb_flag": "Itso_middle_School",
+    },
+    {
+        "key": "team-middle-core",
+        "title": "初中组核心词汇",
+        "subtitle": "Middle School Core Words",
+        "status": "available",
+        "prefix": "SPB团队赛冠军词库-初中组核心词汇",
+        "source_count": 1045,
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Itso_middle_School_true.txt?v=1783239007475",
+        "spb_flag": "Itso_middle_School",
+    },
+    {
+        "key": "team-high-all",
+        "title": "高中组全部词汇",
+        "subtitle": "High School(G10-G12)",
+        "status": "available",
+        "prefix": "SPB团队赛冠军词库-高中组全部词汇",
+        "source_count": 3298,
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Itso_high_School_null.txt?v=1783239024165",
+        "spb_flag": "Itso_high_School",
+    },
+    {
+        "key": "team-origin-all",
+        "title": "词源单词",
+        "subtitle": "Asian Languages",
+        "status": "available",
+        "prefix": "SPB团队赛冠军词库-词源单词",
+        "source_count": 120,
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Asian_Languages_null.txt?v=1783239042794",
+        "spb_flag": "Asian_Languages",
+    },
+]
+
+
 SPB_WORD_BANK_COLLECTIONS = [
     {
         "key": "individual",
@@ -3404,8 +3488,8 @@ SPB_WORD_BANK_COLLECTIONS = [
         "name": "团体赛冠军词库",
         "subtitle": "Team Competition Word Banks",
         "source_type": "itso_champion_thesaurus",
-        "groups": [],
-        "sync_note": "小程序公开产品接口暂未返回团体赛词库；拿到缓存或授权后会出现在这里。",
+        "groups": SPB_TEAM_WORD_BANK_GROUPS,
+        "sync_note": "已记录 SPB 公共团队赛词库源，可直接按组同步。",
     },
     {
         "key": "baby",
@@ -3985,8 +4069,13 @@ def serialize_spb_word_bank_group(db: Session, group: dict[str, Any]) -> dict[st
     total_count = sum(int(card.get("count") or 0) for card in cards)
     synced = total_count > 0
     cached_source_count = count_spb_cached_source_words(group)
+    source_url_configured = bool(str(group.get("source_url") or "").strip())
     authorization_configured = spb_miniprogram_authorization_configured()
-    sync_ready = group.get("status") != "locked" and not synced and (authorization_configured or cached_source_count > 0)
+    sync_ready = (
+        group.get("status") != "locked"
+        and not synced
+        and (authorization_configured or cached_source_count > 0 or source_url_configured)
+    )
     sync_note = spb_group_sync_note(group, synced, cached_source_count, authorization_configured)
     return {
         "key": group["key"],
@@ -3995,6 +4084,7 @@ def serialize_spb_word_bank_group(db: Session, group: dict[str, Any]) -> dict[st
         "status": "synced" if synced else group.get("status", "available"),
         "source_count": group.get("source_count") or cached_source_count or None,
         "cached_source_count": cached_source_count,
+        "source_url_configured": source_url_configured,
         "sync_ready": sync_ready,
         "sync_note": sync_note,
         "total_count": total_count,
@@ -4043,6 +4133,8 @@ def spb_group_sync_note(
         return "已同步到 SpeakEasy。"
     if group.get("status") == "locked":
         return "这组仍在小程序里锁定，暂时不能同步。"
+    if str(group.get("source_url") or "").strip():
+        return "已配置 SPB 公共源词库，可直接同步。"
     if authorization_configured:
         return "可从小程序接口同步；如果接口返回空结果，会自动尝试本地缓存。"
     if cached_source_count:
@@ -4178,7 +4270,23 @@ def fetch_spb_source_rows_from_miniprogram(group: dict[str, Any]) -> tuple[list[
     return [], Path(f"mini-program-{flag or product_id or group.get('key')}.json")
 
 
+def fetch_spb_source_rows_from_url(group: dict[str, Any]) -> tuple[list[dict[str, Any]], Path]:
+    source_url = str(group.get("source_url") or "").strip()
+    if not source_url:
+        return [], Path("")
+    payload = spb_download_source_payload(source_url)
+    rows = normalize_spb_word_rows(extract_spb_word_values(payload), group)
+    if rows:
+        source_name = Path(urlparse(source_url).path).name or f"{group.get('key') or 'source'}.json"
+        return rows, Path(source_name)
+    return [], Path(source_url)
+
+
 def load_spb_source_rows(group: dict[str, Any]) -> tuple[list[dict[str, Any]], Path]:
+    url_rows, url_source = fetch_spb_source_rows_from_url(group)
+    if url_rows:
+        return url_rows, url_source
+
     api_rows, api_source = fetch_spb_source_rows_from_miniprogram(group)
     if api_rows:
         return api_rows, api_source
