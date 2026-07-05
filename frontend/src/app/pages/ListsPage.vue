@@ -555,35 +555,39 @@ watch(wordListGroups, (groups) => {
         <h2>{{ displayedListTitle }}</h2>
         <span>{{ displayedListDescription }}</span>
       </div>
-      <div class="lists-section-meta">
-        <span>{{ displayedCards.length }} 个单词表</span>
-        <strong>{{ displayedWordCount }}</strong>
-        <span>个单词</span>
-      </div>
-      <button v-if="activeGroup" class="lists-action-button lists-return-button" type="button" @click="clearActiveWordListGroup">
-        <ArrowLeft :size="16" aria-hidden="true" />
-        <span>返回未归组</span>
-      </button>
-      <form v-if="activeGroup" class="word-list-group-delete-form" @submit.prevent="deleteActiveWordListGroup">
-        <label>
-          <span class="sr-only">删除单词组密码</span>
-          <input
-            v-model="groupDeletePassword"
-            type="password"
-            placeholder="输入密码删除"
-            autocomplete="current-password"
+      <div class="lists-table-actions">
+        <div class="lists-table-actions-row">
+          <div class="lists-section-meta">
+            <span>{{ displayedCards.length }} 个单词表</span>
+            <strong>{{ displayedWordCount }}</strong>
+            <span>个单词</span>
+          </div>
+          <button v-if="activeGroup" class="lists-action-button lists-return-button" type="button" @click="clearActiveWordListGroup">
+            <ArrowLeft :size="16" aria-hidden="true" />
+            <span>返回未归组</span>
+          </button>
+        </div>
+        <form v-if="activeGroup" class="word-list-group-delete-form" @submit.prevent="deleteActiveWordListGroup">
+          <label>
+            <span class="sr-only">删除单词组密码</span>
+            <input
+              v-model="groupDeletePassword"
+              type="password"
+              placeholder="输入密码删除"
+              autocomplete="current-password"
+            >
+          </label>
+          <button
+            class="word-list-group-delete-button"
+            type="submit"
+            :disabled="!trimmedGroupDeletePassword || isDeletingGroup"
           >
-        </label>
-        <button
-          class="word-list-group-delete-button"
-          type="submit"
-          :disabled="!trimmedGroupDeletePassword || isDeletingGroup"
-        >
-          <Trash2 :size="15" aria-hidden="true" />
-          <span>{{ isDeletingGroup ? "删除中" : "删除单词组" }}</span>
-        </button>
-        <span v-if="groupDeleteNotice" class="word-list-group-delete-notice">{{ groupDeleteNotice }}</span>
-      </form>
+            <Trash2 :size="15" aria-hidden="true" />
+            <span>{{ isDeletingGroup ? "删除中" : "删除单词组" }}</span>
+          </button>
+          <span v-if="groupDeleteNotice" class="word-list-group-delete-notice">{{ groupDeleteNotice }}</span>
+        </form>
+      </div>
     </div>
     <section v-if="displayedCards.length" class="word-grid lists-reorder-grid" role="list" @dragover.prevent>
       <WordListCard
@@ -806,9 +810,21 @@ watch(wordListGroups, (groups) => {
 }
 
 .word-list-groups-head > .lists-action-button,
-.lists-table-head > .lists-return-button {
-  align-self: start;
+.lists-table-actions {
   justify-self: end;
+}
+
+.lists-table-actions {
+  display: grid;
+  align-self: start;
+  gap: 8px;
+}
+
+.lists-table-actions-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .lists-return-button {
@@ -841,7 +857,6 @@ watch(wordListGroups, (groups) => {
 
 .word-list-group-delete-form {
   display: grid;
-  grid-column: 2 / -1;
   grid-template-columns: minmax(150px, 190px) auto;
   align-items: center;
   justify-self: end;
@@ -1108,7 +1123,7 @@ watch(wordListGroups, (groups) => {
 }
 
 .lists-table-head {
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   margin: 0;
 }
 
@@ -1252,6 +1267,20 @@ watch(wordListGroups, (groups) => {
   .lists-section-meta {
     justify-content: flex-start;
     min-width: 0;
+    width: 100%;
+  }
+
+  .lists-table-actions,
+  .lists-table-actions-row {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .lists-table-actions-row {
+    flex-direction: column;
+  }
+
+  .lists-table-actions .lists-return-button {
     width: 100%;
   }
 
