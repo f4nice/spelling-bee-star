@@ -3405,14 +3405,16 @@ a:focus-visible {
 
 .spb-list-count {
   display: grid;
-  justify-items: end;
+  place-items: center;
   gap: 2px;
   min-width: 74px;
+  min-height: 54px;
   border-radius: 999px;
   padding: 8px 11px;
   color: var(--accent-dark);
   background: #e9f8f1;
   line-height: 1;
+  text-align: center;
 }
 
 .spb-list-count strong {
@@ -8095,7 +8097,7 @@ select {
   }
 
   .spb-list-count {
-    justify-items: start;
+    justify-items: center;
     width: fit-content;
   }
 
