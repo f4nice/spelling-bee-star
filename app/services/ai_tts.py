@@ -22,7 +22,31 @@ _ALIYUN_TOKEN_CACHE: dict[str, Any] = {"id": "", "expire_time": 0}
 
 
 def _safe_word_slug(word: str) -> str:
-    return re.sub(r"[^a-zA-Z0-9_-]+", "-", word.lower()).strip("-") or "word"
+    return (re.sub(r"[^a-zA-Z0-9_-]+", "-", word.lower()).strip("-") or "word")[:90]
+
+
+def _safe_source_slug(source: str) -> str:
+    return (re.sub(r"[^a-zA-Z0-9_-]+", "-", source.lower()).strip("-") or "source")[:64]
+
+
+def _stable_audio_target(
+    *,
+    audio_dir: Path,
+    text: str,
+    accent: str,
+    voice_gender: str,
+    source: str,
+    extension: str,
+) -> Path:
+    normalized_text = re.sub(r"\s+", " ", (text or "").strip())
+    digest = hashlib.sha1(f"{normalized_text}|{accent}|{voice_gender}|{source}".encode("utf-8")).hexdigest()[:12]
+    return audio_dir / f"{_safe_word_slug(normalized_text)}-{accent}-{voice_gender}-{_safe_source_slug(source)}-{digest}.{extension}"
+
+
+def _local_audio_url_if_present(target: Path) -> str | None:
+    if target.exists() and target.stat().st_size >= 1000:
+        return f"/media/audio/{target.name}"
+    return None
 
 
 def _percent_encode(value: str) -> str:
@@ -90,7 +114,13 @@ async def fetch_aliyun_nls_token(
     return token_id
 
 
-def _accent_instruction(accent: str) -> str:
+def _accent_instruction(accent: str, text_mode: str = "word") -> str:
+    if text_mode not in {"word", "phonetic"}:
+        accent_name = "British English" if accent == "gb" else "American English"
+        return (
+            f"Read this English text clearly in a natural {accent_name} accent. "
+            "Keep the reading natural and do not add explanations or extra words."
+        )
     if accent == "gb":
         return (
             "Read this single English vocabulary word clearly in a natural British English accent. "
@@ -110,16 +140,30 @@ async def generate_openai_word_audio(
     word: str,
     accent: str,
     voice_gender: str,
+    text_mode: str,
     audio_dir: Path,
 ) -> str:
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not configured on the server.")
 
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    target = _stable_audio_target(
+        audio_dir=audio_dir,
+        text=word,
+        accent=accent,
+        voice_gender=voice_gender,
+        source=f"openai-{text_mode}-{model}-{voice}",
+        extension="mp3",
+    )
+    existing_url = _local_audio_url_if_present(target)
+    if existing_url:
+        return existing_url
+
     payload = {
         "model": model,
         "voice": voice,
         "input": word,
-        "instructions": _accent_instruction(accent),
+        "instructions": _accent_instruction(accent, text_mode),
         "response_format": "mp3",
     }
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
@@ -132,8 +176,6 @@ async def generate_openai_word_audio(
     if len(content) < 1000:
         raise RuntimeError("AI 朗读返回的音频太短，请稍后重试。")
 
-    audio_dir.mkdir(parents=True, exist_ok=True)
-    target = audio_dir / f"{_safe_word_slug(word)}-{accent}-{voice_gender}-ai-{uuid4().hex[:8]}.mp3"
     target.write_bytes(content)
     return f"/media/audio/{target.name}"
 
@@ -221,6 +263,24 @@ async def generate_dashscope_phoneme_audio(
     if normalized_format not in SUPPORTED_AUDIO_FORMATS:
         raise RuntimeError(f"DASHSCOPE_TTS_FORMAT '{audio_format}' is not supported.")
 
+    selected_voice = _choose_dashscope_voice(
+        voice_gender=voice_gender,
+        voice_female=voice_female,
+        voice_male=voice_male,
+    )
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    target = _stable_audio_target(
+        audio_dir=audio_dir,
+        text=word,
+        accent=accent,
+        voice_gender=voice_gender,
+        source=f"dashscope-phoneme-{model or 'cosyvoice-v3-flash'}-{selected_voice}-{normalized_format}-{sample_rate}",
+        extension=normalized_format,
+    )
+    existing_url = _local_audio_url_if_present(target)
+    if existing_url:
+        return existing_url
+
     cmu_pronunciation = await lookup_cmu_pronunciation(word)
     if not cmu_pronunciation:
         raise RuntimeError("没有找到可用的 CMU 音标，暂时不能按音标生成朗读。")
@@ -229,11 +289,7 @@ async def generate_dashscope_phoneme_audio(
         "model": model or "cosyvoice-v3-flash",
         "input": {
             "text": build_cmu_phoneme_ssml(word, cmu_pronunciation),
-            "voice": _choose_dashscope_voice(
-                voice_gender=voice_gender,
-                voice_female=voice_female,
-                voice_male=voice_male,
-            ),
+            "voice": selected_voice,
             "format": normalized_format,
             "sample_rate": sample_rate,
             "enable_ssml": True,
@@ -257,8 +313,6 @@ async def generate_dashscope_phoneme_audio(
     if len(content) < 1000:
         raise RuntimeError("阿里百炼音标朗读返回的音频太短，请稍后重试。")
 
-    audio_dir.mkdir(parents=True, exist_ok=True)
-    target = audio_dir / f"{_safe_word_slug(word)}-{accent}-{voice_gender}-phoneme-{uuid4().hex[:8]}.{normalized_format}"
     target.write_bytes(content)
     return f"/media/audio/{target.name}"
 
@@ -307,6 +361,7 @@ async def generate_aliyun_word_audio(
     volume: int,
     speech_rate: int,
     pitch_rate: int,
+    text_mode: str = "word",
 ) -> str:
     if not appkey:
         raise RuntimeError("ALIYUN_NLS_APPKEY is not configured on the server.")
@@ -322,6 +377,7 @@ async def generate_aliyun_word_audio(
     if normalized_format not in SUPPORTED_AUDIO_FORMATS:
         raise RuntimeError(f"ALIYUN_TTS_FORMAT '{audio_format}' is not supported.")
 
+    audio_dir.mkdir(parents=True, exist_ok=True)
     params = {
         "appkey": appkey,
         "token": token,
@@ -345,6 +401,18 @@ async def generate_aliyun_word_audio(
     if voice:
         params["voice"] = voice
 
+    target = _stable_audio_target(
+        audio_dir=audio_dir,
+        text=word,
+        accent=accent,
+        voice_gender=voice_gender,
+        source=f"aliyun-{text_mode}-{voice}-{normalized_format}-{sample_rate}",
+        extension=normalized_format,
+    )
+    existing_url = _local_audio_url_if_present(target)
+    if existing_url:
+        return existing_url
+
     async with httpx.AsyncClient(timeout=60) as client:
         response = await client.get(gateway, params=params)
         response.raise_for_status()
@@ -357,8 +425,6 @@ async def generate_aliyun_word_audio(
     if len(content) < 1000:
         raise RuntimeError("阿里云语音合成返回的音频太短，请稍后重试。")
 
-    audio_dir.mkdir(parents=True, exist_ok=True)
-    target = audio_dir / f"{_safe_word_slug(word)}-{accent}-{voice_gender}-aliyun-{uuid4().hex[:8]}.{normalized_format}"
     target.write_bytes(content)
     return f"/media/audio/{target.name}"
 
@@ -423,6 +489,7 @@ async def generate_word_ai_audio(
             word=word,
             accent=accent,
             voice_gender=voice_gender,
+            text_mode=text_mode,
             audio_dir=audio_dir,
         )
     if provider == "aliyun":
@@ -449,5 +516,6 @@ async def generate_word_ai_audio(
             volume=aliyun_volume,
             speech_rate=aliyun_speech_rate,
             pitch_rate=aliyun_pitch_rate,
+            text_mode=text_mode,
         )
     raise RuntimeError(f"AI_TTS_PROVIDER '{provider}' is not supported.")

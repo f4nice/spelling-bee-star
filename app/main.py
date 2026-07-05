@@ -81,8 +81,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260705-012"
-DEFAULT_PAGE_VERSION = "v20260705.12"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260706-001"
+DEFAULT_PAGE_VERSION = "v20260706.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2790,15 +2790,26 @@ def vue_update_word_field(
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
     next_value = value.strip() or None
+    previous_value = getattr(word, field, None)
+    definition_audio_invalidated = False
     setattr(word, field, next_value)
     if field == "english_definition":
         word.english_definition_locked = True
+        if (previous_value or "").strip() != (next_value or "").strip():
+            word.english_definition_audio_url = None
+            definition_audio_invalidated = True
     if field == "chinese_definition":
         word.chinese_definition_locked = True
     if field == "english_example":
         word.english_example_locked = True
     word.enrichment_error = None
     db.add(word)
+    if definition_audio_invalidated:
+        resource = get_word_resource(db, word.word)
+        if resource:
+            resource.english_definition_audio_url = None
+            resource.english_definition_audio_source = None
+            db.add(resource)
     db.commit()
     remember_word_resource(db, word, override_text=True, commit=True)
     return {"ok": True, "field": field, "value": next_value}
@@ -3620,7 +3631,7 @@ def run_spb_sync_job(
                 current_word=first_word,
                 message=f"正在补充详情和下载小程序音频：{len(prepared_rows)} / {total}",
             )
-            prepared_batch = asyncio.run(prepare_spb_rows_with_local_audio(batch, group))
+            prepared_batch = asyncio.run(prepare_spb_rows_with_local_audio(batch, group, db=db))
             prepared_rows.extend(prepared_batch)
             update_spb_sync_job(
                 job_id,
@@ -4075,9 +4086,12 @@ def serialize_word(word: Word) -> dict[str, Any]:
         "phonetic": word.phonetic,
         "part_of_speech": word.part_of_speech,
         "english_definition": word.english_definition,
+        "english_definition_audio_url": word.english_definition_audio_url,
         "chinese_definition": word.chinese_definition,
         "english_example": word.english_example,
         "image_url": word.image_url,
+        "american_audio_url": word.american_audio_url,
+        "british_audio_url": word.british_audio_url,
         "has_audio": has_audio,
         "has_playable_audio": has_playable_audio,
         "audio_issue": word.audio_issue,
@@ -4769,7 +4783,11 @@ def spb_has_text_fields(row: dict[str, Any]) -> bool:
     return any(str(row.get(field) or "").strip() for field in SPB_TEXT_IMPORT_FIELDS)
 
 
-async def prepare_spb_rows_with_local_audio(rows: list[dict[str, Any]], group: dict[str, Any]) -> list[dict[str, Any]]:
+async def prepare_spb_rows_with_local_audio(
+    rows: list[dict[str, Any]],
+    group: dict[str, Any],
+    db: Session | None = None,
+) -> list[dict[str, Any]]:
     if not rows:
         return rows
 
@@ -4790,10 +4808,17 @@ async def prepare_spb_rows_with_local_audio(rows: list[dict[str, Any]], group: d
                     if detail_audio_fields.get("british_audio_url"):
                         prepared["british_audio_url_source"] = "spb-miniprogram"
                     for key, value in {**detail_audio_fields, **detail_text_fields}.items():
-                        prepared[key] = prepared.get(key) or value
+                        if value:
+                            prepared[key] = value
             for accent, field_name in (("us", "american_audio_url"), ("gb", "british_audio_url")):
                 audio_url = str(prepared.get(field_name) or "").strip()
                 if not audio_url or is_local_audio_url(audio_url):
+                    continue
+                incoming_source = str(prepared.get(f"{field_name}_source") or "spb-miniprogram")
+                reusable_audio = reusable_local_audio_for_word(db, prepared.get("word"), accent, incoming_source)
+                if reusable_audio:
+                    prepared[field_name] = reusable_audio[0]
+                    prepared[f"{field_name}_source"] = reusable_audio[1] or incoming_source
                     continue
                 try:
                     local_url = await store_audio_candidate(
@@ -4908,7 +4933,7 @@ async def apply_spb_details_to_word(db: Session, word: Word, *, list_id: int | N
                 prepared.update(detail_audio_fields)
                 prepared.update(detail_text_fields)
 
-        prepared_rows = await prepare_spb_rows_with_local_audio([prepared], group)
+        prepared_rows = await prepare_spb_rows_with_local_audio([prepared], group, db=db)
         prepared = prepared_rows[0] if prepared_rows else prepared
         if apply_spb_text_fields_to_word(word, prepared):
             changed = True
@@ -4949,7 +4974,7 @@ async def spb_audio_options_for_word(db: Session, word: Word, accent: str, list_
                     prepared["british_audio_url_source"] = "spb-miniprogram"
                 prepared.update(detail_audio_fields)
 
-        prepared_rows = await prepare_spb_rows_with_local_audio([prepared], group)
+        prepared_rows = await prepare_spb_rows_with_local_audio([prepared], group, db=db)
         prepared = prepared_rows[0] if prepared_rows else prepared
         audio_url = local_import_audio_url(prepared.get(field_name))
         if audio_url and audio_url not in seen_urls:
@@ -4966,9 +4991,12 @@ async def spb_audio_options_for_word(db: Session, word: Word, accent: str, list_
 
 def apply_spb_text_fields_to_word(word: Word, row: dict[str, Any]) -> bool:
     changed = False
+    prefer_spb_detail = row.get("spb_text_source") == "spb-miniprogram"
     for field in ("phonetic", "part_of_speech"):
         value = str(row.get(field) or "").strip()
-        if value and not (getattr(word, field, None) or "").strip():
+        if value and (prefer_spb_detail or not (getattr(word, field, None) or "").strip()):
+            if getattr(word, field, None) == value:
+                continue
             setattr(word, field, value)
             changed = True
 
@@ -4977,7 +5005,9 @@ def apply_spb_text_fields_to_word(word: Word, row: dict[str, Any]) -> bool:
         ("english_example", "english_example_locked"),
     ):
         value = str(row.get(field) or "").strip()
-        if value and not (getattr(word, field, None) or "").strip():
+        if value and (prefer_spb_detail or not (getattr(word, field, None) or "").strip()):
+            if getattr(word, field, None) == value and getattr(word, lock_field, False):
+                continue
             setattr(word, field, value)
             setattr(word, lock_field, True)
             changed = True
@@ -4989,9 +5019,12 @@ def apply_spb_text_fields_to_word(word: Word, row: dict[str, Any]) -> bool:
             or chinese_value
         )
     if chinese_value and (
-        not (word.chinese_definition or "").strip()
+        prefer_spb_detail
+        or not (word.chinese_definition or "").strip()
         or should_refresh_chinese_definition(word.word, word.chinese_definition, word.english_definition)
     ):
+        if word.chinese_definition == chinese_value and word.chinese_definition_locked:
+            return changed
         word.chinese_definition = chinese_value
         word.chinese_definition_locked = True
         changed = True
@@ -5896,42 +5929,11 @@ async def word_ai_audio(
             raise HTTPException(status_code=400, detail="还没有音标，先补充音标后再生成。")
 
     try:
-        audio_url = await generate_word_ai_audio(
-            provider=settings.ai_tts_provider,
-            api_key=settings.openai_api_key,
-            model=settings.openai_tts_model,
-            word=word.word,
+        audio_url = await generate_ai_audio_with_settings(
+            text_value=word.word,
             accent=accent,
             voice_gender=voice_gender,
             text_mode=text_mode,
-            audio_dir=AUDIO_DIR,
-            voice_us=settings.openai_tts_voice_us,
-            voice_gb=settings.openai_tts_voice_gb,
-            dashscope_api_key=settings.dashscope_api_key,
-            dashscope_tts_endpoint=settings.dashscope_tts_endpoint,
-            dashscope_tts_model=settings.dashscope_tts_model,
-            dashscope_tts_voice_female=settings.dashscope_tts_voice_female,
-            dashscope_tts_voice_male=settings.dashscope_tts_voice_male,
-            dashscope_tts_format=settings.dashscope_tts_format,
-            dashscope_tts_sample_rate=settings.dashscope_tts_sample_rate,
-            aliyun_appkey=settings.aliyun_nls_appkey,
-            aliyun_token=settings.aliyun_nls_token,
-            aliyun_access_key_id=settings.aliyun_access_key_id,
-            aliyun_access_key_secret=settings.aliyun_access_key_secret,
-            aliyun_token_region=settings.aliyun_token_region,
-            aliyun_token_endpoint=settings.aliyun_token_endpoint,
-            aliyun_gateway=settings.aliyun_tts_gateway,
-            aliyun_format=settings.aliyun_tts_format,
-            aliyun_sample_rate=settings.aliyun_tts_sample_rate,
-            aliyun_voice_us=settings.aliyun_tts_voice_us,
-            aliyun_voice_gb=settings.aliyun_tts_voice_gb,
-            aliyun_voice_us_female=settings.aliyun_tts_voice_us_female,
-            aliyun_voice_us_male=settings.aliyun_tts_voice_us_male,
-            aliyun_voice_gb_female=settings.aliyun_tts_voice_gb_female,
-            aliyun_voice_gb_male=settings.aliyun_tts_voice_gb_male,
-            aliyun_volume=settings.aliyun_tts_volume,
-            aliyun_speech_rate=settings.aliyun_tts_speech_rate,
-            aliyun_pitch_rate=settings.aliyun_tts_pitch_rate,
         )
     except RuntimeError as exc:
         detail = str(exc)
@@ -5977,6 +5979,58 @@ async def word_ai_audio(
         "message": "" if (not should_commit or can_commit_audio) else "当前音频优先级更高，已生成试听但未替换。",
         "audio_url": audio_url,
     }
+
+
+@app.post("/api/vue/words/{word_id}/definition-audio")
+async def word_definition_audio(
+    word_id: int,
+    edit_token: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    require_word_write_access(edit_token)
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+
+    apply_word_resource(db, word, commit=True, include_image=False)
+    if is_local_audio_url(word.english_definition_audio_url):
+        return {"ok": True, "word": word.word, "audio_url": word.english_definition_audio_url, "reused": True}
+
+    definition_text = re.sub(r"\s+", " ", (word.english_definition or "").strip())
+    if not definition_text:
+        raise HTTPException(status_code=400, detail="还没有英文定义，先补充英文定义后再生成音频。")
+
+    try:
+        audio_url = await generate_ai_audio_with_settings(
+            text_value=definition_text,
+            accent="gb",
+            voice_gender="female",
+            text_mode="definition",
+        )
+    except RuntimeError as exc:
+        detail = str(exc)
+        if "not configured" in detail:
+            raise HTTPException(status_code=400, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=f"英文定义音频生成失败: {detail}") from exc
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text[:400] if exc.response is not None else str(exc)
+        raise HTTPException(status_code=502, detail=f"英文定义音频生成失败: {detail}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"英文定义音频生成失败: {exc}") from exc
+
+    word.english_definition_audio_url = audio_url
+    word.enrichment_error = None
+    db.add(word)
+    db.commit()
+    db.refresh(word)
+    remember_word_resource(
+        db,
+        word,
+        english_definition_audio_source=ai_tts_audio_source("definition"),
+        override_media=True,
+        commit=True,
+    )
+    return {"ok": True, "word": word.word, "audio_url": audio_url, "reused": False}
 
 
 @app.get("/words/{word_id}", response_class=HTMLResponse)
@@ -6142,6 +6196,52 @@ def ai_tts_audio_source(text_mode: str) -> str:
         return "ai-tts:dashscope"
     provider = (settings.ai_tts_provider or "").strip().lower()
     return f"ai-tts:{provider or 'generated'}"
+
+
+async def generate_ai_audio_with_settings(
+    *,
+    text_value: str,
+    accent: str,
+    voice_gender: str = "female",
+    text_mode: str = "word",
+) -> str:
+    return await generate_word_ai_audio(
+        provider=settings.ai_tts_provider,
+        api_key=settings.openai_api_key,
+        model=settings.openai_tts_model,
+        word=text_value,
+        accent=accent,
+        voice_gender=voice_gender,
+        text_mode=text_mode,
+        audio_dir=AUDIO_DIR,
+        voice_us=settings.openai_tts_voice_us,
+        voice_gb=settings.openai_tts_voice_gb,
+        dashscope_api_key=settings.dashscope_api_key,
+        dashscope_tts_endpoint=settings.dashscope_tts_endpoint,
+        dashscope_tts_model=settings.dashscope_tts_model,
+        dashscope_tts_voice_female=settings.dashscope_tts_voice_female,
+        dashscope_tts_voice_male=settings.dashscope_tts_voice_male,
+        dashscope_tts_format=settings.dashscope_tts_format,
+        dashscope_tts_sample_rate=settings.dashscope_tts_sample_rate,
+        aliyun_appkey=settings.aliyun_nls_appkey,
+        aliyun_token=settings.aliyun_nls_token,
+        aliyun_access_key_id=settings.aliyun_access_key_id,
+        aliyun_access_key_secret=settings.aliyun_access_key_secret,
+        aliyun_token_region=settings.aliyun_token_region,
+        aliyun_token_endpoint=settings.aliyun_token_endpoint,
+        aliyun_gateway=settings.aliyun_tts_gateway,
+        aliyun_format=settings.aliyun_tts_format,
+        aliyun_sample_rate=settings.aliyun_tts_sample_rate,
+        aliyun_voice_us=settings.aliyun_tts_voice_us,
+        aliyun_voice_gb=settings.aliyun_tts_voice_gb,
+        aliyun_voice_us_female=settings.aliyun_tts_voice_us_female,
+        aliyun_voice_us_male=settings.aliyun_tts_voice_us_male,
+        aliyun_voice_gb_female=settings.aliyun_tts_voice_gb_female,
+        aliyun_voice_gb_male=settings.aliyun_tts_voice_gb_male,
+        aliyun_volume=settings.aliyun_tts_volume,
+        aliyun_speech_rate=settings.aliyun_tts_speech_rate,
+        aliyun_pitch_rate=settings.aliyun_tts_pitch_rate,
+    )
 
 
 def apply_imported_local_audio(word: Word, row: dict[str, Any]) -> bool:
@@ -6314,6 +6414,30 @@ def get_word_resource(db: Session, word_text: str | None) -> WordResourcePool | 
     return db.scalar(select(WordResourcePool).where(WordResourcePool.normalized_word == normalized))
 
 
+def reusable_local_audio_for_word(
+    db: Session | None,
+    word_text: str | None,
+    accent: str,
+    incoming_source: str | None = None,
+) -> tuple[str, str | None] | None:
+    if db is None:
+        return None
+    resource = get_word_resource(db, word_text)
+    if not resource:
+        return None
+    if accent == "gb":
+        audio_url = (resource.british_audio_url or "").strip()
+        source = resource.british_audio_source
+    else:
+        audio_url = (resource.american_audio_url or "").strip()
+        source = resource.american_audio_source
+    if not is_local_audio_url(audio_url):
+        return None
+    if audio_source_priority(source, audio_url) < audio_source_priority(incoming_source, audio_url):
+        return None
+    return audio_url, source
+
+
 def word_has_shareable_resource(word: Word) -> bool:
     return any(
         (getattr(word, field, None) or "").strip()
@@ -6321,6 +6445,7 @@ def word_has_shareable_resource(word: Word) -> bool:
             "phonetic",
             "part_of_speech",
             "english_definition",
+            "english_definition_audio_url",
             "chinese_definition",
             "english_example",
             "image_url",
@@ -6337,6 +6462,7 @@ def remember_word_resource(
     image_source: str | None = None,
     american_audio_source: str | None = None,
     british_audio_source: str | None = None,
+    english_definition_audio_source: str | None = None,
     override_text: bool = False,
     override_media: bool = False,
     commit: bool = False,
@@ -6403,6 +6529,17 @@ def remember_word_resource(
         resource.british_audio_url = word.british_audio_url
         resource.british_audio_source = british_audio_source or resource.british_audio_source or "word"
         changed = True
+    if (word.english_definition_audio_url or "").strip() and (
+        not resource.english_definition_audio_url
+        or override_media
+    ):
+        resource.english_definition_audio_url = word.english_definition_audio_url
+        resource.english_definition_audio_source = (
+            english_definition_audio_source
+            or resource.english_definition_audio_source
+            or "definition-audio"
+        )
+        changed = True
 
     if changed:
         db.add(resource)
@@ -6455,6 +6592,9 @@ def apply_word_resource(db: Session, word: Word, *, commit: bool = False, includ
     ):
         word.british_audio_url = resource.british_audio_url
         word.british_audio_locked = True
+        changed = True
+    if (resource.english_definition_audio_url or "").strip() and not (word.english_definition_audio_url or "").strip():
+        word.english_definition_audio_url = resource.english_definition_audio_url
         changed = True
 
     if changed:
@@ -6804,7 +6944,15 @@ def ensure_schema_columns() -> None:
     ]
     missing_text_columns = [column for column in ("alternate_spellings",) if column not in word_columns]
     missing_string_columns = [column for column in ("part_of_speech",) if column not in word_columns]
+    missing_long_string_columns = [
+        column for column in ("english_definition_audio_url",) if column not in word_columns
+    ]
     table_names = set(inspector.get_table_names())
+    resource_pool_columns = (
+        {column["name"] for column in inspector.get_columns("word_resource_pool")}
+        if "word_resource_pool" in table_names
+        else set()
+    )
     wrong_columns = {column["name"] for column in inspector.get_columns("wrong_words")} if "wrong_words" in table_names else set()
     word_list_columns = {column["name"] for column in inspector.get_columns("word_lists")} if "word_lists" in table_names else set()
     challenge_progress_columns = (
@@ -6820,6 +6968,13 @@ def ensure_schema_columns() -> None:
             connection.execute(text(f"ALTER TABLE words ADD COLUMN {column} TEXT NULL"))
         for column in missing_string_columns:
             connection.execute(text(f"ALTER TABLE words ADD COLUMN {column} VARCHAR(120) NULL"))
+        for column in missing_long_string_columns:
+            connection.execute(text(f"ALTER TABLE words ADD COLUMN {column} VARCHAR(1000) NULL"))
+        if "word_resource_pool" in table_names:
+            if "english_definition_audio_url" not in resource_pool_columns:
+                connection.execute(text("ALTER TABLE word_resource_pool ADD COLUMN english_definition_audio_url VARCHAR(1000) NULL"))
+            if "english_definition_audio_source" not in resource_pool_columns:
+                connection.execute(text("ALTER TABLE word_resource_pool ADD COLUMN english_definition_audio_source VARCHAR(120) NULL"))
         if "word_lists" in table_names and "display_order" not in word_list_columns:
             connection.execute(text("ALTER TABLE word_lists ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0"))
         if "word_lists" in table_names and "sequence_offset" not in word_list_columns:

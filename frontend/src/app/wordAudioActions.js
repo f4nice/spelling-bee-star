@@ -23,3 +23,9 @@ export async function generateAiWordAudio({ wordId, accent, voiceGender = "femal
   const form = createAiAudioForm(accent, voiceGender, textMode);
   return fetchJson(wordApiPaths.aiAudio(wordId), { method: "POST", body: form });
 }
+
+export async function generateWordDefinitionAudio({ wordId }) {
+  const form = new FormData();
+  form.append("edit_token", "1");
+  return fetchJson(wordApiPaths.definitionAudio(wordId), { method: "POST", body: form });
+}

@@ -23,6 +23,7 @@ export function buildWordDetailPageProps(ctx) {
       chooseAudio: ctx.chooseAudio,
       uploadAudio: ctx.uploadAudio,
       generateAiAudio: ctx.generateAiAudio,
+      generateDefinitionAudio: ctx.generateDefinitionAudio,
       stopRecording: ctx.stopRecording,
       saveRecording: ctx.saveRecording,
     },

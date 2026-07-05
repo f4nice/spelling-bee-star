@@ -62,9 +62,11 @@ async def store_audio_candidate(word: str, accent: str, source_key: str, audio_u
         return audio_url
 
     audio_dir.mkdir(parents=True, exist_ok=True)
-    safe_word = re.sub(r"[^a-zA-Z0-9_-]+", "-", word.lower()).strip("-") or "word"
-    safe_source = re.sub(r"[^a-zA-Z0-9_-]+", "-", source_key.lower()).strip("-") or "source"
+    safe_word = (re.sub(r"[^a-zA-Z0-9_-]+", "-", word.lower()).strip("-") or "word")[:72]
+    safe_source = (re.sub(r"[^a-zA-Z0-9_-]+", "-", source_key.lower()).strip("-") or "source")[:80]
     target = audio_dir / f"{safe_word}-{accent}-{safe_source}.mp3"
+    if target.exists() and target.stat().st_size >= 1000:
+        return f"/media/audio/{target.name}"
 
     async with httpx.AsyncClient(timeout=20, headers=AUDIO_HEADERS, follow_redirects=True) as client:
         response = await client.get(audio_url)

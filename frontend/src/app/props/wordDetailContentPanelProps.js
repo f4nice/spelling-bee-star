@@ -18,4 +18,8 @@ export const wordDetailContentPanelProps = {
     type: Function,
     required: true,
   },
+  generateDefinitionAudio: {
+    type: Function,
+    required: true,
+  },
 };

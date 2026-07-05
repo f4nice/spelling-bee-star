@@ -19,6 +19,14 @@ defineProps({
     type: Function,
     required: true,
   },
+  playAudio: {
+    type: Function,
+    required: true,
+  },
+  generateDefinitionAudio: {
+    type: Function,
+    required: true,
+  },
 });
 
 </script>
@@ -33,5 +41,7 @@ defineProps({
     :word-edit="wordEdit"
     :can-edit="canEdit"
     :save-word-field="saveWordField"
+    :play-audio="playAudio"
+    :generate-definition-audio="generateDefinitionAudio"
   />
 </template>

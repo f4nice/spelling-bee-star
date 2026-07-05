@@ -18,6 +18,7 @@ export function createWordDetailToolContext({ editing, images, audio, navigation
     chooseAudio: audio.chooseAudio,
     uploadAudio: audio.uploadAudio,
     generateAiAudio: audio.generateAiAudio,
+    generateDefinitionAudio: audio.generateDefinitionAudio,
     startRecording: audio.startRecording,
     stopRecording: audio.stopRecording,
     saveRecording: audio.saveRecording,

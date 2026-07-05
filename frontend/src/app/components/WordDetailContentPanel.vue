@@ -32,6 +32,12 @@ defineProps(wordDetailContentPanelProps);
       :save-recording="saveRecording"
     />
 
-    <WordDetailDefinitionPanel :data="data" :word-edit="wordEdit" :save-word-field="saveWordField" />
+    <WordDetailDefinitionPanel
+      :data="data"
+      :word-edit="wordEdit"
+      :save-word-field="saveWordField"
+      :play-audio="playAudio"
+      :generate-definition-audio="generateDefinitionAudio"
+    />
   </article>
 </template>

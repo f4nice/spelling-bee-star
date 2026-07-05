@@ -2,6 +2,7 @@ import { ref } from "vue";
 import { useAudioPlayback } from "../../shared/useAudioPlayback.js";
 import {
   chooseWordAudioOption,
+  generateDefinitionAudioOption,
   generateWordAiAudioOption,
   updateWordAudioOptions,
   uploadWordAudioOption,
@@ -44,6 +45,10 @@ export function useWordAudio({ data, loadRoute }) {
     return generateWordAiAudioOption({ wordId: data.value.word.id, accent, voiceGender, textMode, loadRoute });
   }
 
+  async function generateDefinitionAudio() {
+    return generateDefinitionAudioOption({ data });
+  }
+
   return {
     audioOptions,
     recorderState,
@@ -53,6 +58,7 @@ export function useWordAudio({ data, loadRoute }) {
     chooseAudio,
     uploadAudio,
     generateAiAudio,
+    generateDefinitionAudio,
     startRecording,
     stopRecording,
     saveRecording,
