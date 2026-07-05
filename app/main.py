@@ -11,6 +11,7 @@ import re
 import sys
 from threading import Lock, Thread
 from typing import Any
+import unicodedata
 from urllib.parse import quote_plus, urlparse
 from uuid import uuid4
 import zipfile
@@ -4210,10 +4211,10 @@ def normalize_spb_word_rows(values: list[Any], group: dict[str, Any]) -> list[di
     seen: set[str] = set()
     for value in values:
         raw = spb_word_text_from_source_value(value)
-        word = " ".join(str(raw or "").strip().split())
-        if not word or not re.fullmatch(r"[A-Za-z][A-Za-z' -]*", word):
+        word = normalize_spb_source_word_text(raw)
+        if not is_valid_spb_word_text(word):
             continue
-        normalized = word.lower()
+        normalized = normalize_resource_word(word).casefold()
         if normalized in seen:
             continue
         seen.add(normalized)
@@ -4231,6 +4232,35 @@ def normalize_spb_word_rows(values: list[Any], group: dict[str, Any]) -> list[di
             row["spb_text_source"] = "spb-source-cache"
         rows.append(row)
     return rows
+
+
+SPB_WORD_PUNCTUATION = {" ", "'", "’", "-", "‐", "‑", "–", "—", "."}
+
+
+def normalize_spb_source_word_text(value: Any) -> str:
+    text = " ".join(str(value or "").strip().split())
+    return unicodedata.normalize("NFC", text)[:128]
+
+
+def is_valid_spb_word_text(word: str) -> bool:
+    if not word:
+        return False
+    has_letter = False
+    first_letter_seen = False
+    for char in word:
+        category = unicodedata.category(char)
+        if category.startswith("L"):
+            has_letter = True
+            first_letter_seen = True
+            continue
+        if category in {"Mn", "Mc"}:
+            continue
+        if char in SPB_WORD_PUNCTUATION:
+            if not first_letter_seen:
+                return False
+            continue
+        return False
+    return has_letter
 
 
 def spb_word_text_from_source_value(value: Any) -> Any:
