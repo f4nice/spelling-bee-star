@@ -80,8 +80,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260705-003"
-DEFAULT_PAGE_VERSION = "v20260705.3"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260705-004"
+DEFAULT_PAGE_VERSION = "v20260705.4"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2536,6 +2536,30 @@ async def vue_move_word_list_group_api(word_list_id: int, request: Request, db: 
 
     word_list.group_id = group_id
     db.add(word_list)
+    db.commit()
+    return lists_payload(db)
+
+
+@app.post("/api/vue/lists/groups/{group_id}/delete")
+async def vue_delete_word_list_group_api(group_id: int, request: Request, db: Session = Depends(get_db)):
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="删除单词组数据不是有效 JSON。") from exc
+
+    password = str((payload or {}).get("password") or "")
+    if password != settings.list_delete_password:
+        raise HTTPException(status_code=403, detail="删除密码不正确")
+
+    group = db.get(WordListGroup, group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="没有找到这个单词组。")
+
+    list_count = db.scalar(select(func.count(WordList.id)).where(WordList.group_id == group_id)) or 0
+    if list_count:
+        raise HTTPException(status_code=400, detail="这个单词组里还有单词表，请先移出后再删除。")
+
+    db.delete(group)
     db.commit()
     return lists_payload(db)
 

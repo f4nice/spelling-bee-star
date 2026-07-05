@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { ArrowLeft, BookPlus, FolderPlus, Layers, Search, X } from "lucide-vue-next";
+import { ArrowLeft, BookPlus, FolderPlus, Layers, Search, Trash2, X } from "lucide-vue-next";
 import ListsCreateModal from "../components/ListsCreateModal.vue";
 import ListsToolsPanel from "../components/ListsToolsPanel.vue";
 import WordListCard from "../components/WordListCard.vue";
@@ -42,6 +42,9 @@ const dragStartOrder = ref("");
 const activeGroupId = ref("");
 const dragOverGroupId = ref("");
 const isDroppingOnGroup = ref(false);
+const groupDeletePassword = ref("");
+const groupDeleteNotice = ref("");
+const isDeletingGroup = ref(false);
 let dragStartCards = [];
 let searchTimer = 0;
 
@@ -49,6 +52,7 @@ const trimmedSearchQuery = computed(() => searchQuery.value.trim());
 const hasSearched = computed(() => Boolean(searchedQuery.value));
 const wordListGroups = computed(() => props.data.groups || []);
 const trimmedNewGroupName = computed(() => newGroupName.value.trim());
+const trimmedGroupDeletePassword = computed(() => groupDeletePassword.value.trim());
 const groupedListCount = computed(() => wordListGroups.value.reduce((total, group) => total + Number(group.list_count || 0), 0));
 const totalWordCount = computed(() => orderedCards.value.reduce((total, card) => total + Number(card.count || 0), 0));
 const activeGroup = computed(() => wordListGroups.value.find((group) => String(group.id) === String(activeGroupId.value)) || null);
@@ -122,11 +126,15 @@ function groupIndexLabel(index) {
 function selectWordListGroup(group) {
   activeGroupId.value = String(group.id);
   orderNotice.value = "";
+  groupDeletePassword.value = "";
+  groupDeleteNotice.value = "";
 }
 
 function clearActiveWordListGroup() {
   activeGroupId.value = "";
   orderNotice.value = "";
+  groupDeletePassword.value = "";
+  groupDeleteNotice.value = "";
 }
 
 function openListManager(card) {
@@ -180,6 +188,28 @@ async function moveManagingListToGroup() {
     groupMoveNotice.value = error.message || "移动失败，请稍后再试。";
   } finally {
     isMovingGroup.value = false;
+  }
+}
+
+async function deleteActiveWordListGroup() {
+  if (!activeGroup.value || !trimmedGroupDeletePassword.value || isDeletingGroup.value) return;
+  isDeletingGroup.value = true;
+  groupDeleteNotice.value = "";
+  try {
+    const deletedGroupId = activeGroup.value.id;
+    const payload = await fetchJson(listApiPaths.deleteGroup(deletedGroupId), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ password: trimmedGroupDeletePassword.value }),
+      skipCache: true,
+    });
+    groupDeletePassword.value = "";
+    activeGroupId.value = "";
+    applyListPagePayload(payload);
+  } catch (error) {
+    groupDeleteNotice.value = error.message || "单词组删除失败，请稍后再试。";
+  } finally {
+    isDeletingGroup.value = false;
   }
 }
 
@@ -534,6 +564,26 @@ watch(wordListGroups, (groups) => {
         <ArrowLeft :size="16" aria-hidden="true" />
         <span>返回未归组</span>
       </button>
+      <form v-if="activeGroup" class="word-list-group-delete-form" @submit.prevent="deleteActiveWordListGroup">
+        <label>
+          <span class="sr-only">删除单词组密码</span>
+          <input
+            v-model="groupDeletePassword"
+            type="password"
+            placeholder="输入密码删除"
+            autocomplete="current-password"
+          >
+        </label>
+        <button
+          class="word-list-group-delete-button"
+          type="submit"
+          :disabled="!trimmedGroupDeletePassword || isDeletingGroup"
+        >
+          <Trash2 :size="15" aria-hidden="true" />
+          <span>{{ isDeletingGroup ? "删除中" : "删除单词组" }}</span>
+        </button>
+        <span v-if="groupDeleteNotice" class="word-list-group-delete-notice">{{ groupDeleteNotice }}</span>
+      </form>
     </div>
     <section v-if="displayedCards.length" class="word-grid lists-reorder-grid" role="list" @dragover.prevent>
       <WordListCard
@@ -627,6 +677,15 @@ watch(wordListGroups, (groups) => {
   align-items: center;
   justify-content: center;
   gap: 7px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 
 .list-word-search-panel {
@@ -778,6 +837,80 @@ watch(wordListGroups, (groups) => {
 .lists-return-button:focus-visible {
   outline: 3px solid rgba(15, 127, 89, 0.22);
   outline-offset: 3px;
+}
+
+.word-list-group-delete-form {
+  display: grid;
+  grid-column: 2 / -1;
+  grid-template-columns: minmax(150px, 190px) auto;
+  align-items: center;
+  justify-self: end;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.word-list-group-delete-form label {
+  min-width: 0;
+}
+
+.word-list-group-delete-form input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid rgba(185, 28, 28, 0.18);
+  border-radius: 12px;
+  padding: 0 12px;
+  color: #7f1d1d;
+  background: rgba(255, 255, 255, 0.92);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: 0 10px 22px rgba(127, 29, 29, 0.04);
+}
+
+.word-list-group-delete-form input:focus {
+  border-color: rgba(185, 28, 28, 0.45);
+  outline: 3px solid rgba(185, 28, 28, 0.1);
+}
+
+.word-list-group-delete-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 14px;
+  color: #fff;
+  background: linear-gradient(135deg, #b91c1c, #8f1616);
+  box-shadow: 0 12px 24px rgba(185, 28, 28, 0.2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 1000;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+}
+
+.word-list-group-delete-button:hover,
+.word-list-group-delete-button:focus-visible {
+  color: #fff;
+  box-shadow: 0 16px 30px rgba(185, 28, 28, 0.27);
+  transform: translateY(-1px);
+}
+
+.word-list-group-delete-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  transform: none;
+}
+
+.word-list-group-delete-notice {
+  grid-column: 1 / -1;
+  color: #b42318;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: right;
 }
 
 .word-list-group-grid {
@@ -1120,6 +1253,20 @@ watch(wordListGroups, (groups) => {
     justify-content: flex-start;
     min-width: 0;
     width: 100%;
+  }
+
+  .word-list-group-delete-form {
+    grid-column: 1;
+    grid-template-columns: 1fr;
+    justify-self: stretch;
+  }
+
+  .word-list-group-delete-button {
+    width: 100%;
+  }
+
+  .word-list-group-delete-notice {
+    text-align: left;
   }
 
   .list-word-search-form {
