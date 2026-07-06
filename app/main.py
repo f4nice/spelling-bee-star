@@ -82,8 +82,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260706-009"
-DEFAULT_PAGE_VERSION = "v20260706.9"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260706-010"
+DEFAULT_PAGE_VERSION = "v20260706.10"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -4680,9 +4680,12 @@ def spb_audio_urls_from_payload(payload: Any) -> dict[str, str]:
 
 
 def spb_example_audio_url_from_payload(payload: Any) -> str | None:
-    specific_url = spb_find_first_field(
+    specific_url = spb_find_preferred_field(
         payload,
         (
+            "sentenceUrl",
+            "SentenceUrl",
+            "sentence_url",
             "english_example_audio_url",
             "englishExampleAudioUrl",
             "enExampleAudioUrl",
@@ -4891,9 +4894,18 @@ def spb_has_text_fields(row: dict[str, Any]) -> bool:
 
 def spb_example_audio_source_key(group: dict[str, Any], word: str | None, example: str | None, audio_url: str | None) -> str:
     group_key = str(group.get("spb_flag") or group.get("key") or "example").strip()
-    text = re.sub(r"\s+", " ", (example or "").strip()) or str(audio_url or "").strip() or str(word or "").strip()
+    text = re.sub(r"\s+", " ", (example or "").strip())
+    source_url = str(audio_url or "").strip()
+    text = "|".join(part for part in (text, source_url) if part) or str(word or "").strip()
     digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
     return f"spb-example-{group_key}-{digest}"
+
+
+def local_audio_url_matches_source_key(audio_url: str | None, source_key: str | None) -> bool:
+    if not audio_url or not source_key:
+        return False
+    safe_source = (re.sub(r"[^a-zA-Z0-9_-]+", "-", source_key.lower()).strip("-") or "source")[:80]
+    return safe_source in Path(str(audio_url)).name.lower()
 
 
 def reusable_local_example_audio_for_word(
@@ -4901,6 +4913,7 @@ def reusable_local_example_audio_for_word(
     word_text: str | None,
     incoming_example: str | None,
     incoming_source: str | None = None,
+    expected_source_key: str | None = None,
 ) -> tuple[str, str | None] | None:
     if db is None:
         return None
@@ -4909,6 +4922,8 @@ def reusable_local_example_audio_for_word(
         return None
     audio_url = (resource.english_example_audio_url or "").strip()
     if not is_local_audio_url(audio_url):
+        return None
+    if expected_source_key and not local_audio_url_matches_source_key(audio_url, expected_source_key):
         return None
     normalized_incoming = re.sub(r"\s+", " ", (incoming_example or "").strip())
     normalized_existing = re.sub(r"\s+", " ", (resource.english_example or "").strip())
@@ -4974,11 +4989,18 @@ async def prepare_spb_rows_with_local_audio(
             example_audio_url = str(prepared.get("english_example_audio_url") or "").strip()
             if example_audio_url and not is_local_audio_url(example_audio_url):
                 incoming_source = str(prepared.get("english_example_audio_url_source") or "spb-miniprogram")
+                example_source_key = spb_example_audio_source_key(
+                    group,
+                    prepared.get("word"),
+                    prepared.get("english_example"),
+                    example_audio_url,
+                )
                 reusable_example_audio = reusable_local_example_audio_for_word(
                     db,
                     prepared.get("word"),
                     prepared.get("english_example"),
                     incoming_source,
+                    expected_source_key=example_source_key,
                 )
                 if reusable_example_audio:
                     prepared["english_example_audio_url"] = reusable_example_audio[0]
@@ -4988,12 +5010,7 @@ async def prepare_spb_rows_with_local_audio(
                         local_url = await store_audio_candidate(
                             prepared["word"],
                             "example",
-                            spb_example_audio_source_key(
-                                group,
-                                prepared.get("word"),
-                                prepared.get("english_example"),
-                                example_audio_url,
-                            ),
+                            example_source_key,
                             example_audio_url,
                             AUDIO_DIR,
                         )
