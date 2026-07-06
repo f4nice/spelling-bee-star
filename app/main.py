@@ -82,8 +82,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260706-010"
-DEFAULT_PAGE_VERSION = "v20260706.10"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260706-011"
+DEFAULT_PAGE_VERSION = "v20260706.11"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -6472,6 +6472,10 @@ def local_spb_word_audio_url_for_accent(value: str | None, accent: str) -> bool:
     )
 
 
+def legacy_word_audio_in_example_slot(value: str | None) -> bool:
+    return local_spb_word_audio_url_for_accent(value, "gb")
+
+
 def repair_legacy_spb_example_audio_slot(word: Word) -> bool:
     audio_url = (word.british_audio_url or "").strip()
     if not local_spb_word_audio_url_for_accent(audio_url, "gb"):
@@ -6605,7 +6609,7 @@ def apply_imported_local_audio(word: Word, row: dict[str, Any]) -> bool:
         word.english_example_audio_url,
         english_example_audio_url,
         incoming_source=english_example_source,
-    ):
+    ) or (english_example_audio_url and legacy_word_audio_in_example_slot(word.english_example_audio_url)):
         word.english_example_audio_url = english_example_audio_url
         changed = True
     if english_example_audio_url and not british_audio_url and local_spb_word_audio_url_for_accent(word.british_audio_url, "gb"):
