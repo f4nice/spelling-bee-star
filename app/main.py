@@ -82,8 +82,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260706-005"
-DEFAULT_PAGE_VERSION = "v20260706.5"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260706-006"
+DEFAULT_PAGE_VERSION = "v20260706.6"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -4646,7 +4646,6 @@ def spb_audio_urls_from_payload(payload: Any) -> dict[str, str]:
             "ukaudio",
             "ukUrl",
             "uk_url",
-            "eurl",
         ),
     )
     generic_url = spb_find_first_field(payload, ("audioUrl", "audio_url", "audio", "voiceUrl", "voice_url", "durl"))
@@ -4707,6 +4706,7 @@ def spb_example_audio_url_from_payload(payload: Any) -> str | None:
             "en_sentence_audio_url",
             "sentAudioUrl",
             "sent_audio_url",
+            "eurl",
         ),
     )
     if spb_looks_like_audio_url(specific_url):
@@ -6445,6 +6445,37 @@ def local_spb_word_audio_url_for_accent(value: str | None, accent: str) -> bool:
     )
 
 
+def repair_legacy_spb_example_audio_slot(word: Word) -> bool:
+    audio_url = (word.british_audio_url or "").strip()
+    if not local_spb_word_audio_url_for_accent(audio_url, "gb"):
+        return False
+
+    changed = False
+    if (word.english_example or "").strip() and not (word.english_example_audio_url or "").strip():
+        word.english_example_audio_url = audio_url
+        changed = True
+    word.british_audio_url = None
+    word.british_audio_locked = False
+    changed = True
+    return changed
+
+
+def repair_legacy_spb_example_audio_resource(resource: WordResourcePool) -> bool:
+    audio_url = (resource.british_audio_url or "").strip()
+    if not local_spb_word_audio_url_for_accent(audio_url, "gb"):
+        return False
+
+    changed = False
+    if (resource.english_example or "").strip() and not (resource.english_example_audio_url or "").strip():
+        resource.english_example_audio_url = audio_url
+        resource.english_example_audio_source = resource.british_audio_source or "spb-miniprogram"
+        changed = True
+    resource.british_audio_url = None
+    resource.british_audio_source = None
+    changed = True
+    return changed
+
+
 def audio_source_priority(source: str | None = None, audio_url: str | None = None) -> int:
     marker = f"{source or ''} {audio_url or ''}".lower()
     if "spb" in marker or "miniprogram" in marker:
@@ -6550,13 +6581,11 @@ def apply_imported_local_audio(word: Word, row: dict[str, Any]) -> bool:
     ):
         word.english_example_audio_url = english_example_audio_url
         changed = True
-    if english_example_audio_url and not american_audio_url and local_spb_word_audio_url_for_accent(word.american_audio_url, "us"):
-        word.american_audio_url = None
-        word.american_audio_locked = False
-        changed = True
     if english_example_audio_url and not british_audio_url and local_spb_word_audio_url_for_accent(word.british_audio_url, "gb"):
         word.british_audio_url = None
         word.british_audio_locked = False
+        changed = True
+    if repair_legacy_spb_example_audio_slot(word):
         changed = True
     return changed
 
@@ -6569,14 +6598,7 @@ def clear_misclassified_spb_audio_from_resource(db: Session, word: Word, row: di
     if not resource:
         return False
 
-    changed = False
-    if (
-        not local_import_audio_url(row.get("american_audio_url"))
-        and local_spb_word_audio_url_for_accent(resource.american_audio_url, "us")
-    ):
-        resource.american_audio_url = None
-        resource.american_audio_source = None
-        changed = True
+    changed = repair_legacy_spb_example_audio_resource(resource)
     if (
         not local_import_audio_url(row.get("british_audio_url"))
         and local_spb_word_audio_url_for_accent(resource.british_audio_url, "gb")
@@ -6599,10 +6621,7 @@ def word_needs_spb_detail_repair(word: Word) -> bool:
         return True
     if (word.english_example or "").strip() and not is_local_audio_url(word.english_example_audio_url):
         return True
-    return local_spb_word_audio_url_for_accent(word.american_audio_url, "us") or local_spb_word_audio_url_for_accent(
-        word.british_audio_url,
-        "gb",
-    )
+    return local_spb_word_audio_url_for_accent(word.british_audio_url, "gb")
 
 
 def merge_spellings(existing: str | None, incoming: str | None, *, primary: str | None = None) -> str | None:
@@ -6838,12 +6857,17 @@ def remember_word_resource(
     override_media: bool = False,
     commit: bool = False,
 ) -> bool:
+    word_changed = repair_legacy_spb_example_audio_slot(word)
     normalized = normalize_resource_word(word.word)
     if not normalized or not word_has_shareable_resource(word):
+        if word_changed:
+            db.add(word)
+            if commit:
+                db.commit()
         return False
 
     resource = get_word_resource(db, word.word)
-    changed = False
+    changed = word_changed
     if not resource:
         resource = WordResourcePool(normalized_word=normalized)
         db.add(resource)
@@ -6937,6 +6961,8 @@ def remember_word_resource(
         changed = True
 
     if changed:
+        if word_changed:
+            db.add(word)
         db.add(resource)
         if commit:
             db.commit()
@@ -6946,9 +6972,18 @@ def remember_word_resource(
 def apply_word_resource(db: Session, word: Word, *, commit: bool = False, include_image: bool = True) -> bool:
     resource = get_word_resource(db, word.word)
     if not resource:
-        return False
+        changed = repair_legacy_spb_example_audio_slot(word)
+        if changed:
+            word.enrichment_error = None
+            db.add(word)
+            if commit:
+                db.commit()
+                db.refresh(word)
+        return changed
 
-    changed = False
+    changed = repair_legacy_spb_example_audio_resource(resource)
+    if repair_legacy_spb_example_audio_slot(word):
+        changed = True
     for field in ("phonetic", "part_of_speech"):
         value = (getattr(resource, field, None) or "").strip()
         if value and not (getattr(word, field, None) or "").strip():
