@@ -82,8 +82,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260706-012"
-DEFAULT_PAGE_VERSION = "v20260706.12"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260707-001"
+DEFAULT_PAGE_VERSION = "v20260707.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3585,6 +3585,7 @@ def spb_payload(db: Session, collection_key: str | None = None) -> dict[str, Any
         "collection": active_payload,
         "collections": collections,
         "groups": active_payload.get("groups", []),
+        "active_sync_job": spb_active_sync_job_for_collection(active_collection["key"]),
     }
 
 
@@ -3601,6 +3602,19 @@ def spb_sync_job_snapshot(job_id: str) -> dict[str, Any] | None:
     with IMAGE_SYNC_LOCK:
         job = SPB_SYNC_JOBS.get(job_id)
         return dict(job) if job else None
+
+
+def spb_active_sync_job_for_collection(collection_key: str | None) -> dict[str, Any] | None:
+    key = str(collection_key or "individual").strip() or "individual"
+    with IMAGE_SYNC_LOCK:
+        active_jobs = [
+            dict(job)
+            for job in SPB_SYNC_JOBS.values()
+            if str(job.get("collection") or "") == key and job.get("status") in {"queued", "running"}
+        ]
+    if not active_jobs:
+        return None
+    return max(active_jobs, key=lambda job: str(job.get("updated_at") or job.get("created_at") or ""))
 
 
 def spb_sync_response(db: Session, job: dict[str, Any]) -> dict[str, Any]:

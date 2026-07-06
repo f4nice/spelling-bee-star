@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
@@ -16,6 +16,8 @@ const props = defineProps({
 });
 
 const INDIVIDUAL_COLLECTION_KEY = "individual";
+const SPB_SYNC_STORAGE_KEY = "speakeasy:spb-sync-jobs:v1";
+const ACTIVE_SYNC_STATUSES = new Set(["queued", "running"]);
 const activeKey = ref("");
 const pageData = ref(props.data);
 const syncingKey = ref("");
@@ -65,6 +67,7 @@ watch(
   () => props.data,
   (nextData) => {
     pageData.value = nextData;
+    resumeSyncJobFromPayload(nextData);
   },
 );
 
@@ -128,28 +131,111 @@ function clearSyncPoll() {
   }
 }
 
+function readStoredSyncJobs() {
+  try {
+    return JSON.parse(window.localStorage.getItem(SPB_SYNC_STORAGE_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredSyncJobs(jobs) {
+  try {
+    window.localStorage.setItem(SPB_SYNC_STORAGE_KEY, JSON.stringify(jobs));
+  } catch {
+    // Local storage can be unavailable in private windows; polling still works in-page.
+  }
+}
+
+function rememberSyncJob(job) {
+  if (!job?.id || !ACTIVE_SYNC_STATUSES.has(job.status)) return;
+  const collectionKey = job.collection || activeCollection.value?.key || INDIVIDUAL_COLLECTION_KEY;
+  const jobs = readStoredSyncJobs();
+  jobs[collectionKey] = {
+    id: job.id,
+    collection: collectionKey,
+    key: job.key || activeKey.value,
+  };
+  writeStoredSyncJobs(jobs);
+}
+
+function forgetStoredSyncJob(collectionKey) {
+  const key = collectionKey || activeCollection.value?.key || INDIVIDUAL_COLLECTION_KEY;
+  const jobs = readStoredSyncJobs();
+  if (!jobs[key]) return;
+  delete jobs[key];
+  writeStoredSyncJobs(jobs);
+}
+
+function applyRunningSyncJob(job, notice = "") {
+  if (!job?.id || !ACTIVE_SYNC_STATUSES.has(job.status)) return false;
+  syncJob.value = job;
+  syncingKey.value = job.key || "";
+  if (job.key) activeKey.value = job.key;
+  syncNotice.value = notice || job.message || "正在恢复同步进度...";
+  rememberSyncJob(job);
+  pollSyncJob(job.id, job.key || activeKey.value);
+  return true;
+}
+
+function resumeSyncJobFromPayload(payload) {
+  const job = payload?.active_sync_job;
+  if (!job || syncJob.value?.id === job.id) return false;
+  return applyRunningSyncJob(job);
+}
+
+function resumeStoredSyncJob() {
+  const collectionKey = activeCollection.value?.key || INDIVIDUAL_COLLECTION_KEY;
+  const storedJob = readStoredSyncJobs()[collectionKey];
+  if (!storedJob?.id || syncJob.value?.id === storedJob.id) return false;
+  return applyRunningSyncJob(
+    {
+      id: storedJob.id,
+      collection: collectionKey,
+      key: storedJob.key || activeKey.value,
+      status: "queued",
+      stage: "queued",
+      total: 0,
+      processed: 0,
+      message: "正在恢复同步进度...",
+    },
+    "正在恢复同步进度...",
+  );
+}
+
 async function pollSyncJob(jobId, groupKey) {
   clearSyncPoll();
   try {
     const payload = await fetchJson(routeApiPaths.spbSyncStatus(jobId), { skipCache: true });
-    if (payload.job) syncJob.value = payload.job;
+    if (payload.job) {
+      syncJob.value = payload.job;
+      if (ACTIVE_SYNC_STATUSES.has(payload.job.status)) {
+        syncingKey.value = payload.job.key || groupKey;
+        rememberSyncJob(payload.job);
+      }
+    }
     if (payload.collection) {
       pageData.value = payload;
-      activeKey.value = groupKey;
+      activeKey.value = payload.job?.key || groupKey;
     }
     const status = payload.job?.status;
     if (status === "complete") {
       syncingKey.value = "";
+      forgetStoredSyncJob(payload.job?.collection);
       syncNotice.value = payload.message || "词库已同步。";
       return;
     }
     if (status === "failed") {
       syncingKey.value = "";
+      forgetStoredSyncJob(payload.job?.collection);
       syncNotice.value = payload.message || "同步失败，请稍后再试。";
       return;
     }
     syncPollTimer = window.setTimeout(() => pollSyncJob(jobId, groupKey), 1200);
   } catch (error) {
+    if ((error.message || "").includes("不存在") || (error.message || "").includes("已过期")) {
+      forgetStoredSyncJob(activeCollection.value?.key);
+    }
     syncingKey.value = "";
     syncNotice.value = error.message || "同步状态获取失败，请稍后再试。";
   }
@@ -172,6 +258,7 @@ async function syncGroup(group) {
     activeKey.value = group.key;
     if (payload.job) {
       syncJob.value = payload.job;
+      rememberSyncJob(payload.job);
       syncNotice.value = payload.message || "同步任务已开始。";
       pollSyncJob(payload.job.id, group.key);
       return;
@@ -183,6 +270,10 @@ async function syncGroup(group) {
     syncingKey.value = "";
   }
 }
+
+onMounted(() => {
+  if (!resumeSyncJobFromPayload(pageData.value)) resumeStoredSyncJob();
+});
 
 onBeforeUnmount(clearSyncPoll);
 
