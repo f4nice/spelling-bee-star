@@ -40,7 +40,7 @@ const exampleAudioId = computed(() => `example-audio-${props.word.id || "current
 const isEnglishDefinition = computed(() => props.field === "english_definition");
 const isEnglishExample = computed(() => props.field === "english_example");
 const definitionAudioSrc = computed(() => props.word.english_definition_audio_url || "");
-const exampleAudioSrc = computed(() => props.word.british_audio_url || "");
+const exampleAudioSrc = computed(() => props.word.english_example_audio_url || "");
 
 function isLocalAudioUrl(url) {
   return String(url || "").startsWith("/media/audio/");
