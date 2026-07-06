@@ -29,3 +29,10 @@ export async function generateWordDefinitionAudio({ wordId }) {
   form.append("edit_token", "1");
   return fetchJson(wordApiPaths.definitionAudio(wordId), { method: "POST", body: form });
 }
+
+export async function generateWordExampleAudio({ wordId, listId = "" }) {
+  const form = new FormData();
+  form.append("edit_token", "1");
+  if (listId) form.append("list_id", listId);
+  return fetchJson(wordApiPaths.exampleAudio(wordId), { method: "POST", body: form });
+}

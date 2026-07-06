@@ -3,6 +3,7 @@ export const wordApiPaths = {
   audioChoice: (wordId) => `/api/vue/words/${wordId}/audio-choice`,
   aiAudio: (wordId) => `/api/vue/words/${wordId}/ai-audio`,
   definitionAudio: (wordId) => `/api/vue/words/${wordId}/definition-audio`,
+  exampleAudio: (wordId) => `/api/vue/words/${wordId}/example-audio`,
   aiImage: (wordId) => `/api/vue/words/${wordId}/ai-image`,
   field: (wordId) => `/api/vue/words/${wordId}/field`,
   image: (wordId) => `/api/vue/words/${wordId}/image`,

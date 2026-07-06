@@ -13,6 +13,8 @@ export function buildWordDetailPageProps(ctx) {
       chooseAudio: ctx.chooseAudio,
       uploadAudio: ctx.uploadAudio,
       generateAiAudio: ctx.generateAiAudio,
+      generateDefinitionAudio: ctx.generateDefinitionAudio,
+      generateExampleAudio: ctx.generateExampleAudio,
     },
     contentPanel: {
       data: ctx.data,

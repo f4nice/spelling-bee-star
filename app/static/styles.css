@@ -7068,6 +7068,74 @@ audio {
   background: var(--panel-soft);
 }
 
+.audio-manager-section.disabled {
+  opacity: 0.62;
+}
+
+.audio-manager-target-panel {
+  border-color: rgba(18, 128, 89, 0.22);
+  background: linear-gradient(135deg, #f7fffb 0%, #eefbf5 100%);
+}
+
+.audio-manager-target-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.audio-manager-target-button {
+  display: grid;
+  gap: 5px;
+  min-height: 98px;
+  border: 1px solid rgba(137, 185, 166, 0.48);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: left;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 10px 22px rgba(20, 64, 48, 0.06);
+  cursor: pointer;
+}
+
+.audio-manager-target-button:hover,
+.audio-manager-target-button.active {
+  border-color: transparent;
+  color: #fff;
+  background: linear-gradient(135deg, #128059 0%, #0b6748 100%);
+  box-shadow: 0 16px 34px rgba(18, 128, 89, 0.22);
+}
+
+.audio-manager-target-button span,
+.audio-manager-target-button strong,
+.audio-manager-target-button small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.audio-manager-target-button span {
+  font-weight: 900;
+}
+
+.audio-manager-target-button strong {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.audio-manager-target-button:hover strong,
+.audio-manager-target-button.active strong {
+  color: #dff9ed;
+}
+
+.audio-manager-target-button small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.audio-manager-target-button:hover small,
+.audio-manager-target-button.active small {
+  color: rgba(255, 255, 255, 0.82);
+}
+
 .audio-manager-section-head {
   display: flex;
   align-items: start;
@@ -7106,6 +7174,31 @@ audio {
 
 .audio-manager-preview audio {
   width: 100%;
+}
+
+.audio-manager-current-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: var(--accent);
+  background: #e9f8f1;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.audio-manager-field-panel {
+  border-color: rgba(18, 128, 89, 0.2);
+  background: #fbfffd;
+}
+
+.audio-manager-field-text {
+  border-left: 3px solid rgba(18, 128, 89, 0.36);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: #fff;
+  line-height: 1.65;
 }
 
 .audio-manager-button-group {
@@ -7172,6 +7265,15 @@ audio {
   font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.audio-upload-picker.disabled {
+  background: #f2f5f4;
+  cursor: not-allowed;
+}
+
+.audio-upload-picker.disabled span {
+  background: #a7b6b0;
 }
 
 .audio-manager-save:disabled {
@@ -8211,6 +8313,10 @@ select {
   .audio-manager-section-head,
   .audio-manager-ai-row {
     flex-direction: column;
+  }
+
+  .audio-manager-target-grid {
+    grid-template-columns: 1fr;
   }
 
   .audio-manager-option,

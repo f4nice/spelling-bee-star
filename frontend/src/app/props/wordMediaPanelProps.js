@@ -47,4 +47,12 @@ export const wordMediaPanelProps = {
     type: Function,
     required: true,
   },
+  generateDefinitionAudio: {
+    type: Function,
+    required: true,
+  },
+  generateExampleAudio: {
+    type: Function,
+    required: true,
+  },
 };

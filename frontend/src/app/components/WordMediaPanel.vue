@@ -87,6 +87,8 @@ function openAudioModal() {
       :choose-audio="chooseAudio"
       :upload-audio="uploadAudio"
       :generate-ai-audio="generateAiAudio"
+      :generate-definition-audio="generateDefinitionAudio"
+      :generate-example-audio="generateExampleAudio"
       @change-accent="selectedAudioAccentKey = $event"
       @close="isAudioModalOpen = false"
     />

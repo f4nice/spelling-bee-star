@@ -3,6 +3,7 @@ import { useAudioPlayback } from "../../shared/useAudioPlayback.js";
 import {
   chooseWordAudioOption,
   generateDefinitionAudioOption,
+  generateExampleAudioOption,
   generateWordAiAudioOption,
   updateWordAudioOptions,
   uploadWordAudioOption,
@@ -49,6 +50,10 @@ export function useWordAudio({ data, loadRoute }) {
     return generateDefinitionAudioOption({ data });
   }
 
+  async function generateExampleAudio() {
+    return generateExampleAudioOption({ data });
+  }
+
   return {
     audioOptions,
     recorderState,
@@ -59,6 +64,7 @@ export function useWordAudio({ data, loadRoute }) {
     uploadAudio,
     generateAiAudio,
     generateDefinitionAudio,
+    generateExampleAudio,
     startRecording,
     stopRecording,
     saveRecording,

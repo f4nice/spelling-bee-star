@@ -82,8 +82,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260706-004"
-DEFAULT_PAGE_VERSION = "v20260706.4"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260706-005"
+DEFAULT_PAGE_VERSION = "v20260706.5"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3784,26 +3784,19 @@ async def vue_spb_backfill_details_api(request: Request, db: Session = Depends(g
         raise HTTPException(status_code=404, detail="这组还没有同步到 SpeakEasy，先同步词库后再补全详情。")
 
     resource_applied = apply_word_resources(db, words, include_image=False)
-    missing_words = [
-        word
-        for word in words
-        if not (word.phonetic or "").strip()
-        or not (word.part_of_speech or "").strip()
-        or not (word.english_definition or "").strip()
-        or not (word.english_example or "").strip()
-    ]
-    queued_ids = [word.id for word in missing_words[:SPB_DETAIL_BACKFILL_BATCH_LIMIT]]
-    remaining_after_batch = max(len(missing_words) - len(queued_ids), 0)
+    repair_words = [word for word in words if word_needs_spb_detail_repair(word)]
+    queued_ids = [word.id for word in repair_words[:SPB_DETAIL_BACKFILL_BATCH_LIMIT]]
+    remaining_after_batch = max(len(repair_words) - len(queued_ids), 0)
     if queued_ids:
-        start_enrichment_thread(queued_ids, include_images=False)
+        start_spb_detail_backfill_thread(queued_ids)
 
     response = spb_payload(db, collection["key"])
     if queued_ids:
-        response["message"] = f"已从公共资源表补齐 {resource_applied} 个；后台继续补全 {len(queued_ids)} 个缺音标、词性、英文定义或英文例句的单词。"
+        response["message"] = f"已从公共资源表补齐 {resource_applied} 个；后台用 SPB 详情修复 {len(queued_ids)} 个单词，包含词性、英文定义、英文例句、例句音频和旧音频误挂清理。"
         if remaining_after_batch:
             response["message"] += f" 还有 {remaining_after_batch} 个会留到下一批，避免一次任务过大。"
     else:
-        response["message"] = f"已从公共资源表补齐 {resource_applied} 个；这组音标、词性、英文定义和英文例句已经没有明显缺口。"
+        response["message"] = f"已从公共资源表补齐 {resource_applied} 个；这组 SPB 详情、例句音频和音频挂载没有明显缺口。"
     response["queued_detail_count"] = len(queued_ids)
     response["remaining_detail_count"] = remaining_after_batch
     response["resource_applied_count"] = resource_applied
@@ -4659,14 +4652,23 @@ def spb_audio_urls_from_payload(payload: Any) -> dict[str, str]:
     generic_url = spb_find_first_field(payload, ("audioUrl", "audio_url", "audio", "voiceUrl", "voice_url", "durl"))
     example_url = spb_example_audio_url_from_payload(payload)
     result: dict[str, str] = {}
-    if spb_looks_like_audio_url(us_url):
-        result["american_audio_url"] = us_url
-    elif spb_looks_like_audio_url(generic_url):
-        result["american_audio_url"] = generic_url
-    if spb_looks_like_audio_url(gb_url):
-        result["british_audio_url"] = gb_url
     if spb_looks_like_audio_url(example_url):
         result["english_example_audio_url"] = example_url
+    if spb_looks_like_audio_url(us_url):
+        if spb_looks_like_example_audio_url(us_url):
+            result.setdefault("english_example_audio_url", us_url)
+        else:
+            result["american_audio_url"] = us_url
+    elif spb_looks_like_audio_url(generic_url):
+        if spb_looks_like_example_audio_url(generic_url):
+            result.setdefault("english_example_audio_url", generic_url)
+        else:
+            result["american_audio_url"] = generic_url
+    if spb_looks_like_audio_url(gb_url):
+        if spb_looks_like_example_audio_url(gb_url):
+            result.setdefault("english_example_audio_url", gb_url)
+        else:
+            result["british_audio_url"] = gb_url
     return result
 
 
@@ -4738,6 +4740,26 @@ def spb_looks_like_audio_url(value: str | None) -> bool:
     return lower_value.startswith(("http://", "https://")) and any(
         marker in lower_value
         for marker in (".mp3", ".m4a", ".wav", ".aac", ".ogg", "/audio", "audio", "voice", "sound")
+    )
+
+
+def spb_looks_like_example_audio_url(value: str | None) -> bool:
+    if not spb_looks_like_audio_url(value):
+        return False
+    lower_value = str(value or "").lower()
+    return any(
+        marker in lower_value
+        for marker in (
+            "example",
+            "sentence",
+            "sent_",
+            "sent-",
+            "/sent",
+            "ensentence",
+            "en_sentence",
+            "exampleaudio",
+            "sentenceaudio",
+        )
     )
 
 
@@ -5077,6 +5099,8 @@ async def apply_spb_details_to_word(db: Session, word: Word, *, list_id: int | N
         if apply_spb_text_fields_to_word(word, prepared):
             changed = True
         if apply_imported_local_audio(word, prepared):
+            changed = True
+        if clear_misclassified_spb_audio_from_resource(db, word, prepared):
             changed = True
         if changed:
             remember_word_resource(
@@ -6180,6 +6204,96 @@ async def word_definition_audio(
     return {"ok": True, "word": word.word, "audio_url": audio_url, "reused": False}
 
 
+@app.post("/api/vue/words/{word_id}/example-audio")
+async def word_example_audio(
+    word_id: int,
+    edit_token: str = Form(default=""),
+    list_id: int | None = Form(default=None),
+    db: Session = Depends(get_db),
+):
+    require_word_write_access(edit_token)
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+
+    resource_changed = apply_word_resource(db, word, commit=False, include_image=False)
+    if is_local_audio_url(word.english_example_audio_url):
+        if resource_changed:
+            db.add(word)
+            db.commit()
+            db.refresh(word)
+        return {
+            "ok": True,
+            "word": serialize_word(word),
+            "audio_url": word.english_example_audio_url,
+            "reused": True,
+            "source": "resource",
+        }
+
+    spb_changed = await apply_spb_details_to_word(db, word, list_id=list_id)
+    if spb_changed:
+        db.add(word)
+        db.commit()
+        db.refresh(word)
+    if is_local_audio_url(word.english_example_audio_url):
+        remember_word_resource(
+            db,
+            word,
+            english_example_audio_source="spb-miniprogram",
+            override_media=True,
+            commit=True,
+        )
+        return {
+            "ok": True,
+            "word": serialize_word(word),
+            "audio_url": word.english_example_audio_url,
+            "reused": False,
+            "source": "spb-miniprogram",
+        }
+
+    example_text = re.sub(r"\s+", " ", (word.english_example or "").strip())
+    if not example_text:
+        raise HTTPException(status_code=400, detail="还没有英文例句，先从 SPB 补全或手动补充例句。")
+
+    try:
+        audio_url = await generate_ai_audio_with_settings(
+            text_value=example_text,
+            accent="gb",
+            voice_gender="female",
+            text_mode="example",
+        )
+    except RuntimeError as exc:
+        detail = str(exc)
+        if "not configured" in detail:
+            raise HTTPException(status_code=400, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=f"英文例句音频生成失败: {detail}") from exc
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text[:400] if exc.response is not None else str(exc)
+        raise HTTPException(status_code=502, detail=f"英文例句音频生成失败: {detail}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"英文例句音频生成失败: {exc}") from exc
+
+    word.english_example_audio_url = audio_url
+    word.enrichment_error = None
+    db.add(word)
+    db.commit()
+    db.refresh(word)
+    remember_word_resource(
+        db,
+        word,
+        english_example_audio_source=ai_tts_audio_source("example"),
+        override_media=True,
+        commit=True,
+    )
+    return {
+        "ok": True,
+        "word": serialize_word(word),
+        "audio_url": audio_url,
+        "reused": False,
+        "source": ai_tts_audio_source("example"),
+    }
+
+
 @app.get("/words/{word_id}", response_class=HTMLResponse)
 def word_detail(
     word_id: int,
@@ -6321,6 +6435,16 @@ def local_import_audio_url(value: str | None) -> str | None:
     return audio_url if is_local_audio_url(audio_url) else None
 
 
+def local_spb_word_audio_url_for_accent(value: str | None, accent: str) -> bool:
+    audio_url = str(value or "").strip()
+    lower_value = audio_url.lower()
+    return bool(
+        is_local_audio_url(audio_url)
+        and "-spb-" in lower_value
+        and f"-{accent}-" in lower_value
+    )
+
+
 def audio_source_priority(source: str | None = None, audio_url: str | None = None) -> int:
     marker = f"{source or ''} {audio_url or ''}".lower()
     if "spb" in marker or "miniprogram" in marker:
@@ -6426,7 +6550,59 @@ def apply_imported_local_audio(word: Word, row: dict[str, Any]) -> bool:
     ):
         word.english_example_audio_url = english_example_audio_url
         changed = True
+    if english_example_audio_url and not american_audio_url and local_spb_word_audio_url_for_accent(word.american_audio_url, "us"):
+        word.american_audio_url = None
+        word.american_audio_locked = False
+        changed = True
+    if english_example_audio_url and not british_audio_url and local_spb_word_audio_url_for_accent(word.british_audio_url, "gb"):
+        word.british_audio_url = None
+        word.british_audio_locked = False
+        changed = True
     return changed
+
+
+def clear_misclassified_spb_audio_from_resource(db: Session, word: Word, row: dict[str, Any]) -> bool:
+    english_example_audio_url = local_import_audio_url(row.get("english_example_audio_url"))
+    if not english_example_audio_url:
+        return False
+    resource = get_word_resource(db, word.word)
+    if not resource:
+        return False
+
+    changed = False
+    if (
+        not local_import_audio_url(row.get("american_audio_url"))
+        and local_spb_word_audio_url_for_accent(resource.american_audio_url, "us")
+    ):
+        resource.american_audio_url = None
+        resource.american_audio_source = None
+        changed = True
+    if (
+        not local_import_audio_url(row.get("british_audio_url"))
+        and local_spb_word_audio_url_for_accent(resource.british_audio_url, "gb")
+    ):
+        resource.british_audio_url = None
+        resource.british_audio_source = None
+        changed = True
+    if changed:
+        db.add(resource)
+    return changed
+
+
+def word_needs_spb_detail_repair(word: Word) -> bool:
+    if (
+        not (word.phonetic or "").strip()
+        or not (word.part_of_speech or "").strip()
+        or not (word.english_definition or "").strip()
+        or not (word.english_example or "").strip()
+    ):
+        return True
+    if (word.english_example or "").strip() and not is_local_audio_url(word.english_example_audio_url):
+        return True
+    return local_spb_word_audio_url_for_accent(word.american_audio_url, "us") or local_spb_word_audio_url_for_accent(
+        word.british_audio_url,
+        "gb",
+    )
 
 
 def merge_spellings(existing: str | None, incoming: str | None, *, primary: str | None = None) -> str | None:
@@ -6563,6 +6739,31 @@ def html_to_text(value: str) -> str:
 
 def start_enrichment_thread(word_ids: list[int], *, include_images: bool = True) -> None:
     worker = Thread(target=lambda: asyncio.run(enrich_word_ids(word_ids, include_images=include_images)), daemon=True)
+    worker.start()
+
+
+async def apply_spb_detail_backfill_word_ids(word_ids: list[int]) -> None:
+    db = SessionLocal()
+    try:
+        for word_id in word_ids:
+            word = db.get(Word, word_id)
+            if not word:
+                continue
+            try:
+                apply_word_resource(db, word, commit=False, include_image=False)
+                await apply_spb_details_to_word(db, word)
+                db.add(word)
+                db.commit()
+                db.refresh(word)
+                remember_word_resource(db, word, commit=True)
+            except Exception:
+                db.rollback()
+    finally:
+        db.close()
+
+
+def start_spb_detail_backfill_thread(word_ids: list[int]) -> None:
+    worker = Thread(target=lambda: asyncio.run(apply_spb_detail_backfill_word_ids(word_ids)), daemon=True)
     worker.start()
 
 

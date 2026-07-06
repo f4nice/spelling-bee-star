@@ -16,6 +16,7 @@ export function buildWordDetailContext(wordDetail) {
     uploadAudio: wordDetail.uploadAudio,
     generateAiAudio: wordDetail.generateAiAudio,
     generateDefinitionAudio: wordDetail.generateDefinitionAudio,
+    generateExampleAudio: wordDetail.generateExampleAudio,
     startRecording: wordDetail.startRecording,
     stopRecording: wordDetail.stopRecording,
     saveRecording: wordDetail.saveRecording,

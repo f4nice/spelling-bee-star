@@ -39,10 +39,19 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  generateDefinitionAudio: {
+    type: Function,
+    default: null,
+  },
+  generateExampleAudio: {
+    type: Function,
+    default: null,
+  },
 });
 
 const emit = defineEmits(["change-accent", "close"]);
 
+const activeTargetKey = ref(props.selectedAccentKey || props.accent.key || "us");
 const loadingOptions = ref(false);
 const loadingSpbOptions = ref(false);
 const savingSelection = ref(false);
@@ -54,35 +63,125 @@ const previewAudio = ref(null);
 const notice = ref("");
 
 const selectedFileName = computed(() => selectedFile.value?.name || "未选择音频文件");
-const accentName = computed(() => (props.accent.key === "gb" ? "英式" : "美式"));
-const phoneticText = computed(() => String(props.data.word?.phonetic || "").trim().replace(/^\/+|\/+$/g, "").trim());
+const word = computed(() => props.data.word || {});
+const audioSources = computed(() => props.data.audio_sources || {});
+const phoneticText = computed(() => String(word.value.phonetic || "").trim().replace(/^\/+|\/+$/g, "").trim());
 const hasPhoneticText = computed(() => Boolean(phoneticText.value));
+
+function isLocalAudioUrl(url) {
+  return typeof url === "string" && url.startsWith("/media/audio/");
+}
+
+function wordAudioUrl(accentKey) {
+  if (accentKey === "gb") return audioSources.value.gb || word.value.british_audio_url || "";
+  return audioSources.value.us || word.value.american_audio_url || "";
+}
+
+function targetStatus(url) {
+  if (!url) return "待处理";
+  return isLocalAudioUrl(url) ? "服务器已有" : "可播放";
+}
+
+const wordTargets = computed(() => {
+  const accents = props.accents.length ? props.accents : [{ key: "us", label: "美式发音" }, { key: "gb", label: "英式发音" }];
+  return accents.map((item) => ({
+    key: item.key,
+    type: "word",
+    label: item.key === "gb" ? "英式单词" : "美式单词",
+    subtitle: item.key === "gb" ? "只处理英式单词发音" : "只处理美式单词发音",
+    currentUrl: wordAudioUrl(item.key),
+    status: targetStatus(wordAudioUrl(item.key)),
+  }));
+});
+
+const fieldTargets = computed(() => [
+  {
+    key: "definition",
+    type: "definition",
+    label: "英文定义",
+    subtitle: "朗读英文定义，不影响单词发音",
+    currentUrl: word.value.english_definition_audio_url || "",
+    text: word.value.english_definition || "",
+    status: targetStatus(word.value.english_definition_audio_url || ""),
+  },
+  {
+    key: "example",
+    type: "example",
+    label: "英文例句",
+    subtitle: "优先复用 SPB 小程序例句音频",
+    currentUrl: word.value.english_example_audio_url || "",
+    text: word.value.english_example || "",
+    status: targetStatus(word.value.english_example_audio_url || ""),
+  },
+]);
+
+const audioTargets = computed(() => [...wordTargets.value, ...fieldTargets.value]);
+const activeTarget = computed(() => audioTargets.value.find((item) => item.key === activeTargetKey.value) || audioTargets.value[0]);
+const isWordTarget = computed(() => activeTarget.value?.type === "word");
+const isDefinitionTarget = computed(() => activeTarget.value?.type === "definition");
+const isExampleTarget = computed(() => activeTarget.value?.type === "example");
+const accentName = computed(() => (activeTarget.value?.key === "gb" ? "英式" : "美式"));
+const activeOptions = computed(() => (isWordTarget.value ? props.options : []));
+const currentAudioUrl = computed(() => pendingAudio.value?.url || activeTarget.value?.currentUrl || "");
+const currentAudioLabel = computed(() => pendingAudio.value?.label || (activeTarget.value?.currentUrl ? `${activeTarget.value.label} · 当前音频` : "还没有音频"));
+const canSavePendingAudio = computed(() => isWordTarget.value && Boolean(pendingAudio.value?.url || pendingAudio.value?.file));
+const canUseUpload = computed(() => isWordTarget.value);
+const canUseWordAi = computed(() => isWordTarget.value);
+const canUseDictionary = computed(() => isWordTarget.value);
+const fieldText = computed(() => String(activeTarget.value?.text || "").trim());
+
 function aiButtonLabel(textMode = "word") {
   return `生成${accentName.value} AI朗读${textMode === "phonetic" ? "音标" : "单词"}`;
 }
+
 function aiButtonText(textMode, voiceGender) {
   const currentKey = `${textMode}:${voiceGender}`;
   const voiceLabel = voiceGender === "male" ? "男声" : "女声";
   return generatingKey.value === currentKey ? "生成中..." : `${aiButtonLabel(textMode)} · ${voiceLabel}`;
 }
+
 function canGenerateAi(textMode) {
-  return !generatingKey.value && (textMode !== "phonetic" || hasPhoneticText.value);
+  return !generatingKey.value && canUseWordAi.value && (textMode !== "phonetic" || hasPhoneticText.value);
 }
+
 const phoneticRowHint = computed(() => {
   if (hasPhoneticText.value) return `当前音标 /${phoneticText.value}/`;
   return "还没有音标，先双击单词下方音标补充后再生成。";
 });
-const pendingAudioLabel = computed(() => pendingAudio.value?.label || "还没有选择试听音频");
-const canSavePendingAudio = computed(() => Boolean(pendingAudio.value?.url || pendingAudio.value?.file));
+
+const fieldGenerateText = computed(() => {
+  if (isDefinitionTarget.value) return generatingKey.value === "definition" ? "生成中..." : "生成英文定义音频";
+  return generatingKey.value === "example" ? "处理中..." : "获取/生成英文例句音频";
+});
+
+const canGenerateFieldAudio = computed(() => {
+  if (generatingKey.value || !fieldText.value) return false;
+  if (isDefinitionTarget.value) return typeof props.generateDefinitionAudio === "function";
+  if (isExampleTarget.value) return typeof props.generateExampleAudio === "function";
+  return false;
+});
 
 function clearPreviewUrl() {
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
   previewUrl.value = "";
 }
 
+function resetPendingAudio() {
+  selectedFile.value = null;
+  pendingAudio.value = null;
+  notice.value = "";
+  clearPreviewUrl();
+}
+
 function setPendingAudio(source) {
   if (source.type !== "upload") clearPreviewUrl();
   pendingAudio.value = source;
+}
+
+function selectTarget(key) {
+  activeTargetKey.value = key;
+  resetPendingAudio();
+  if (key === "us" || key === "gb") emit("change-accent", key);
 }
 
 async function playPendingAudio() {
@@ -99,6 +198,7 @@ async function playPendingAudio() {
 }
 
 function selectUploadFile(event) {
+  if (!canUseUpload.value) return;
   clearPreviewUrl();
   selectedFile.value = event.target.files?.[0] || null;
   if (selectedFile.value) {
@@ -114,10 +214,11 @@ function selectUploadFile(event) {
 }
 
 async function refreshOptions() {
+  if (!canUseDictionary.value) return;
   loadingOptions.value = true;
   notice.value = "";
   try {
-    await props.fetchAudioOptions(props.accent.key, "dictionary");
+    await props.fetchAudioOptions(activeTarget.value.key, "dictionary");
     notice.value = "已更新可选音源";
   } catch (error) {
     notice.value = error.message || "获取音源失败";
@@ -127,11 +228,12 @@ async function refreshOptions() {
 }
 
 async function refreshSpbOptions() {
+  if (!canUseDictionary.value) return;
   loadingSpbOptions.value = true;
   notice.value = "";
   try {
-    await props.fetchAudioOptions(props.accent.key, "spb");
-    notice.value = "已获取小程序音频候选，试听后可以保存。";
+    await props.fetchAudioOptions(activeTarget.value.key, "spb");
+    notice.value = "已获取小程序单词音频候选，试听后可以保存。";
   } catch (error) {
     notice.value = error.message || "获取小程序音频失败";
   } finally {
@@ -150,14 +252,14 @@ function previewOption(option) {
 }
 
 async function saveCurrentAudio() {
-  if (!pendingAudio.value || savingSelection.value) return;
+  if (!canSavePendingAudio.value || savingSelection.value) return;
   savingSelection.value = true;
   notice.value = "";
   try {
     if (pendingAudio.value.type === "upload") {
-      await props.uploadAudio(props.accent.key, pendingAudio.value.file);
+      await props.uploadAudio(activeTarget.value.key, pendingAudio.value.file);
     } else {
-      await props.chooseAudio(props.accent.key, pendingAudio.value.url);
+      await props.chooseAudio(activeTarget.value.key, pendingAudio.value.url);
     }
     emit("close");
   } catch (error) {
@@ -175,7 +277,7 @@ async function generateAiSource(textMode, voiceGender) {
   generatingKey.value = `${textMode}:${voiceGender}`;
   notice.value = "";
   try {
-    const result = await props.generateAiAudio(props.accent.key, voiceGender, textMode);
+    const result = await props.generateAiAudio(activeTarget.value.key, voiceGender, textMode);
     const voiceLabel = voiceGender === "male" ? "男声" : "女声";
     setPendingAudio({
       type: "url",
@@ -193,11 +295,40 @@ async function generateAiSource(textMode, voiceGender) {
   }
 }
 
-watch(() => props.accent.key, () => {
-  selectedFile.value = null;
-  pendingAudio.value = null;
+async function generateFieldAudio() {
+  if (!canGenerateFieldAudio.value) {
+    notice.value = fieldText.value ? "当前音频处理功能未加载，请刷新页面后重试。" : "当前字段还没有文本，先补全内容后再生成音频。";
+    return;
+  }
+  const key = activeTarget.value.type;
+  generatingKey.value = key;
   notice.value = "";
-  clearPreviewUrl();
+  try {
+    const result = key === "definition" ? await props.generateDefinitionAudio() : await props.generateExampleAudio();
+    const audioUrl = result?.audio_url || (key === "definition" ? word.value.english_definition_audio_url : word.value.english_example_audio_url);
+    if (audioUrl) {
+      setPendingAudio({
+        type: "field",
+        url: audioUrl,
+        label: `${activeTarget.value.label} · 已保存到服务器`,
+      });
+      const played = await playPendingAudio();
+      notice.value = played
+        ? `${activeTarget.value.label}音频已更新并自动播放。`
+        : `${activeTarget.value.label}音频已更新，点上方播放器可试听。`;
+    } else {
+      notice.value = `${activeTarget.value.label}音频处理完成，但暂时没有可播放文件。`;
+    }
+  } catch (error) {
+    notice.value = error.message || `${activeTarget.value.label}音频处理失败`;
+  } finally {
+    generatingKey.value = "";
+  }
+}
+
+watch(() => props.accent.key, (key) => {
+  if (activeTargetKey.value === "us" || activeTargetKey.value === "gb") activeTargetKey.value = key;
+  resetPendingAudio();
 });
 
 onBeforeUnmount(clearPreviewUrl);
@@ -208,123 +339,121 @@ onBeforeUnmount(clearPreviewUrl);
     <section class="audio-manager-modal">
       <header class="audio-manager-heading">
         <div>
-          <p class="section-kicker">{{ accent.label }}</p>
+          <p class="section-kicker">当前：{{ activeTarget.label }}</p>
           <h2>音频管理</h2>
         </div>
-        <div class="audio-manager-heading-actions">
-          <div v-if="accents.length > 1" class="audio-manager-accent-switch" role="group" aria-label="选择发音">
-            <button
-              v-for="item in accents"
-              :key="item.key"
-              type="button"
-              :class="{ active: item.key === accent.key }"
-              @click="emit('change-accent', item.key)"
-            >
-              {{ item.key === "gb" ? "英式" : "美式" }}
-            </button>
-          </div>
-          <button class="ghost-button compact-button" type="button" @click="emit('close')">关闭</button>
-        </div>
+        <button class="ghost-button compact-button" type="button" @click="emit('close')">关闭</button>
       </header>
 
       <div class="audio-manager-body">
+        <section class="audio-manager-section audio-manager-target-panel">
+          <div class="audio-manager-target-grid" role="group" aria-label="选择音频类型">
+            <button
+              v-for="target in audioTargets"
+              :key="target.key"
+              type="button"
+              class="audio-manager-target-button"
+              :class="{ active: target.key === activeTarget.key }"
+              @click="selectTarget(target.key)"
+            >
+              <span>{{ target.label }}</span>
+              <strong>{{ target.status }}</strong>
+              <small>{{ target.subtitle }}</small>
+            </button>
+          </div>
+        </section>
+
         <section class="audio-manager-section audio-manager-preview">
           <div class="audio-manager-section-head">
             <div>
               <h3>当前试听音频</h3>
-              <p>{{ pendingAudioLabel }}</p>
+              <p>{{ currentAudioLabel }}</p>
             </div>
             <button
+              v-if="isWordTarget"
               class="challenge-button"
               type="button"
               :disabled="!canSavePendingAudio || savingSelection"
               @click="saveCurrentAudio"
             >
-              {{ savingSelection ? "保存中..." : "保存当前音频" }}
+              {{ savingSelection ? "保存中..." : "保存当前单词音频" }}
             </button>
+            <span v-else class="audio-manager-current-pill">
+              {{ activeTarget.currentUrl ? "字段音频已保存" : "字段音频待处理" }}
+            </span>
           </div>
-          <audio v-if="pendingAudio?.url" ref="previewAudio" controls :src="pendingAudio.url" />
+          <audio v-if="currentAudioUrl" ref="previewAudio" controls :src="currentAudioUrl" />
           <p v-else class="audio-manager-empty">先从下方选择、上传或生成一个音频。</p>
         </section>
 
-        <section class="audio-manager-section">
+        <template v-if="isWordTarget">
+          <section class="audio-manager-section">
+            <div class="audio-manager-section-head">
+              <div>
+                <h3>重新获取单词音频</h3>
+                <p>从词典源查找，也可以直接读取 SPB 小程序单词音频。</p>
+              </div>
+              <div class="audio-manager-button-group">
+                <button class="secondary-button" type="button" :disabled="loadingOptions || loadingSpbOptions" @click="refreshOptions">
+                  {{ loadingOptions ? "获取中..." : "重新获取音源" }}
+                </button>
+                <button class="secondary-button" type="button" :disabled="loadingOptions || loadingSpbOptions" @click="refreshSpbOptions">
+                  {{ loadingSpbOptions ? "获取中..." : "获取小程序音频" }}
+                </button>
+              </div>
+            </div>
+            <div v-if="activeOptions.length" class="audio-manager-options">
+              <article v-for="option in activeOptions" :key="option.url" class="audio-manager-option">
+                <strong>{{ option.label }}</strong>
+                <button class="secondary-button" type="button" @click="previewOption(option)">放入试听</button>
+              </article>
+            </div>
+            <p v-else class="audio-manager-empty">还没有候选音频，点击重新获取音源。</p>
+          </section>
+
+          <section class="audio-manager-section">
+            <div class="audio-manager-ai-row">
+              <div>
+                <h3>AI朗读单词</h3>
+              </div>
+              <div class="audio-manager-button-group">
+                <button class="secondary-button" type="button" :disabled="!canGenerateAi('word')" @click="generateAiSource('word', 'female')">
+                  {{ aiButtonText("word", "female") }}
+                </button>
+                <button class="secondary-button" type="button" :disabled="!canGenerateAi('word')" @click="generateAiSource('word', 'male')">
+                  {{ aiButtonText("word", "male") }}
+                </button>
+              </div>
+            </div>
+            <div class="audio-manager-ai-row">
+              <div>
+                <h3>AI朗读音标</h3>
+                <p>{{ phoneticRowHint }}</p>
+              </div>
+              <div class="audio-manager-button-group">
+                <button class="secondary-button" type="button" :disabled="!canGenerateAi('phonetic')" @click="generateAiSource('phonetic', 'female')">
+                  {{ aiButtonText("phonetic", "female") }}
+                </button>
+                <button class="secondary-button" type="button" :disabled="!canGenerateAi('phonetic')" @click="generateAiSource('phonetic', 'male')">
+                  {{ aiButtonText("phonetic", "male") }}
+                </button>
+              </div>
+            </div>
+          </section>
+        </template>
+
+        <section v-else class="audio-manager-section audio-manager-field-panel">
           <div class="audio-manager-section-head">
             <div>
-              <h3>重新获取</h3>
-              <p>从多个词典音频源查找，也可以直接读取 SPB 小程序音频。</p>
+              <h3>{{ activeTarget.label }}音频</h3>
+              <p>{{ activeTarget.subtitle }}</p>
             </div>
-            <div class="audio-manager-button-group">
-              <button class="secondary-button" type="button" :disabled="loadingOptions || loadingSpbOptions" @click="refreshOptions">
-                {{ loadingOptions ? "获取中..." : "重新获取音源" }}
-              </button>
-              <button class="secondary-button" type="button" :disabled="loadingOptions || loadingSpbOptions" @click="refreshSpbOptions">
-                {{ loadingSpbOptions ? "获取中..." : "获取小程序音频" }}
-              </button>
-            </div>
+            <button class="challenge-button" type="button" :disabled="!canGenerateFieldAudio" @click="generateFieldAudio">
+              {{ fieldGenerateText }}
+            </button>
           </div>
-          <div v-if="options.length" class="audio-manager-options">
-            <article v-for="option in options" :key="option.url" class="audio-manager-option">
-              <strong>{{ option.label }}</strong>
-              <button
-                class="secondary-button"
-                type="button"
-                @click="previewOption(option)"
-              >
-                放入试听
-              </button>
-            </article>
-          </div>
-          <p v-else class="audio-manager-empty">还没有候选音频，点击重新获取音源。</p>
-        </section>
-
-        <section class="audio-manager-section">
-          <div class="audio-manager-ai-row">
-            <div>
-              <h3>AI朗读单词</h3>
-            </div>
-            <div class="audio-manager-button-group">
-              <button
-                class="secondary-button"
-                type="button"
-                :disabled="!canGenerateAi('word')"
-                @click="generateAiSource('word', 'female')"
-              >
-                {{ aiButtonText("word", "female") }}
-              </button>
-              <button
-                class="secondary-button"
-                type="button"
-                :disabled="!canGenerateAi('word')"
-                @click="generateAiSource('word', 'male')"
-              >
-                {{ aiButtonText("word", "male") }}
-              </button>
-            </div>
-          </div>
-          <div class="audio-manager-ai-row">
-            <div>
-              <h3>AI朗读音标</h3>
-              <p>{{ phoneticRowHint }}</p>
-            </div>
-            <div class="audio-manager-button-group">
-              <button
-                class="secondary-button"
-                type="button"
-                :disabled="!canGenerateAi('phonetic')"
-                @click="generateAiSource('phonetic', 'female')"
-              >
-                {{ aiButtonText("phonetic", "female") }}
-              </button>
-              <button
-                class="secondary-button"
-                type="button"
-                :disabled="!canGenerateAi('phonetic')"
-                @click="generateAiSource('phonetic', 'male')"
-              >
-                {{ aiButtonText("phonetic", "male") }}
-              </button>
-            </div>
-          </div>
+          <p v-if="fieldText" class="audio-manager-field-text">{{ fieldText }}</p>
+          <p v-else class="audio-manager-empty">这个字段还没有内容，先补全文本后再生成音频。</p>
         </section>
 
         <section class="audio-manager-section">
@@ -337,15 +466,15 @@ onBeforeUnmount(clearPreviewUrl);
           </div>
         </section>
 
-        <section class="audio-manager-section">
+        <section class="audio-manager-section" :class="{ disabled: !canUseUpload }">
           <div class="audio-manager-section-head">
             <div>
               <h3>上传我的音频</h3>
-              <p>选择音频文件后先预览，确认后保存为当前发音。</p>
+              <p>{{ canUseUpload ? "选择音频文件后先预览，确认后保存为当前单词发音。" : "上传只用于美式/英式单词音频，定义和例句音频请用上方按钮处理。" }}</p>
             </div>
           </div>
-          <label class="audio-upload-picker">
-            <input type="file" accept="audio/*" @change="selectUploadFile">
+          <label class="audio-upload-picker" :class="{ disabled: !canUseUpload }">
+            <input type="file" accept="audio/*" :disabled="!canUseUpload" @change="selectUploadFile">
             <span>选择音频</span>
             <strong>{{ selectedFileName }}</strong>
           </label>
