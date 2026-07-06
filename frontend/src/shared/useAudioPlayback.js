@@ -1,7 +1,16 @@
 export function useAudioPlayback() {
+  function stopPageAudio(activeAudio = null) {
+    document.querySelectorAll("audio").forEach((audio) => {
+      if (audio === activeAudio) return;
+      audio.pause();
+      audio.currentTime = 0;
+    });
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+  }
+
   function speakFallback(text, lang = "en-US") {
     if (!text || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
+    stopPageAudio();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang;
     window.speechSynthesis.speak(utterance);
@@ -13,6 +22,7 @@ export function useAudioPlayback() {
       speakFallback(fallbackText, lang);
       return;
     }
+    stopPageAudio(audio);
     if (!audio.readyState) audio.load();
     audio.currentTime = 0;
     audio.play().catch(() => {
