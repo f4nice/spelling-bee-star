@@ -27,9 +27,15 @@ export async function generateWordAiAudioOption({ wordId, accent, voiceGender, t
   return result;
 }
 
-export async function generateDefinitionAudioOption({ data }) {
-  const result = await generateWordDefinitionAudio({ wordId: data.value.word.id });
-  if (result?.audio_url) {
+export async function generateDefinitionAudioOption({ data, source = "auto" }) {
+  const result = await generateWordDefinitionAudio({
+    wordId: data.value.word.id,
+    listId: data.value.navigation?.list_id || "",
+    source,
+  });
+  if (result?.word) {
+    data.value.word = result.word;
+  } else if (result?.audio_url) {
     data.value.word.english_definition_audio_url = result.audio_url;
   }
   return result;

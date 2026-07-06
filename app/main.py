@@ -82,8 +82,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260706-011"
-DEFAULT_PAGE_VERSION = "v20260706.11"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260706-012"
+DEFAULT_PAGE_VERSION = "v20260706.12"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -4658,9 +4658,12 @@ def spb_audio_urls_from_payload(payload: Any) -> dict[str, str]:
     )
     generic_url = spb_find_first_field(payload, ("audioUrl", "audio_url", "audio", "voiceUrl", "voice_url", "durl"))
     example_url = spb_example_audio_url_from_payload(payload)
+    definition_url = spb_definition_audio_url_from_payload(payload)
     result: dict[str, str] = {}
     if spb_looks_like_audio_url(example_url):
         result["english_example_audio_url"] = example_url
+    if spb_looks_like_audio_url(definition_url):
+        result["english_definition_audio_url"] = definition_url
     if spb_looks_like_audio_url(us_url):
         if spb_looks_like_example_audio_url(us_url):
             result.setdefault("english_example_audio_url", us_url)
@@ -4677,6 +4680,62 @@ def spb_audio_urls_from_payload(payload: Any) -> dict[str, str]:
         else:
             result["british_audio_url"] = gb_url
     return result
+
+
+def spb_definition_audio_url_from_payload(payload: Any) -> str | None:
+    specific_url = spb_find_preferred_field(
+        payload,
+        (
+            "definitionUrl",
+            "DefinitionUrl",
+            "definition_url",
+            "english_definition_audio_url",
+            "englishDefinitionAudioUrl",
+            "enDefinitionAudioUrl",
+            "definitionAudioUrl",
+            "definition_audio_url",
+            "definitionVoiceUrl",
+            "definition_voice_url",
+            "definitionSoundUrl",
+            "definition_sound_url",
+            "definitionMp3",
+            "definition_mp3",
+            "definitionMp3Url",
+            "definition_mp3_url",
+            "definitionAudio",
+            "definition_audio",
+            "meaningAudioUrl",
+            "meaning_audio_url",
+            "meaningAudio",
+            "meaning_audio",
+            "defAudioUrl",
+            "def_audio_url",
+        ),
+    )
+    if spb_looks_like_audio_url(specific_url) and not spb_looks_like_example_audio_url(specific_url):
+        return specific_url
+
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            lower_key = key.lower()
+            is_definition_key = any(marker in lower_key for marker in ("definition", "meaning", "defaudio"))
+            is_other_field = any(marker in lower_key for marker in ("example", "sentence", "chinese", "translation"))
+            if is_definition_key and not is_other_field:
+                nested_url = spb_find_first_field(
+                    value,
+                    ("audioUrl", "audio_url", "audio", "voiceUrl", "voice_url", "soundUrl", "sound_url", "url"),
+                )
+                if spb_looks_like_audio_url(nested_url) and not spb_looks_like_example_audio_url(nested_url):
+                    return nested_url
+            nested = spb_definition_audio_url_from_payload(value)
+            if nested:
+                return nested
+    elif isinstance(payload, list):
+        for value in payload:
+            nested = spb_definition_audio_url_from_payload(value)
+            if nested:
+                return nested
+    return None
 
 
 def spb_example_audio_url_from_payload(payload: Any) -> str | None:
@@ -4777,7 +4836,7 @@ def spb_looks_like_example_audio_url(value: str | None) -> bool:
 def spb_local_audio_count(row: dict[str, Any]) -> int:
     return sum(
         1
-        for field in ("american_audio_url", "british_audio_url", "english_example_audio_url")
+        for field in ("american_audio_url", "british_audio_url", "english_definition_audio_url", "english_example_audio_url")
         if is_local_audio_url(row.get(field))
     )
 
@@ -4901,6 +4960,20 @@ def spb_example_audio_source_key(group: dict[str, Any], word: str | None, exampl
     return f"spb-example-{group_key}-{digest}"
 
 
+def spb_definition_audio_source_key(
+    group: dict[str, Any],
+    word: str | None,
+    definition: str | None,
+    audio_url: str | None,
+) -> str:
+    group_key = str(group.get("spb_flag") or group.get("key") or "definition").strip()
+    text = re.sub(r"\s+", " ", (definition or "").strip())
+    source_url = str(audio_url or "").strip()
+    text = "|".join(part for part in (text, source_url) if part) or str(word or "").strip()
+    digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
+    return f"spb-definition-{group_key}-{digest}"
+
+
 def local_audio_url_matches_source_key(audio_url: str | None, source_key: str | None) -> bool:
     if not audio_url or not source_key:
         return False
@@ -4934,6 +5007,32 @@ def reusable_local_example_audio_for_word(
     return audio_url, resource.english_example_audio_source
 
 
+def reusable_local_definition_audio_for_word(
+    db: Session | None,
+    word_text: str | None,
+    incoming_definition: str | None,
+    incoming_source: str | None = None,
+    expected_source_key: str | None = None,
+) -> tuple[str, str | None] | None:
+    if db is None:
+        return None
+    resource = get_word_resource(db, word_text)
+    if not resource:
+        return None
+    audio_url = (resource.english_definition_audio_url or "").strip()
+    if not is_local_audio_url(audio_url):
+        return None
+    if expected_source_key and not local_audio_url_matches_source_key(audio_url, expected_source_key):
+        return None
+    normalized_incoming = re.sub(r"\s+", " ", (incoming_definition or "").strip())
+    normalized_existing = re.sub(r"\s+", " ", (resource.english_definition or "").strip())
+    if normalized_incoming and normalized_existing and normalized_incoming != normalized_existing:
+        return None
+    if audio_source_priority(resource.english_definition_audio_source, audio_url) < audio_source_priority(incoming_source, audio_url):
+        return None
+    return audio_url, resource.english_definition_audio_source
+
+
 async def prepare_spb_rows_with_local_audio(
     rows: list[dict[str, Any]],
     group: dict[str, Any],
@@ -4958,6 +5057,8 @@ async def prepare_spb_rows_with_local_audio(
                         prepared["american_audio_url_source"] = "spb-miniprogram"
                     if detail_audio_fields.get("british_audio_url"):
                         prepared["british_audio_url_source"] = "spb-miniprogram"
+                    if detail_audio_fields.get("english_definition_audio_url"):
+                        prepared["english_definition_audio_url_source"] = "spb-miniprogram"
                     if detail_audio_fields.get("english_example_audio_url"):
                         prepared["english_example_audio_url_source"] = "spb-miniprogram"
                     for key, value in {**detail_audio_fields, **detail_text_fields}.items():
@@ -5019,6 +5120,39 @@ async def prepare_spb_rows_with_local_audio(
                     if local_url:
                         prepared["english_example_audio_url"] = local_url
                         prepared["english_example_audio_url_source"] = "spb-miniprogram"
+            definition_audio_url = str(prepared.get("english_definition_audio_url") or "").strip()
+            if definition_audio_url and not is_local_audio_url(definition_audio_url):
+                incoming_source = str(prepared.get("english_definition_audio_url_source") or "spb-miniprogram")
+                definition_source_key = spb_definition_audio_source_key(
+                    group,
+                    prepared.get("word"),
+                    prepared.get("english_definition"),
+                    definition_audio_url,
+                )
+                reusable_definition_audio = reusable_local_definition_audio_for_word(
+                    db,
+                    prepared.get("word"),
+                    prepared.get("english_definition"),
+                    incoming_source,
+                    expected_source_key=definition_source_key,
+                )
+                if reusable_definition_audio:
+                    prepared["english_definition_audio_url"] = reusable_definition_audio[0]
+                    prepared["english_definition_audio_url_source"] = reusable_definition_audio[1] or incoming_source
+                else:
+                    try:
+                        local_url = await store_audio_candidate(
+                            prepared["word"],
+                            "definition",
+                            definition_source_key,
+                            definition_audio_url,
+                            AUDIO_DIR,
+                        )
+                    except Exception:
+                        local_url = None
+                    if local_url:
+                        prepared["english_definition_audio_url"] = local_url
+                        prepared["english_definition_audio_url_source"] = "spb-miniprogram"
             return prepared
 
     return await asyncio.gather(*(prepare(row) for row in rows))
@@ -5116,6 +5250,8 @@ async def apply_spb_details_to_word(db: Session, word: Word, *, list_id: int | N
                     prepared["american_audio_url_source"] = "spb-miniprogram"
                 if detail_audio_fields.get("british_audio_url"):
                     prepared["british_audio_url_source"] = "spb-miniprogram"
+                if detail_audio_fields.get("english_definition_audio_url"):
+                    prepared["english_definition_audio_url_source"] = "spb-miniprogram"
                 if detail_audio_fields.get("english_example_audio_url"):
                     prepared["english_example_audio_url_source"] = "spb-miniprogram"
                 prepared.update(detail_audio_fields)
@@ -5135,11 +5271,13 @@ async def apply_spb_details_to_word(db: Session, word: Word, *, list_id: int | N
                 word,
                 american_audio_source=prepared.get("american_audio_url_source"),
                 british_audio_source=prepared.get("british_audio_url_source"),
+                english_definition_audio_source=prepared.get("english_definition_audio_url_source"),
                 english_example_audio_source=prepared.get("english_example_audio_url_source"),
                 override_text=bool(prepared.get("spb_text_source")),
                 override_media=bool(
                     prepared.get("american_audio_url_source")
                     or prepared.get("british_audio_url_source")
+                    or prepared.get("english_definition_audio_url_source")
                     or prepared.get("english_example_audio_url_source")
                 ),
                 commit=False,
@@ -5203,7 +5341,10 @@ def apply_spb_text_fields_to_word(word: Word, row: dict[str, Any]) -> bool:
         if value and (prefer_spb_detail or not (getattr(word, field, None) or "").strip()):
             if getattr(word, field, None) == value and getattr(word, lock_field, False):
                 continue
+            incoming_definition_audio_url = local_import_audio_url(row.get("english_definition_audio_url"))
             incoming_example_audio_url = local_import_audio_url(row.get("english_example_audio_url"))
+            if field == "english_definition" and getattr(word, field, None) != value and not incoming_definition_audio_url:
+                word.english_definition_audio_url = None
             if field == "english_example" and getattr(word, field, None) != value and not incoming_example_audio_url:
                 word.english_example_audio_url = None
             setattr(word, field, value)
@@ -6183,6 +6324,8 @@ async def word_ai_audio(
 async def word_definition_audio(
     word_id: int,
     edit_token: str = Form(default=""),
+    list_id: int | None = Form(default=None),
+    source: str = Form(default="auto"),
     db: Session = Depends(get_db),
 ):
     require_word_write_access(edit_token)
@@ -6190,9 +6333,49 @@ async def word_definition_audio(
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
 
-    apply_word_resource(db, word, commit=True, include_image=False)
+    source_mode = (source or "auto").strip().lower()
+    resource_changed = apply_word_resource(db, word, commit=False, include_image=False)
     if is_local_audio_url(word.english_definition_audio_url):
-        return {"ok": True, "word": word.word, "audio_url": word.english_definition_audio_url, "reused": True}
+        if resource_changed:
+            db.add(word)
+            db.commit()
+            db.refresh(word)
+        return {
+            "ok": True,
+            "word": serialize_word(word),
+            "audio_url": word.english_definition_audio_url,
+            "reused": True,
+            "source": "resource",
+        }
+
+    if source_mode in {"auto", "spb", "miniprogram", "mini-program", "spb-miniprogram"}:
+        candidate_groups = spb_candidate_groups_for_word(db, word, list_id)
+        spb_changed = await apply_spb_details_to_word(db, word, list_id=list_id)
+        if spb_changed:
+            db.add(word)
+            db.commit()
+            db.refresh(word)
+        if is_local_audio_url(word.english_definition_audio_url):
+            remember_word_resource(
+                db,
+                word,
+                english_definition_audio_source="spb-miniprogram",
+                override_media=True,
+                commit=True,
+            )
+            return {
+                "ok": True,
+                "word": serialize_word(word),
+                "audio_url": word.english_definition_audio_url,
+                "reused": False,
+                "source": "spb-miniprogram",
+            }
+        if source_mode != "auto":
+            if not candidate_groups:
+                raise HTTPException(status_code=404, detail="没有找到这个单词对应的 SPB 词库，暂时不能同步小程序音频。")
+            if not spb_miniprogram_authorization_configured():
+                raise HTTPException(status_code=400, detail="服务器还没有配置 SPB 小程序授权，无法读取小程序音频。")
+            raise HTTPException(status_code=404, detail="没有从 SPB 小程序拿到英文定义音频，可以改用生成英文定义音频。")
 
     definition_text = re.sub(r"\s+", " ", (word.english_definition or "").strip())
     if not definition_text:
@@ -6228,7 +6411,13 @@ async def word_definition_audio(
         override_media=True,
         commit=True,
     )
-    return {"ok": True, "word": word.word, "audio_url": audio_url, "reused": False}
+    return {
+        "ok": True,
+        "word": serialize_word(word),
+        "audio_url": audio_url,
+        "reused": False,
+        "source": ai_tts_audio_source("definition"),
+    }
 
 
 @app.post("/api/vue/words/{word_id}/example-audio")
@@ -6389,6 +6578,10 @@ def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]
             existing.part_of_speech = row.get("part_of_speech") or existing.part_of_speech
             existing.english_definition = row.get("english_definition") or existing.english_definition
             existing.english_definition_locked = existing.english_definition_locked or bool(row.get("english_definition"))
+            existing.english_definition_audio_url = (
+                local_import_audio_url(row.get("english_definition_audio_url"))
+                or existing.english_definition_audio_url
+            )
             existing.chinese_definition = row.get("chinese_definition") or existing.chinese_definition
             existing.chinese_definition_locked = existing.chinese_definition_locked or bool(row.get("chinese_definition"))
             incoming_example = str(row.get("english_example") or "").strip()
@@ -6412,6 +6605,7 @@ def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]
                 part_of_speech=row.get("part_of_speech"),
                 english_definition=row.get("english_definition"),
                 english_definition_locked=bool(row.get("english_definition")),
+                english_definition_audio_url=local_import_audio_url(row.get("english_definition_audio_url")),
                 chinese_definition=row.get("chinese_definition"),
                 chinese_definition_locked=bool(row.get("chinese_definition")),
                 english_example=row.get("english_example"),
@@ -6436,11 +6630,13 @@ def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]
                 word,
                 american_audio_source=row.get("american_audio_url_source"),
                 british_audio_source=row.get("british_audio_url_source"),
+                english_definition_audio_source=row.get("english_definition_audio_url_source"),
                 english_example_audio_source=row.get("english_example_audio_url_source"),
                 override_text=bool(row.get("spb_text_source")),
                 override_media=bool(
                     row.get("american_audio_url_source")
                     or row.get("british_audio_url_source")
+                    or row.get("english_definition_audio_url_source")
                     or row.get("english_example_audio_url_source")
                 ),
                 commit=False,
@@ -6593,9 +6789,11 @@ def apply_imported_local_audio(word: Word, row: dict[str, Any]) -> bool:
     changed = False
     american_audio_url = local_import_audio_url(row.get("american_audio_url"))
     british_audio_url = local_import_audio_url(row.get("british_audio_url"))
+    english_definition_audio_url = local_import_audio_url(row.get("english_definition_audio_url"))
     english_example_audio_url = local_import_audio_url(row.get("english_example_audio_url"))
     american_source = row.get("american_audio_url_source")
     british_source = row.get("british_audio_url_source")
+    english_definition_source = row.get("english_definition_audio_url_source")
     english_example_source = row.get("english_example_audio_url_source")
     if should_replace_audio(word.american_audio_url, american_audio_url, incoming_source=american_source):
         word.american_audio_url = american_audio_url
@@ -6604,6 +6802,13 @@ def apply_imported_local_audio(word: Word, row: dict[str, Any]) -> bool:
     if should_replace_audio(word.british_audio_url, british_audio_url, incoming_source=british_source):
         word.british_audio_url = british_audio_url
         word.british_audio_locked = True
+        changed = True
+    if should_replace_audio(
+        word.english_definition_audio_url,
+        english_definition_audio_url,
+        incoming_source=english_definition_source,
+    ):
+        word.english_definition_audio_url = english_definition_audio_url
         changed = True
     if should_replace_audio(
         word.english_example_audio_url,
@@ -6651,6 +6856,8 @@ def word_needs_spb_detail_repair(word: Word) -> bool:
     ):
         return True
     if (word.english_example or "").strip() and not is_local_audio_url(word.english_example_audio_url):
+        return True
+    if (word.english_definition or "").strip() and not is_local_audio_url(word.english_definition_audio_url):
         return True
     return local_spb_word_audio_url_for_accent(word.british_audio_url, "gb")
 
@@ -6960,7 +7167,17 @@ def remember_word_resource(
         changed = True
     if (word.english_definition_audio_url or "").strip() and (
         not resource.english_definition_audio_url
-        or override_media
+        or should_replace_audio(
+            resource.english_definition_audio_url,
+            word.english_definition_audio_url,
+            current_source=resource.english_definition_audio_source,
+            incoming_source=english_definition_audio_source,
+        )
+        or (
+            override_media
+            and audio_source_priority(english_definition_audio_source, word.english_definition_audio_url)
+            >= audio_source_priority(resource.english_definition_audio_source, resource.english_definition_audio_url)
+        )
     ):
         resource.english_definition_audio_url = word.english_definition_audio_url
         resource.english_definition_audio_source = (
@@ -7054,7 +7271,11 @@ def apply_word_resource(db: Session, word: Word, *, commit: bool = False, includ
         word.british_audio_url = resource.british_audio_url
         word.british_audio_locked = True
         changed = True
-    if (resource.english_definition_audio_url or "").strip() and not (word.english_definition_audio_url or "").strip():
+    if (resource.english_definition_audio_url or "").strip() and should_replace_audio(
+        word.english_definition_audio_url,
+        resource.english_definition_audio_url,
+        incoming_source=resource.english_definition_audio_source,
+    ):
         word.english_definition_audio_url = resource.english_definition_audio_url
         changed = True
     if (resource.english_example_audio_url or "").strip() and should_replace_audio(

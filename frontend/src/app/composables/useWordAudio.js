@@ -46,8 +46,8 @@ export function useWordAudio({ data, loadRoute }) {
     return generateWordAiAudioOption({ wordId: data.value.word.id, accent, voiceGender, textMode, loadRoute });
   }
 
-  async function generateDefinitionAudio() {
-    return generateDefinitionAudioOption({ data });
+  async function generateDefinitionAudio(options = {}) {
+    return generateDefinitionAudioOption({ data, source: options.source || "auto" });
   }
 
   async function generateExampleAudio() {
