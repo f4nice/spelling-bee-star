@@ -6141,8 +6141,30 @@ button.calendar-day:disabled {
   padding: 12px;
 }
 
+.word-media-action-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.media-manager-button,
 .image-manager-trigger {
   width: 100%;
+  min-height: 42px;
+  border-radius: 8px;
+  font-weight: 900;
+}
+
+.audio-manager-trigger {
+  border-color: rgba(29, 127, 91, 0.24);
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+}
+
+.audio-manager-trigger:hover {
+  color: #fff;
+  border-color: var(--accent);
+  background: var(--accent);
 }
 
 .detail-media img,
@@ -6739,7 +6761,7 @@ button.calendar-day:disabled {
 
 .word-title-stack {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .word-title-main {
@@ -6800,6 +6822,57 @@ button.calendar-day:disabled {
   color: var(--accent-dark);
   font-size: 18px;
   font-weight: 700;
+}
+
+.word-audio-quick-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.word-audio-quick-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.word-audio-quick-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  border: 1px solid rgba(29, 127, 91, 0.24);
+  border-radius: 999px;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.word-audio-quick-button:hover {
+  color: #fff;
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.word-audio-quick-button:disabled,
+.word-audio-quick-button:disabled:hover {
+  color: #8a9a92;
+  border-color: rgba(120, 138, 128, 0.18);
+  background: #eef3ef;
+  cursor: not-allowed;
+  opacity: 0.74;
+}
+
+.word-audio-quick-controls audio {
+  display: none;
 }
 
 .alternate-spellings-row {
@@ -6937,6 +7010,39 @@ audio {
   gap: 16px;
   border-bottom: 1px solid var(--line);
   padding: 18px;
+}
+
+.audio-manager-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.audio-manager-accent-switch {
+  display: inline-flex;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px;
+  background: #fff;
+}
+
+.audio-manager-accent-switch button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 12px;
+  color: var(--muted);
+  background: transparent;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.audio-manager-accent-switch button.active {
+  color: #fff;
+  background: var(--accent);
 }
 
 .audio-manager-heading h2 {
@@ -7176,8 +7282,17 @@ dd {
 }
 
 .definition-audio-button:disabled {
-  opacity: 0.64;
-  cursor: wait;
+  color: #8a9a92;
+  border-color: rgba(120, 138, 128, 0.18);
+  background: #eef3ef;
+  opacity: 0.74;
+  cursor: not-allowed;
+}
+
+.definition-audio-button:disabled:hover {
+  color: #8a9a92;
+  border-color: rgba(120, 138, 128, 0.18);
+  background: #eef3ef;
 }
 
 .definition-display-row audio {

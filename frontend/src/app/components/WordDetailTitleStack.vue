@@ -15,6 +15,10 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  playAudio: {
+    type: Function,
+    required: true,
+  },
 });
 
 const alternateInput = ref(null);
@@ -25,6 +29,37 @@ const alternateSpellingsText = computed(() => props.wordEdit.alternate_spellings
 const hasAlternateSpellings = computed(() => Boolean(String(alternateSpellingsText.value).trim()));
 const phoneticText = computed(() => normalizePhonetic(props.wordEdit.phonetic || props.data.word.phonetic || ""));
 const hasPhoneticText = computed(() => Boolean(phoneticText.value));
+const wordAudioButtons = computed(() => [
+  {
+    key: "us",
+    label: "美式",
+    lang: "en-US",
+    audioId: "audio-us",
+    source: localWordAudioSource("us"),
+  },
+  {
+    key: "gb",
+    label: "英式",
+    lang: "en-GB",
+    audioId: "audio-gb",
+    source: localWordAudioSource("gb"),
+  },
+]);
+
+function isLocalAudioUrl(url) {
+  return String(url || "").startsWith("/media/audio/");
+}
+
+function localWordAudioSource(accent) {
+  const fieldValue = accent === "gb" ? props.data.word.british_audio_url : props.data.word.american_audio_url;
+  if (!isLocalAudioUrl(fieldValue)) return "";
+  return props.data.audio_sources?.[accent] || fieldValue;
+}
+
+function playWordAudio(audio) {
+  if (!audio.source) return;
+  props.playAudio(audio.audioId, "", audio.lang);
+}
 
 async function startAlternateEdit() {
   if (!props.data.can_edit) return;
@@ -106,5 +141,29 @@ function cancelPhoneticEdit() {
     >
       {{ hasPhoneticText ? `/${phoneticText}/` : "双击添加音标" }}
     </p>
+    <div class="word-audio-quick-controls" aria-label="单词音频">
+      <label
+        v-for="audio in wordAudioButtons"
+        :key="audio.key"
+        class="word-audio-quick-item"
+      >
+        <span>{{ audio.label }}</span>
+        <button
+          type="button"
+          class="word-audio-quick-button"
+          :disabled="!audio.source"
+          :title="audio.source ? `播放${audio.label}单词` : `${audio.label}单词音频未就绪，请到音频管理处理`"
+          @click="playWordAudio(audio)"
+        >
+          <span aria-hidden="true">🔊</span>
+        </button>
+        <audio
+          v-if="audio.source"
+          :id="audio.audioId"
+          :src="audio.source"
+          preload="metadata"
+        ></audio>
+      </label>
+    </div>
   </div>
 </template>

@@ -1,6 +1,5 @@
 <script setup>
 import { wordDetailContentPanelProps } from "../props/wordDetailContentPanelProps.js";
-import WordAudioPanel from "./WordAudioPanel.vue";
 import WordDetailDefinitionPanel from "./WordDetailDefinitionPanel.vue";
 import WordDetailHeading from "./WordDetailHeading.vue";
 import WordStudyNav from "./WordStudyNav.vue";
@@ -16,20 +15,7 @@ defineProps(wordDetailContentPanelProps);
       :word-edit="wordEdit"
       :save-word-field="saveWordField"
       :refresh-word="refreshWord"
-    />
-
-    <WordAudioPanel
-      :data="data"
-      :audio-options="audioOptions"
-      :recorder-state="recorderState"
       :play-audio="playAudio"
-      :fetch-audio-options="fetchAudioOptions"
-      :start-recording="startRecording"
-      :choose-audio="chooseAudio"
-      :upload-audio="uploadAudio"
-      :generate-ai-audio="generateAiAudio"
-      :stop-recording="stopRecording"
-      :save-recording="saveRecording"
     />
 
     <WordDetailDefinitionPanel

@@ -7,6 +7,14 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  accents: {
+    type: Array,
+    default: () => [],
+  },
+  selectedAccentKey: {
+    type: String,
+    default: "",
+  },
   data: {
     type: Object,
     required: true,
@@ -33,7 +41,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(["close"]);
+const emit = defineEmits(["change-accent", "close"]);
 
 const loadingOptions = ref(false);
 const loadingSpbOptions = ref(false);
@@ -203,7 +211,20 @@ onBeforeUnmount(clearPreviewUrl);
           <p class="section-kicker">{{ accent.label }}</p>
           <h2>音频管理</h2>
         </div>
-        <button class="ghost-button compact-button" type="button" @click="emit('close')">关闭</button>
+        <div class="audio-manager-heading-actions">
+          <div v-if="accents.length > 1" class="audio-manager-accent-switch" role="group" aria-label="选择发音">
+            <button
+              v-for="item in accents"
+              :key="item.key"
+              type="button"
+              :class="{ active: item.key === accent.key }"
+              @click="emit('change-accent', item.key)"
+            >
+              {{ item.key === "gb" ? "英式" : "美式" }}
+            </button>
+          </div>
+          <button class="ghost-button compact-button" type="button" @click="emit('close')">关闭</button>
+        </div>
       </header>
 
       <div class="audio-manager-body">

@@ -19,6 +19,10 @@ defineProps({
     type: Function,
     required: true,
   },
+  playAudio: {
+    type: Function,
+    required: true,
+  },
 });
 </script>
 
@@ -28,6 +32,7 @@ defineProps({
       :data="data"
       :word-edit="wordEdit"
       :save-word-field="saveWordField"
+      :play-audio="playAudio"
     />
     <WordDetailHeadingActions :can-edit="data.can_edit" :refresh-word="refreshWord" />
   </div>

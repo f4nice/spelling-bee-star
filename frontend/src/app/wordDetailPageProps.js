@@ -8,6 +8,11 @@ export function buildWordDetailPageProps(ctx) {
       findImages: ctx.findImages,
       chooseNetworkImage: ctx.chooseNetworkImage,
       generateAiImage: ctx.generateAiImage,
+      audioOptions: ctx.audioOptions,
+      fetchAudioOptions: ctx.fetchAudioOptions,
+      chooseAudio: ctx.chooseAudio,
+      uploadAudio: ctx.uploadAudio,
+      generateAiAudio: ctx.generateAiAudio,
     },
     contentPanel: {
       data: ctx.data,

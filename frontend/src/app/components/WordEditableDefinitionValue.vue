@@ -46,23 +46,18 @@ function isLocalAudioUrl(url) {
   return String(url || "").startsWith("/media/audio/");
 }
 
-const canPlayDefinition = computed(() => {
-  return Boolean(
-    isEnglishDefinition.value &&
-      (props.word.english_definition || "").trim() &&
-      (isLocalAudioUrl(definitionAudioSrc.value) || props.canEdit),
-  );
+const hasDefinitionText = computed(() => Boolean((props.word.english_definition || "").trim()));
+const hasExampleText = computed(() => Boolean((props.word.english_example || "").trim()));
+const shouldShowFieldAudio = computed(() => {
+  return Boolean((isEnglishDefinition.value && hasDefinitionText.value) || (isEnglishExample.value && hasExampleText.value));
 });
-
-const canPlayExample = computed(() => {
-  return Boolean(
-    isEnglishExample.value &&
-      (props.word.english_example || "").trim() &&
-      isLocalAudioUrl(exampleAudioSrc.value),
-  );
-});
-
+const canPlayDefinition = computed(() => Boolean(isEnglishDefinition.value && hasDefinitionText.value && isLocalAudioUrl(definitionAudioSrc.value)));
+const canPlayExample = computed(() => Boolean(isEnglishExample.value && hasExampleText.value && isLocalAudioUrl(exampleAudioSrc.value)));
 const canPlayFieldAudio = computed(() => canPlayDefinition.value || canPlayExample.value);
+const audioButtonTitle = computed(() => {
+  if (canPlayFieldAudio.value) return isEnglishDefinition.value ? "播放英文定义" : "播放英文例句";
+  return isEnglishDefinition.value ? "英文定义暂无本地音频，请到音频管理处理" : "英文例句暂无本地音频，请到音频管理处理";
+});
 
 async function startEditing() {
   if (!props.canEdit) return;
@@ -78,24 +73,10 @@ async function finishEditing() {
 }
 
 async function playFieldAudio() {
+  if (!canPlayFieldAudio.value || audioPending.value) return;
   if (canPlayExample.value) {
     props.playAudio(exampleAudioId.value, "", "en-GB");
     return;
-  }
-  if (!canPlayDefinition.value || audioPending.value) return;
-  if (!isLocalAudioUrl(definitionAudioSrc.value)) {
-    audioPending.value = true;
-    try {
-      const result = await props.generateDefinitionAudio();
-      if (result?.audio_url) {
-        props.word.english_definition_audio_url = result.audio_url;
-      }
-    } catch (error) {
-      alert(error?.message || "英文定义音频生成失败");
-      return;
-    } finally {
-      audioPending.value = false;
-    }
   }
   if (isLocalAudioUrl(definitionAudioSrc.value)) {
     await nextTick();
@@ -115,12 +96,12 @@ async function playFieldAudio() {
         {{ word[field] || "暂无" }}
       </span>
       <button
-        v-if="canPlayFieldAudio"
+        v-if="shouldShowFieldAudio"
         type="button"
         class="definition-audio-button"
-        :disabled="audioPending"
+        :disabled="!canPlayFieldAudio || audioPending"
         :aria-label="isEnglishDefinition ? '播放英文定义' : '播放英文例句'"
-        :title="isEnglishDefinition ? '播放英文定义' : '播放英文例句'"
+        :title="audioButtonTitle"
         @click.stop.prevent="playFieldAudio"
       >
         {{ audioPending ? "..." : "▶" }}

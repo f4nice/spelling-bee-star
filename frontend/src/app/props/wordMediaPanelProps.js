@@ -27,4 +27,24 @@ export const wordMediaPanelProps = {
     type: Function,
     required: true,
   },
+  audioOptions: {
+    type: Object,
+    required: true,
+  },
+  fetchAudioOptions: {
+    type: Function,
+    required: true,
+  },
+  chooseAudio: {
+    type: Function,
+    required: true,
+  },
+  uploadAudio: {
+    type: Function,
+    required: true,
+  },
+  generateAiAudio: {
+    type: Function,
+    required: true,
+  },
 };
