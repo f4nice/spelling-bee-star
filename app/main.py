@@ -82,8 +82,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260706-003"
-DEFAULT_PAGE_VERSION = "v20260706.3"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260706-004"
+DEFAULT_PAGE_VERSION = "v20260706.4"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3646,12 +3646,7 @@ def run_spb_sync_job(
                 job_id,
                 processed=len(prepared_rows),
                 text_detail_count=sum(1 for row in prepared_rows if spb_has_text_fields(row)),
-                local_audio_count=sum(
-                    1
-                    for row in prepared_rows
-                    if is_local_audio_url(row.get("american_audio_url"))
-                    or is_local_audio_url(row.get("british_audio_url"))
-                ),
+                local_audio_count=sum(spb_local_audio_count(row) for row in prepared_rows),
                 message=f"正在补充详情和下载小程序音频：{len(prepared_rows)} / {total}",
             )
 
@@ -3663,11 +3658,7 @@ def run_spb_sync_job(
             message="正在写入数据库并按 500 个单词拆分分表。",
         )
         text_detail_count = sum(1 for row in prepared_rows if spb_has_text_fields(row))
-        local_audio_count = sum(
-            1
-            for row in prepared_rows
-            if is_local_audio_url(row.get("american_audio_url")) or is_local_audio_url(row.get("british_audio_url"))
-        )
+        local_audio_count = sum(spb_local_audio_count(row) for row in prepared_rows)
         word_ids, split_lists = import_spb_word_bank_rows(db, group, prepared_rows)
         if word_ids:
             start_enrichment_thread(word_ids, include_images=False)
@@ -4694,14 +4685,22 @@ def spb_example_audio_url_from_payload(payload: Any) -> str | None:
             "example_sound_url",
             "exampleMp3",
             "example_mp3",
+            "exampleMp3Url",
+            "example_mp3_url",
+            "exampleAudio",
+            "example_audio",
             "sentenceAudioUrl",
             "sentence_audio_url",
+            "sentenceAudio",
+            "sentence_audio",
             "sentenceVoiceUrl",
             "sentence_voice_url",
             "sentenceSoundUrl",
             "sentence_sound_url",
             "sentenceMp3",
             "sentence_mp3",
+            "sentenceMp3Url",
+            "sentence_mp3_url",
             "enSentenceAudioUrl",
             "en_sentence_audio_url",
             "sentAudioUrl",
@@ -4737,7 +4736,16 @@ def spb_looks_like_audio_url(value: str | None) -> bool:
         return False
     lower_value = value.lower()
     return lower_value.startswith(("http://", "https://")) and any(
-        marker in lower_value for marker in (".mp3", ".m4a", ".wav", "/audio", "voice", "sound")
+        marker in lower_value
+        for marker in (".mp3", ".m4a", ".wav", ".aac", ".ogg", "/audio", "audio", "voice", "sound")
+    )
+
+
+def spb_local_audio_count(row: dict[str, Any]) -> int:
+    return sum(
+        1
+        for field in ("american_audio_url", "british_audio_url", "english_example_audio_url")
+        if is_local_audio_url(row.get(field))
     )
 
 
@@ -5144,7 +5152,8 @@ def apply_spb_text_fields_to_word(word: Word, row: dict[str, Any]) -> bool:
         if value and (prefer_spb_detail or not (getattr(word, field, None) or "").strip()):
             if getattr(word, field, None) == value and getattr(word, lock_field, False):
                 continue
-            if field == "english_example" and getattr(word, field, None) != value:
+            incoming_example_audio_url = local_import_audio_url(row.get("english_example_audio_url"))
+            if field == "english_example" and getattr(word, field, None) != value and not incoming_example_audio_url:
                 word.english_example_audio_url = None
             setattr(word, field, value)
             setattr(word, lock_field, True)

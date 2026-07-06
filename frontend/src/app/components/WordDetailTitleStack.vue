@@ -155,7 +155,7 @@ function cancelPhoneticEdit() {
           :title="audio.source ? `播放${audio.label}单词` : `${audio.label}单词音频未就绪，请到音频管理处理`"
           @click="playWordAudio(audio)"
         >
-          <span aria-hidden="true">🔊</span>
+          <span aria-hidden="true">▶</span>
         </button>
         <audio
           v-if="audio.source"

@@ -6845,14 +6845,15 @@ button.calendar-day:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  min-height: 34px;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
   border: 1px solid rgba(29, 127, 91, 0.24);
   border-radius: 999px;
   color: var(--accent-dark);
   background: var(--accent-soft);
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 900;
   cursor: pointer;
 }
 
