@@ -82,8 +82,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260706-008"
-DEFAULT_PAGE_VERSION = "v20260706.8"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260706-009"
+DEFAULT_PAGE_VERSION = "v20260706.9"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -4583,6 +4583,14 @@ def spb_find_first_field(payload: Any, field_names: tuple[str, ...]) -> str | No
     return None
 
 
+def spb_find_preferred_field(payload: Any, field_names: tuple[str, ...]) -> str | None:
+    for field_name in field_names:
+        text = spb_find_first_field(payload, (field_name,))
+        if text:
+            return text
+    return None
+
+
 def spb_clean_field_text(value: Any) -> str | None:
     if value is None:
         return None
@@ -4773,7 +4781,7 @@ def spb_local_audio_count(row: dict[str, Any]) -> int:
 
 def spb_text_fields_from_payload(payload: Any) -> dict[str, str]:
     result: dict[str, str] = {}
-    phonetic = spb_find_first_field(
+    phonetic = spb_find_preferred_field(
         payload,
         (
             "phonetic",
@@ -4793,7 +4801,7 @@ def spb_text_fields_from_payload(payload: Any) -> dict[str, str]:
             "英标",
         ),
     )
-    part_of_speech = spb_find_first_field(
+    part_of_speech = spb_find_preferred_field(
         payload,
         (
             "part_of_speech",
@@ -4808,9 +4816,10 @@ def spb_text_fields_from_payload(payload: Any) -> dict[str, str]:
             "词性",
         ),
     )
-    english_definition = spb_find_first_field(
+    english_definition = spb_find_preferred_field(
         payload,
         (
+            "Definition",
             "english_definition",
             "englishDefinition",
             "enDefinition",
@@ -4824,7 +4833,7 @@ def spb_text_fields_from_payload(payload: Any) -> dict[str, str]:
             "英文释义",
         ),
     )
-    chinese_definition = spb_find_first_field(
+    chinese_definition = spb_find_preferred_field(
         payload,
         (
             "chinese_definition",
@@ -4846,19 +4855,20 @@ def spb_text_fields_from_payload(payload: Any) -> dict[str, str]:
             "释义",
         ),
     )
-    english_example = spb_find_first_field(
+    english_example = spb_find_preferred_field(
         payload,
         (
+            "Sentence",
+            "sentence",
+            "sentenceEn",
+            "sentences",
             "english_example",
             "englishExample",
             "enExample",
             "exampleEn",
-            "sentenceEn",
             "exampleSentence",
             "example",
             "examples",
-            "sentence",
-            "sentences",
             "例句",
         ),
     )
