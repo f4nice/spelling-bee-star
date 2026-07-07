@@ -4,6 +4,7 @@ export const routeApiPaths = {
   spb: (route = {}) => `/api/vue/spb?collection=${encodeURIComponent(route.params?.collection || "individual")}`,
   spbSync: () => "/api/vue/spb/sync",
   spbSyncStatus: (jobId) => `/api/vue/spb/sync/${encodeURIComponent(jobId)}`,
+  spbBackfillDetails: () => "/api/vue/spb/backfill-details",
   lists: () => "/api/vue/lists",
   listSearch: (query) => `/api/vue/lists/search?q=${encodeURIComponent(query)}`,
   listDetail: (route) => `/api/vue/lists/${route.params.id}`,

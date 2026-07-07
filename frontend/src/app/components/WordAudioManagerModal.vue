@@ -156,6 +156,7 @@ const fieldGenerateText = computed(() => {
 
 const fieldSpbSyncText = computed(() => {
   if (generatingKey.value === "definition:spb") return "同步中...";
+  if (generatingKey.value === "example:spb") return "同步中...";
   return "同步小程序音频";
 });
 
@@ -166,8 +167,11 @@ const canGenerateFieldAudio = computed(() => {
   return false;
 });
 
-const canSyncDefinitionFromSpb = computed(() => {
-  return !generatingKey.value && isDefinitionTarget.value && Boolean(fieldText.value) && typeof props.generateDefinitionAudio === "function";
+const canSyncFieldFromSpb = computed(() => {
+  if (generatingKey.value || !fieldText.value) return false;
+  if (isDefinitionTarget.value) return typeof props.generateDefinitionAudio === "function";
+  if (isExampleTarget.value) return typeof props.generateExampleAudio === "function";
+  return false;
 });
 
 function clearPreviewUrl() {
@@ -313,7 +317,7 @@ async function generateFieldAudio() {
   generatingKey.value = key;
   notice.value = "";
   try {
-    const result = key === "definition" ? await props.generateDefinitionAudio({ source: "auto" }) : await props.generateExampleAudio();
+    const result = key === "definition" ? await props.generateDefinitionAudio({ source: "auto" }) : await props.generateExampleAudio({ source: "auto" });
     const audioUrl = result?.audio_url || (key === "definition" ? word.value.english_definition_audio_url : word.value.english_example_audio_url);
     if (audioUrl) {
       setPendingAudio({
@@ -335,31 +339,32 @@ async function generateFieldAudio() {
   }
 }
 
-async function syncDefinitionFromSpb() {
-  if (!canSyncDefinitionFromSpb.value) {
+async function syncFieldFromSpb() {
+  if (!canSyncFieldFromSpb.value) {
     notice.value = fieldText.value ? "当前小程序同步功能未加载，请刷新页面后重试。" : "当前字段还没有文本，先补全文本后再同步。";
     return;
   }
-  generatingKey.value = "definition:spb";
+  const key = activeTarget.value.type;
+  generatingKey.value = `${key}:spb`;
   notice.value = "";
   try {
-    const result = await props.generateDefinitionAudio({ source: "spb" });
-    const audioUrl = result?.audio_url || word.value.english_definition_audio_url;
+    const result = key === "definition" ? await props.generateDefinitionAudio({ source: "spb" }) : await props.generateExampleAudio({ source: "spb" });
+    const audioUrl = result?.audio_url || (key === "definition" ? word.value.english_definition_audio_url : word.value.english_example_audio_url);
     if (audioUrl) {
       setPendingAudio({
         type: "field",
         url: audioUrl,
-        label: "英文定义 · SPB小程序音频",
+        label: `${activeTarget.value.label} · SPB小程序音频`,
       });
       const played = await playPendingAudio();
       notice.value = played
-        ? "已同步 SPB 小程序英文定义音频并自动播放。"
-        : "已同步 SPB 小程序英文定义音频，点上方播放器可试听。";
+        ? `已同步 SPB 小程序${activeTarget.value.label}音频并自动播放。`
+        : `已同步 SPB 小程序${activeTarget.value.label}音频，点上方播放器可试听。`;
     } else {
-      notice.value = "SPB 小程序暂时没有返回英文定义音频。";
+      notice.value = `SPB 小程序暂时没有返回${activeTarget.value.label}音频。`;
     }
   } catch (error) {
-    notice.value = error.message || "同步小程序英文定义音频失败";
+    notice.value = error.message || `同步小程序${activeTarget.value.label}音频失败`;
   } finally {
     generatingKey.value = "";
   }
@@ -488,7 +493,7 @@ onBeforeUnmount(clearPreviewUrl);
               <p>{{ activeTarget.subtitle }}</p>
             </div>
             <div class="audio-manager-button-group">
-              <button v-if="isDefinitionTarget" class="secondary-button" type="button" :disabled="!canSyncDefinitionFromSpb" @click="syncDefinitionFromSpb">
+              <button class="secondary-button" type="button" :disabled="!canSyncFieldFromSpb" @click="syncFieldFromSpb">
                 {{ fieldSpbSyncText }}
               </button>
               <button class="challenge-button" type="button" :disabled="!canGenerateFieldAudio" @click="generateFieldAudio">

@@ -247,8 +247,9 @@ async function syncGroup(group) {
   syncingKey.value = group.key;
   syncJob.value = null;
   syncNotice.value = group.sync_ready || group.cached_source_count ? "" : group.sync_note || "";
+  const isDetailUpdate = Number(group.total_count || 0) > 0;
   try {
-    const payload = await fetchJson(routeApiPaths.spbSync(), {
+    const payload = await fetchJson(isDetailUpdate ? routeApiPaths.spbBackfillDetails() : routeApiPaths.spbSync(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ collection: activeCollection.value.key || INDIVIDUAL_COLLECTION_KEY, key: group.key }),

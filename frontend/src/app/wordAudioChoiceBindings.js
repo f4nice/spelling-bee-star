@@ -41,10 +41,11 @@ export async function generateDefinitionAudioOption({ data, source = "auto" }) {
   return result;
 }
 
-export async function generateExampleAudioOption({ data }) {
+export async function generateExampleAudioOption({ data, source = "auto" }) {
   const result = await generateWordExampleAudio({
     wordId: data.value.word.id,
     listId: data.value.navigation?.list_id || "",
+    source,
   });
   if (result?.word) {
     data.value.word = result.word;

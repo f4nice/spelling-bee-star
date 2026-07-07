@@ -50,8 +50,8 @@ export function useWordAudio({ data, loadRoute }) {
     return generateDefinitionAudioOption({ data, source: options.source || "auto" });
   }
 
-  async function generateExampleAudio() {
-    return generateExampleAudioOption({ data });
+  async function generateExampleAudio(options = {}) {
+    return generateExampleAudioOption({ data, source: options.source || "auto" });
   }
 
   return {
