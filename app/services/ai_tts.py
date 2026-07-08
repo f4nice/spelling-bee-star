@@ -40,7 +40,7 @@ def _stable_audio_target(
 ) -> Path:
     normalized_text = re.sub(r"\s+", " ", (text or "").strip())
     digest = hashlib.sha1(f"{normalized_text}|{accent}|{voice_gender}|{source}".encode("utf-8")).hexdigest()[:12]
-    return audio_dir / f"{_safe_word_slug(normalized_text)}-{accent}-{voice_gender}-{_safe_source_slug(source)}-{digest}.{extension}"
+    return audio_dir / f"ai-{_safe_word_slug(normalized_text)}-{accent}-{voice_gender}-{_safe_source_slug(source)}-{digest}.{extension}"
 
 
 def _local_audio_url_if_present(target: Path) -> str | None:

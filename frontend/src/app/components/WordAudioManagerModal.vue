@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { inferAudioSourceMeta, sourceText } from "../mediaSourceLabels.js";
 import VersionStamp from "./VersionStamp.vue";
 
 const props = defineProps({
@@ -65,6 +66,8 @@ const notice = ref("");
 const selectedFileName = computed(() => selectedFile.value?.name || "未选择音频文件");
 const word = computed(() => props.data.word || {});
 const audioSources = computed(() => props.data.audio_sources || {});
+const mediaSources = computed(() => props.data.media_sources || {});
+const audioMediaSources = computed(() => mediaSources.value.audio || {});
 const phoneticText = computed(() => String(word.value.phonetic || "").trim().replace(/^\/+|\/+$/g, "").trim());
 const hasPhoneticText = computed(() => Boolean(phoneticText.value));
 
@@ -82,16 +85,43 @@ function targetStatus(url) {
   return isLocalAudioUrl(url) ? "服务器已有" : "可播放";
 }
 
+function audioMetaFor(key, url) {
+  return inferAudioSourceMeta(audioMediaSources.value[key] || {}, url);
+}
+
+function optionSourceMeta(option) {
+  return inferAudioSourceMeta(option?.source_meta || { source: option?.source || option?.label || "" }, option?.url || "");
+}
+
+function displaySource(meta) {
+  return sourceText(meta);
+}
+
+function resultSourceMeta(result, key, fallbackSource = "", fallbackUrl = "") {
+  return inferAudioSourceMeta(
+    result?.source_meta || result?.media_sources?.audio?.[key] || { source: result?.source || fallbackSource },
+    result?.audio_url || fallbackUrl || "",
+  );
+}
+
+function applyMediaSources(result) {
+  if (result?.media_sources) props.data.media_sources = result.media_sources;
+}
+
 const wordTargets = computed(() => {
   const accents = props.accents.length ? props.accents : [{ key: "us", label: "美式发音" }, { key: "gb", label: "英式发音" }];
-  return accents.map((item) => ({
-    key: item.key,
-    type: "word",
-    label: item.key === "gb" ? "英式单词" : "美式单词",
-    subtitle: item.key === "gb" ? "只处理英式单词发音" : "只处理美式单词发音",
-    currentUrl: wordAudioUrl(item.key),
-    status: targetStatus(wordAudioUrl(item.key)),
-  }));
+  return accents.map((item) => {
+    const currentUrl = wordAudioUrl(item.key);
+    return {
+      key: item.key,
+      type: "word",
+      label: item.key === "gb" ? "英式单词" : "美式单词",
+      subtitle: item.key === "gb" ? "只处理英式单词发音" : "只处理美式单词发音",
+      currentUrl,
+      sourceMeta: audioMetaFor(item.key, currentUrl),
+      status: targetStatus(currentUrl),
+    };
+  });
 });
 
 const fieldTargets = computed(() => [
@@ -102,6 +132,7 @@ const fieldTargets = computed(() => [
     subtitle: "朗读英文定义，不影响单词发音",
     currentUrl: word.value.english_definition_audio_url || "",
     text: word.value.english_definition || "",
+    sourceMeta: audioMetaFor("definition", word.value.english_definition_audio_url || ""),
     status: targetStatus(word.value.english_definition_audio_url || ""),
   },
   {
@@ -111,6 +142,7 @@ const fieldTargets = computed(() => [
     subtitle: "优先复用 SPB 小程序例句音频",
     currentUrl: word.value.english_example_audio_url || "",
     text: word.value.english_example || "",
+    sourceMeta: audioMetaFor("example", word.value.english_example_audio_url || ""),
     status: targetStatus(word.value.english_example_audio_url || ""),
   },
 ]);
@@ -124,6 +156,8 @@ const accentName = computed(() => (activeTarget.value?.key === "gb" ? "英式" :
 const activeOptions = computed(() => (isWordTarget.value ? props.options : []));
 const currentAudioUrl = computed(() => pendingAudio.value?.url || activeTarget.value?.currentUrl || "");
 const currentAudioLabel = computed(() => pendingAudio.value?.label || (activeTarget.value?.currentUrl ? `${activeTarget.value.label} · 当前音频` : "还没有音频"));
+const currentAudioSourceMeta = computed(() => pendingAudio.value?.sourceMeta || activeTarget.value?.sourceMeta || inferAudioSourceMeta({}, currentAudioUrl.value));
+const currentAudioSourceText = computed(() => displaySource(currentAudioSourceMeta.value));
 const canSavePendingAudio = computed(() => isWordTarget.value && Boolean(pendingAudio.value?.url || pendingAudio.value?.file));
 const canUseUpload = computed(() => isWordTarget.value);
 const canUseWordAi = computed(() => isWordTarget.value);
@@ -221,6 +255,7 @@ function selectUploadFile(event) {
       file: selectedFile.value,
       url: previewUrl.value,
       label: `上传音频 · ${selectedFile.value.name}`,
+      sourceMeta: inferAudioSourceMeta({ source: "upload" }, previewUrl.value),
     });
     notice.value = "已放入上方播放器，可以试听后保存。";
   }
@@ -260,6 +295,7 @@ function previewOption(option) {
     type: "url",
     url: option.url,
     label: option.label || "候选音源",
+    sourceMeta: optionSourceMeta(option),
   });
   notice.value = "已放入上方播放器，可以试听后保存。";
 }
@@ -269,11 +305,13 @@ async function saveCurrentAudio() {
   savingSelection.value = true;
   notice.value = "";
   try {
+    let result = null;
     if (pendingAudio.value.type === "upload") {
-      await props.uploadAudio(activeTarget.value.key, pendingAudio.value.file);
+      result = await props.uploadAudio(activeTarget.value.key, pendingAudio.value.file);
     } else {
-      await props.chooseAudio(activeTarget.value.key, pendingAudio.value.url);
+      result = await props.chooseAudio(activeTarget.value.key, pendingAudio.value.url);
     }
+    applyMediaSources(result);
     emit("close");
   } catch (error) {
     notice.value = error.message || "保存音频失败";
@@ -291,11 +329,13 @@ async function generateAiSource(textMode, voiceGender) {
   notice.value = "";
   try {
     const result = await props.generateAiAudio(activeTarget.value.key, voiceGender, textMode);
+    applyMediaSources(result);
     const voiceLabel = voiceGender === "male" ? "男声" : "女声";
     setPendingAudio({
       type: "url",
       url: result.audio_url,
       label: `${aiButtonLabel(textMode)} · ${voiceLabel}`,
+      sourceMeta: resultSourceMeta(result, activeTarget.value.key, result?.source || "ai-tts", result.audio_url),
     });
     const played = await playPendingAudio();
     notice.value = played
@@ -318,12 +358,14 @@ async function generateFieldAudio() {
   notice.value = "";
   try {
     const result = key === "definition" ? await props.generateDefinitionAudio({ source: "auto" }) : await props.generateExampleAudio({ source: "auto" });
+    applyMediaSources(result);
     const audioUrl = result?.audio_url || (key === "definition" ? word.value.english_definition_audio_url : word.value.english_example_audio_url);
     if (audioUrl) {
       setPendingAudio({
         type: "field",
         url: audioUrl,
         label: `${activeTarget.value.label} · 已保存到服务器`,
+        sourceMeta: resultSourceMeta(result, key, result?.source || "resource", audioUrl),
       });
       const played = await playPendingAudio();
       notice.value = played
@@ -349,12 +391,14 @@ async function syncFieldFromSpb() {
   notice.value = "";
   try {
     const result = key === "definition" ? await props.generateDefinitionAudio({ source: "spb" }) : await props.generateExampleAudio({ source: "spb" });
+    applyMediaSources(result);
     const audioUrl = result?.audio_url || (key === "definition" ? word.value.english_definition_audio_url : word.value.english_example_audio_url);
     if (audioUrl) {
       setPendingAudio({
         type: "field",
         url: audioUrl,
         label: `${activeTarget.value.label} · SPB小程序音频`,
+        sourceMeta: resultSourceMeta(result, key, "spb-miniprogram", audioUrl),
       });
       const played = await playPendingAudio();
       notice.value = played
@@ -402,6 +446,7 @@ onBeforeUnmount(clearPreviewUrl);
             >
               <span>{{ target.label }}</span>
               <strong>{{ target.status }}</strong>
+              <em class="audio-source-chip">{{ displaySource(target.sourceMeta) }}</em>
               <small>{{ target.subtitle }}</small>
             </button>
           </div>
@@ -412,6 +457,7 @@ onBeforeUnmount(clearPreviewUrl);
             <div>
               <h3>当前试听音频</h3>
               <p>{{ currentAudioLabel }}</p>
+              <small v-if="currentAudioUrl" class="audio-manager-current-source">{{ currentAudioSourceText }}</small>
             </div>
             <button
               v-if="isWordTarget"
@@ -448,7 +494,10 @@ onBeforeUnmount(clearPreviewUrl);
             </div>
             <div v-if="activeOptions.length" class="audio-manager-options">
               <article v-for="option in activeOptions" :key="option.url" class="audio-manager-option">
-                <strong>{{ option.label }}</strong>
+                <div>
+                  <strong>{{ option.label }}</strong>
+                  <small class="audio-source-chip">{{ displaySource(optionSourceMeta(option)) }}</small>
+                </div>
                 <button class="secondary-button" type="button" @click="previewOption(option)">放入试听</button>
               </article>
             </div>
@@ -535,3 +584,46 @@ onBeforeUnmount(clearPreviewUrl);
     </section>
   </div>
 </template>
+
+<style scoped>
+.audio-source-chip,
+.audio-manager-current-source {
+  align-self: flex-start;
+  width: fit-content;
+  border-radius: 999px;
+  background: rgba(16, 128, 90, 0.1);
+  color: #087452;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1;
+  padding: 5px 9px;
+}
+
+.audio-manager-current-source {
+  display: inline-flex;
+  margin-top: 6px;
+}
+
+.audio-manager-target-button .audio-source-chip {
+  margin-top: 2px;
+}
+
+.audio-manager-option {
+  align-items: center;
+  gap: 12px;
+}
+
+.audio-manager-option > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.audio-manager-option strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

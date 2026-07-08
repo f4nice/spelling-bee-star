@@ -82,8 +82,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260708-001"
-DEFAULT_PAGE_VERSION = "v20260708.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260708-002"
+DEFAULT_PAGE_VERSION = "v20260708.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2740,6 +2740,10 @@ def vue_word_detail_api(
     if nav_word_list:
         nav["word_list_name"] = nav_word_list.name
     audio_version = str(int(datetime.utcnow().timestamp()))
+    audio_sources = {
+        "us": word_audio_source(word, "us", audio_version),
+        "gb": word_audio_source(word, "gb", audio_version),
+    }
     return {
         "word": {
             **serialize_word(word),
@@ -2752,10 +2756,8 @@ def vue_word_detail_api(
             "british_audio_locked": word.british_audio_locked,
         },
         "can_edit": edit == 1,
-        "audio_sources": {
-            "us": word_audio_source(word, "us", audio_version),
-            "gb": word_audio_source(word, "gb", audio_version),
-        },
+        "audio_sources": audio_sources,
+        "media_sources": word_media_sources(db, word, audio_sources=audio_sources),
         "navigation": nav,
     }
 
@@ -2767,6 +2769,152 @@ def word_audio_source(word: Word, accent: str, audio_version: str | None = None)
         separator = "&" if "?" in source else "?"
         return f"{source}{separator}av={audio_version}"
     return source
+
+
+def media_path_without_query(value: str | None) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return text.split("?", 1)[0].split("#", 1)[0]
+
+
+def media_filename(value: str | None) -> str:
+    path = media_path_without_query(value)
+    if not path:
+        return ""
+    parsed_path = urlparse(path).path if "://" in path else path
+    return Path(parsed_path).name
+
+
+def audio_source_meta(source: str | None = None, audio_url: str | None = None) -> dict[str, str]:
+    source_marker = str(source or "").strip()
+    filename = media_filename(audio_url)
+    combined = f"{source_marker.lower()} {filename.lower()} {str(audio_url or '').lower()}"
+    if not audio_url:
+        prefix, label = "未配置", "暂无音频"
+    elif (
+        source_marker.lower().startswith("spb")
+        or "miniprogram" in combined
+        or filename.lower().startswith("spb-")
+        or "-spb-" in filename.lower()
+    ):
+        prefix, label = "SPB", "SPB小程序"
+    elif (
+        filename.lower().startswith("ai-")
+        or source_marker.lower().startswith("ai")
+        or "ai-tts" in combined
+        or "aliyun" in combined
+        or "dashscope" in combined
+        or "phoneme" in combined
+    ):
+        prefix, label = "AI", "AI生成"
+    elif (
+        filename.lower().startswith("dict-")
+        or "dictionary" in combined
+        or "youdao" in combined
+        or "free-dictionary" in combined
+        or "google" in combined
+        or "tts" in combined
+    ):
+        prefix, label = "词典", "词典音源"
+    elif filename.lower().startswith("record-") or "record" in combined:
+        prefix, label = "录音", "本地录音"
+    elif "upload" in combined:
+        prefix, label = "上传", "上传音频"
+    elif is_local_audio_url(audio_url):
+        prefix, label = "本地", "服务器音频"
+    elif str(audio_url or "").startswith(("http://", "https://")):
+        prefix, label = "外链", "外链音频"
+    else:
+        prefix, label = "未知", "来源未知"
+    return {"source": source_marker, "prefix": prefix, "label": label, "filename": filename}
+
+
+def image_source_meta(source: str | None = None, image_url: str | None = None) -> dict[str, str]:
+    source_marker = str(source or "").strip()
+    filename = media_filename(image_url)
+    combined = f"{source_marker.lower()} {filename.lower()} {str(image_url or '').lower()}"
+    if not image_url:
+        prefix, label = "未配置", "暂无图片"
+    elif (
+        source_marker.lower().startswith("spb")
+        or "miniprogram" in combined
+        or filename.lower().startswith("spb-")
+        or "-spb-" in filename.lower()
+    ):
+        prefix, label = "SPB", "SPB图片"
+    elif (
+        filename.lower().startswith("ai-")
+        or "ai-image" in combined
+        or "generated" in combined
+        or "dashscope" in combined
+        or "qwen" in combined
+        or "wan" in combined
+    ):
+        prefix, label = "AI", "AI生成图"
+    elif "upload" in combined or "batch-upload" in combined:
+        prefix, label = "上传", "上传图片"
+    elif "network" in combined or str(image_url or "").startswith(("http://", "https://")):
+        prefix, label = "网络", "网络选图"
+    elif is_local_media_url(image_url):
+        prefix, label = "本地", "服务器图片"
+    else:
+        prefix, label = "未知", "来源未知"
+    return {"source": source_marker, "prefix": prefix, "label": label, "filename": filename}
+
+
+def media_value_matches(current_url: str | None, resource_url: str | None) -> bool:
+    current = media_path_without_query(current_url)
+    resource = media_path_without_query(resource_url)
+    if not current or not resource:
+        return False
+    if current == resource:
+        return True
+    return media_filename(current) == media_filename(resource)
+
+
+def word_media_sources(db: Session, word: Word, audio_sources: dict[str, str] | None = None) -> dict[str, Any]:
+    resource = get_word_resource(db, word.word)
+
+    def resource_source(current_url: str | None, resource_url: str | None, source: str | None) -> str | None:
+        if resource and media_value_matches(current_url, resource_url):
+            return source
+        return None
+
+    us_audio = word.american_audio_url or (audio_sources or {}).get("us")
+    gb_audio = word.british_audio_url or (audio_sources or {}).get("gb")
+    return {
+        "image": image_source_meta(
+            resource_source(word.image_url, getattr(resource, "image_url", None), getattr(resource, "image_source", None)),
+            word.image_url,
+        ),
+        "audio": {
+            "us": audio_source_meta(
+                resource_source(word.american_audio_url, getattr(resource, "american_audio_url", None), getattr(resource, "american_audio_source", None)),
+                us_audio,
+            ),
+            "gb": audio_source_meta(
+                resource_source(word.british_audio_url, getattr(resource, "british_audio_url", None), getattr(resource, "british_audio_source", None)),
+                gb_audio,
+            ),
+            "definition": audio_source_meta(
+                resource_source(
+                    word.english_definition_audio_url,
+                    getattr(resource, "english_definition_audio_url", None),
+                    getattr(resource, "english_definition_audio_source", None),
+                ),
+                word.english_definition_audio_url,
+            ),
+            "example": audio_source_meta(
+                resource_source(
+                    word.english_example_audio_url,
+                    getattr(resource, "english_example_audio_url", None),
+                    getattr(resource, "english_example_audio_source", None),
+                ),
+                word.english_example_audio_url,
+            ),
+        },
+    }
 
 
 @app.post("/api/vue/words/{word_id}/field")
@@ -5719,7 +5867,14 @@ async def replace_word_image(
     remember_word_resource(db, word, image_source="upload", override_media=True, commit=True)
     if previous_url != word.image_url:
         remove_local_image(previous_url, IMAGE_DIR)
-    return {"ok": True, "word": word.word, "image_url": word.image_url}
+    return {
+        "ok": True,
+        "word": word.word,
+        "image_url": word.image_url,
+        "source": "upload",
+        "source_meta": image_source_meta("upload", word.image_url),
+        "media_sources": word_media_sources(db, word),
+    }
 
 
 @app.post("/api/vue/public-assets/ai-image")
@@ -5902,9 +6057,26 @@ async def generate_ai_word_image(
         word.enrichment_error = None
         db.add(word)
         db.commit()
-        remember_word_resource(db, word, image_source="ai-image", override_media=True, commit=True)
+        committed_model = (
+            selected_openai_model
+            if selected_provider == "openai"
+            else selected_dashscope_model
+            if selected_provider == "dashscope"
+            else selected_tencent_action
+        )
+        image_source = f"ai-image:{committed_model}"
+        remember_word_resource(db, word, image_source=image_source, override_media=True, commit=True)
         if previous_url != word.image_url:
             remove_local_image(previous_url, IMAGE_DIR)
+    else:
+        committed_model = (
+            selected_openai_model
+            if selected_provider == "openai"
+            else selected_dashscope_model
+            if selected_provider == "dashscope"
+            else selected_tencent_action
+        )
+        image_source = f"ai-image:{committed_model}"
     return {
         "ok": True,
         "word": word.word,
@@ -5916,6 +6088,9 @@ async def generate_ai_word_image(
         if selected_provider == "dashscope"
         else selected_tencent_action,
         "committed": should_commit,
+        "source": image_source,
+        "source_meta": image_source_meta(image_source, image_url),
+        "media_sources": word_media_sources(db, word) if should_commit else {},
     }
 
 
@@ -5934,7 +6109,17 @@ async def word_image_candidates(
         images = await ImageClient().find_images(word.word, limit=8)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"网络找图失败: {exc}") from exc
-    return {"ok": True, "word": word.word, "images": images}
+    decorated_images = []
+    for image in images:
+        if isinstance(image, dict):
+            image_url = image.get("url") or image.get("image_url") or ""
+            image_source = image.get("source") or image.get("provider") or "network"
+            decorated_images.append({
+                **image,
+                "source": image_source,
+                "source_meta": image_source_meta(image_source, image_url),
+            })
+    return {"ok": True, "word": word.word, "images": decorated_images}
 
 
 @app.post("/api/vue/words/{word_id}/network-image")
@@ -5969,7 +6154,14 @@ async def replace_word_image_from_network(
     remember_word_resource(db, word, image_source="network", override_media=True, commit=True)
     if previous_url != word.image_url:
         remove_local_image(previous_url, IMAGE_DIR)
-    return {"ok": True, "word": word.word, "image_url": word.image_url}
+    return {
+        "ok": True,
+        "word": word.word,
+        "image_url": word.image_url,
+        "source": "network",
+        "source_meta": image_source_meta("network", word.image_url),
+        "media_sources": word_media_sources(db, word),
+    }
 
 
 @app.post("/api/vue/words/{word_id}/sync-image")
@@ -5983,10 +6175,27 @@ async def sync_word_image(word_id: int, db: Session = Depends(get_db)):
 
 async def sync_word_image_record(db: Session, word: Word) -> dict:
     if is_local_media_url(word.image_url):
-        return {"ok": True, "id": word.id, "word": word.word, "image_url": word.image_url, "skipped": True}
+        return {
+            "ok": True,
+            "id": word.id,
+            "word": word.word,
+            "image_url": word.image_url,
+            "skipped": True,
+            "source_meta": image_source_meta(None, word.image_url),
+            "media_sources": word_media_sources(db, word),
+        }
 
     if word.image_locked:
-        return {"ok": True, "id": word.id, "word": word.word, "image_url": word.image_url, "skipped": True, "locked": True}
+        return {
+            "ok": True,
+            "id": word.id,
+            "word": word.word,
+            "image_url": word.image_url,
+            "skipped": True,
+            "locked": True,
+            "source_meta": image_source_meta(None, word.image_url),
+            "media_sources": word_media_sources(db, word),
+        }
 
     candidates = []
     if word.image_url:
@@ -6010,7 +6219,16 @@ async def sync_word_image_record(db: Session, word: Word) -> dict:
                 db.add(word)
                 db.commit()
                 remember_word_resource(db, word, image_source="network-sync", override_media=False, commit=True)
-                return {"ok": True, "id": word.id, "word": word.word, "image_url": local_url, "skipped": False}
+                return {
+                    "ok": True,
+                    "id": word.id,
+                    "word": word.word,
+                    "image_url": local_url,
+                    "skipped": False,
+                    "source": "network-sync",
+                    "source_meta": image_source_meta("network-sync", local_url),
+                    "media_sources": word_media_sources(db, word),
+                }
         except Exception as exc:
             errors.append(str(exc))
 
@@ -6154,14 +6372,25 @@ async def word_audio_options(
             else:
                 error = "没有从小程序拿到可用音频"
             return {"ok": False, "word": word.word, "accent": accent, "source": "spb", "options": [], "error": error}
+        options = [
+            {
+                **option,
+                "source_meta": audio_source_meta(option.get("source") or "spb-miniprogram", option.get("url")),
+            }
+            for option in options
+            if isinstance(option, dict)
+        ]
         return {"ok": True, "word": word.word, "accent": accent, "source": "spb", "options": options}
 
     options = []
     current_audio_url = word.british_audio_url if accent == "gb" else word.american_audio_url
     if is_local_audio_url(current_audio_url):
+        current_meta = word_media_sources(db, word).get("audio", {}).get(accent) or audio_source_meta(None, current_audio_url)
         options.append({
             "label": "当前英式音源" if accent == "gb" else "当前美式音源",
             "url": current_audio_url,
+            "source": current_meta.get("source") or "current",
+            "source_meta": current_meta,
         })
 
     for candidate in await audio_candidates_with_dictionary(word.word, accent):
@@ -6170,7 +6399,13 @@ async def word_audio_options(
         except Exception:
             local_url = None
         if local_url and all(option["url"] != local_url for option in options):
-            options.append({"label": candidate["label"], "url": local_url})
+            source = f"dictionary:{candidate.get('key') or 'candidate'}"
+            options.append({
+                "label": candidate["label"],
+                "url": local_url,
+                "source": source,
+                "source_meta": audio_source_meta(source, local_url),
+            })
 
     if not options:
         return {"ok": False, "word": word.word, "accent": accent, "source": "dictionary", "options": [], "error": "没有找到可用音频"}
@@ -6222,6 +6457,9 @@ async def word_audio_choice(
         "accent": accent,
         "audio_url": audio_url,
         "committed": can_commit_audio,
+        "source": "choice",
+        "source_meta": audio_source_meta("choice", audio_url),
+        "media_sources": word_media_sources(db, word),
         "message": "" if can_commit_audio else "当前音频优先级更高，已保留原音频。",
     }
 
@@ -6251,7 +6489,7 @@ async def word_recorded_audio(
     content_type = (audio_file.content_type or "").lower()
     suffix = recorded_audio_suffix(content_type, audio_file.filename or "")
     safe_word = re.sub(r"[^a-zA-Z0-9_-]+", "-", word.word.lower()).strip("-") or "word"
-    target = AUDIO_DIR / f"{safe_word}-{accent}-recorded-{uuid4().hex[:8]}{suffix}"
+    target = AUDIO_DIR / f"record-{safe_word}-{accent}-{uuid4().hex[:8]}{suffix}"
     target.write_bytes(content)
     audio_url = f"/media/audio/{target.name}"
 
@@ -6282,6 +6520,9 @@ async def word_recorded_audio(
         "accent": accent,
         "audio_url": audio_url,
         "committed": can_commit_audio,
+        "source": "recorded",
+        "source_meta": audio_source_meta("recorded", audio_url),
+        "media_sources": word_media_sources(db, word),
         "message": "" if can_commit_audio else "当前音频优先级更高，已保留原音频。",
     }
 
@@ -6362,6 +6603,9 @@ async def word_ai_audio(
         "committed": should_commit and can_commit_audio,
         "message": "" if (not should_commit or can_commit_audio) else "当前音频优先级更高，已生成试听但未替换。",
         "audio_url": audio_url,
+        "source": audio_source,
+        "source_meta": audio_source_meta(audio_source, audio_url),
+        "media_sources": word_media_sources(db, word) if should_commit and can_commit_audio else {},
     }
 
 
@@ -6404,6 +6648,8 @@ async def word_definition_audio(
                 "audio_url": word.english_definition_audio_url,
                 "reused": False,
                 "source": "spb-miniprogram",
+                "source_meta": audio_source_meta("spb-miniprogram", word.english_definition_audio_url),
+                "media_sources": word_media_sources(db, word),
             }
         if source_mode != "auto":
             if not candidate_groups:
@@ -6423,6 +6669,8 @@ async def word_definition_audio(
             "audio_url": word.english_definition_audio_url,
             "reused": True,
             "source": "resource",
+            "source_meta": audio_source_meta("resource", word.english_definition_audio_url),
+            "media_sources": word_media_sources(db, word),
         }
 
     definition_text = re.sub(r"\s+", " ", (word.english_definition or "").strip())
@@ -6465,6 +6713,8 @@ async def word_definition_audio(
         "audio_url": audio_url,
         "reused": False,
         "source": ai_tts_audio_source("definition"),
+        "source_meta": audio_source_meta(ai_tts_audio_source("definition"), audio_url),
+        "media_sources": word_media_sources(db, word),
     }
 
 
@@ -6507,6 +6757,8 @@ async def word_example_audio(
                 "audio_url": word.english_example_audio_url,
                 "reused": not spb_changed,
                 "source": "spb-miniprogram",
+                "source_meta": audio_source_meta("spb-miniprogram", word.english_example_audio_url),
+                "media_sources": word_media_sources(db, word),
             }
         if source_mode != "auto":
             if not candidate_groups:
@@ -6526,6 +6778,8 @@ async def word_example_audio(
             "audio_url": word.english_example_audio_url,
             "reused": True,
             "source": "resource",
+            "source_meta": audio_source_meta("resource", word.english_example_audio_url),
+            "media_sources": word_media_sources(db, word),
         }
 
     example_text = re.sub(r"\s+", " ", (word.english_example or "").strip())
@@ -6568,6 +6822,8 @@ async def word_example_audio(
         "audio_url": audio_url,
         "reused": False,
         "source": ai_tts_audio_source("example"),
+        "source_meta": audio_source_meta(ai_tts_audio_source("example"), audio_url),
+        "media_sources": word_media_sources(db, word),
     }
 
 
@@ -6721,11 +6977,11 @@ def local_import_audio_url(value: str | None) -> str | None:
 
 def local_spb_word_audio_url_for_accent(value: str | None, accent: str) -> bool:
     audio_url = str(value or "").strip()
-    lower_value = audio_url.lower()
+    filename = Path(audio_url.split("?", 1)[0]).name.lower()
     return bool(
         is_local_audio_url(audio_url)
-        and "-spb-" in lower_value
-        and f"-{accent}-" in lower_value
+        and (filename.startswith("spb-") or "-spb-" in filename)
+        and f"-{accent}-" in filename
     )
 
 
@@ -6765,16 +7021,30 @@ def repair_legacy_spb_example_audio_resource(resource: WordResourcePool) -> bool
 
 
 def audio_source_priority(source: str | None = None, audio_url: str | None = None) -> int:
-    marker = f"{source or ''} {audio_url or ''}".lower()
-    if "spb" in marker or "miniprogram" in marker:
+    source_marker = (source or "").strip().lower()
+    audio_filename = Path(str(audio_url or "").split("?", 1)[0]).name.lower()
+    marker = f"{source_marker} {audio_filename}"
+    is_local_audio = is_local_audio_url(audio_url)
+    if is_local_audio:
+        if audio_filename.startswith("spb-") or "-spb-" in audio_filename:
+            return 300
+        if audio_filename.startswith("ai-"):
+            return 200 if any(token in marker for token in ("aliyun", "dashscope", "phoneme")) else 180
+        if audio_filename.startswith("record-") or audio_filename.startswith("upload-") or "recorded" in audio_filename:
+            return 150
+        if audio_filename.startswith("dict-"):
+            return 100
+    if not is_local_audio and (
+        source_marker.startswith("spb") or "spb-miniprogram" in source_marker or "miniprogram" in source_marker
+    ):
         return 300
     if "aliyun" in marker or "dashscope" in marker or "phoneme" in marker:
         return 200
-    if "ai-tts" in marker or "openai" in marker or re.search(r"-(female|male)-ai-", marker):
+    if audio_filename.startswith("ai-") or "ai-tts" in marker or "openai" in marker or re.search(r"-(female|male)-ai-", marker):
         return 180
-    if "choice" in marker or "recorded" in marker:
+    if audio_filename.startswith("record-") or audio_filename.startswith("upload-") or "choice" in marker or "recorded" in marker:
         return 150
-    if any(token in marker for token in ("free-dictionary", "youdao", "google", "dictionary", "tts")):
+    if audio_filename.startswith("dict-") or any(token in marker for token in ("free-dictionary", "youdao", "google", "dictionary", "tts")):
         return 100
     return 0
 

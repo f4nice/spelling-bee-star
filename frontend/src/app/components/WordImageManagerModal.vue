@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { inferImageSourceMeta, sourceText } from "../mediaSourceLabels.js";
 import VersionStamp from "./VersionStamp.vue";
 import WordImageCandidateGrid from "./WordImageCandidateGrid.vue";
 
@@ -19,6 +20,10 @@ const props = defineProps({
   imageCandidates: {
     type: Array,
     required: true,
+  },
+  mediaSources: {
+    type: Object,
+    default: () => ({}),
   },
   findImages: {
     type: Function,
@@ -58,10 +63,14 @@ const aiImageModels = [
 ];
 
 const selectedFileName = computed(() => props.selectedImageFile?.name || "还没有选择图片");
+const imageSourceMeta = computed(() => inferImageSourceMeta(props.mediaSources?.image || {}, props.imageUrl));
+const imageSourceText = computed(() => sourceText(imageSourceMeta.value));
 const replacementPreview = computed(() => {
   if (!selectedReplacement.value) return null;
   return selectedReplacement.value;
 });
+const replacementSourceMeta = computed(() => replacementPreview.value?.sourceMeta || inferImageSourceMeta({}, replacementPreview.value?.imageUrl || ""));
+const replacementSourceText = computed(() => replacementPreview.value ? sourceText(replacementSourceMeta.value) : "等待选择来源");
 const aiControls = computed(() => ({
   theme: aiTheme.value,
   style: aiStyle.value,
@@ -88,6 +97,17 @@ function clearPreview() {
   previewUrl.value = "";
 }
 
+function candidateSourceMeta(candidate) {
+  return inferImageSourceMeta(
+    candidate?.source_meta || candidate?.sourceMeta || { source: candidate?.source || candidate?.provider || candidate?.model || candidate?.label || "" },
+    candidate?.imageUrl || candidate?.url || "",
+  );
+}
+
+function candidateSourceText(candidate) {
+  return sourceText(candidateSourceMeta(candidate));
+}
+
 watch(
   () => props.selectedImageFile,
   (file) => {
@@ -98,6 +118,7 @@ watch(
         type: "upload",
         imageUrl: previewUrl.value,
         label: "上传图片",
+        sourceMeta: inferImageSourceMeta({ source: "upload" }, previewUrl.value),
       };
     } else if (selectedReplacement.value?.type === "upload") {
       selectedReplacement.value = null;
@@ -152,6 +173,7 @@ function selectAiCandidate(candidate) {
     imageUrl: candidate.imageUrl,
     label: `AI 做图 · ${label}`,
     key: candidate.key,
+    sourceMeta: candidateSourceMeta(candidate),
   };
   aiNotice.value = "已放入准备替换，确认后点击保存。";
 }
@@ -161,6 +183,7 @@ function selectNetworkCandidate(candidate) {
     type: "network",
     imageUrl: candidate.url,
     label: "网络选图",
+    sourceMeta: candidateSourceMeta(candidate),
   };
 }
 
@@ -169,11 +192,15 @@ async function generateAiCandidate(option) {
   beginGeneratingModel(option.key);
   try {
     const result = await props.generateAiImage(option, aiControls.value);
+    const source = result.source || result.provider || option.provider || "ai-image";
     const candidate = {
       ...option,
       imageUrl: result.image_url,
       model: result.model || option.model,
       modelLabel: `阿里 · ${result.model || option.model}`,
+      source,
+      source_meta: result.source_meta,
+      sourceMeta: inferImageSourceMeta(result.source_meta || { source }, result.image_url),
     };
     aiCandidates.value = [
       candidate,
@@ -216,6 +243,7 @@ async function generateAllAiCandidates() {
             <div>
               <h3>当前图片</h3>
               <p>{{ word.word }}</p>
+              <small class="image-source-chip">{{ imageSourceText }}</small>
             </div>
             <img v-if="imageUrl" class="word-image-manager-preview" :src="imageUrl" :alt="word.word">
             <div v-else class="image-fallback word-image-manager-preview">{{ word.word.slice(0, 1).toUpperCase() }}</div>
@@ -224,6 +252,7 @@ async function generateAllAiCandidates() {
             <div>
               <h3>准备替换</h3>
               <p>{{ replacementPreview?.label || "等待选择" }}</p>
+              <small class="image-source-chip">{{ replacementSourceText }}</small>
             </div>
             <img
               v-if="replacementPreview?.imageUrl"
@@ -319,6 +348,7 @@ async function generateAllAiCandidates() {
             >
               <img :src="candidate.imageUrl" :alt="`${word.word} ${candidate.modelLabel || candidate.label}`">
               <span>{{ candidate.modelLabel || candidate.label }}</span>
+              <small class="image-source-chip">{{ candidateSourceText(candidate) }}</small>
             </button>
           </div>
           <p v-if="aiNotice" class="word-image-manager-empty">{{ aiNotice }}</p>
@@ -346,3 +376,28 @@ async function generateAllAiCandidates() {
     </section>
   </div>
 </template>
+
+<style scoped>
+.image-source-chip {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  background: rgba(16, 128, 90, 0.1);
+  color: #087452;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 5px 9px;
+}
+
+.word-image-compare-card > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.ai-image-candidate .image-source-chip {
+  margin: 0 10px 10px;
+}
+</style>

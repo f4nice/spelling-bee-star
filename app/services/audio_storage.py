@@ -14,6 +14,21 @@ def is_local_audio_url(url: str | None) -> bool:
     return bool(url and url.startswith("/media/audio/"))
 
 
+def audio_source_prefix(source_key: str | None) -> str:
+    marker = (source_key or "").strip().lower()
+    if marker.startswith("spb-") or marker == "spb" or "miniprogram" in marker:
+        return "spb"
+    if marker.startswith("ai-") or any(token in marker for token in ("aliyun", "dashscope", "openai", "phoneme")):
+        return "ai"
+    if any(token in marker for token in ("free-dictionary", "youdao", "google", "dictionary", "tts")):
+        return "dict"
+    if "record" in marker:
+        return "record"
+    if "upload" in marker:
+        return "upload"
+    return "audio"
+
+
 def audio_candidates(word: str, accent: str) -> list[dict]:
     google_lang = "en-GB" if accent == "gb" else "en-US"
     primary_youdao_type = "1" if accent == "gb" else "2"
@@ -64,7 +79,8 @@ async def store_audio_candidate(word: str, accent: str, source_key: str, audio_u
     audio_dir.mkdir(parents=True, exist_ok=True)
     safe_word = (re.sub(r"[^a-zA-Z0-9_-]+", "-", word.lower()).strip("-") or "word")[:72]
     safe_source = (re.sub(r"[^a-zA-Z0-9_-]+", "-", source_key.lower()).strip("-") or "source")[:80]
-    target = audio_dir / f"{safe_word}-{accent}-{safe_source}.mp3"
+    prefix = audio_source_prefix(source_key)
+    target = audio_dir / f"{prefix}-{safe_word}-{accent}-{safe_source}.mp3"
     if target.exists() and target.stat().st_size >= 1000:
         return f"/media/audio/{target.name}"
 

@@ -68,6 +68,7 @@ function openAudioModal() {
       :image-url="imageForWord(data.word)"
       :selected-image-file="selectedImageFile"
       :image-candidates="imageCandidates"
+      :media-sources="data.media_sources || {}"
       :find-images="findImages"
       :save-selected-image="saveUploadedImage"
       :choose-network-image="chooseNetworkImageAndClose"

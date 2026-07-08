@@ -11,12 +11,12 @@ export async function loadWordAudioOptions({ wordId, accent, source = "dictionar
 
 export async function saveWordAudioChoice({ wordId, accent, url }) {
   const form = createAudioChoiceForm(accent, url);
-  await fetchJson(wordApiPaths.audioChoice(wordId), { method: "POST", body: form });
+  return fetchJson(wordApiPaths.audioChoice(wordId), { method: "POST", body: form });
 }
 
 export async function saveUploadedWordAudio({ wordId, accent, file }) {
   const form = createUploadedAudioForm(accent, file);
-  await fetchJson(wordApiPaths.recordedAudio(wordId), { method: "POST", body: form });
+  return fetchJson(wordApiPaths.recordedAudio(wordId), { method: "POST", body: form });
 }
 
 export async function generateAiWordAudio({ wordId, accent, voiceGender = "female", textMode = "word" }) {

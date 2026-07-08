@@ -35,15 +35,33 @@ export function useWordAudio({ data, loadRoute }) {
   }
 
   async function chooseAudio(accent, url) {
-    await chooseWordAudioOption({ wordId: data.value.word.id, accent, url, loadRoute });
+    const result = await chooseWordAudioOption({ wordId: data.value.word.id, accent, url, loadRoute });
+    if (result?.media_sources) data.value.media_sources = result.media_sources;
+    if (result?.committed && result?.audio_url) {
+      if (accent === "gb") data.value.word.british_audio_url = result.audio_url;
+      else data.value.word.american_audio_url = result.audio_url;
+    }
+    return result;
   }
 
   async function uploadAudio(accent, file) {
-    await uploadWordAudioOption({ wordId: data.value.word.id, accent, file, loadRoute });
+    const result = await uploadWordAudioOption({ wordId: data.value.word.id, accent, file, loadRoute });
+    if (result?.media_sources) data.value.media_sources = result.media_sources;
+    if (result?.committed && result?.audio_url) {
+      if (accent === "gb") data.value.word.british_audio_url = result.audio_url;
+      else data.value.word.american_audio_url = result.audio_url;
+    }
+    return result;
   }
 
   async function generateAiAudio(accent, voiceGender = "female", textMode = "word") {
-    return generateWordAiAudioOption({ wordId: data.value.word.id, accent, voiceGender, textMode, loadRoute });
+    const result = await generateWordAiAudioOption({ wordId: data.value.word.id, accent, voiceGender, textMode, loadRoute });
+    if (result?.media_sources) data.value.media_sources = result.media_sources;
+    if (result?.committed && result?.audio_url) {
+      if (accent === "gb") data.value.word.british_audio_url = result.audio_url;
+      else data.value.word.american_audio_url = result.audio_url;
+    }
+    return result;
   }
 
   async function generateDefinitionAudio(options = {}) {

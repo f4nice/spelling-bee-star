@@ -12,13 +12,15 @@ export async function updateWordAudioOptions({ wordId, audioOptions, accent, sou
 }
 
 export async function chooseWordAudioOption({ wordId, accent, url, loadRoute }) {
-  await saveWordAudioChoice({ wordId, accent, url });
-  await loadRoute();
+  const result = await saveWordAudioChoice({ wordId, accent, url });
+  if (!result?.media_sources) await loadRoute();
+  return result;
 }
 
 export async function uploadWordAudioOption({ wordId, accent, file, loadRoute }) {
-  await saveUploadedWordAudio({ wordId, accent, file });
-  await loadRoute();
+  const result = await saveUploadedWordAudio({ wordId, accent, file });
+  if (!result?.media_sources) await loadRoute();
+  return result;
 }
 
 export async function generateWordAiAudioOption({ wordId, accent, voiceGender, textMode = "word", loadRoute }) {
@@ -38,6 +40,7 @@ export async function generateDefinitionAudioOption({ data, source = "auto" }) {
   } else if (result?.audio_url) {
     data.value.word.english_definition_audio_url = result.audio_url;
   }
+  if (result?.media_sources) data.value.media_sources = result.media_sources;
   return result;
 }
 
@@ -52,5 +55,6 @@ export async function generateExampleAudioOption({ data, source = "auto" }) {
   } else if (result?.audio_url) {
     data.value.word.english_example_audio_url = result.audio_url;
   }
+  if (result?.media_sources) data.value.media_sources = result.media_sources;
   return result;
 }
