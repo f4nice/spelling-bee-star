@@ -609,6 +609,17 @@ onBeforeUnmount(clearPreviewUrl);
   margin-top: 2px;
 }
 
+.audio-manager-target-button:hover .audio-source-chip,
+.audio-manager-target-button.active .audio-source-chip {
+  background: rgba(255, 255, 255, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+}
+
+.audio-manager-target-button:hover .audio-source-chip {
+  background: rgba(255, 255, 255, 0.3);
+}
+
 .audio-manager-option {
   align-items: center;
   gap: 12px;
