@@ -82,13 +82,14 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260708-007"
-DEFAULT_PAGE_VERSION = "v20260708.7"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260709-001"
+DEFAULT_PAGE_VERSION = "v20260709.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SPB_DETAIL_BACKFILL_BATCH_LIMIT = 300
-SPB_AUDIO_SOURCE_RULE_VERSION = "lexicon-v1"
+SPB_WORD_AUDIO_SOURCE_RULE_VERSION = "lexicon-v1"
+SPB_DETAIL_AUDIO_SOURCE_RULE_VERSION = "compound-v1"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
 SCIENCE_IMAGE_VERSION = "20260629-no-text-1"
 SCIENCE_DISCOVERY_DATA_VERSION = "20260629-source-mode-1"
@@ -4803,6 +4804,15 @@ def spb_find_preferred_field(payload: Any, field_names: tuple[str, ...]) -> str 
     return None
 
 
+def spb_word_compound_audio_url(payload: Any, field_names: tuple[str, ...]) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    for key, value in payload.items():
+        if key.lower() in {"wordcompoundaudio", "word_compound_audio", "compoundaudio", "compound_audio"}:
+            return spb_find_preferred_field(value, field_names)
+    return None
+
+
 def spb_clean_field_text(value: Any) -> str | None:
     if value is None:
         return None
@@ -4896,9 +4906,9 @@ def spb_audio_urls_from_payload(payload: Any) -> dict[str, str]:
 
 
 def spb_definition_audio_url_from_payload(payload: Any) -> str | None:
-    lexicon_url = spb_find_preferred_field(payload, ("durl",))
-    if spb_looks_like_audio_url(lexicon_url) and not spb_looks_like_example_audio_url(lexicon_url):
-        return lexicon_url
+    compound_url = spb_word_compound_audio_url(payload, ("definitionUrl", "definition_url"))
+    if spb_looks_like_audio_url(compound_url) and not spb_looks_like_example_audio_url(compound_url):
+        return compound_url
 
     specific_url = spb_find_preferred_field(
         payload,
@@ -4932,6 +4942,10 @@ def spb_definition_audio_url_from_payload(payload: Any) -> str | None:
     if spb_looks_like_audio_url(specific_url) and not spb_looks_like_example_audio_url(specific_url):
         return specific_url
 
+    lexicon_url = spb_find_preferred_field(payload, ("durl",))
+    if spb_looks_like_audio_url(lexicon_url) and not spb_looks_like_example_audio_url(lexicon_url):
+        return lexicon_url
+
     if isinstance(payload, dict):
         for key, value in payload.items():
             lower_key = key.lower()
@@ -4956,9 +4970,9 @@ def spb_definition_audio_url_from_payload(payload: Any) -> str | None:
 
 
 def spb_example_audio_url_from_payload(payload: Any) -> str | None:
-    lexicon_url = spb_find_preferred_field(payload, ("eurl",))
-    if spb_looks_like_audio_url(lexicon_url):
-        return lexicon_url
+    compound_url = spb_word_compound_audio_url(payload, ("sentenceUrl", "sentence_url"))
+    if spb_looks_like_audio_url(compound_url):
+        return compound_url
 
     specific_url = spb_find_preferred_field(
         payload,
@@ -5001,6 +5015,10 @@ def spb_example_audio_url_from_payload(payload: Any) -> str | None:
     )
     if spb_looks_like_audio_url(specific_url):
         return specific_url
+
+    lexicon_url = spb_find_preferred_field(payload, ("eurl",))
+    if spb_looks_like_audio_url(lexicon_url):
+        return lexicon_url
 
     if isinstance(payload, dict):
         for key, value in payload.items():
@@ -5171,21 +5189,21 @@ def spb_has_text_fields(row: dict[str, Any]) -> bool:
     return any(str(row.get(field) or "").strip() for field in SPB_TEXT_IMPORT_FIELDS)
 
 
-def spb_group_audio_rule_key(group: dict[str, Any]) -> str:
+def spb_group_audio_rule_key(group: dict[str, Any], rule_version: str = SPB_WORD_AUDIO_SOURCE_RULE_VERSION) -> str:
     group_key = str(group.get("spb_flag") or group.get("key") or "example").strip()
     source_url = str(group.get("source_url") or "").strip()
     source_stem = Path(urlparse(source_url).path).stem if source_url else ""
     source_version_match = re.search(r"(?:\?|&)v=([^&]+)", source_url)
     source_version = source_version_match.group(1) if source_version_match else ""
-    return "-".join(part for part in (group_key, source_stem, source_version, SPB_AUDIO_SOURCE_RULE_VERSION) if part)
+    return "-".join(part for part in (group_key, source_stem, source_version, rule_version) if part)
 
 
 def spb_word_audio_source_key(group: dict[str, Any]) -> str:
-    return f"spb-{spb_group_audio_rule_key(group)}"
+    return f"spb-{spb_group_audio_rule_key(group, SPB_WORD_AUDIO_SOURCE_RULE_VERSION)}"
 
 
 def spb_detail_audio_source_key_prefix(group: dict[str, Any], kind: str) -> str:
-    return f"spb-{kind}-{spb_group_audio_rule_key(group)}"
+    return f"spb-{kind}-{spb_group_audio_rule_key(group, SPB_DETAIL_AUDIO_SOURCE_RULE_VERSION)}"
 
 
 def spb_example_audio_source_key(group: dict[str, Any], word: str | None, example: str | None, audio_url: str | None) -> str:
