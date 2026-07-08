@@ -72,7 +72,15 @@ async def audio_candidates_with_dictionary(word: str, accent: str) -> list[dict]
     return candidates
 
 
-async def store_audio_candidate(word: str, accent: str, source_key: str, audio_url: str, audio_dir: Path) -> str | None:
+async def store_audio_candidate(
+    word: str,
+    accent: str,
+    source_key: str,
+    audio_url: str,
+    audio_dir: Path,
+    *,
+    force_download: bool = False,
+) -> str | None:
     if not audio_url or is_local_audio_url(audio_url):
         return audio_url
 
@@ -81,7 +89,7 @@ async def store_audio_candidate(word: str, accent: str, source_key: str, audio_u
     safe_source = (re.sub(r"[^a-zA-Z0-9_-]+", "-", source_key.lower()).strip("-") or "source")[:80]
     prefix = audio_source_prefix(source_key)
     target = audio_dir / f"{prefix}-{safe_word}-{accent}-{safe_source}.mp3"
-    if target.exists() and target.stat().st_size >= 1000:
+    if not force_download and target.exists() and target.stat().st_size >= 1000:
         return f"/media/audio/{target.name}"
 
     async with httpx.AsyncClient(timeout=20, headers=AUDIO_HEADERS, follow_redirects=True) as client:

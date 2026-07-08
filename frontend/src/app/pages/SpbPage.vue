@@ -252,7 +252,11 @@ async function syncGroup(group) {
     const payload = await fetchJson(isDetailUpdate ? routeApiPaths.spbBackfillDetails() : routeApiPaths.spbSync(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ collection: activeCollection.value.key || INDIVIDUAL_COLLECTION_KEY, key: group.key }),
+      body: JSON.stringify({
+        collection: activeCollection.value.key || INDIVIDUAL_COLLECTION_KEY,
+        key: group.key,
+        force_audio_download: isDetailUpdate && (activeCollection.value.key || INDIVIDUAL_COLLECTION_KEY) === INDIVIDUAL_COLLECTION_KEY,
+      }),
       skipCache: true,
     });
     if (payload.collection) pageData.value = payload;

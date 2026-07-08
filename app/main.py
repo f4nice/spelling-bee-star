@@ -82,8 +82,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260709-001"
-DEFAULT_PAGE_VERSION = "v20260709.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260709-002"
+DEFAULT_PAGE_VERSION = "v20260709.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3954,23 +3954,36 @@ async def vue_spb_backfill_details_api(request: Request, db: Session = Depends(g
     if not words:
         raise HTTPException(status_code=404, detail="这组还没有同步到 SpeakEasy，先同步词库后再补全详情。")
 
+    force_audio_download = bool(payload.get("force_audio_download") or payload.get("forceAudioDownload"))
+    if collection["key"] == "individual" and str(group.get("source_url") or "").strip():
+        force_audio_download = True
     resource_applied = apply_word_resources(db, words, include_image=False)
     source_rows, _source_path = load_spb_source_rows(group)
     source_rows_by_word = {normalize_resource_word(row.get("word")): row for row in source_rows}
-    repair_words = [
-        word
-        for word in words
-        if word_needs_spb_detail_repair(word)
-        or word_needs_spb_group_audio_repair(
-            word,
-            group,
-            source_rows_by_word.get(normalize_resource_word(word.word)),
-        )
-    ]
-    queued_ids = [word.id for word in repair_words[:SPB_DETAIL_BACKFILL_BATCH_LIMIT]]
-    remaining_after_batch = max(len(repair_words) - len(queued_ids), 0)
+    if force_audio_download:
+        repair_words = [
+            word
+            for word in words
+            if source_rows_by_word.get(normalize_resource_word(word.word))
+        ]
+        queued_ids = [word.id for word in repair_words]
+        remaining_after_batch = 0
+    else:
+        repair_words = [
+            word
+            for word in words
+            if word_needs_spb_detail_repair(word)
+            or word_needs_spb_group_audio_repair(
+                word,
+                group,
+                source_rows_by_word.get(normalize_resource_word(word.word)),
+            )
+        ]
+        queued_ids = [word.id for word in repair_words[:SPB_DETAIL_BACKFILL_BATCH_LIMIT]]
+        remaining_after_batch = max(len(repair_words) - len(queued_ids), 0)
     if queued_ids:
         job_id = uuid4().hex
+        action_label = "强制下载小程序音频并更新" if force_audio_download else "检查"
         job = {
             "id": job_id,
             "collection": collection["key"],
@@ -3986,8 +3999,9 @@ async def vue_spb_backfill_details_api(request: Request, db: Session = Depends(g
             "local_audio_count": 0,
             "current_word": "",
             "source": "spb-public-detail-audio",
+            "force_audio_download": force_audio_download,
             "message": (
-                f"已从公共资源表补齐 {resource_applied} 个；准备检查 {len(queued_ids)} 个单词的 SPB 详情和音频来源。"
+                f"已从公共资源表补齐 {resource_applied} 个；准备{action_label} {len(queued_ids)} 个单词的 SPB 详情和音频来源。"
             ),
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat(),
@@ -3999,6 +4013,7 @@ async def vue_spb_backfill_details_api(request: Request, db: Session = Depends(g
             job_id=job_id,
             collection_key=collection["key"],
             group_key=group["key"],
+            force_audio_download=force_audio_download,
         )
         response = spb_sync_response(db, job)
         response["queued_detail_count"] = len(queued_ids)
@@ -5290,6 +5305,8 @@ async def prepare_spb_rows_with_local_audio(
     rows: list[dict[str, Any]],
     group: dict[str, Any],
     db: Session | None = None,
+    *,
+    force_audio_download: bool = False,
 ) -> list[dict[str, Any]]:
     if not rows:
         return rows
@@ -5299,6 +5316,7 @@ async def prepare_spb_rows_with_local_audio(
     async def prepare(row: dict[str, Any]) -> dict[str, Any]:
         async with semaphore:
             prepared = dict(row)
+            forced_download_count = 0
             if spb_miniprogram_authorization_configured() and prepared.get("spb_word_id"):
                 detail = await fetch_spb_word_detail_from_miniprogram(prepared, group)
                 if isinstance(detail, dict):
@@ -5322,24 +5340,28 @@ async def prepare_spb_rows_with_local_audio(
                 if not audio_url or is_local_audio_url(audio_url):
                     continue
                 incoming_source = str(prepared.get(f"{field_name}_source") or "spb-miniprogram")
-                reusable_audio = reusable_local_audio_for_word(db, prepared.get("word"), accent, incoming_source)
-                if reusable_audio:
-                    prepared[field_name] = reusable_audio[0]
-                    prepared[f"{field_name}_source"] = reusable_audio[1] or incoming_source
-                    continue
+                if not force_audio_download:
+                    reusable_audio = reusable_local_audio_for_word(db, prepared.get("word"), accent, incoming_source)
+                    if reusable_audio:
+                        prepared[field_name] = reusable_audio[0]
+                        prepared[f"{field_name}_source"] = reusable_audio[1] or incoming_source
+                        continue
                 try:
-                        local_url = await store_audio_candidate(
-                            prepared["word"],
-                            accent,
-                            spb_word_audio_source_key(group),
-                            audio_url,
-                            AUDIO_DIR,
-                        )
+                    local_url = await store_audio_candidate(
+                        prepared["word"],
+                        accent,
+                        spb_word_audio_source_key(group),
+                        audio_url,
+                        AUDIO_DIR,
+                        force_download=force_audio_download,
+                    )
                 except Exception:
                     local_url = None
                 if local_url:
                     prepared[field_name] = local_url
                     prepared[f"{field_name}_source"] = "spb-miniprogram"
+                    if force_audio_download:
+                        forced_download_count += 1
             example_audio_url = str(prepared.get("english_example_audio_url") or "").strip()
             if example_audio_url and not is_local_audio_url(example_audio_url):
                 incoming_source = str(prepared.get("english_example_audio_url_source") or "spb-miniprogram")
@@ -5349,13 +5371,15 @@ async def prepare_spb_rows_with_local_audio(
                     prepared.get("english_example"),
                     example_audio_url,
                 )
-                reusable_example_audio = reusable_local_example_audio_for_word(
-                    db,
-                    prepared.get("word"),
-                    prepared.get("english_example"),
-                    incoming_source,
-                    expected_source_key=example_source_key,
-                )
+                reusable_example_audio = None
+                if not force_audio_download:
+                    reusable_example_audio = reusable_local_example_audio_for_word(
+                        db,
+                        prepared.get("word"),
+                        prepared.get("english_example"),
+                        incoming_source,
+                        expected_source_key=example_source_key,
+                    )
                 if reusable_example_audio:
                     prepared["english_example_audio_url"] = reusable_example_audio[0]
                     prepared["english_example_audio_url_source"] = reusable_example_audio[1] or incoming_source
@@ -5367,12 +5391,15 @@ async def prepare_spb_rows_with_local_audio(
                             example_source_key,
                             example_audio_url,
                             AUDIO_DIR,
+                            force_download=force_audio_download,
                         )
                     except Exception:
                         local_url = None
                     if local_url:
                         prepared["english_example_audio_url"] = local_url
                         prepared["english_example_audio_url_source"] = "spb-miniprogram"
+                        if force_audio_download:
+                            forced_download_count += 1
             definition_audio_url = str(prepared.get("english_definition_audio_url") or "").strip()
             if definition_audio_url and not is_local_audio_url(definition_audio_url):
                 incoming_source = str(prepared.get("english_definition_audio_url_source") or "spb-miniprogram")
@@ -5382,13 +5409,15 @@ async def prepare_spb_rows_with_local_audio(
                     prepared.get("english_definition"),
                     definition_audio_url,
                 )
-                reusable_definition_audio = reusable_local_definition_audio_for_word(
-                    db,
-                    prepared.get("word"),
-                    prepared.get("english_definition"),
-                    incoming_source,
-                    expected_source_key=definition_source_key,
-                )
+                reusable_definition_audio = None
+                if not force_audio_download:
+                    reusable_definition_audio = reusable_local_definition_audio_for_word(
+                        db,
+                        prepared.get("word"),
+                        prepared.get("english_definition"),
+                        incoming_source,
+                        expected_source_key=definition_source_key,
+                    )
                 if reusable_definition_audio:
                     prepared["english_definition_audio_url"] = reusable_definition_audio[0]
                     prepared["english_definition_audio_url_source"] = reusable_definition_audio[1] or incoming_source
@@ -5400,12 +5429,17 @@ async def prepare_spb_rows_with_local_audio(
                             definition_source_key,
                             definition_audio_url,
                             AUDIO_DIR,
+                            force_download=force_audio_download,
                         )
                     except Exception:
                         local_url = None
                     if local_url:
                         prepared["english_definition_audio_url"] = local_url
                         prepared["english_definition_audio_url_source"] = "spb-miniprogram"
+                        if force_audio_download:
+                            forced_download_count += 1
+            if forced_download_count:
+                prepared["_spb_force_downloaded_audio_count"] = forced_download_count
             return prepared
 
     return await asyncio.gather(*(prepare(row) for row in rows))
@@ -5491,6 +5525,7 @@ async def apply_spb_details_to_word(
     *,
     list_id: int | None = None,
     preferred_group: dict[str, Any] | None = None,
+    force_audio_download: bool = False,
 ) -> bool:
     changed = False
     candidate_groups: list[dict[str, Any]] = []
@@ -5523,11 +5558,18 @@ async def apply_spb_details_to_word(
                 prepared.update(detail_audio_fields)
                 prepared.update(detail_text_fields)
 
-        prepared_rows = await prepare_spb_rows_with_local_audio([prepared], group, db=db)
+        prepared_rows = await prepare_spb_rows_with_local_audio(
+            [prepared],
+            group,
+            db=db,
+            force_audio_download=force_audio_download,
+        )
         prepared = prepared_rows[0] if prepared_rows else prepared
         if apply_spb_text_fields_to_word(word, prepared):
             changed = True
         if apply_imported_local_audio(word, prepared):
+            changed = True
+        if int(prepared.get("_spb_force_downloaded_audio_count") or 0):
             changed = True
         if clear_misclassified_spb_audio_from_resource(db, word, prepared):
             changed = True
@@ -7487,6 +7529,7 @@ async def apply_spb_detail_backfill_word_ids(
     job_id: str | None = None,
     collection_key: str | None = None,
     group_key: str | None = None,
+    force_audio_download: bool = False,
 ) -> None:
     db = SessionLocal()
     total = len(word_ids)
@@ -7508,15 +7551,28 @@ async def apply_spb_detail_backfill_word_ids(
                 total=total,
                 processed=0,
                 current_word="",
-                message=f"正在检查 SPB 详情和音频来源：0 / {total}",
+                message=(
+                    f"正在强制下载 SPB 小程序详情音频：0 / {total}"
+                    if force_audio_download
+                    else f"正在检查 SPB 详情和音频来源：0 / {total}"
+                ),
                 collection=collection_key,
                 key=group_key,
+                force_audio_download=force_audio_download,
             )
         for index, word_id in enumerate(word_ids, start=1):
             word = db.get(Word, word_id)
             if not word:
                 if job_id:
-                    update_spb_sync_job(job_id, processed=index, message=f"正在检查 SPB 详情和音频来源：{index} / {total}")
+                    update_spb_sync_job(
+                        job_id,
+                        processed=index,
+                        message=(
+                            f"正在强制下载 SPB 小程序详情音频：{index} / {total}"
+                            if force_audio_download
+                            else f"正在检查 SPB 详情和音频来源：{index} / {total}"
+                        ),
+                    )
                 continue
             try:
                 if job_id:
@@ -7524,10 +7580,19 @@ async def apply_spb_detail_backfill_word_ids(
                         job_id,
                         processed=index - 1,
                         current_word=word.word,
-                        message=f"正在检查 SPB 详情和音频来源：{index - 1} / {total}",
+                        message=(
+                            f"正在强制下载 SPB 小程序详情音频：{index - 1} / {total}"
+                            if force_audio_download
+                            else f"正在检查 SPB 详情和音频来源：{index - 1} / {total}"
+                        ),
                     )
                 resource_changed = apply_word_resource(db, word, commit=False, include_image=False)
-                spb_changed = await apply_spb_details_to_word(db, word, preferred_group=preferred_group)
+                spb_changed = await apply_spb_details_to_word(
+                    db,
+                    word,
+                    preferred_group=preferred_group,
+                    force_audio_download=force_audio_download,
+                )
                 db.add(word)
                 db.commit()
                 db.refresh(word)
@@ -7555,10 +7620,17 @@ async def apply_spb_detail_backfill_word_ids(
                         current_word=word.word,
                         text_detail_count=changed_count,
                         local_audio_count=spb_audio_count,
-                        message=f"正在检查 SPB 详情和音频来源：{index} / {total}",
+                        message=(
+                            f"正在强制下载 SPB 小程序详情音频：{index} / {total}"
+                            if force_audio_download
+                            else f"正在检查 SPB 详情和音频来源：{index} / {total}"
+                        ),
                     )
         if job_id:
-            message = f"SPB 详情和音频来源更新完成：检查 {total} 个，修复 {changed_count} 个。"
+            if force_audio_download:
+                message = f"SPB 小程序音频强制下载完成：检查 {total} 个，替换/确认 {changed_count} 个。"
+            else:
+                message = f"SPB 详情和音频来源更新完成：检查 {total} 个，修复 {changed_count} 个。"
             if spb_audio_count:
                 message += f" 本地 SPB 音频 {spb_audio_count} 个。"
             if failed_count:
@@ -7595,6 +7667,7 @@ def start_spb_detail_backfill_thread(
     job_id: str | None = None,
     collection_key: str | None = None,
     group_key: str | None = None,
+    force_audio_download: bool = False,
 ) -> None:
     worker = Thread(
         target=lambda: asyncio.run(
@@ -7603,6 +7676,7 @@ def start_spb_detail_backfill_thread(
                 job_id=job_id,
                 collection_key=collection_key,
                 group_key=group_key,
+                force_audio_download=force_audio_download,
             )
         ),
         daemon=True,
