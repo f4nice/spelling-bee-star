@@ -82,8 +82,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260708-005"
-DEFAULT_PAGE_VERSION = "v20260708.5"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260708-006"
+DEFAULT_PAGE_VERSION = "v20260708.6"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3959,7 +3959,11 @@ async def vue_spb_backfill_details_api(request: Request, db: Session = Depends(g
         word
         for word in words
         if word_needs_spb_detail_repair(word)
-        or word_needs_spb_word_audio_repair(word, source_rows_by_word.get(normalize_resource_word(word.word)))
+        or word_needs_spb_group_audio_repair(
+            word,
+            group,
+            source_rows_by_word.get(normalize_resource_word(word.word)),
+        )
     ]
     queued_ids = [word.id for word in repair_words[:SPB_DETAIL_BACKFILL_BATCH_LIMIT]]
     remaining_after_batch = max(len(repair_words) - len(queued_ids), 0)
@@ -5158,13 +5162,29 @@ def spb_has_text_fields(row: dict[str, Any]) -> bool:
     return any(str(row.get(field) or "").strip() for field in SPB_TEXT_IMPORT_FIELDS)
 
 
-def spb_example_audio_source_key(group: dict[str, Any], word: str | None, example: str | None, audio_url: str | None) -> str:
+def spb_group_audio_rule_key(group: dict[str, Any]) -> str:
     group_key = str(group.get("spb_flag") or group.get("key") or "example").strip()
+    source_url = str(group.get("source_url") or "").strip()
+    source_stem = Path(urlparse(source_url).path).stem if source_url else ""
+    source_version_match = re.search(r"(?:\?|&)v=([^&]+)", source_url)
+    source_version = source_version_match.group(1) if source_version_match else ""
+    return "-".join(part for part in (group_key, source_stem, source_version) if part)
+
+
+def spb_word_audio_source_key(group: dict[str, Any]) -> str:
+    return f"spb-{spb_group_audio_rule_key(group)}"
+
+
+def spb_detail_audio_source_key_prefix(group: dict[str, Any], kind: str) -> str:
+    return f"spb-{kind}-{spb_group_audio_rule_key(group)}"
+
+
+def spb_example_audio_source_key(group: dict[str, Any], word: str | None, example: str | None, audio_url: str | None) -> str:
     text = re.sub(r"\s+", " ", (example or "").strip())
     source_url = str(audio_url or "").strip()
     text = "|".join(part for part in (text, source_url) if part) or str(word or "").strip()
     digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
-    return f"spb-example-{group_key}-{digest}"
+    return f"{spb_detail_audio_source_key_prefix(group, 'example')}-{digest}"
 
 
 def spb_definition_audio_source_key(
@@ -5173,12 +5193,11 @@ def spb_definition_audio_source_key(
     definition: str | None,
     audio_url: str | None,
 ) -> str:
-    group_key = str(group.get("spb_flag") or group.get("key") or "definition").strip()
     text = re.sub(r"\s+", " ", (definition or "").strip())
     source_url = str(audio_url or "").strip()
     text = "|".join(part for part in (text, source_url) if part) or str(word or "").strip()
     digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
-    return f"spb-definition-{group_key}-{digest}"
+    return f"{spb_detail_audio_source_key_prefix(group, 'definition')}-{digest}"
 
 
 def local_audio_url_matches_source_key(audio_url: str | None, source_key: str | None) -> bool:
@@ -5282,13 +5301,13 @@ async def prepare_spb_rows_with_local_audio(
                     prepared[f"{field_name}_source"] = reusable_audio[1] or incoming_source
                     continue
                 try:
-                    local_url = await store_audio_candidate(
-                        prepared["word"],
-                        accent,
-                        f"spb-{group.get('spb_flag') or group.get('key') or 'audio'}",
-                        audio_url,
-                        AUDIO_DIR,
-                    )
+                        local_url = await store_audio_candidate(
+                            prepared["word"],
+                            accent,
+                            spb_word_audio_source_key(group),
+                            audio_url,
+                            AUDIO_DIR,
+                        )
                 except Exception:
                     local_url = None
                 if local_url:
@@ -5439,9 +5458,22 @@ def find_spb_source_row_for_word(group: dict[str, Any], word_text: str | None) -
     return next((row for row in rows if normalize_resource_word(row.get("word")) == normalized_word), None)
 
 
-async def apply_spb_details_to_word(db: Session, word: Word, *, list_id: int | None = None) -> bool:
+async def apply_spb_details_to_word(
+    db: Session,
+    word: Word,
+    *,
+    list_id: int | None = None,
+    preferred_group: dict[str, Any] | None = None,
+) -> bool:
     changed = False
+    candidate_groups: list[dict[str, Any]] = []
+    if preferred_group:
+        candidate_groups.append(preferred_group)
     for group in spb_candidate_groups_for_word(db, word, list_id):
+        if all(existing.get("prefix") != group.get("prefix") for existing in candidate_groups):
+            candidate_groups.append(group)
+
+    for group in candidate_groups:
         row = find_spb_source_row_for_word(group, word.word)
         if not row:
             continue
@@ -7239,6 +7271,52 @@ def word_needs_spb_word_audio_repair(word: Word, source_row: dict[str, Any] | No
     return False
 
 
+def safe_audio_source_fragment(source_key: str | None) -> str:
+    return (re.sub(r"[^a-zA-Z0-9_-]+", "-", str(source_key or "").lower()).strip("-") or "source")[:80]
+
+
+def local_spb_word_audio_matches_group(audio_url: str | None, group: dict[str, Any]) -> bool:
+    if not is_spb_audio_source(audio_url=audio_url):
+        return False
+    expected_fragment = safe_audio_source_fragment(spb_word_audio_source_key(group))
+    return expected_fragment in Path(str(audio_url or "")).name.lower()
+
+
+def local_spb_detail_audio_matches_group(audio_url: str | None, group: dict[str, Any], kind: str) -> bool:
+    if not is_spb_audio_source(audio_url=audio_url):
+        return False
+    expected_fragment = safe_audio_source_fragment(spb_detail_audio_source_key_prefix(group, kind))
+    return expected_fragment in Path(str(audio_url or "")).name.lower()
+
+
+def word_needs_spb_group_audio_repair(
+    word: Word,
+    group: dict[str, Any],
+    source_row: dict[str, Any] | None,
+) -> bool:
+    if not source_row:
+        return False
+    if word_needs_spb_word_audio_repair(word, source_row):
+        return True
+    if source_row.get("spb_word_id"):
+        for field in ("american_audio_url", "british_audio_url"):
+            current_url = getattr(word, field, None)
+            if current_url and not local_spb_word_audio_matches_group(current_url, group):
+                return True
+        for kind, field in (
+            ("definition", "english_definition_audio_url"),
+            ("example", "english_example_audio_url"),
+        ):
+            current_url = getattr(word, field, None)
+            if current_url and is_spb_audio_source(audio_url=current_url) and not local_spb_detail_audio_matches_group(
+                current_url,
+                group,
+                kind,
+            ):
+                return True
+    return False
+
+
 def merge_spellings(existing: str | None, incoming: str | None, *, primary: str | None = None) -> str | None:
     values: list[str] = []
     seen: set[str] = set()
@@ -7388,6 +7466,12 @@ async def apply_spb_detail_backfill_word_ids(
     changed_count = 0
     spb_audio_count = 0
     failed_count = 0
+    preferred_group = None
+    if collection_key and group_key:
+        try:
+            _collection, preferred_group = spb_collection_group_by_keys(collection_key, group_key)
+        except HTTPException:
+            preferred_group = None
     try:
         if job_id:
             update_spb_sync_job(
@@ -7416,7 +7500,7 @@ async def apply_spb_detail_backfill_word_ids(
                         message=f"正在检查 SPB 详情和音频来源：{index - 1} / {total}",
                     )
                 resource_changed = apply_word_resource(db, word, commit=False, include_image=False)
-                spb_changed = await apply_spb_details_to_word(db, word)
+                spb_changed = await apply_spb_details_to_word(db, word, preferred_group=preferred_group)
                 db.add(word)
                 db.commit()
                 db.refresh(word)
