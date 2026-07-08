@@ -82,12 +82,13 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260708-006"
-DEFAULT_PAGE_VERSION = "v20260708.6"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260708-007"
+DEFAULT_PAGE_VERSION = "v20260708.7"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SPB_DETAIL_BACKFILL_BATCH_LIMIT = 300
+SPB_AUDIO_SOURCE_RULE_VERSION = "lexicon-v1"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
 SCIENCE_IMAGE_VERSION = "20260629-no-text-1"
 SCIENCE_DISCOVERY_DATA_VERSION = "20260629-source-mode-1"
@@ -4845,6 +4846,7 @@ def spb_audio_urls_from_payload(payload: Any) -> dict[str, str]:
     us_url = spb_find_first_field(
         payload,
         (
+            "purl",
             "american_audio_url",
             "americanAudioUrl",
             "usAudioUrl",
@@ -4894,6 +4896,10 @@ def spb_audio_urls_from_payload(payload: Any) -> dict[str, str]:
 
 
 def spb_definition_audio_url_from_payload(payload: Any) -> str | None:
+    lexicon_url = spb_find_preferred_field(payload, ("durl",))
+    if spb_looks_like_audio_url(lexicon_url) and not spb_looks_like_example_audio_url(lexicon_url):
+        return lexicon_url
+
     specific_url = spb_find_preferred_field(
         payload,
         (
@@ -4950,6 +4956,10 @@ def spb_definition_audio_url_from_payload(payload: Any) -> str | None:
 
 
 def spb_example_audio_url_from_payload(payload: Any) -> str | None:
+    lexicon_url = spb_find_preferred_field(payload, ("eurl",))
+    if spb_looks_like_audio_url(lexicon_url):
+        return lexicon_url
+
     specific_url = spb_find_preferred_field(
         payload,
         (
@@ -4987,7 +4997,6 @@ def spb_example_audio_url_from_payload(payload: Any) -> str | None:
             "en_sentence_audio_url",
             "sentAudioUrl",
             "sent_audio_url",
-            "eurl",
         ),
     )
     if spb_looks_like_audio_url(specific_url):
@@ -5168,7 +5177,7 @@ def spb_group_audio_rule_key(group: dict[str, Any]) -> str:
     source_stem = Path(urlparse(source_url).path).stem if source_url else ""
     source_version_match = re.search(r"(?:\?|&)v=([^&]+)", source_url)
     source_version = source_version_match.group(1) if source_version_match else ""
-    return "-".join(part for part in (group_key, source_stem, source_version) if part)
+    return "-".join(part for part in (group_key, source_stem, source_version, SPB_AUDIO_SOURCE_RULE_VERSION) if part)
 
 
 def spb_word_audio_source_key(group: dict[str, Any]) -> str:
