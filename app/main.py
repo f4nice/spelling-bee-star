@@ -82,8 +82,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260708-004"
-DEFAULT_PAGE_VERSION = "v20260708.4"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260708-005"
+DEFAULT_PAGE_VERSION = "v20260708.5"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3418,8 +3418,9 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "subtitle": "Beginner Group(G1-G2)",
         "status": "available",
         "prefix": "SPB个人赛冠军词库-小初组",
-        "source_count": 1300,
+        "source_count": 1299,
         "source_file": "spb_individual_beginner_g1_g2_words.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_BEGINNER_GROUP0_null.txt?v=1783513437372",
         "spb_product_id": 1,
         "spb_flag": "BEGINNER_GROUP0",
     },
@@ -3431,6 +3432,7 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "prefix": "SPB个人赛冠军词库-小中组",
         "source_count": 1900,
         "source_file": "spb_individual_intermediate_g3_g4_words.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_BEGINNER_GROUP1_null.txt?v=1783513802350",
         "spb_product_id": 2,
         "spb_flag": "BEGINNER_GROUP1",
     },
@@ -3442,6 +3444,7 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "prefix": "SPB个人赛冠军词库-小高组",
         "source_count": 2300,
         "source_file": "spb_individual_advanced_g5_g6_words.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_BEGINNER_GROUP2_null.txt?v=1783513810146",
         "spb_product_id": 3,
         "spb_flag": "BEGINNER_GROUP2",
     },
@@ -3453,6 +3456,7 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "prefix": "SPB个人赛冠军词库-初中组",
         "source_count": 3400,
         "source_file": "spb_individual_middle_g7_g9_words.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_BEGINNER_GROUP3_null.txt?v=1783514057432",
         "spb_product_id": 4,
         "spb_flag": "BEGINNER_GROUP3",
     },
@@ -3464,6 +3468,7 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "prefix": "SPB个人赛冠军词库-高中组",
         "source_count": 3300,
         "source_file": "spb_individual_high_g10_g12_words.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_BEGINNER_GROUP4_null.txt?v=1783514147067",
         "spb_product_id": 5,
         "spb_flag": "BEGINNER_GROUP4",
     },
@@ -3473,10 +3478,11 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "subtitle": "Language Origin",
         "status": "available",
         "prefix": "SPB个人赛冠军词库-词源单词",
-        "source_count": 2000,
+        "source_count": 120,
         "source_file": "spb_individual_language_origin_words.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Asian_Languages_null.txt?v=1783514166982",
         "spb_product_id": 6,
-        "spb_flag": "LANGUAGE_ORIGIN",
+        "spb_flag": "Asian_Languages",
     },
     {
         "key": "challenge",
@@ -3484,8 +3490,9 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "subtitle": "Challenge Words",
         "status": "available",
         "prefix": "SPB个人赛冠军词库-挑战词汇",
-        "source_count": 1299,
+        "source_count": 1300,
         "source_file": "spb_individual_challenge_words.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_CHALLENGE_WORDS_null.txt?v=1783514205665",
         "spb_product_id": 7,
         "spb_flag": "CHALLENGE_WORDS",
     },
