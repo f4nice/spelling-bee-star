@@ -89,7 +89,7 @@ function groupStatusLabel(group) {
 function groupMeta(group) {
   if (group.total_count > 0) return `${group.total_count} 个单词 · ${group.list_count} 个分表`;
   if (group.source_url_configured) return `公开源可导入 ${group.source_count || 0} 个单词`;
-  if (group.cached_source_count) return `缓存可导入 ${group.cached_source_count} 个单词`;
+  if (group.cached_source_count) return `公共源可导入 ${group.cached_source_count} 个单词`;
   if (group.sync_ready) return "可从小程序接口同步";
   return "等待获取词库";
 }
@@ -120,7 +120,7 @@ function syncButtonText(group) {
   if (syncingKey.value === group?.key) return "同步中...";
   if (group?.total_count) return "更新详情";
   if (group?.sync_ready) return "同步词库";
-  if (group?.cached_source_count) return "导入缓存";
+  if (group?.cached_source_count) return "导入公共源";
   return "检查同步";
 }
 
@@ -396,7 +396,7 @@ onBeforeUnmount(clearSyncPoll);
     <section v-else class="panel spb-group-panel">
       <div class="spb-empty-panel">
         <strong>{{ activeCollection.name || "这个分类" }} 暂时没有可同步词库</strong>
-        <span>{{ activeCollection.sync_note || "等小程序接口返回词库或服务器放入缓存后，这里会自动出现可同步分表。" }}</span>
+        <span>{{ activeCollection.sync_note || "等小程序接口返回词库或服务器放入公共源文件后，这里会自动出现可同步分表。" }}</span>
       </div>
     </section>
   </section>

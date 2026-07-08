@@ -82,8 +82,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260708-002"
-DEFAULT_PAGE_VERSION = "v20260708.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260708-003"
+DEFAULT_PAGE_VERSION = "v20260708.3"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3674,7 +3674,7 @@ SPB_WORD_BANK_COLLECTIONS = [
         "subtitle": "TOEFL Word Banks",
         "source_type": "toefl_thesaurus",
         "groups": [],
-        "sync_note": "小程序公开产品接口暂未返回托福词库；拿到缓存或授权后会出现在这里。",
+        "sync_note": "小程序公开产品接口暂未返回托福词库；拿到公共源文件或授权后会出现在这里。",
     },
     {
         "key": "ielts",
@@ -3682,7 +3682,7 @@ SPB_WORD_BANK_COLLECTIONS = [
         "subtitle": "IELTS Word Banks",
         "source_type": "ielts_thesaurus",
         "groups": [],
-        "sync_note": "小程序公开产品接口暂未返回雅思词库；拿到缓存或授权后会出现在这里。",
+        "sync_note": "小程序公开产品接口暂未返回雅思词库；拿到公共源文件或授权后会出现在这里。",
     },
 ]
 
@@ -3879,7 +3879,7 @@ async def vue_spb_sync_api(request: Request, db: Session = Depends(get_db)):
     rows, source_path = load_spb_source_rows(group)
     if not rows:
         detail = (
-            f"{group['title']} 缺少小程序授权，服务器也没有这组源词库缓存。请先配置 SPB 小程序授权后再同步。"
+            f"{group['title']} 缺少小程序授权，服务器也没有这组公共源词库。请先配置 SPB 小程序授权后再同步。"
             if not spb_miniprogram_authorization_configured()
             else f"{group['title']} 已尝试调用小程序接口，但没有拿到可导入词库；请确认小程序账号已开通这组词库。"
         )
@@ -3946,7 +3946,14 @@ async def vue_spb_backfill_details_api(request: Request, db: Session = Depends(g
         raise HTTPException(status_code=404, detail="这组还没有同步到 SpeakEasy，先同步词库后再补全详情。")
 
     resource_applied = apply_word_resources(db, words, include_image=False)
-    repair_words = [word for word in words if word_needs_spb_detail_repair(word)]
+    source_rows, _source_path = load_spb_source_rows(group)
+    source_rows_by_word = {normalize_resource_word(row.get("word")): row for row in source_rows}
+    repair_words = [
+        word
+        for word in words
+        if word_needs_spb_detail_repair(word)
+        or word_needs_spb_word_audio_repair(word, source_rows_by_word.get(normalize_resource_word(word.word)))
+    ]
     queued_ids = [word.id for word in repair_words[:SPB_DETAIL_BACKFILL_BATCH_LIMIT]]
     remaining_after_batch = max(len(repair_words) - len(queued_ids), 0)
     if queued_ids:
@@ -3965,9 +3972,9 @@ async def vue_spb_backfill_details_api(request: Request, db: Session = Depends(g
             "text_detail_count": 0,
             "local_audio_count": 0,
             "current_word": "",
-            "source": "spb-miniprogram-detail",
+            "source": "spb-public-detail-audio",
             "message": (
-                f"已从公共资源表补齐 {resource_applied} 个；准备检查 {len(queued_ids)} 个单词是否来自 SPB 小程序详情。"
+                f"已从公共资源表补齐 {resource_applied} 个；准备检查 {len(queued_ids)} 个单词的 SPB 详情和音频来源。"
             ),
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat(),
@@ -3989,7 +3996,7 @@ async def vue_spb_backfill_details_api(request: Request, db: Session = Depends(g
         return response
 
     response = spb_payload(db, collection["key"])
-    response["message"] = f"已从公共资源表补齐 {resource_applied} 个；这组 SPB 详情、例句音频和音频挂载没有明显缺口。"
+    response["message"] = f"已从公共资源表补齐 {resource_applied} 个；这组 SPB 详情、定义/例句音频和单词音频来源没有明显缺口。"
     response["queued_detail_count"] = len(queued_ids)
     response["remaining_detail_count"] = remaining_after_batch
     response["resource_applied_count"] = resource_applied
@@ -4478,10 +4485,10 @@ def spb_group_sync_note(
     if str(group.get("source_url") or "").strip():
         return "已配置 SPB 公共源词库，可直接同步。"
     if authorization_configured:
-        return "可从小程序接口同步；如果接口返回空结果，会自动尝试本地缓存。"
+        return "可从小程序接口同步；如果接口返回空结果，会自动尝试本地公共源词库。"
     if cached_source_count:
-        return f"已找到本地源词库缓存，可导入 {cached_source_count} 个单词。"
-    return "缺少小程序授权，且本地没有这组源词库缓存；请先配置服务器小程序授权。"
+        return f"已找到本地公共源词库，可导入 {cached_source_count} 个单词。"
+    return "缺少小程序授权，且本地没有这组公共源词库；请先配置服务器小程序授权。"
 
 
 SPB_MINIPROGRAM_WORD_FILE_ENDPOINT = "wordThesaurus/spbcnInfoFile"
@@ -4688,7 +4695,7 @@ def normalize_spb_word_rows(values: list[Any], group: dict[str, Any]) -> list[di
         text_fields = spb_text_fields_from_payload(value)
         if text_fields:
             row.update(text_fields)
-            row["spb_text_source"] = "spb-source-cache"
+            row["spb_text_source"] = "spb-public-source"
         rows.append(row)
     return rows
 
@@ -7215,6 +7222,16 @@ def word_needs_spb_detail_repair(word: Word) -> bool:
     return local_spb_word_audio_url_for_accent(word.british_audio_url, "gb")
 
 
+def word_needs_spb_word_audio_repair(word: Word, source_row: dict[str, Any] | None) -> bool:
+    if not source_row:
+        return False
+    for field in ("american_audio_url", "british_audio_url"):
+        incoming_url = str(source_row.get(field) or "").strip()
+        if spb_looks_like_audio_url(incoming_url) and not is_spb_audio_source(audio_url=getattr(word, field, None)):
+            return True
+    return False
+
+
 def merge_spellings(existing: str | None, incoming: str | None, *, primary: str | None = None) -> str | None:
     values: list[str] = []
     seen: set[str] = set()
@@ -7373,7 +7390,7 @@ async def apply_spb_detail_backfill_word_ids(
                 total=total,
                 processed=0,
                 current_word="",
-                message=f"正在检查详情是否来自 SPB 小程序：0 / {total}",
+                message=f"正在检查 SPB 详情和音频来源：0 / {total}",
                 collection=collection_key,
                 key=group_key,
             )
@@ -7381,7 +7398,7 @@ async def apply_spb_detail_backfill_word_ids(
             word = db.get(Word, word_id)
             if not word:
                 if job_id:
-                    update_spb_sync_job(job_id, processed=index, message=f"正在检查详情是否来自 SPB 小程序：{index} / {total}")
+                    update_spb_sync_job(job_id, processed=index, message=f"正在检查 SPB 详情和音频来源：{index} / {total}")
                 continue
             try:
                 if job_id:
@@ -7389,7 +7406,7 @@ async def apply_spb_detail_backfill_word_ids(
                         job_id,
                         processed=index - 1,
                         current_word=word.word,
-                        message=f"正在检查详情是否来自 SPB 小程序：{index - 1} / {total}",
+                        message=f"正在检查 SPB 详情和音频来源：{index - 1} / {total}",
                     )
                 resource_changed = apply_word_resource(db, word, commit=False, include_image=False)
                 spb_changed = await apply_spb_details_to_word(db, word)
@@ -7401,7 +7418,12 @@ async def apply_spb_detail_backfill_word_ids(
                     changed_count += 1
                 spb_audio_count += sum(
                     1
-                    for audio_url in (word.english_definition_audio_url, word.english_example_audio_url)
+                    for audio_url in (
+                        word.american_audio_url,
+                        word.british_audio_url,
+                        word.english_definition_audio_url,
+                        word.english_example_audio_url,
+                    )
                     if is_spb_audio_source(audio_url=audio_url)
                 )
             except Exception:
@@ -7415,12 +7437,12 @@ async def apply_spb_detail_backfill_word_ids(
                         current_word=word.word,
                         text_detail_count=changed_count,
                         local_audio_count=spb_audio_count,
-                        message=f"正在检查详情是否来自 SPB 小程序：{index} / {total}",
+                        message=f"正在检查 SPB 详情和音频来源：{index} / {total}",
                     )
         if job_id:
-            message = f"SPB 小程序详情更新完成：检查 {total} 个，修复 {changed_count} 个。"
+            message = f"SPB 详情和音频来源更新完成：检查 {total} 个，修复 {changed_count} 个。"
             if spb_audio_count:
-                message += f" 本地小程序定义/例句音频 {spb_audio_count} 个。"
+                message += f" 本地 SPB 音频 {spb_audio_count} 个。"
             if failed_count:
                 message += f" {failed_count} 个暂时失败，可稍后再点更新详情。"
             update_spb_sync_job(
