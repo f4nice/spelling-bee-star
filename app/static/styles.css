@@ -2819,6 +2819,12 @@ a:focus-visible {
   font-size: 26px;
 }
 
+.challenge-day-back:hover,
+.challenge-day-back:hover span,
+.challenge-day-back:hover strong {
+  color: #fff;
+}
+
 .challenge-day-stats .stat-correct {
   color: var(--accent-dark);
 }
