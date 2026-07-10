@@ -30,26 +30,49 @@ const returnList = computed(() => {
   };
 });
 
-function goBackToList(event) {
-  if (!returnList.value || !props.go) return;
+function safeInternalReturnPath(value) {
+  const text = String(value || "").trim();
+  if (!text.startsWith("/") || text.startsWith("//")) return "";
+  if (/[\r\n]/.test(text)) return "";
+  return text;
+}
+
+const returnTarget = computed(() => {
+  if (props.route?.name !== "wordDetail") return null;
+  const returnTo = safeInternalReturnPath(props.route?.query?.return_to);
+  if (returnTo) {
+    return {
+      href: returnTo,
+      label: String(props.route?.query?.return_label || "上一页").trim() || "上一页",
+    };
+  }
+  if (!returnList.value) return null;
+  return {
+    href: `/lists/${returnList.value.id}`,
+    label: returnList.value.name,
+  };
+});
+
+function goBack(event) {
+  if (!returnTarget.value || !props.go) return;
   event.preventDefault();
-  props.go(`/lists/${returnList.value.id}`);
+  props.go(returnTarget.value.href);
 }
 </script>
 
 <template>
-  <section class="panel app-page-heading" :class="{ 'has-return-link': returnList }">
+  <section class="panel app-page-heading" :class="{ 'has-return-link': returnTarget }">
     <div class="page-heading-title">
       <p class="section-kicker">SpeakEasy</p>
       <h1>{{ routeTitle }}</h1>
     </div>
     <a
-      v-if="returnList"
+      v-if="returnTarget"
       class="secondary-button page-heading-return-button"
-      :href="`/lists/${returnList.id}`"
-      @click="goBackToList"
+      :href="returnTarget.href"
+      @click="goBack"
     >
-      返回{{ returnList.name }}
+      返回{{ returnTarget.label }}
     </a>
   </section>
 </template>
