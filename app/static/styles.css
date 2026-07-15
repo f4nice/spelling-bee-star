@@ -2725,16 +2725,18 @@ a:focus-visible {
 
 .challenge-day-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(150px, 0.95fr) minmax(170px, 1fr) minmax(180px, 0.95fr);
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .challenge-day-stats .panel,
 .challenge-day-back {
   display: grid;
-  gap: 6px;
-  padding: 16px;
+  align-content: center;
+  gap: 5px;
+  min-height: 94px;
+  padding: 12px 14px;
   text-decoration: none;
 }
 
@@ -2775,7 +2777,7 @@ a:focus-visible {
   padding: 0;
   background: transparent;
   font: inherit;
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 900;
   line-height: 1.1;
   cursor: pointer;
@@ -2790,12 +2792,14 @@ a:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
 }
 
 .challenge-day-start-button {
-  min-height: 34px;
-  padding: 7px 12px;
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .challenge-day-stats span {
@@ -2816,7 +2820,7 @@ a:focus-visible {
 
 .challenge-day-stats strong {
   color: var(--ink);
-  font-size: 26px;
+  font-size: 24px;
 }
 
 .challenge-day-back:hover,
@@ -2831,6 +2835,10 @@ a:focus-visible {
 
 .challenge-day-stats .stat-wrong {
   color: var(--error);
+}
+
+.challenge-day-stats .stat-pending {
+  color: var(--warn);
 }
 
 .challenge-day-note {
@@ -8021,6 +8029,12 @@ dd {
 
 .word-column-modal-side button {
   min-height: 42px;
+}
+
+@media (max-width: 980px) {
+  .challenge-day-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 select {

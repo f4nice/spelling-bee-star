@@ -82,8 +82,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260711-002"
-DEFAULT_PAGE_VERSION = "v20260711.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260715-001"
+DEFAULT_PAGE_VERSION = "v20260715.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2700,14 +2700,50 @@ def vue_wrong_words_api(db: Session = Depends(get_db)):
     groups: dict[str, dict[str, Any]] = {}
     for wrong_word, word in wrong_rows:
         day = (wrong_word.wrong_date or date.today()).isoformat()
-        group = groups.setdefault(day, {"date": day, "count": 0, "wrong_total": 0, "cover_word": None, "words": []})
+        group = groups.setdefault(
+            day,
+            {
+                "date": day,
+                "count": 0,
+                "wrong_total": 0,
+                "corrected_count": 0,
+                "pending_count": 0,
+                "cover_word": None,
+                "words": [],
+                "_wrong_date": wrong_word.wrong_date or date.today(),
+                "_word_ids": set(),
+            },
+        )
         group["count"] += 1
         group["wrong_total"] += wrong_word.wrong_count
+        group["_word_ids"].add(wrong_word.word_id)
         serialized_word = serialize_word(word)
         if not group["cover_word"] or (not group["cover_word"].get("image_url") and serialized_word.get("image_url")):
             group["cover_word"] = serialized_word
-        group["words"].append({"word": serialized_word, "wrong_count": wrong_word.wrong_count})
-    return {"groups": list(groups.values())}
+        group["words"].append({"word": serialized_word, "wrong_count": wrong_word.wrong_count, "corrected": False})
+
+    pending_word_total = 0
+    corrected_word_total = 0
+    for group in groups.values():
+        word_ids = set(group.pop("_word_ids"))
+        wrong_date = group.pop("_wrong_date")
+        corrected_ids = challenge_day_corrected_wrong_word_ids(db, wrong_date, word_ids)
+        group["corrected_count"] = len(corrected_ids)
+        group["pending_count"] = max(group["count"] - group["corrected_count"], 0)
+        group["status"] = "corrected" if group["pending_count"] == 0 and group["count"] else "pending"
+        pending_word_total += group["pending_count"]
+        corrected_word_total += group["corrected_count"]
+        for item in group["words"]:
+            item["corrected"] = item["word"]["id"] in corrected_ids
+
+    return {
+        "groups": list(groups.values()),
+        "counts": {
+            "all": sum(group["count"] for group in groups.values()),
+            "pending": pending_word_total,
+            "corrected": corrected_word_total,
+        },
+    }
 
 
 @app.get("/api/vue/challenge-calendar/{day}")

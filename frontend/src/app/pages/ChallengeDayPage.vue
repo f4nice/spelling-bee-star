@@ -23,6 +23,7 @@ const activeFilter = ref("all");
 const filteredWords = computed(() => {
   if (activeFilter.value === "all") return props.data.words || [];
   if (activeFilter.value === "wrong") return (props.data.words || []).filter((item) => item.was_wrong || item.status === "wrong");
+  if (activeFilter.value === "pending") return (props.data.words || []).filter((item) => item.was_wrong && !item.corrected);
   return (props.data.words || []).filter((item) => item.status === activeFilter.value);
 });
 

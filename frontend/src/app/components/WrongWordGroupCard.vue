@@ -1,5 +1,7 @@
 <script setup>
-defineProps({
+import { computed } from "vue";
+
+const props = defineProps({
   group: {
     type: Object,
     required: true,
@@ -9,6 +11,10 @@ defineProps({
     required: true,
   },
 });
+
+const pendingCount = computed(() => Number(props.group.pending_count ?? props.group.count ?? 0));
+const correctedCount = computed(() => Number(props.group.corrected_count || 0));
+const isFullyCorrected = computed(() => pendingCount.value <= 0 && Number(props.group.count || 0) > 0);
 </script>
 
 <template>
@@ -23,9 +29,11 @@ defineProps({
       <div class="word-card-body">
         <div class="word-card-title">
           <strong>{{ group.date }}</strong>
-          <span class="status failed">{{ group.count }} 词</span>
+          <span class="status" :class="isFullyCorrected ? 'done' : 'failed'">
+            {{ isFullyCorrected ? '已纠正' : '待纠正' }} {{ isFullyCorrected ? correctedCount : pendingCount }}
+          </span>
         </div>
-        <p class="wrong-list-summary">错 {{ group.wrong_total }} 次</p>
+        <p class="wrong-list-summary">错 {{ group.wrong_total }} 次 · 已纠正 {{ correctedCount }}</p>
       </div>
     </button>
   </article>
