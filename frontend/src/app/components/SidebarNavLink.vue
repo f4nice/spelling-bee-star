@@ -17,6 +17,6 @@ defineProps({
     :href="item.path"
     @click.prevent="navigate(item.path)"
   >
-    {{ item.label }} <span v-if="item.count !== undefined" class="nav-count">{{ item.count }}</span>
+    {{ item.label }} <span v-if="Number(item.count || 0) > 0" class="nav-count">{{ item.count }}</span>
   </a>
 </template>

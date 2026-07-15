@@ -82,8 +82,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260715-001"
-DEFAULT_PAGE_VERSION = "v20260715.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260715-002"
+DEFAULT_PAGE_VERSION = "v20260715.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2492,7 +2492,7 @@ def vue_shell_api(db: Session = Depends(get_db)):
         "app_name": settings.app_name,
         "daily_quote": get_daily_quote(db),
         "sidebar_challenges": sidebar_challenge_progress(db),
-        "wrong_word_count": wrong_word_count(db),
+        "wrong_word_count": pending_wrong_word_count(db),
         "learning_growth": learning_growth_summary(db),
     })
 
@@ -2692,56 +2692,13 @@ def vue_list_detail_api(word_list_id: int, db: Session = Depends(get_db)):
 
 @app.get("/api/vue/wrong-words")
 def vue_wrong_words_api(db: Session = Depends(get_db)):
-    wrong_rows = db.execute(
-        select(WrongWord, Word)
-        .join(Word, Word.id == WrongWord.word_id)
-        .order_by(WrongWord.wrong_date.desc(), WrongWord.updated_at.desc(), WrongWord.id.desc())
-    ).all()
-    groups: dict[str, dict[str, Any]] = {}
-    for wrong_word, word in wrong_rows:
-        day = (wrong_word.wrong_date or date.today()).isoformat()
-        group = groups.setdefault(
-            day,
-            {
-                "date": day,
-                "count": 0,
-                "wrong_total": 0,
-                "corrected_count": 0,
-                "pending_count": 0,
-                "cover_word": None,
-                "words": [],
-                "_wrong_date": wrong_word.wrong_date or date.today(),
-                "_word_ids": set(),
-            },
-        )
-        group["count"] += 1
-        group["wrong_total"] += wrong_word.wrong_count
-        group["_word_ids"].add(wrong_word.word_id)
-        serialized_word = serialize_word(word)
-        if not group["cover_word"] or (not group["cover_word"].get("image_url") and serialized_word.get("image_url")):
-            group["cover_word"] = serialized_word
-        group["words"].append({"word": serialized_word, "wrong_count": wrong_word.wrong_count, "corrected": False})
-
-    pending_word_total = 0
-    corrected_word_total = 0
-    for group in groups.values():
-        word_ids = set(group.pop("_word_ids"))
-        wrong_date = group.pop("_wrong_date")
-        corrected_ids = challenge_day_corrected_wrong_word_ids(db, wrong_date, word_ids)
-        group["corrected_count"] = len(corrected_ids)
-        group["pending_count"] = max(group["count"] - group["corrected_count"], 0)
-        group["status"] = "corrected" if group["pending_count"] == 0 and group["count"] else "pending"
-        pending_word_total += group["pending_count"]
-        corrected_word_total += group["corrected_count"]
-        for item in group["words"]:
-            item["corrected"] = item["word"]["id"] in corrected_ids
-
+    groups = [wrong_word_date_group_payload(db, wrong_date) for wrong_date in wrong_word_dates(db)]
     return {
-        "groups": list(groups.values()),
+        "groups": groups,
         "counts": {
-            "all": sum(group["count"] for group in groups.values()),
-            "pending": pending_word_total,
-            "corrected": corrected_word_total,
+            "all": sum(group["count"] for group in groups),
+            "pending": sum(group["pending_count"] for group in groups),
+            "corrected": sum(group["corrected_count"] for group in groups),
         },
     }
 
@@ -8213,7 +8170,7 @@ def page_context(request: Request, db: Session, extra: dict | None = None) -> di
         "app_name": settings.app_name,
         "daily_quote": get_daily_quote(db),
         "sidebar_challenges": sidebar_challenge_progress(db),
-        "wrong_word_count": wrong_word_count(db),
+        "wrong_word_count": pending_wrong_word_count(db),
         "learning_growth": learning_growth_summary(db),
         "version_matrix": ensure_version_matrix_file(),
         "static_version": static_asset_version(),
@@ -8877,6 +8834,68 @@ def correction_challenge_words(db: Session, word_list_id: int, wrong_date: date 
 
 def wrong_word_count(db: Session) -> int:
     return db.scalar(select(func.count(WrongWord.id))) or 0
+
+
+def wrong_word_list_date_from_name(name: str) -> date | None:
+    match = re.fullmatch(r"生词本 (\d{4}-\d{2}-\d{2})", str(name or "").strip())
+    return parse_wrong_date(match.group(1)) if match else None
+
+
+def wrong_word_dates(db: Session) -> list[date]:
+    dates: set[date] = set()
+    dates.update(row[0] for row in db.execute(select(WrongWord.wrong_date)).all() if row[0])
+    dates.update(
+        row[0]
+        for row in db.execute(
+            select(ChallengeDailyWord.challenge_date).where(ChallengeDailyWord.wrong_count > 0)
+        ).all()
+        if row[0]
+    )
+    dates.update(
+        row[0]
+        for row in db.execute(select(ChallengeDailyStat.stat_date).where(ChallengeDailyStat.wrong_count > 0)).all()
+        if row[0]
+    )
+    for name in db.scalars(select(WordList.name).where(WordList.name.like("生词本 %"))).all():
+        wrong_date = wrong_word_list_date_from_name(name)
+        if wrong_date:
+            dates.add(wrong_date)
+    return sorted(dates, reverse=True)
+
+
+def wrong_word_date_group_payload(db: Session, wrong_date: date) -> dict[str, Any]:
+    day_payload = challenge_calendar_day_payload(db, wrong_date)
+    wrong_items = [
+        item
+        for item in day_payload.get("words", [])
+        if item.get("was_wrong") or int(item.get("wrong_count") or 0) > 0 or item.get("status") == "wrong"
+    ]
+    cover_word = next((item for item in wrong_items if item.get("image_url")), wrong_items[0] if wrong_items else None)
+    count = len(wrong_items) or int(day_payload.get("wrong") or 0)
+    wrong_total = int(day_payload.get("wrong_attempts") or sum(int(item.get("wrong_count") or 0) for item in wrong_items))
+    corrected_count = int(day_payload.get("corrected") or 0)
+    pending_count = int(day_payload.get("correction_pending") or 0)
+    return {
+        "date": wrong_date.isoformat(),
+        "count": count,
+        "wrong_total": wrong_total,
+        "corrected_count": corrected_count,
+        "pending_count": pending_count,
+        "status": "corrected" if pending_count == 0 and count else "pending",
+        "cover_word": cover_word,
+        "words": [
+            {
+                "word": item,
+                "wrong_count": int(item.get("wrong_count") or 0),
+                "corrected": bool(item.get("corrected")),
+            }
+            for item in wrong_items
+        ],
+    }
+
+
+def pending_wrong_word_count(db: Session) -> int:
+    return sum(len(challenge_day_pending_wrong_word_ids(db, wrong_date)) for wrong_date in wrong_word_dates(db))
 
 
 def needs_image_sync(word: Word) -> bool:

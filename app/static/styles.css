@@ -1882,6 +1882,18 @@ a:focus-visible {
   background: rgba(255, 255, 255, 0.18);
 }
 
+.list-card:hover .word-card-title > strong,
+.list-card:hover .wrong-list-summary,
+.list-card:hover .status {
+  color: #fff;
+}
+
+.list-card:hover .status.done,
+.list-card:hover .status.failed {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+}
+
 .list-card:hover .word-audio-badge {
   border-color: rgba(255, 255, 255, 0.36);
   color: #fff;
