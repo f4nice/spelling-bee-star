@@ -143,7 +143,7 @@ async function selectCat(catId) {
       <div class="cat-world-copy">
         <p class="section-kicker">Cat World</p>
         <h1>猫咪能量世界</h1>
-        <p>每一次英文学习都会变成能量值，给猫咪换一顿饭、一件玩具，或者把房间慢慢装成她喜欢的样子。</p>
+        <p>把今天练过的英文变成软绵绵的能量，给猫咪买小鱼干、玩具和漂亮家具，把她的房间一点点装可爱。</p>
       </div>
       <div class="cat-world-wallet" aria-label="猫咪世界能量">
         <span>可用能量</span>

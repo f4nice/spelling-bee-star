@@ -1,22 +1,22 @@
 {
-  "version": "BIZ-REL-20260719-020",
+  "version": "BIZ-REL-20260719-021",
   "releaseName": "Vue 全站版",
-  "pageVersion": "v20260719.20",
+  "pageVersion": "v20260719.21",
   "footerText": "SpeakEasy",
   "modules": [
-    { "label": "首页", "version": "v20260719.20", "status": "优化" },
-    { "label": "后台管理", "version": "v20260719.20", "status": "优化" },
-    { "label": "我的单词表", "version": "v20260719.20", "status": "优化" },
-    { "label": "英文小报", "version": "v20260719.20", "status": "优化" },
-    { "label": "好词好句", "version": "v20260719.20", "status": "优化" },
-    { "label": "科学探索", "version": "v20260719.20", "status": "优化" },
-    { "label": "SPB", "version": "v20260719.20", "status": "优化" },
-    { "label": "我的生词本", "version": "v20260719.20", "status": "优化" },
-    { "label": "挑战进度", "version": "v20260719.20", "status": "优化" },
-    { "label": "上传导入", "version": "v20260719.20", "status": "优化" },
-    { "label": "音频管理", "version": "v20260719.20", "status": "优化" },
-    { "label": "图片管理", "version": "v20260719.20", "status": "优化" },
-    { "label": "成长体系", "version": "v20260719.20", "status": "优化" },
-    { "label": "猫咪世界", "version": "v20260719.20", "status": "新增" }
+    { "label": "首页", "version": "v20260719.21", "status": "优化" },
+    { "label": "后台管理", "version": "v20260719.21", "status": "优化" },
+    { "label": "我的单词表", "version": "v20260719.21", "status": "优化" },
+    { "label": "英文小报", "version": "v20260719.21", "status": "优化" },
+    { "label": "好词好句", "version": "v20260719.21", "status": "优化" },
+    { "label": "科学探索", "version": "v20260719.21", "status": "优化" },
+    { "label": "SPB", "version": "v20260719.21", "status": "优化" },
+    { "label": "我的生词本", "version": "v20260719.21", "status": "优化" },
+    { "label": "挑战进度", "version": "v20260719.21", "status": "优化" },
+    { "label": "上传导入", "version": "v20260719.21", "status": "优化" },
+    { "label": "音频管理", "version": "v20260719.21", "status": "优化" },
+    { "label": "图片管理", "version": "v20260719.21", "status": "优化" },
+    { "label": "成长体系", "version": "v20260719.21", "status": "优化" },
+    { "label": "猫咪世界", "version": "v20260719.21", "status": "优化" }
   ]
 }
