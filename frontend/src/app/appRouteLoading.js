@@ -17,7 +17,7 @@ export async function loadCurrentAppRoute({ route, data, loading, error, refresh
       ...getRouteLoaders(),
     });
   } catch (err) {
-    error.value = err.message || "页面数据加载失败";
+    error.value = err?.message || "页面数据加载失败";
   } finally {
     loading.value = false;
     refreshShellContext();

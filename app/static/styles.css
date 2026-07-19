@@ -8109,6 +8109,25 @@ dd {
   border-radius: 6px;
 }
 
+.app-error-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.app-error-box .secondary-button {
+  color: #7a271a;
+  background: #fff;
+}
+
 .stacked-panel {
   align-items: stretch;
   flex-direction: column;
@@ -8693,6 +8712,15 @@ select {
   }
 
   .home-wrong-chips {
+    justify-content: flex-start;
+  }
+
+  .app-error-box {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .app-error-actions {
     justify-content: flex-start;
   }
 

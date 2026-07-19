@@ -13,7 +13,13 @@ export async function fetchJson(url, options) {
   const response = await fetch(url, requestOptions);
   const isJson = response.headers.get("content-type")?.includes("application/json");
   const payload = isJson ? await response.json() : null;
-  if (!response.ok) throw new Error(payloadErrorMessage(payload));
+  if (!response.ok) {
+    const error = new Error(response.status === 401 ? "登录已失效，正在前往登录页..." : payloadErrorMessage(payload));
+    error.status = response.status;
+    error.url = url;
+    if (response.status === 401) scheduleLoginRedirect();
+    throw error;
+  }
 
   if (method === "GET" && !skipCache) {
     writeApiCache(url, payload);
@@ -21,6 +27,14 @@ export async function fetchJson(url, options) {
     invalidateApiCacheForMutation(url);
   }
   return payload;
+}
+
+function scheduleLoginRedirect() {
+  if (typeof window === "undefined" || window.location.pathname === "/login") return;
+  window.setTimeout(() => {
+    const next = `${window.location.pathname}${window.location.search}` || "/";
+    window.location.assign(`/login?next=${encodeURIComponent(next)}`);
+  }, 0);
 }
 
 function payloadErrorMessage(payload) {

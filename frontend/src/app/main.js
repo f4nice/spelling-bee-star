@@ -18,6 +18,33 @@ function installSingleAudioPlaybackGuard() {
   );
 }
 
+function installAssetLoadRecovery() {
+  const shouldRecover = (message) => /Failed to fetch dynamically imported module|Importing a module script failed|Unable to preload CSS/i.test(String(message || ""));
+  const recover = () => {
+    const key = `speakeasy:asset-reload:${window.location.pathname}`;
+    const lastReload = Number(window.sessionStorage.getItem(key) || 0);
+    if (Date.now() - lastReload < 30000) return;
+    window.sessionStorage.setItem(key, String(Date.now()));
+    window.location.reload();
+  };
+
+  window.addEventListener("vite:preloadError", (event) => {
+    event.preventDefault();
+    recover();
+  });
+  window.addEventListener(
+    "error",
+    (event) => {
+      if (shouldRecover(event.message)) recover();
+    },
+    true,
+  );
+  window.addEventListener("unhandledrejection", (event) => {
+    if (shouldRecover(event.reason?.message || event.reason)) recover();
+  });
+}
+
 installSingleAudioPlaybackGuard();
+installAssetLoadRecovery();
 
 createApp(App).mount('#speakeasy-vue-app');
