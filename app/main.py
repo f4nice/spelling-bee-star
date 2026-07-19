@@ -84,8 +84,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260719-002"
-DEFAULT_PAGE_VERSION = "v20260719.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260719-003"
+DEFAULT_PAGE_VERSION = "v20260719.3"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -1953,22 +1953,58 @@ def admin_user_display_name(phone: str, role: str) -> str:
     return ("管理员" if role == "admin" else "用户") + suffix
 
 
+def default_admin_image_ai_pair() -> tuple[str, str]:
+    configured_provider = str(settings.ai_image_provider or "dashscope").strip()
+    for item in ADMIN_IMAGE_AI_OPTIONS:
+        if item["provider"] == configured_provider:
+            return item["provider"], item["model"]
+    return "dashscope", "wan2.7-image-pro"
+
+
+def valid_admin_image_ai_values() -> set[str]:
+    return {
+        admin_image_ai_value(item["provider"], item["model"])
+        for item in ADMIN_IMAGE_AI_OPTIONS
+    }
+
+
+def normalize_admin_user_ai_fields(user: AdminUserSetting) -> bool:
+    changed = False
+    if admin_image_ai_value(user.image_ai_provider, user.image_ai_model) not in valid_admin_image_ai_values():
+        user.image_ai_provider, user.image_ai_model = default_admin_image_ai_pair()
+        changed = True
+    normalized_audio_provider = normalize_admin_audio_provider(user.audio_ai_provider)
+    if user.audio_ai_provider != normalized_audio_provider:
+        user.audio_ai_provider = normalized_audio_provider
+        changed = True
+    normalized_voice_gender = normalize_admin_voice_gender(user.audio_voice_gender)
+    if user.audio_voice_gender != normalized_voice_gender:
+        user.audio_voice_gender = normalized_voice_gender
+        changed = True
+    return changed
+
+
 def get_or_create_admin_user(db: Session, phone: str) -> AdminUserSetting | None:
     normalized = normalize_login_phone(phone)
     if not normalized:
         return None
     existing = db.scalar(select(AdminUserSetting).where(AdminUserSetting.phone == normalized))
     if existing:
+        if normalize_admin_user_ai_fields(existing):
+            db.add(existing)
+            db.commit()
+            db.refresh(existing)
         return existing
     existing_count = db.scalar(select(func.count(AdminUserSetting.id))) or 0
     role = "admin" if existing_count == 0 else "viewer"
+    image_provider, image_model = default_admin_image_ai_pair()
     user = AdminUserSetting(
         phone=normalized,
         username=admin_user_display_name(normalized, role),
         role=role,
         permissions=encode_admin_permissions(None, role),
-        image_ai_provider=settings.ai_image_provider or "dashscope",
-        image_ai_model="wan2.7-image-pro",
+        image_ai_provider=image_provider,
+        image_ai_model=image_model,
         audio_ai_provider=settings.ai_tts_provider or "openai",
         audio_voice_gender="female",
         is_active=True,
@@ -2011,13 +2047,9 @@ def admin_image_ai_value(provider: str | None, model: str | None) -> str:
 def parse_admin_image_ai_value(value: str | None) -> tuple[str, str]:
     raw = str(value or "").strip()
     if ":" not in raw:
-        return settings.ai_image_provider or "dashscope", "wan2.7-image-pro"
+        return default_admin_image_ai_pair()
     provider, model = raw.split(":", 1)
-    allowed = {
-        admin_image_ai_value(item["provider"], item["model"])
-        for item in ADMIN_IMAGE_AI_OPTIONS
-    }
-    return (provider, model) if admin_image_ai_value(provider, model) in allowed else (settings.ai_image_provider or "dashscope", "wan2.7-image-pro")
+    return (provider, model) if admin_image_ai_value(provider, model) in valid_admin_image_ai_values() else default_admin_image_ai_pair()
 
 
 def normalize_admin_audio_provider(provider: str | None) -> str:
