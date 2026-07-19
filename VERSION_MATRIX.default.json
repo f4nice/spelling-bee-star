@@ -1,11 +1,11 @@
 {
-  "version": "BIZ-REL-20260719-005",
+  "version": "BIZ-REL-20260719-006",
   "releaseName": "Vue 全站版",
-  "pageVersion": "v20260719.5",
+  "pageVersion": "v20260719.6",
   "footerText": "SpeakEasy",
   "modules": [
     { "label": "首页", "version": "v20260719.1", "status": "优化" },
-    { "label": "后台管理", "version": "v20260719.5", "status": "优化" },
+    { "label": "后台管理", "version": "v20260719.6", "status": "优化" },
     { "label": "我的单词表", "version": "v20260706.12", "status": "优化" },
     { "label": "英文小报", "version": "v20260627.0", "status": "可用" },
     { "label": "好词好句", "version": "v20260628.2", "status": "优化中" },

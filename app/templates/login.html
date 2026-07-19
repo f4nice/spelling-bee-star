@@ -7,7 +7,7 @@
       <img src="{{ url_for('static', path='/speakeasy-mouth-logo.svg') }}" alt="">
       <div>
         <p class="section-kicker">SpeakEasy</p>
-        <h1 id="loginTitle">手机号登录</h1>
+        <h1 id="loginTitle">手机号密码登录</h1>
       </div>
     </div>
     <form class="login-form" action="/login" method="post">
@@ -23,6 +23,16 @@
           placeholder="请输入 11 位手机号"
           value="{{ phone }}"
           autofocus
+          required
+        >
+      </label>
+      <label>
+        <span>登录密码</span>
+        <input
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          placeholder="请输入登录密码"
           required
         >
       </label>

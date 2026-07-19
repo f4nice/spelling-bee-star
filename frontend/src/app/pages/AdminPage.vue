@@ -13,12 +13,13 @@ const props = defineProps({
 const users = ref((props.data.users || []).map(createEditableUser));
 const savingPhones = ref([]);
 const notice = ref("");
-const newUser = ref({ phone: "", username: "", role: "viewer" });
+const newUser = ref({ phone: "", username: "", role: "viewer", loginPassword: "" });
 
 function createEditableUser(user) {
   return {
     ...user,
     permissions: { ...(user.permissions || {}) },
+    loginPassword: "",
   };
 }
 
@@ -61,8 +62,10 @@ async function saveUser(user) {
     });
     users.value = (result.users || []).map(createEditableUser);
     notice.value = `${result.user?.username || user.phone} 已保存。`;
+    return true;
   } catch (error) {
     notice.value = error.message || "保存失败。";
+    return false;
   } finally {
     setSaving(user.phone, false);
   }
@@ -78,14 +81,16 @@ async function addUser() {
     phone,
     username: newUser.value.username.trim(),
     role: newUser.value.role,
+    loginPassword: newUser.value.loginPassword.trim(),
     permissions: defaultPermissions(newUser.value.role),
     imageAiValue: props.data.imageAiOptions?.[0]?.value || "dashscope:wan2.7-image-pro",
     audioAiProvider: props.data.audioAiOptions?.[0]?.provider || "openai",
     audioVoiceGender: "female",
     isActive: true,
   };
-  await saveUser(draft);
-  newUser.value = { phone: "", username: "", role: "viewer" };
+  if (await saveUser(draft)) {
+    newUser.value = { phone: "", username: "", role: "viewer", loginPassword: "" };
+  }
 }
 </script>
 
@@ -95,7 +100,7 @@ async function addUser() {
       <div>
         <p class="section-kicker">ADMIN</p>
         <h1>后台管理</h1>
-        <p>按手机号管理登录用户、权限和默认 AI 服务。</p>
+        <p>按手机号、密码管理登录用户、权限和默认 AI 服务。</p>
       </div>
       <div class="admin-current-user">
         <span>当前账号</span>
@@ -110,6 +115,7 @@ async function addUser() {
         <p>手机号是唯一登录标识，用户名只用于后台显示。</p>
       </div>
       <input v-model="newUser.phone" type="tel" inputmode="numeric" placeholder="手机号">
+      <input v-model="newUser.loginPassword" type="password" autocomplete="new-password" placeholder="登录密码">
       <input v-model="newUser.username" type="text" placeholder="用户名">
       <select v-model="newUser.role">
         <option v-for="role in data.roleOptions" :key="role.key" :value="role.key">{{ role.label }}</option>
@@ -136,6 +142,15 @@ async function addUser() {
             <select v-model="user.role" @change="applyRoleDefaults(user)">
               <option v-for="role in data.roleOptions" :key="role.key" :value="role.key">{{ role.label }}</option>
             </select>
+          </label>
+          <label>
+            <span>登录密码 · {{ user.hasLoginPassword ? "已设置" : "未设置" }}</span>
+            <input
+              v-model="user.loginPassword"
+              type="password"
+              autocomplete="new-password"
+              :placeholder="user.hasLoginPassword ? '留空不改' : '设置登录密码'"
+            >
           </label>
           <label>
             <span>图片 AI</span>

@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 import random
 import re
+import secrets
 import sys
 from threading import Lock, Thread
 from typing import Any
@@ -84,8 +85,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260719-005"
-DEFAULT_PAGE_VERSION = "v20260719.5"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260719-006"
+DEFAULT_PAGE_VERSION = "v20260719.6"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -1886,6 +1887,44 @@ def login_cookie_secure(request: Request) -> bool:
     return request.url.scheme == "https" or "https" in forwarded_proto.lower().split(",")
 
 
+LOGIN_PASSWORD_ALGORITHM = "pbkdf2_sha256"
+LOGIN_PASSWORD_ITERATIONS = 260000
+LOGIN_PASSWORD_MIN_LENGTH = 6
+
+
+def normalize_login_password(password: str | None) -> str:
+    return str(password or "").strip()
+
+
+def hash_login_password(password: str) -> str:
+    salt = secrets.token_urlsafe(18)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        LOGIN_PASSWORD_ITERATIONS,
+    ).hex()
+    return f"{LOGIN_PASSWORD_ALGORITHM}${LOGIN_PASSWORD_ITERATIONS}${salt}${digest}"
+
+
+def verify_login_password(password: str, password_hash: str | None) -> bool:
+    if not password_hash:
+        return False
+    parts = str(password_hash).split("$")
+    if len(parts) != 4:
+        return False
+    algorithm, iterations_text, salt, digest = parts
+    if algorithm != LOGIN_PASSWORD_ALGORITHM or not iterations_text.isdigit():
+        return False
+    candidate = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        int(iterations_text),
+    ).hex()
+    return hmac.compare_digest(candidate, digest)
+
+
 ADMIN_ROLE_OPTIONS = [
     {"key": "admin", "label": "管理员"},
     {"key": "teacher", "label": "老师"},
@@ -2119,6 +2158,7 @@ def serialize_admin_user(user: AdminUserSetting) -> dict[str, Any]:
         "username": user.username,
         "role": user.role,
         "permissions": parse_admin_permissions(user.permissions, user.role),
+        "hasLoginPassword": bool(user.login_password_hash),
         "imageAiValue": admin_image_ai_value(user.image_ai_provider, user.image_ai_model),
         "audioAiProvider": user.audio_ai_provider,
         "audioVoiceGender": user.audio_voice_gender,
@@ -2315,7 +2355,9 @@ def login_page(request: Request, next: str = Query(default="/")):
 @app.post("/login", response_class=HTMLResponse)
 def login_submit(
     request: Request,
+    db: Session = Depends(get_db),
     phone: str = Form(default=""),
+    password: str = Form(default=""),
     next: str = Form(default="/"),
 ):
     next_path = safe_next_path(next)
@@ -2332,6 +2374,44 @@ def login_submit(
         return templates.TemplateResponse(
             "login.html",
             login_template_context(request, next_path, "这个手机号暂时没有访问权限。", phone),
+            status_code=403,
+        )
+    normalized_password = normalize_login_password(password)
+    user = db.scalar(select(AdminUserSetting).where(AdminUserSetting.phone == normalized))
+    if not user:
+        if active_admin_user_count(db) > 0:
+            return templates.TemplateResponse(
+                "login.html",
+                login_template_context(request, next_path, "这个手机号还没有后台账号。", phone),
+                status_code=403,
+            )
+        if len(normalized_password) < LOGIN_PASSWORD_MIN_LENGTH:
+            return templates.TemplateResponse(
+                "login.html",
+                login_template_context(request, next_path, "首次登录请设置至少 6 位密码。", phone),
+                status_code=400,
+            )
+        user = get_or_create_admin_user(db, normalized)
+        user.login_password_hash = hash_login_password(normalized_password)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    if not user.is_active:
+        return templates.TemplateResponse(
+            "login.html",
+            login_template_context(request, next_path, "账号已停用。", phone),
+            status_code=403,
+        )
+    if not user.login_password_hash:
+        return templates.TemplateResponse(
+            "login.html",
+            login_template_context(request, next_path, "这个账号还没有设置登录密码，请联系管理员。", phone),
+            status_code=403,
+        )
+    if not verify_login_password(normalized_password, user.login_password_hash):
+        return templates.TemplateResponse(
+            "login.html",
+            login_template_context(request, next_path, "手机号或密码不正确。", phone),
             status_code=403,
         )
     response = RedirectResponse(url=next_path, status_code=303)
@@ -2976,9 +3056,18 @@ async def vue_admin_save_user_api(request: Request, db: Session = Depends(get_db
     voice_gender = normalize_admin_voice_gender(payload.get("audioVoiceGender"))
 
     user = db.scalar(select(AdminUserSetting).where(AdminUserSetting.phone == phone))
+    login_password = normalize_login_password(payload.get("loginPassword"))
     if not user:
+        if len(login_password) < LOGIN_PASSWORD_MIN_LENGTH:
+            raise HTTPException(status_code=400, detail="新增用户需要设置至少 6 位登录密码。")
         user = AdminUserSetting(phone=phone)
         db.add(user)
+    elif not user.login_password_hash and len(login_password) < LOGIN_PASSWORD_MIN_LENGTH:
+        raise HTTPException(status_code=400, detail="这个用户还没有登录密码，请先设置至少 6 位密码。")
+    if login_password:
+        if len(login_password) < LOGIN_PASSWORD_MIN_LENGTH:
+            raise HTTPException(status_code=400, detail="登录密码至少 6 位。")
+        user.login_password_hash = hash_login_password(login_password)
     user.username = username[:120]
     user.role = role
     user.permissions = encode_admin_permissions(payload.get("permissions"), role)
@@ -8873,6 +8962,11 @@ def ensure_schema_columns() -> None:
         if "challenge_progress" in table_names
         else set()
     )
+    admin_user_columns = (
+        {column["name"] for column in inspector.get_columns("admin_user_settings")}
+        if "admin_user_settings" in table_names
+        else set()
+    )
 
     with engine.begin() as connection:
         for column in missing_boolean_columns:
@@ -8900,6 +8994,8 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE word_lists ADD COLUMN group_id INTEGER NULL"))
         if "challenge_progress" in table_names and "completed_rounds" not in challenge_progress_columns:
             connection.execute(text("ALTER TABLE challenge_progress ADD COLUMN completed_rounds INTEGER NOT NULL DEFAULT 0"))
+        if "admin_user_settings" in table_names and "login_password_hash" not in admin_user_columns:
+            connection.execute(text("ALTER TABLE admin_user_settings ADD COLUMN login_password_hash TEXT NULL"))
         if "wrong_words" in table_names and "wrong_date" not in wrong_columns:
             if dialect == "mysql":
                 connection.execute(text("ALTER TABLE wrong_words ADD COLUMN wrong_date DATE NULL"))

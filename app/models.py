@@ -206,6 +206,7 @@ class AdminUserSetting(Base):
     username: Mapped[str] = mapped_column(String(120), nullable=False, default="")
     role: Mapped[str] = mapped_column(String(32), nullable=False, default="viewer", server_default="viewer")
     permissions: Mapped[str | None] = mapped_column(Text)
+    login_password_hash: Mapped[str | None] = mapped_column(Text)
     image_ai_provider: Mapped[str] = mapped_column(String(64), nullable=False, default="dashscope", server_default="dashscope")
     image_ai_model: Mapped[str] = mapped_column(String(120), nullable=False, default="wan2.7-image-pro", server_default="wan2.7-image-pro")
     audio_ai_provider: Mapped[str] = mapped_column(String(64), nullable=False, default="openai", server_default="openai")

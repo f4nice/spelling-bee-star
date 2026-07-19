@@ -90,7 +90,8 @@ body {
   font-weight: 900;
 }
 
-.login-form input[type="tel"] {
+.login-form input[type="tel"],
+.login-form input[type="password"] {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -103,7 +104,8 @@ body {
   outline: none;
 }
 
-.login-form input[type="tel"]:focus {
+.login-form input[type="tel"]:focus,
+.login-form input[type="password"]:focus {
   border-color: rgba(29, 127, 91, 0.52);
   box-shadow: var(--focus-ring);
 }
@@ -536,7 +538,7 @@ body {
 
 .admin-create-panel {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(140px, 180px) minmax(140px, 180px) minmax(120px, 140px) auto;
+  grid-template-columns: minmax(180px, 1fr) repeat(3, minmax(130px, 180px)) minmax(120px, 140px) auto;
   gap: 12px;
   align-items: end;
   padding: 18px;
@@ -545,6 +547,7 @@ body {
 .admin-create-panel input,
 .admin-create-panel select,
 .admin-user-card input[type="text"],
+.admin-user-card input[type="password"],
 .admin-user-card select {
   width: 100%;
   border: 1px solid var(--line);
@@ -598,7 +601,7 @@ body {
 
 .admin-user-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
 }
 
