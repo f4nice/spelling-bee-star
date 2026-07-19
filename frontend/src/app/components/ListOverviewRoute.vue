@@ -1,5 +1,7 @@
 <script setup>
-import ListsPage from "../pages/ListsPage.vue";
+import { defineAsyncComponent } from "vue";
+
+const ListsPage = defineAsyncComponent(() => import("../pages/ListsPage.vue"));
 
 defineProps({
   ctx: {

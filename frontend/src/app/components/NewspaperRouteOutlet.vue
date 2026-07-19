@@ -1,6 +1,8 @@
 <script setup>
-import NewspaperArticlePage from "../pages/NewspaperArticlePage.vue";
-import NewspaperPage from "../pages/NewspaperPage.vue";
+import { defineAsyncComponent } from "vue";
+
+const NewspaperArticlePage = defineAsyncComponent(() => import("../pages/NewspaperArticlePage.vue"));
+const NewspaperPage = defineAsyncComponent(() => import("../pages/NewspaperPage.vue"));
 
 defineProps({
   ctx: {

@@ -1,15 +1,17 @@
 <script setup>
-import BooklearnerRouteOutlet from "./BooklearnerRouteOutlet.vue";
-import ChallengeRouteOutlet from "./ChallengeRouteOutlet.vue";
-import CoreRouteOutlet from "./CoreRouteOutlet.vue";
-import ImportRouteOutlet from "./ImportRouteOutlet.vue";
-import WordDetailRoute from "./WordDetailRoute.vue";
+import { defineAsyncComponent } from "vue";
 import {
   isBooklearnerRoute,
   isChallengeRoute,
   isImportRoute,
   isWordDetailRoute,
 } from "../pageOutletRoutes.js";
+
+const BooklearnerRouteOutlet = defineAsyncComponent(() => import("./BooklearnerRouteOutlet.vue"));
+const ChallengeRouteOutlet = defineAsyncComponent(() => import("./ChallengeRouteOutlet.vue"));
+const CoreRouteOutlet = defineAsyncComponent(() => import("./CoreRouteOutlet.vue"));
+const ImportRouteOutlet = defineAsyncComponent(() => import("./ImportRouteOutlet.vue"));
+const WordDetailRoute = defineAsyncComponent(() => import("./WordDetailRoute.vue"));
 
 defineProps({
   ctx: {

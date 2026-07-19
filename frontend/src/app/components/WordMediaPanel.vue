@@ -1,11 +1,12 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, defineAsyncComponent, ref } from "vue";
 import { useSelectedWordImage } from "../composables/useSelectedWordImage.js";
 import { wordMediaPanelProps } from "../props/wordMediaPanelProps.js";
 import { wordAudioAccents } from "../wordAudioAccents.js";
-import WordAudioManagerModal from "./WordAudioManagerModal.vue";
 import WordImageFrame from "./WordImageFrame.vue";
-import WordImageManagerModal from "./WordImageManagerModal.vue";
+
+const WordAudioManagerModal = defineAsyncComponent(() => import("./WordAudioManagerModal.vue"));
+const WordImageManagerModal = defineAsyncComponent(() => import("./WordImageManagerModal.vue"));
 
 const props = defineProps(wordMediaPanelProps);
 const isImageModalOpen = ref(false);

@@ -1,6 +1,7 @@
 <script setup>
-import { computed, ref } from "vue";
-import BookCoverManagerModal from "./BookCoverManagerModal.vue";
+import { computed, defineAsyncComponent, ref } from "vue";
+
+const BookCoverManagerModal = defineAsyncComponent(() => import("./BookCoverManagerModal.vue"));
 
 const props = defineProps({
   route: {

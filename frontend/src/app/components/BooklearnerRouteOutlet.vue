@@ -1,5 +1,7 @@
 <script setup>
-import BooklearnerPage from '../pages/BooklearnerPage.vue';
+import { defineAsyncComponent } from "vue";
+
+const BooklearnerPage = defineAsyncComponent(() => import("../pages/BooklearnerPage.vue"));
 
 defineProps({
   ctx: {

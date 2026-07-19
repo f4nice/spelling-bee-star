@@ -1,8 +1,10 @@
 <script setup>
-import BooklearnerDetailPanel from "./BooklearnerDetailPanel.vue";
-import BooklearnerQuoteFeed from "./BooklearnerQuoteFeed.vue";
-import BooklearnerScienceArticle from "./BooklearnerScienceArticle.vue";
-import BooklearnerScienceDiscoveries from "./BooklearnerScienceDiscoveries.vue";
+import { defineAsyncComponent } from "vue";
+
+const BooklearnerDetailPanel = defineAsyncComponent(() => import("./BooklearnerDetailPanel.vue"));
+const BooklearnerQuoteFeed = defineAsyncComponent(() => import("./BooklearnerQuoteFeed.vue"));
+const BooklearnerScienceArticle = defineAsyncComponent(() => import("./BooklearnerScienceArticle.vue"));
+const BooklearnerScienceDiscoveries = defineAsyncComponent(() => import("./BooklearnerScienceDiscoveries.vue"));
 
 defineProps([
   "route",

@@ -1,9 +1,10 @@
 <script setup>
-import { ref } from "vue";
+import { defineAsyncComponent, ref } from "vue";
 
 import { wordAudioAccentPanelProps } from "../props/wordAudioAccentPanelProps.js";
 import WordAudioActions from "./WordAudioActions.vue";
-import WordAudioManagerModal from "./WordAudioManagerModal.vue";
+
+const WordAudioManagerModal = defineAsyncComponent(() => import("./WordAudioManagerModal.vue"));
 
 defineProps(wordAudioAccentPanelProps);
 

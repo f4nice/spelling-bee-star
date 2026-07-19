@@ -1,8 +1,9 @@
 <script setup>
-import { ref, watch } from "vue";
+import { defineAsyncComponent, ref, watch } from "vue";
 import BooklearnerHero from "../components/BooklearnerHero.vue";
 import BooklearnerRouteSections from "../components/BooklearnerRouteSections.vue";
-import BooklearnerUploadModal from "../components/BooklearnerUploadModal.vue";
+
+const BooklearnerUploadModal = defineAsyncComponent(() => import("../components/BooklearnerUploadModal.vue"));
 
 const props = defineProps([
   "route",

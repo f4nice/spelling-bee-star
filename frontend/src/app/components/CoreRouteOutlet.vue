@@ -1,12 +1,14 @@
 <script setup>
-import ChallengeDayPage from "../pages/ChallengeDayPage.vue";
-import AdminPage from "../pages/AdminPage.vue";
-import GrowthPage from "../pages/GrowthPage.vue";
-import HomePage from "../pages/HomePage.vue";
-import SpbPage from "../pages/SpbPage.vue";
-import WrongWordsPage from "../pages/WrongWordsPage.vue";
-import ListRouteOutlet from "./ListRouteOutlet.vue";
-import NewspaperRouteOutlet from "./NewspaperRouteOutlet.vue";
+import { defineAsyncComponent } from "vue";
+
+const ChallengeDayPage = defineAsyncComponent(() => import("../pages/ChallengeDayPage.vue"));
+const AdminPage = defineAsyncComponent(() => import("../pages/AdminPage.vue"));
+const GrowthPage = defineAsyncComponent(() => import("../pages/GrowthPage.vue"));
+const HomePage = defineAsyncComponent(() => import("../pages/HomePage.vue"));
+const SpbPage = defineAsyncComponent(() => import("../pages/SpbPage.vue"));
+const WrongWordsPage = defineAsyncComponent(() => import("../pages/WrongWordsPage.vue"));
+const ListRouteOutlet = defineAsyncComponent(() => import("./ListRouteOutlet.vue"));
+const NewspaperRouteOutlet = defineAsyncComponent(() => import("./NewspaperRouteOutlet.vue"));
 
 defineProps({
   ctx: {

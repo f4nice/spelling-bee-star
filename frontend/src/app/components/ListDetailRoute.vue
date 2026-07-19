@@ -1,5 +1,7 @@
 <script setup>
-import ListDetailPage from "../pages/ListDetailPage.vue";
+import { defineAsyncComponent } from "vue";
+
+const ListDetailPage = defineAsyncComponent(() => import("../pages/ListDetailPage.vue"));
 
 defineProps({
   ctx: {

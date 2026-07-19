@@ -1,6 +1,8 @@
 <script setup>
-import PreviewPage from '../pages/PreviewPage.vue';
-import UploadPage from '../pages/UploadPage.vue';
+import { defineAsyncComponent } from "vue";
+
+const PreviewPage = defineAsyncComponent(() => import("../pages/PreviewPage.vue"));
+const UploadPage = defineAsyncComponent(() => import("../pages/UploadPage.vue"));
 
 defineProps({
   ctx: {

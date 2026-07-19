@@ -1,7 +1,8 @@
 <script setup>
-import { computed } from "vue";
-import WordDetailPage from '../pages/WordDetailPage.vue';
+import { computed, defineAsyncComponent } from "vue";
 import { buildWordDetailPageProps } from "../wordDetailPageProps.js";
+
+const WordDetailPage = defineAsyncComponent(() => import("../pages/WordDetailPage.vue"));
 
 const props = defineProps({
   ctx: {

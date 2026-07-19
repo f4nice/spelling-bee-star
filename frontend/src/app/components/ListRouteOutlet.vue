@@ -1,6 +1,8 @@
 <script setup>
-import ListDetailRoute from "./ListDetailRoute.vue";
-import ListOverviewRoute from "./ListOverviewRoute.vue";
+import { defineAsyncComponent } from "vue";
+
+const ListDetailRoute = defineAsyncComponent(() => import("./ListDetailRoute.vue"));
+const ListOverviewRoute = defineAsyncComponent(() => import("./ListOverviewRoute.vue"));
 
 defineProps({
   ctx: {
