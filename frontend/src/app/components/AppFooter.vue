@@ -14,12 +14,17 @@ const props = defineProps({
 });
 
 const matrix = computed(() => normalizeVersionMatrix(props.version));
+const icpNumber = "沪ICP备2026026397号-2";
 </script>
 
 <template>
   <footer class="app-footer">
-    <span>{{ matrix.footerText }}</span>
-    <span>{{ matrix.version }}</span>
-    <span v-if="pageVersion">{{ pageVersion.text }}</span>
+    <a class="app-footer-icp" href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">
+      {{ icpNumber }}
+    </a>
+    <span class="app-footer-version">
+      <span>{{ matrix.version }}</span>
+      <span v-if="pageVersion">{{ pageVersion.text }}</span>
+    </span>
   </footer>
 </template>
