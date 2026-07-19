@@ -1,6 +1,7 @@
 import asyncio
 from calendar import monthrange
 from datetime import date, datetime, timedelta
+import hmac
 import html
 import hashlib
 from io import BytesIO
@@ -19,7 +20,7 @@ import zipfile
 
 import httpx
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete, func, inspect, or_, select, text
@@ -82,8 +83,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260715-002"
-DEFAULT_PAGE_VERSION = "v20260715.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260719-001"
+DEFAULT_PAGE_VERSION = "v20260719.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -1751,10 +1752,155 @@ AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 BOOK_COVER_DIR.mkdir(parents=True, exist_ok=True)
 PUBLIC_ASSET_DIR.mkdir(parents=True, exist_ok=True)
 SCIENCE_DISCOVERY_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def login_cookie_max_age_seconds() -> int:
+    return max(int(settings.login_cookie_days or 1), 1) * 24 * 60 * 60
+
+
+def normalize_login_phone(phone: str | None) -> str:
+    compact = re.sub(r"[\s\-.()]", "", str(phone or "").strip())
+    if compact.startswith("+86"):
+        compact = compact[3:]
+    elif compact.startswith("86") and len(compact) == 13:
+        compact = compact[2:]
+    return compact if re.fullmatch(r"1[3-9]\d{9}", compact) else ""
+
+
+def masked_login_phone(phone: str | None) -> str:
+    normalized = normalize_login_phone(phone)
+    return f"{normalized[:3]}****{normalized[-4:]}" if normalized else ""
+
+
+def allowed_login_phones() -> set[str]:
+    return {
+        normalized
+        for normalized in (
+            normalize_login_phone(item)
+            for item in str(settings.login_phone_allowlist or "").split(",")
+        )
+        if normalized
+    }
+
+
+def is_login_phone_allowed(phone: str) -> bool:
+    allowlist = allowed_login_phones()
+    return not allowlist or phone in allowlist
+
+
+def login_signing_secret() -> str:
+    configured = str(settings.login_session_secret or "").strip()
+    if configured:
+        return configured
+    seed = f"{settings.app_name}|{settings.database_url}|{settings.list_delete_password}|phone-login"
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()
+
+
+def sign_login_payload(payload: str) -> str:
+    return hmac.new(login_signing_secret().encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def build_login_cookie(phone: str, issued_at: int | None = None) -> str:
+    issued = int(issued_at if issued_at is not None else datetime.utcnow().timestamp())
+    payload = f"v1:{phone}:{issued}"
+    return f"{payload}:{sign_login_payload(payload)}"
+
+
+def read_login_cookie(value: str | None) -> str:
+    if not settings.login_enabled or not value:
+        return ""
+    parts = str(value).split(":")
+    if len(parts) != 4:
+        return ""
+    version, phone, issued, signature = parts
+    if version != "v1":
+        return ""
+    normalized = normalize_login_phone(phone)
+    if not normalized or not issued.isdigit():
+        return ""
+    payload = f"{version}:{normalized}:{issued}"
+    if not hmac.compare_digest(signature, sign_login_payload(payload)):
+        return ""
+    age = int(datetime.utcnow().timestamp()) - int(issued)
+    if age < 0 or age > login_cookie_max_age_seconds():
+        return ""
+    return normalized if is_login_phone_allowed(normalized) else ""
+
+
+def authenticated_phone_from_request(request: Request) -> str:
+    return read_login_cookie(request.cookies.get(settings.login_cookie_name))
+
+
+def is_login_public_path(path: str) -> bool:
+    return (
+        path in {"/login", "/logout", "/favicon.ico"}
+        or path.startswith("/static/")
+        or path.startswith("/media/")
+        or path == "/booklearner/api/health"
+    )
+
+
+def safe_next_path(value: str | None) -> str:
+    candidate = str(value or "/").strip() or "/"
+    parsed = urlparse(candidate)
+    if parsed.scheme or parsed.netloc or not candidate.startswith("/") or candidate.startswith("//"):
+        return "/"
+    if "\r" in candidate or "\n" in candidate:
+        return "/"
+    return candidate
+
+
+def login_redirect_url(request: Request) -> str:
+    target = request.url.path
+    if request.url.query:
+        target = f"{target}?{request.url.query}"
+    return f"/login?next={quote_plus(target)}"
+
+
+def login_template_context(
+    request: Request,
+    next_path: str = "/",
+    error: str = "",
+    phone: str = "",
+) -> dict[str, Any]:
+    version_matrix = ensure_version_matrix_file()
+    return {
+        "request": request,
+        "app_name": settings.app_name,
+        "static_version": static_asset_version(),
+        "shell_context": {
+            "appName": settings.app_name,
+            "currentUser": None,
+            "versionMatrix": version_matrix,
+        },
+        "version_matrix": version_matrix,
+        "next_path": safe_next_path(next_path),
+        "error": error,
+        "phone": phone,
+    }
+
+
+def login_cookie_secure(request: Request) -> bool:
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    return request.url.scheme == "https" or "https" in forwarded_proto.lower().split(",")
+
+
 app = FastAPI(title=settings.app_name)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
+
+
+@app.middleware("http")
+async def require_phone_login(request: Request, call_next):
+    path = request.url.path
+    if not settings.login_enabled or request.method == "OPTIONS" or is_login_public_path(path):
+        return await call_next(request)
+    if authenticated_phone_from_request(request):
+        return await call_next(request)
+    if path.startswith("/api/") or path.startswith("/booklearner/api/"):
+        return JSONResponse({"detail": "请先用手机号登录。"}, status_code=401)
+    return RedirectResponse(url=login_redirect_url(request), status_code=303)
 
 
 @app.middleware("http")
@@ -1906,6 +2052,58 @@ def vue_shell(request: Request, db: Session, vue_path: str = ""):
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
     return RedirectResponse(url="/static/speakeasy-mouth-logo.svg", status_code=302)
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request, next: str = Query(default="/")):
+    next_path = safe_next_path(next)
+    if next_path == "/login":
+        next_path = "/"
+    if authenticated_phone_from_request(request):
+        return RedirectResponse(url=next_path, status_code=303)
+    return templates.TemplateResponse("login.html", login_template_context(request, next_path))
+
+
+@app.post("/login", response_class=HTMLResponse)
+def login_submit(
+    request: Request,
+    phone: str = Form(default=""),
+    next: str = Form(default="/"),
+):
+    next_path = safe_next_path(next)
+    if next_path == "/login":
+        next_path = "/"
+    normalized = normalize_login_phone(phone)
+    if not normalized:
+        return templates.TemplateResponse(
+            "login.html",
+            login_template_context(request, next_path, "请输入正确的 11 位手机号。", phone),
+            status_code=400,
+        )
+    if not is_login_phone_allowed(normalized):
+        return templates.TemplateResponse(
+            "login.html",
+            login_template_context(request, next_path, "这个手机号暂时没有访问权限。", phone),
+            status_code=403,
+        )
+    response = RedirectResponse(url=next_path, status_code=303)
+    response.set_cookie(
+        key=settings.login_cookie_name,
+        value=build_login_cookie(normalized),
+        max_age=login_cookie_max_age_seconds(),
+        httponly=True,
+        secure=login_cookie_secure(request),
+        samesite="lax",
+        path="/",
+    )
+    return response
+
+
+@app.api_route("/logout", methods=["GET", "POST"], include_in_schema=False)
+def logout():
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie(key=settings.login_cookie_name, path="/")
+    return response
 
 
 @app.on_event("startup")
@@ -2487,9 +2685,10 @@ def vue_growth_api(db: Session = Depends(get_db)):
 
 
 @app.get("/api/vue/shell")
-def vue_shell_api(db: Session = Depends(get_db)):
+def vue_shell_api(request: Request, db: Session = Depends(get_db)):
     return serialize_shell_context({
         "app_name": settings.app_name,
+        "current_user_phone": authenticated_phone_from_request(request),
         "daily_quote": get_daily_quote(db),
         "sidebar_challenges": sidebar_challenge_progress(db),
         "wrong_word_count": pending_wrong_word_count(db),
@@ -8165,9 +8364,11 @@ def learning_growth_summary(db: Session) -> dict[str, Any]:
 
 
 def page_context(request: Request, db: Session, extra: dict | None = None) -> dict:
+    current_user_phone = authenticated_phone_from_request(request)
     context = {
         "request": request,
         "app_name": settings.app_name,
+        "current_user_phone": current_user_phone,
         "daily_quote": get_daily_quote(db),
         "sidebar_challenges": sidebar_challenge_progress(db),
         "wrong_word_count": pending_wrong_word_count(db),
@@ -8185,6 +8386,11 @@ def serialize_shell_context(context: dict[str, Any]) -> dict[str, Any]:
     daily_quote = context.get("daily_quote")
     return {
         "appName": context.get("app_name", settings.app_name),
+        "currentUser": {
+            "phoneMasked": masked_login_phone(context.get("current_user_phone")),
+        }
+        if context.get("current_user_phone")
+        else None,
         "dailyQuote": {
             "content": daily_quote.content,
             "author": daily_quote.author,

@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     spb_miniprogram_api_base: str = "https://dev.spbcn.org/applets/"
     spb_miniprogram_authorization: str = ""
     spb_miniprogram_timeout_seconds: float = 30.0
+    login_enabled: bool = True
+    login_cookie_name: str = "speakeasy_login"
+    login_cookie_days: int = 30
+    login_session_secret: str = ""
+    login_phone_allowlist: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

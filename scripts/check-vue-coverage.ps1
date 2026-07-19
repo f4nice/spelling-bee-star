@@ -50,7 +50,7 @@ foreach ($file in $requiredFiles) {
 }
 
 $templateFiles = Get-ChildItem (Join-Path $RepoRoot "app/templates") -File | Select-Object -ExpandProperty Name
-$allowedTemplates = @("base.html", "vue_app.html")
+$allowedTemplates = @("base.html", "vue_app.html", "login.html")
 $unexpectedTemplates = $templateFiles | Where-Object { $_ -notin $allowedTemplates }
 if ($unexpectedTemplates) {
     throw "Unexpected server templates remain: $($unexpectedTemplates -join ', ')"
@@ -63,7 +63,7 @@ Assert-Text $mainText 'TemplateResponse\("vue_app\.html"' "vue_app.html is not t
 
 $templateResponseMatches = [regex]::Matches($mainText, 'TemplateResponse\("([^"]+)"')
 foreach ($match in $templateResponseMatches) {
-    if ($match.Groups[1].Value -ne "vue_app.html") {
+    if ($match.Groups[1].Value -notin @("vue_app.html", "login.html")) {
         throw "Unexpected TemplateResponse target: $($match.Groups[1].Value)"
     }
 }

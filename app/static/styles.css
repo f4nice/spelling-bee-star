@@ -39,6 +39,93 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.login-screen {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 28px;
+}
+
+.login-card {
+  display: grid;
+  gap: 22px;
+  width: min(420px, 100%);
+  padding: 30px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.login-brand img {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.login-brand h1 {
+  margin: 4px 0 0;
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.login-form {
+  display: grid;
+  gap: 14px;
+}
+
+.login-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.login-form input[type="tel"] {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 13px 14px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 800;
+  outline: none;
+}
+
+.login-form input[type="tel"]:focus {
+  border-color: rgba(29, 127, 91, 0.52);
+  box-shadow: var(--focus-ring);
+}
+
+.login-error {
+  margin: 0;
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  color: #8a1f17;
+  background: #fff0ee;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.login-version {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
 .shell-sidebar-toggle {
   position: fixed;
   width: 1px;
@@ -297,6 +384,39 @@ body {
 .challenge-sidebar p {
   padding: 0 10px;
   font-size: 13px;
+}
+
+.sidebar-session {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 14px 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.sidebar-session span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.sidebar-session button {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 9px 10px;
+  color: var(--accent-dark);
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.sidebar-session button:hover {
+  border-color: rgba(29, 127, 91, 0.35);
+  color: #fff;
+  background: var(--accent);
 }
 
 .side-nav .challenge-progress-link {
