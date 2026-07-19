@@ -91,7 +91,8 @@ body {
 }
 
 .login-form input[type="tel"],
-.login-form input[type="password"] {
+.login-form input[type="password"],
+.login-form input[type="text"] {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -105,8 +106,63 @@ body {
 }
 
 .login-form input[type="tel"]:focus,
-.login-form input[type="password"]:focus {
+.login-form input[type="password"]:focus,
+.login-form input[type="text"]:focus {
   border-color: rgba(29, 127, 91, 0.52);
+  box-shadow: var(--focus-ring);
+}
+
+.login-password-field {
+  position: relative;
+  display: block;
+}
+
+.login-password-field input {
+  padding-right: 50px;
+}
+
+.login-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.login-password-toggle svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.login-password-eye-off {
+  display: none;
+}
+
+.login-password-toggle[aria-pressed="true"] .login-password-eye {
+  display: none;
+}
+
+.login-password-toggle[aria-pressed="true"] .login-password-eye-off {
+  display: block;
+}
+
+.login-password-toggle:hover,
+.login-password-toggle:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
   box-shadow: var(--focus-ring);
 }
 

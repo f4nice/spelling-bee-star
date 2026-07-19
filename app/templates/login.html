@@ -28,13 +28,33 @@
       </label>
       <label>
         <span>登录密码</span>
-        <input
-          name="password"
-          type="password"
-          autocomplete="current-password"
-          placeholder="请输入登录密码"
-          required
-        >
+        <span class="login-password-field">
+          <input
+            id="loginPassword"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            placeholder="请输入登录密码"
+            required
+          >
+          <button
+            class="login-password-toggle"
+            type="button"
+            data-password-toggle
+            aria-label="显示登录密码"
+            aria-pressed="false"
+          >
+            <svg class="login-password-eye" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg class="login-password-eye-off" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2.5 12s3.5-6 9.5-6c6 0 9.5 6 9.5 6a18.5 18.5 0 0 1-2.8 3.3"></path>
+              <path d="M15 15.2A4 4 0 0 1 8.8 9"></path>
+              <path d="M3 3l18 18"></path>
+            </svg>
+          </button>
+        </span>
       </label>
       {% if error %}
       <p class="login-error">{{ error }}</p>
@@ -44,4 +64,21 @@
     <p class="login-version">{{ version_matrix.version }} · {{ version_matrix.pageVersion }}</p>
   </section>
 </main>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (() => {
+    const button = document.querySelector("[data-password-toggle]");
+    const input = document.getElementById("loginPassword");
+    if (!button || !input) return;
+    button.addEventListener("click", () => {
+      const shouldShow = input.type === "password";
+      input.type = shouldShow ? "text" : "password";
+      button.setAttribute("aria-pressed", shouldShow ? "true" : "false");
+      button.setAttribute("aria-label", shouldShow ? "隐藏登录密码" : "显示登录密码");
+      input.focus();
+    });
+  })();
+</script>
 {% endblock %}
