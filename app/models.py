@@ -195,3 +195,21 @@ class CacheEntry(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class AdminUserSetting(Base):
+    __tablename__ = "admin_user_settings"
+    __table_args__ = (UniqueConstraint("phone", name="uq_admin_user_settings_phone"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    username: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    role: Mapped[str] = mapped_column(String(32), nullable=False, default="viewer", server_default="viewer")
+    permissions: Mapped[str | None] = mapped_column(Text)
+    image_ai_provider: Mapped[str] = mapped_column(String(64), nullable=False, default="dashscope", server_default="dashscope")
+    image_ai_model: Mapped[str] = mapped_column(String(120), nullable=False, default="wan2.7-image-pro", server_default="wan2.7-image-pro")
+    audio_ai_provider: Mapped[str] = mapped_column(String(64), nullable=False, default="openai", server_default="openai")
+    audio_voice_gender: Mapped[str] = mapped_column(String(16), nullable=False, default="female", server_default="female")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

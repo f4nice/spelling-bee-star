@@ -35,6 +35,7 @@ from app.models import (
     ChallengeDailyWord,
     ChallengeProgress,
     ChallengeSpellingAttempt,
+    AdminUserSetting,
     DailyQuote,
     LearningGrowthMetric,
     Word,
@@ -83,8 +84,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260719-001"
-DEFAULT_PAGE_VERSION = "v20260719.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260719-002"
+DEFAULT_PAGE_VERSION = "v20260719.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -1885,6 +1886,194 @@ def login_cookie_secure(request: Request) -> bool:
     return request.url.scheme == "https" or "https" in forwarded_proto.lower().split(",")
 
 
+ADMIN_ROLE_OPTIONS = [
+    {"key": "admin", "label": "管理员"},
+    {"key": "teacher", "label": "老师"},
+    {"key": "viewer", "label": "只读"},
+]
+ADMIN_PERMISSION_OPTIONS = [
+    {"key": "admin", "label": "后台管理"},
+    {"key": "word_edit", "label": "单词编辑"},
+    {"key": "image_manage", "label": "图片管理"},
+    {"key": "audio_manage", "label": "音频管理"},
+    {"key": "import_manage", "label": "导入管理"},
+    {"key": "spb_sync", "label": "SPB 同步"},
+    {"key": "challenge_manage", "label": "挑战管理"},
+]
+ADMIN_IMAGE_AI_OPTIONS = [
+    {"provider": "dashscope", "model": "wan2.7-image-pro", "label": "阿里 · wan2.7-image-pro"},
+    {"provider": "dashscope", "model": "qwen-image-2.0-pro", "label": "阿里 · qwen-image-2.0-pro"},
+    {"provider": "dashscope", "model": "wan2.6-t2i", "label": "阿里 · wan2.6-t2i"},
+    {"provider": "openai", "model": "gpt-image-1", "label": "OpenAI · gpt-image-1"},
+    {"provider": "tencent_hunyuan", "model": "TextToImageRapid", "label": "腾讯混元 · TextToImageRapid"},
+]
+ADMIN_AUDIO_AI_OPTIONS = [
+    {"provider": "openai", "label": "OpenAI TTS"},
+    {"provider": "dashscope", "label": "阿里 DashScope TTS"},
+    {"provider": "aliyun", "label": "阿里云 NLS TTS"},
+]
+
+
+def admin_permission_defaults(role: str) -> dict[str, bool]:
+    keys = [item["key"] for item in ADMIN_PERMISSION_OPTIONS]
+    if role == "admin":
+        return {key: True for key in keys}
+    if role == "teacher":
+        return {key: key in {"word_edit", "image_manage", "audio_manage", "import_manage", "challenge_manage"} for key in keys}
+    return {key: key == "challenge_manage" for key in keys}
+
+
+def parse_admin_permissions(raw_permissions: str | None, role: str) -> dict[str, bool]:
+    defaults = admin_permission_defaults(role)
+    if not raw_permissions:
+        return defaults
+    try:
+        loaded = json.loads(raw_permissions)
+    except json.JSONDecodeError:
+        return defaults
+    if not isinstance(loaded, dict):
+        return defaults
+    return {
+        key: bool(loaded.get(key, defaults[key]))
+        for key in defaults
+    }
+
+
+def encode_admin_permissions(permissions: dict[str, Any] | None, role: str) -> str:
+    defaults = admin_permission_defaults(role)
+    incoming = permissions if isinstance(permissions, dict) else {}
+    normalized = {key: bool(incoming.get(key, defaults[key])) for key in defaults}
+    if role == "admin":
+        normalized["admin"] = True
+    return json.dumps(normalized, ensure_ascii=False, sort_keys=True)
+
+
+def admin_user_display_name(phone: str, role: str) -> str:
+    suffix = phone[-4:] if len(phone) >= 4 else phone
+    return ("管理员" if role == "admin" else "用户") + suffix
+
+
+def get_or_create_admin_user(db: Session, phone: str) -> AdminUserSetting | None:
+    normalized = normalize_login_phone(phone)
+    if not normalized:
+        return None
+    existing = db.scalar(select(AdminUserSetting).where(AdminUserSetting.phone == normalized))
+    if existing:
+        return existing
+    existing_count = db.scalar(select(func.count(AdminUserSetting.id))) or 0
+    role = "admin" if existing_count == 0 else "viewer"
+    user = AdminUserSetting(
+        phone=normalized,
+        username=admin_user_display_name(normalized, role),
+        role=role,
+        permissions=encode_admin_permissions(None, role),
+        image_ai_provider=settings.ai_image_provider or "dashscope",
+        image_ai_model="wan2.7-image-pro",
+        audio_ai_provider=settings.ai_tts_provider or "openai",
+        audio_voice_gender="female",
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def current_admin_user(request: Request, db: Session) -> AdminUserSetting:
+    phone = authenticated_phone_from_request(request)
+    if not phone:
+        raise HTTPException(status_code=401, detail="请先用手机号登录。")
+    user = get_or_create_admin_user(db, phone)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=403, detail="账号已停用。")
+    return user
+
+
+def admin_user_can(user: AdminUserSetting | None, permission_key: str) -> bool:
+    if not user or not user.is_active:
+        return False
+    if user.role == "admin":
+        return True
+    return bool(parse_admin_permissions(user.permissions, user.role).get(permission_key))
+
+
+def require_admin_panel_access(request: Request, db: Session) -> AdminUserSetting:
+    user = current_admin_user(request, db)
+    if not admin_user_can(user, "admin"):
+        raise HTTPException(status_code=403, detail="没有后台管理权限。")
+    return user
+
+
+def admin_image_ai_value(provider: str | None, model: str | None) -> str:
+    return f"{provider or ''}:{model or ''}"
+
+
+def parse_admin_image_ai_value(value: str | None) -> tuple[str, str]:
+    raw = str(value or "").strip()
+    if ":" not in raw:
+        return settings.ai_image_provider or "dashscope", "wan2.7-image-pro"
+    provider, model = raw.split(":", 1)
+    allowed = {
+        admin_image_ai_value(item["provider"], item["model"])
+        for item in ADMIN_IMAGE_AI_OPTIONS
+    }
+    return (provider, model) if admin_image_ai_value(provider, model) in allowed else (settings.ai_image_provider or "dashscope", "wan2.7-image-pro")
+
+
+def normalize_admin_audio_provider(provider: str | None) -> str:
+    normalized = str(provider or settings.ai_tts_provider or "openai").strip().lower()
+    allowed = {item["provider"] for item in ADMIN_AUDIO_AI_OPTIONS}
+    return normalized if normalized in allowed else (settings.ai_tts_provider or "openai")
+
+
+def normalize_admin_voice_gender(value: str | None) -> str:
+    return value if value in {"female", "male"} else "female"
+
+
+def admin_user_summary(user: AdminUserSetting | None, phone: str | None = None) -> dict[str, Any] | None:
+    masked_phone = masked_login_phone(user.phone if user else phone)
+    if not masked_phone:
+        return None
+    permissions = parse_admin_permissions(user.permissions, user.role) if user else {}
+    return {
+        "phoneMasked": masked_phone,
+        "username": user.username if user else "",
+        "role": user.role if user else "viewer",
+        "canAdmin": admin_user_can(user, "admin"),
+        "permissions": permissions,
+        "imageAi": {
+            "provider": user.image_ai_provider,
+            "model": user.image_ai_model,
+        } if user else None,
+        "audioAi": {
+            "provider": user.audio_ai_provider,
+            "voiceGender": user.audio_voice_gender,
+        } if user else None,
+    }
+
+
+def serialize_admin_user(user: AdminUserSetting) -> dict[str, Any]:
+    return {
+        "id": user.id,
+        "phone": user.phone,
+        "phoneMasked": masked_login_phone(user.phone),
+        "username": user.username,
+        "role": user.role,
+        "permissions": parse_admin_permissions(user.permissions, user.role),
+        "imageAiValue": admin_image_ai_value(user.image_ai_provider, user.image_ai_model),
+        "audioAiProvider": user.audio_ai_provider,
+        "audioVoiceGender": user.audio_voice_gender,
+        "isActive": bool(user.is_active),
+        "createdAt": user.created_at.isoformat() if user.created_at else "",
+        "updatedAt": user.updated_at.isoformat() if user.updated_at else "",
+    }
+
+
+def preferred_admin_user_ai(db: Session, request: Request) -> AdminUserSetting | None:
+    phone = authenticated_phone_from_request(request)
+    return get_or_create_admin_user(db, phone) if phone else None
+
+
 app = FastAPI(title=settings.app_name)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
@@ -2684,11 +2873,78 @@ def vue_growth_api(db: Session = Depends(get_db)):
     return {"growth": learning_growth_summary(db)}
 
 
+@app.get("/api/vue/admin")
+def vue_admin_api(request: Request, db: Session = Depends(get_db)):
+    current = require_admin_panel_access(request, db)
+    users = db.scalars(select(AdminUserSetting).order_by(AdminUserSetting.role.asc(), AdminUserSetting.updated_at.desc())).all()
+    return {
+        "currentUser": serialize_admin_user(current),
+        "users": [serialize_admin_user(user) for user in users],
+        "roleOptions": ADMIN_ROLE_OPTIONS,
+        "permissionOptions": ADMIN_PERMISSION_OPTIONS,
+        "imageAiOptions": [
+            {
+                **item,
+                "value": admin_image_ai_value(item["provider"], item["model"]),
+            }
+            for item in ADMIN_IMAGE_AI_OPTIONS
+        ],
+        "audioAiOptions": ADMIN_AUDIO_AI_OPTIONS,
+        "voiceOptions": [
+            {"key": "female", "label": "女声"},
+            {"key": "male", "label": "男声"},
+        ],
+    }
+
+
+@app.post("/api/vue/admin/users")
+async def vue_admin_save_user_api(request: Request, db: Session = Depends(get_db)):
+    require_admin_panel_access(request, db)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="用户数据不是有效 JSON。") from exc
+
+    phone = normalize_login_phone(payload.get("phone"))
+    if not phone:
+        raise HTTPException(status_code=400, detail="请输入正确的 11 位手机号。")
+    role = str(payload.get("role") or "viewer").strip()
+    if role not in {item["key"] for item in ADMIN_ROLE_OPTIONS}:
+        role = "viewer"
+    username = str(payload.get("username") or "").strip() or admin_user_display_name(phone, role)
+    image_provider, image_model = parse_admin_image_ai_value(payload.get("imageAiValue"))
+    audio_provider = normalize_admin_audio_provider(payload.get("audioAiProvider"))
+    voice_gender = normalize_admin_voice_gender(payload.get("audioVoiceGender"))
+
+    user = db.scalar(select(AdminUserSetting).where(AdminUserSetting.phone == phone))
+    if not user:
+        user = AdminUserSetting(phone=phone)
+        db.add(user)
+    user.username = username[:120]
+    user.role = role
+    user.permissions = encode_admin_permissions(payload.get("permissions"), role)
+    user.image_ai_provider = image_provider
+    user.image_ai_model = image_model
+    user.audio_ai_provider = audio_provider
+    user.audio_voice_gender = voice_gender
+    user.is_active = bool(payload.get("isActive", True))
+    db.commit()
+    db.refresh(user)
+    return {
+        "ok": True,
+        "user": serialize_admin_user(user),
+        "users": [serialize_admin_user(item) for item in db.scalars(select(AdminUserSetting).order_by(AdminUserSetting.role.asc(), AdminUserSetting.updated_at.desc())).all()],
+    }
+
+
 @app.get("/api/vue/shell")
 def vue_shell_api(request: Request, db: Session = Depends(get_db)):
+    current_phone = authenticated_phone_from_request(request)
+    admin_user = get_or_create_admin_user(db, current_phone) if current_phone else None
     return serialize_shell_context({
         "app_name": settings.app_name,
         "current_user_phone": authenticated_phone_from_request(request),
+        "current_admin_user": admin_user,
         "daily_quote": get_daily_quote(db),
         "sidebar_challenges": sidebar_challenge_progress(db),
         "wrong_word_count": pending_wrong_word_count(db),
@@ -3591,6 +3847,11 @@ def wrong_words_page(request: Request, db: Session = Depends(get_db)):
 @app.get("/growth", response_class=HTMLResponse)
 def growth_page(request: Request, db: Session = Depends(get_db)):
     return vue_shell(request, db, "growth")
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_page(request: Request, db: Session = Depends(get_db)):
+    return vue_shell(request, db, "admin")
 
 
 @app.get("/spb", response_class=HTMLResponse)
@@ -6293,6 +6554,7 @@ async def generate_growth_trophy_asset(
 @app.post("/api/vue/words/{word_id}/ai-image")
 async def generate_ai_word_image(
     word_id: int,
+    request: Request,
     edit_token: str = Form(default=""),
     provider: str = Form(default=""),
     model: str = Form(default=""),
@@ -6306,8 +6568,9 @@ async def generate_ai_word_image(
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
-    selected_provider = (provider or settings.ai_image_provider).strip()
-    selected_model = (model or "").strip()
+    preferred_user = preferred_admin_user_ai(db, request)
+    selected_provider = (provider or (preferred_user.image_ai_provider if preferred_user else "") or settings.ai_image_provider).strip()
+    selected_model = (model or (preferred_user.image_ai_model if preferred_user else "") or "").strip()
     selected_openai_model = settings.openai_image_model
     selected_tencent_action = settings.tencent_hunyuan_image_action
     selected_dashscope_model = selected_model or "wan2.7-image-pro"
@@ -6837,6 +7100,7 @@ async def word_recorded_audio(
 @app.post("/api/vue/words/{word_id}/ai-audio")
 async def word_ai_audio(
     word_id: int,
+    request: Request,
     accent: str = Form(...),
     voice_gender: str = Form(default="female"),
     text_mode: str = Form(default="word"),
@@ -6859,6 +7123,8 @@ async def word_ai_audio(
         display_phonetic = re.sub(r"^/+|/+$", "", (word.phonetic or "").strip()).strip()
         if not display_phonetic:
             raise HTTPException(status_code=400, detail="还没有音标，先补充音标后再生成。")
+    preferred_user = preferred_admin_user_ai(db, request)
+    selected_audio_provider = preferred_user.audio_ai_provider if preferred_user else settings.ai_tts_provider
 
     try:
         audio_url = await generate_ai_audio_with_settings(
@@ -6866,6 +7132,7 @@ async def word_ai_audio(
             accent=accent,
             voice_gender=voice_gender,
             text_mode=text_mode,
+            provider=selected_audio_provider,
         )
     except RuntimeError as exc:
         detail = str(exc)
@@ -6879,7 +7146,7 @@ async def word_ai_audio(
         raise HTTPException(status_code=502, detail=f"AI 朗读失败: {exc}") from exc
 
     should_commit = commit not in {"0", "false", "False", "no"}
-    audio_source = ai_tts_audio_source(text_mode)
+    audio_source = selected_ai_tts_audio_source(text_mode, selected_audio_provider)
     current_audio_url = word.british_audio_url if accent == "gb" else word.american_audio_url
     can_commit_audio = should_replace_audio(current_audio_url, audio_url, incoming_source=audio_source)
     if should_commit and can_commit_audio:
@@ -6919,6 +7186,7 @@ async def word_ai_audio(
 @app.post("/api/vue/words/{word_id}/definition-audio")
 async def word_definition_audio(
     word_id: int,
+    request: Request,
     edit_token: str = Form(default=""),
     list_id: int | None = Form(default=None),
     source: str = Form(default="auto"),
@@ -6983,13 +7251,17 @@ async def word_definition_audio(
     definition_text = re.sub(r"\s+", " ", (word.english_definition or "").strip())
     if not definition_text:
         raise HTTPException(status_code=400, detail="还没有英文定义，先补充英文定义后再生成音频。")
+    preferred_user = preferred_admin_user_ai(db, request)
+    selected_audio_provider = preferred_user.audio_ai_provider if preferred_user else settings.ai_tts_provider
+    selected_voice_gender = preferred_user.audio_voice_gender if preferred_user else "female"
 
     try:
         audio_url = await generate_ai_audio_with_settings(
             text_value=definition_text,
             accent="gb",
-            voice_gender="female",
+            voice_gender=selected_voice_gender,
             text_mode="definition",
+            provider=selected_audio_provider,
         )
     except RuntimeError as exc:
         detail = str(exc)
@@ -7007,10 +7279,11 @@ async def word_definition_audio(
     db.add(word)
     db.commit()
     db.refresh(word)
+    audio_source = selected_ai_tts_audio_source("definition", selected_audio_provider)
     remember_word_resource(
         db,
         word,
-        english_definition_audio_source=ai_tts_audio_source("definition"),
+        english_definition_audio_source=audio_source,
         override_media=True,
         commit=True,
     )
@@ -7019,8 +7292,8 @@ async def word_definition_audio(
         "word": serialize_word(word),
         "audio_url": audio_url,
         "reused": False,
-        "source": ai_tts_audio_source("definition"),
-        "source_meta": audio_source_meta(ai_tts_audio_source("definition"), audio_url),
+        "source": audio_source,
+        "source_meta": audio_source_meta(audio_source, audio_url),
         "media_sources": word_media_sources(db, word),
     }
 
@@ -7028,6 +7301,7 @@ async def word_definition_audio(
 @app.post("/api/vue/words/{word_id}/example-audio")
 async def word_example_audio(
     word_id: int,
+    request: Request,
     edit_token: str = Form(default=""),
     list_id: int | None = Form(default=None),
     source: str = Form(default="auto"),
@@ -7092,13 +7366,17 @@ async def word_example_audio(
     example_text = re.sub(r"\s+", " ", (word.english_example or "").strip())
     if not example_text:
         raise HTTPException(status_code=400, detail="还没有英文例句，先从 SPB 补全或手动补充例句。")
+    preferred_user = preferred_admin_user_ai(db, request)
+    selected_audio_provider = preferred_user.audio_ai_provider if preferred_user else settings.ai_tts_provider
+    selected_voice_gender = preferred_user.audio_voice_gender if preferred_user else "female"
 
     try:
         audio_url = await generate_ai_audio_with_settings(
             text_value=example_text,
             accent="gb",
-            voice_gender="female",
+            voice_gender=selected_voice_gender,
             text_mode="example",
+            provider=selected_audio_provider,
         )
     except RuntimeError as exc:
         detail = str(exc)
@@ -7116,10 +7394,11 @@ async def word_example_audio(
     db.add(word)
     db.commit()
     db.refresh(word)
+    audio_source = selected_ai_tts_audio_source("example", selected_audio_provider)
     remember_word_resource(
         db,
         word,
-        english_example_audio_source=ai_tts_audio_source("example"),
+        english_example_audio_source=audio_source,
         override_media=True,
         commit=True,
     )
@@ -7128,8 +7407,8 @@ async def word_example_audio(
         "word": serialize_word(word),
         "audio_url": audio_url,
         "reused": False,
-        "source": ai_tts_audio_source("example"),
-        "source_meta": audio_source_meta(ai_tts_audio_source("example"), audio_url),
+        "source": audio_source,
+        "source_meta": audio_source_meta(audio_source, audio_url),
         "media_sources": word_media_sources(db, word),
     }
 
@@ -7385,15 +7664,23 @@ def ai_tts_audio_source(text_mode: str) -> str:
     return f"ai-tts:{provider or 'generated'}"
 
 
+def selected_ai_tts_audio_source(text_mode: str, provider: str | None = None) -> str:
+    if text_mode == "phonetic":
+        return "ai-tts:dashscope"
+    selected_provider = (provider or settings.ai_tts_provider or "").strip().lower()
+    return f"ai-tts:{selected_provider or 'generated'}"
+
+
 async def generate_ai_audio_with_settings(
     *,
     text_value: str,
     accent: str,
     voice_gender: str = "female",
     text_mode: str = "word",
+    provider: str | None = None,
 ) -> str:
     return await generate_word_ai_audio(
-        provider=settings.ai_tts_provider,
+        provider=provider or settings.ai_tts_provider,
         api_key=settings.openai_api_key,
         model=settings.openai_tts_model,
         word=text_value,
@@ -8365,10 +8652,12 @@ def learning_growth_summary(db: Session) -> dict[str, Any]:
 
 def page_context(request: Request, db: Session, extra: dict | None = None) -> dict:
     current_user_phone = authenticated_phone_from_request(request)
+    current_admin = get_or_create_admin_user(db, current_user_phone) if current_user_phone else None
     context = {
         "request": request,
         "app_name": settings.app_name,
         "current_user_phone": current_user_phone,
+        "current_admin_user": current_admin,
         "daily_quote": get_daily_quote(db),
         "sidebar_challenges": sidebar_challenge_progress(db),
         "wrong_word_count": pending_wrong_word_count(db),
@@ -8386,11 +8675,7 @@ def serialize_shell_context(context: dict[str, Any]) -> dict[str, Any]:
     daily_quote = context.get("daily_quote")
     return {
         "appName": context.get("app_name", settings.app_name),
-        "currentUser": {
-            "phoneMasked": masked_login_phone(context.get("current_user_phone")),
-        }
-        if context.get("current_user_phone")
-        else None,
+        "currentUser": admin_user_summary(context.get("current_admin_user"), context.get("current_user_phone")),
         "dailyQuote": {
             "content": daily_quote.content,
             "author": daily_quote.author,

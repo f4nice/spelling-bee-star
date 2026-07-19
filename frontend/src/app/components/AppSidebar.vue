@@ -36,6 +36,14 @@ function navigate(path) {
       <SidebarChallengeProgress :challenges="shell.sidebarChallenges" :navigate="navigate" />
       <form class="sidebar-session" method="post" action="/logout">
         <span v-if="phoneLabel">已登录 {{ phoneLabel }}</span>
+        <button
+          v-if="shell.currentUser?.canAdmin"
+          class="sidebar-admin-button"
+          type="button"
+          @click="navigate('/admin')"
+        >
+          后台管理
+        </button>
         <button type="submit">退出登录</button>
       </form>
     </nav>

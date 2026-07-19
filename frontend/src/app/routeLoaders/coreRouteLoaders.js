@@ -10,6 +10,10 @@ export const coreRouteLoaders = {
     data.value = await fetchJson(routeApiPaths.growth());
   },
 
+  async admin({ data }) {
+    data.value = await fetchJson(routeApiPaths.admin(), { skipCache: true });
+  },
+
   async spb({ route, data }) {
     data.value = await fetchJson(routeApiPaths.spb(route));
   },

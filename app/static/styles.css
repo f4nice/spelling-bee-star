@@ -419,6 +419,10 @@ body {
   background: var(--accent);
 }
 
+.sidebar-session .sidebar-admin-button {
+  background: var(--accent-soft);
+}
+
 .side-nav .challenge-progress-link {
   display: grid;
   gap: 6px;
@@ -477,6 +481,153 @@ body {
 .version-matrix-head strong,
 .version-stamp strong {
   color: var(--accent-dark);
+}
+
+.admin-page {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px;
+  background: linear-gradient(135deg, #ffffff 0%, #f2faf6 100%);
+}
+
+.admin-hero h1,
+.admin-create-panel h2 {
+  margin: 0;
+}
+
+.admin-hero p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.admin-current-user {
+  display: grid;
+  gap: 4px;
+  min-width: 180px;
+  border: 1px solid rgba(29, 127, 91, 0.18);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  background: #fff;
+}
+
+.admin-current-user span,
+.admin-current-user em,
+.admin-create-panel p,
+.admin-user-head span,
+.admin-user-grid span,
+.admin-user-actions span {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.admin-current-user strong {
+  font-size: 18px;
+}
+
+.admin-create-panel {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(140px, 180px) minmax(140px, 180px) minmax(120px, 140px) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 18px;
+}
+
+.admin-create-panel input,
+.admin-create-panel select,
+.admin-user-card input[type="text"],
+.admin-user-card select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-weight: 800;
+}
+
+.admin-user-list {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-user-card {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.admin-user-head,
+.admin-user-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-user-head > div {
+  display: grid;
+  gap: 6px;
+  width: min(340px, 100%);
+}
+
+.admin-active-switch,
+.admin-permission-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 900;
+}
+
+.admin-active-switch input,
+.admin-permission-chip input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.admin-user-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-user-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-permission-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-permission-chip {
+  border: 1px solid rgba(29, 127, 91, 0.16);
+  border-radius: 999px;
+  padding: 8px 11px;
+  background: #f7fbf8;
+  color: var(--accent-dark);
+  font-size: 13px;
+}
+
+.admin-user-actions {
+  padding-top: 4px;
+}
+
+.admin-notice {
+  margin: 0;
 }
 
 .version-release,
@@ -8241,6 +8392,18 @@ select {
 }
 
 @media (max-width: 760px) {
+  .admin-create-panel,
+  .admin-user-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-hero,
+  .admin-user-head,
+  .admin-user-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .app-topbar {
     align-items: flex-start;
     flex-wrap: wrap;

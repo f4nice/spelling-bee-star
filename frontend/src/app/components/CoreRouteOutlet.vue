@@ -1,5 +1,6 @@
 <script setup>
 import ChallengeDayPage from "../pages/ChallengeDayPage.vue";
+import AdminPage from "../pages/AdminPage.vue";
 import GrowthPage from "../pages/GrowthPage.vue";
 import HomePage from "../pages/HomePage.vue";
 import SpbPage from "../pages/SpbPage.vue";
@@ -17,6 +18,7 @@ defineProps({
 
 <template>
   <HomePage v-if="ctx.route.name === 'home' && ctx.data" :data="ctx.data" :go="ctx.go" :fallback-letter="ctx.fallbackLetter" />
+  <AdminPage v-else-if="ctx.route.name === 'admin' && ctx.data" :data="ctx.data" />
   <GrowthPage v-else-if="ctx.route.name === 'growth' && ctx.data" :data="ctx.data" />
   <SpbPage v-else-if="ctx.route.name === 'spb' && ctx.data" :data="ctx.data" :go="ctx.go" />
   <ListRouteOutlet v-else-if="ctx.route.name === 'lists' || ctx.route.name === 'listDetail'" :ctx="ctx" />

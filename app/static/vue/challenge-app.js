@@ -1,1 +1,1 @@
-import{L as t,_ as n}from"./ChallengeApp-BzG0ubgW.js";function d(e=document.getElementById("speakeasy-challenge-app")){return Number((e==null?void 0:e.dataset.wordListId)||0)}const a=document.getElementById("speakeasy-challenge-app");a&&t(n,{wordListId:d(a)}).mount(a);
+import{L as t,_ as n}from"./ChallengeApp-DDAx--zF.js";function d(e=document.getElementById("speakeasy-challenge-app")){return Number((e==null?void 0:e.dataset.wordListId)||0)}const a=document.getElementById("speakeasy-challenge-app");a&&t(n,{wordListId:d(a)}).mount(a);
