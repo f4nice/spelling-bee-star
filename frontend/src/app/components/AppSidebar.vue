@@ -37,7 +37,7 @@ function navigate(path) {
       <form class="sidebar-session" method="post" action="/logout">
         <span v-if="phoneLabel">已登录 {{ phoneLabel }}</span>
         <button
-          v-if="phoneLabel"
+          v-if="shell.currentUser?.canAdmin"
           class="sidebar-admin-button"
           type="button"
           @click="navigate('/admin')"
