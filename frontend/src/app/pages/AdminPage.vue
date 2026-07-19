@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from "vue";
+import { Eye, EyeOff } from "lucide-vue-next";
 import VersionStamp from "../components/VersionStamp.vue";
 import { fetchJson } from "../utils.js";
 
@@ -12,6 +13,7 @@ const props = defineProps({
 
 const users = ref((props.data.users || []).map(createEditableUser));
 const savingPhones = ref([]);
+const visiblePasswordPhones = ref([]);
 const notice = ref("");
 const newUser = ref({ phone: "", username: "", role: "viewer", loginPassword: "" });
 
@@ -27,10 +29,20 @@ function isSaving(phone) {
   return savingPhones.value.includes(phone);
 }
 
+function isPasswordVisible(phone) {
+  return visiblePasswordPhones.value.includes(phone);
+}
+
 function setSaving(phone, saving) {
   savingPhones.value = saving
     ? [...new Set([...savingPhones.value, phone])]
     : savingPhones.value.filter((item) => item !== phone);
+}
+
+function togglePasswordVisibility(phone) {
+  visiblePasswordPhones.value = isPasswordVisible(phone)
+    ? visiblePasswordPhones.value.filter((item) => item !== phone)
+    : [...new Set([...visiblePasswordPhones.value, phone])];
 }
 
 function defaultPermissions(role) {
@@ -126,9 +138,32 @@ async function addUser() {
     <section class="admin-user-list" aria-label="后台用户权限">
       <article v-for="user in users" :key="user.phone" class="panel admin-user-card">
         <header class="admin-user-head">
-          <div>
+          <div class="admin-user-identity">
             <span>{{ user.phoneMasked }}</span>
-            <input v-model="user.username" type="text" aria-label="用户名">
+            <div class="admin-user-head-fields">
+              <input v-model="user.username" type="text" aria-label="用户名">
+              <label class="admin-header-password">
+                <span>登录密码 · {{ user.hasLoginPassword ? "已设置" : "未设置" }}</span>
+                <div class="admin-password-field">
+                  <input
+                    v-model="user.loginPassword"
+                    :type="isPasswordVisible(user.phone) ? 'text' : 'password'"
+                    autocomplete="new-password"
+                    :placeholder="user.hasLoginPassword ? '留空不改' : '设置登录密码'"
+                  >
+                  <button
+                    class="admin-password-toggle"
+                    type="button"
+                    :aria-label="isPasswordVisible(user.phone) ? '隐藏登录密码' : '显示登录密码'"
+                    :title="isPasswordVisible(user.phone) ? '隐藏登录密码' : '显示登录密码'"
+                    @click="togglePasswordVisibility(user.phone)"
+                  >
+                    <EyeOff v-if="isPasswordVisible(user.phone)" :size="18" aria-hidden="true" />
+                    <Eye v-else :size="18" aria-hidden="true" />
+                  </button>
+                </div>
+              </label>
+            </div>
           </div>
           <label class="admin-active-switch">
             <input v-model="user.isActive" type="checkbox">
@@ -142,15 +177,6 @@ async function addUser() {
             <select v-model="user.role" @change="applyRoleDefaults(user)">
               <option v-for="role in data.roleOptions" :key="role.key" :value="role.key">{{ role.label }}</option>
             </select>
-          </label>
-          <label>
-            <span>登录密码 · {{ user.hasLoginPassword ? "已设置" : "未设置" }}</span>
-            <input
-              v-model="user.loginPassword"
-              type="password"
-              autocomplete="new-password"
-              :placeholder="user.hasLoginPassword ? '留空不改' : '设置登录密码'"
-            >
           </label>
           <label>
             <span>图片 AI</span>

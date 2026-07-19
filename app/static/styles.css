@@ -578,10 +578,22 @@ body {
   gap: 12px;
 }
 
-.admin-user-head > div {
+.admin-user-identity {
   display: grid;
   gap: 6px;
-  width: min(340px, 100%);
+  width: min(620px, 100%);
+}
+
+.admin-user-head-fields {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) minmax(220px, 1fr);
+  gap: 10px;
+  align-items: end;
+}
+
+.admin-header-password {
+  display: grid;
+  gap: 6px;
 }
 
 .admin-active-switch,
@@ -608,6 +620,38 @@ body {
 .admin-user-grid label {
   display: grid;
   gap: 6px;
+}
+
+.admin-password-field {
+  position: relative;
+}
+
+.admin-password-field input {
+  padding-right: 46px;
+}
+
+.admin-password-toggle {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  color: var(--accent-dark);
+  background: transparent;
+  cursor: pointer;
+}
+
+.admin-password-toggle:hover,
+.admin-password-toggle:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .admin-permission-grid {
@@ -8405,6 +8449,10 @@ select {
   .admin-user-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .admin-user-head-fields {
+    grid-template-columns: 1fr;
   }
 
   .app-topbar {
