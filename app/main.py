@@ -85,8 +85,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260719-017"
-DEFAULT_PAGE_VERSION = "v20260719.17"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260719-018"
+DEFAULT_PAGE_VERSION = "v20260719.18"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2195,7 +2195,7 @@ async def require_phone_login(request: Request, call_next):
 async def add_cache_headers(request: Request, call_next):
     response = await call_next(request)
     path = request.url.path
-    if re.fullmatch(r"/static/vue/(speakeasy-app|challenge-app)\.js", path):
+    if path.startswith("/static/vue/"):
         response.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
     elif path.startswith("/static/") or path.startswith("/media/"):
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
