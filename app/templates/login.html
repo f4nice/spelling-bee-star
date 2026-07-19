@@ -2,7 +2,7 @@
 
 {% block content %}
 <main class="login-screen">
-  <section class="login-shell" aria-labelledby="loginTitle">
+  <section class="login-shell" aria-label="登录">
     <aside class="login-hero-panel">
       <div class="login-brand">
         <img src="{{ url_for('static', path='/speakeasy-mouth-logo.svg') }}" alt="">
@@ -22,11 +22,6 @@
     </aside>
 
     <section class="login-card">
-      <div class="login-card-head">
-        <p class="section-kicker">Account</p>
-        <h2 id="loginTitle">手机号密码登录</h2>
-        <p>手机号是唯一登录方式。</p>
-      </div>
       <form class="login-form" action="/login" method="post">
         <input type="hidden" name="next" value="{{ next_path }}">
         <label>

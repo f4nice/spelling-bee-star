@@ -137,10 +137,10 @@ body {
   display: grid;
   gap: 10px;
   margin: 0;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 10px;
-  padding: 18px;
-  background: rgba(255, 255, 255, 0.1);
+  max-width: 460px;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .login-hero-quote p {
@@ -157,26 +157,6 @@ body {
   font-size: 13px;
   font-style: normal;
   font-weight: 900;
-}
-
-.login-card-head {
-  display: grid;
-  gap: 8px;
-}
-
-.login-card-head h2 {
-  margin: 0;
-  color: var(--ink);
-  font-size: 32px;
-  line-height: 1.15;
-  letter-spacing: 0;
-}
-
-.login-card-head p:not(.section-kicker) {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 800;
 }
 
 .login-form {
@@ -216,9 +196,9 @@ body {
 
 .login-password-field {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 1fr) 32px;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
 }
 
 .login-password-field input {
@@ -228,11 +208,12 @@ body {
 .login-password-toggle {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: #fff;
+  justify-self: start;
+  width: 32px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
   color: var(--accent);
   cursor: pointer;
 }
@@ -261,9 +242,8 @@ body {
 
 .login-password-toggle:hover,
 .login-password-toggle:focus-visible {
-  background: var(--accent-soft);
+  background: rgba(29, 127, 91, 0.1);
   outline: none;
-  box-shadow: var(--focus-ring);
 }
 
 .login-submit-button {
@@ -309,7 +289,8 @@ body {
 .login-footer {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: center;
   gap: 8px 16px;
   width: min(960px, 100%);
   margin: 0 auto;
@@ -8815,8 +8796,7 @@ select {
     padding: 24px;
   }
 
-  .login-hero-copy h1,
-  .login-card-head h2 {
+  .login-hero-copy h1 {
     font-size: 30px;
   }
 
@@ -8825,8 +8805,8 @@ select {
   }
 
   .login-footer {
-    align-items: flex-start;
-    flex-direction: column;
+    justify-content: center;
+    text-align: center;
   }
 
   .admin-create-panel,
