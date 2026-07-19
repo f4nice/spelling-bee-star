@@ -84,8 +84,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260719-004"
-DEFAULT_PAGE_VERSION = "v20260719.4"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260719-005"
+DEFAULT_PAGE_VERSION = "v20260719.5"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -1984,19 +1984,46 @@ def normalize_admin_user_ai_fields(user: AdminUserSetting) -> bool:
     return changed
 
 
+def active_admin_user_count(db: Session) -> int:
+    return db.scalar(
+        select(func.count(AdminUserSetting.id)).where(
+            AdminUserSetting.role == "admin",
+            AdminUserSetting.is_active.is_(True),
+        )
+    ) or 0
+
+
+def promote_admin_user(user: AdminUserSetting) -> bool:
+    changed = False
+    if user.role != "admin":
+        user.role = "admin"
+        changed = True
+    permissions = encode_admin_permissions(None, "admin")
+    if user.permissions != permissions:
+        user.permissions = permissions
+        changed = True
+    default_username = admin_user_display_name(user.phone, "viewer")
+    if not user.username or user.username == default_username:
+        user.username = admin_user_display_name(user.phone, "admin")
+        changed = True
+    return changed
+
+
 def get_or_create_admin_user(db: Session, phone: str) -> AdminUserSetting | None:
     normalized = normalize_login_phone(phone)
     if not normalized:
         return None
     existing = db.scalar(select(AdminUserSetting).where(AdminUserSetting.phone == normalized))
     if existing:
-        if normalize_admin_user_ai_fields(existing):
+        changed = normalize_admin_user_ai_fields(existing)
+        if existing.is_active and active_admin_user_count(db) == 0:
+            changed = promote_admin_user(existing) or changed
+        if changed:
             db.add(existing)
             db.commit()
             db.refresh(existing)
         return existing
-    existing_count = db.scalar(select(func.count(AdminUserSetting.id))) or 0
-    role = "admin" if existing_count == 0 else "viewer"
+    role = "admin" if active_admin_user_count(db) == 0 else "viewer"
     image_provider, image_model = default_admin_image_ai_pair()
     user = AdminUserSetting(
         phone=normalized,
