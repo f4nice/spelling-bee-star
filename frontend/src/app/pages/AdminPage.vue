@@ -180,7 +180,7 @@ async function addUser() {
           </label>
           <label>
             <span>图片 AI</span>
-            <select v-model="user.imageAiValue">
+            <select v-model="user.imageAiValue" class="admin-model-select">
               <option v-for="option in data.imageAiOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
             </select>
           </label>

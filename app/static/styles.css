@@ -622,6 +622,16 @@ body {
   gap: 6px;
 }
 
+.admin-user-grid select {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.admin-user-grid .admin-model-select {
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .admin-password-field {
   position: relative;
 }
