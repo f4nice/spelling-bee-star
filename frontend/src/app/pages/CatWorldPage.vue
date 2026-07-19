@@ -157,7 +157,7 @@ async function selectCat(catId) {
         <div class="cat-world-room-head">
           <div>
             <p class="section-kicker">Room</p>
-            <h2>{{ selectedCat.label || "咪咪" }} 的房间</h2>
+            <h2>{{ selectedCat.label || "咪咪" }}的房间</h2>
           </div>
           <div class="cat-world-mood">
             <span>{{ mood.label || "安静陪读" }}</span>
