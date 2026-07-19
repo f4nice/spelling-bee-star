@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
 
@@ -14,6 +14,16 @@ const payload = ref(props.data || {});
 const activeCategory = ref("food");
 const busyItemId = ref("");
 const notice = ref("");
+const catReaction = ref("");
+const catPetSequence = ref(0);
+
+const catReactionTexts = [
+  "轻轻蹭了一下手心",
+  "眯起眼睛陪你学英语",
+  "尾巴开心地晃了晃",
+  "今天也想听你读单词",
+];
+let catReactionTimer = 0;
 
 watch(
   () => props.data,
@@ -21,6 +31,10 @@ watch(
     payload.value = nextData || {};
   },
 );
+
+onBeforeUnmount(() => {
+  window.clearTimeout(catReactionTimer);
+});
 
 const categories = [
   { key: "food", label: "猫粮" },
@@ -72,6 +86,16 @@ function ownsCat(catId) {
 
 function canAfford(item) {
   return Number(energy.value.available || 0) >= Number(item.cost || 0);
+}
+
+function petCat() {
+  const nextIndex = catPetSequence.value % catReactionTexts.length;
+  catReaction.value = catReactionTexts[nextIndex];
+  catPetSequence.value += 1;
+  window.clearTimeout(catReactionTimer);
+  catReactionTimer = window.setTimeout(() => {
+    catReaction.value = "";
+  }, 2200);
 }
 
 async function purchase(item) {
@@ -174,11 +198,32 @@ async function selectCat(catId) {
           <div v-if="ownedFoodCount" class="cat-world-bowl"></div>
           <div v-if="inventory['scratch-board']" class="cat-world-scratcher"></div>
           <div v-if="inventory['feather-wand']" class="cat-world-wand"></div>
+          <div
+            v-if="catReaction"
+            :key="`cat-reaction-${catPetSequence}`"
+            class="cat-world-reaction"
+            aria-live="polite"
+          >
+            {{ catReaction }}
+          </div>
+          <div
+            v-if="catPetSequence"
+            :key="`cat-sparkles-${catPetSequence}`"
+            class="cat-world-sparkles"
+            aria-hidden="true"
+          >
+            <span></span><span></span><span></span><span></span>
+          </div>
           <svg
-            :class="['cat-world-cat-svg', `cat-tone-${selectedCat.id || 'mimi'}`]"
+            :key="`cat-pet-${catPetSequence}`"
+            :class="['cat-world-cat-svg', `cat-tone-${selectedCat.id || 'mimi'}`, { 'is-petted': catPetSequence }]"
             viewBox="0 0 240 180"
-            role="img"
-            :aria-label="`${selectedCat.label || '咪咪'} 正在猫咪房间里`"
+            role="button"
+            tabindex="0"
+            :aria-label="`摸摸${selectedCat.label || '咪咪'}`"
+            @click="petCat"
+            @keydown.enter.prevent="petCat"
+            @keydown.space.prevent="petCat"
           >
             <path class="cat-tail" d="M177 103c33-24 26-54 8-58-12-3-20 7-15 18 4 8 14 9 20 3" />
             <path class="cat-body" d="M69 105c0-34 20-55 55-55s55 21 55 55v21c0 28-21 42-55 42s-55-14-55-42z" />

@@ -86,8 +86,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260719-021"
-DEFAULT_PAGE_VERSION = "v20260719.21"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260720-001"
+DEFAULT_PAGE_VERSION = "v20260720.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -214,14 +214,6 @@ GROWTH_BADGE_CONFIG = [
         "target": 100,
         "unit": "条",
         "tier": "silver",
-    },
-    {
-        "key": "science_discoveries",
-        "label": "科学探索",
-        "badge_label": "探索 100 个知识点",
-        "target": 100,
-        "unit": "个",
-        "tier": "emerald",
     },
 ]
 
@@ -2615,15 +2607,13 @@ def good_words_quotes_page(request: Request, db: Session = Depends(get_db)):
 
 
 @app.get("/booklearner/science", response_class=HTMLResponse)
-def good_words_science_home_page(request: Request, db: Session = Depends(get_db)):
-    return vue_shell(request, db, "booklearner/science")
+def good_words_science_home_page():
+    return RedirectResponse(url="/booklearner", status_code=302)
 
 
 @app.get("/booklearner/science/{slug}", response_class=HTMLResponse)
-def good_words_science_page(slug: str, request: Request, db: Session = Depends(get_db)):
-    if not find_science_article(slug):
-        raise HTTPException(status_code=404, detail="Science discovery not found")
-    return vue_shell(request, db, f"booklearner/science/{slug}")
+def good_words_science_page(slug: str):
+    return RedirectResponse(url="/booklearner", status_code=302)
 
 
 @app.get("/booklearner/detail/{analysis_id}", response_class=HTMLResponse)
@@ -8946,7 +8936,6 @@ def growth_score_rules() -> list[dict[str, Any]]:
         {"key": "spelling_words", "label": "拼写题", "points": 2},
         {"key": "challenge_rounds", "label": "完整轮", "points": 50},
         {"key": "good_quotes", "label": "好句", "points": 3},
-        {"key": "science_discoveries", "label": "科学点", "points": 8},
     ]
 
 
@@ -8956,12 +8945,10 @@ def learning_growth_summary(db: Session) -> dict[str, Any]:
         spelling_words = db.scalar(select(func.count(ChallengeSpellingAttempt.id))) or 0
         challenge_rounds = db.scalar(select(func.coalesce(func.sum(ChallengeProgress.completed_rounds), 0))) or 0
         good_quotes = max(good_quote_growth_count(), growth_metric_value(db, "good_quotes"))
-        science_discoveries = max(science_growth_count(), growth_metric_value(db, "science_discoveries"))
         values = {
             "spelling_words": int(spelling_words),
             "challenge_rounds": int(challenge_rounds),
             "good_quotes": int(good_quotes),
-            "science_discoveries": int(science_discoveries),
         }
         metrics = []
         for config in GROWTH_BADGE_CONFIG:
@@ -8991,7 +8978,7 @@ def learning_growth_summary(db: Session) -> dict[str, Any]:
         today_correct = today_stat.correct_count if today_stat else 0
         today_wrong = today_stat.wrong_count if today_stat else 0
         today_total = today_correct + today_wrong
-        points = values["spelling_words"] * 2 + values["challenge_rounds"] * 50 + values["good_quotes"] * 3 + values["science_discoveries"] * 8
+        points = values["spelling_words"] * 2 + values["challenge_rounds"] * 50 + values["good_quotes"] * 3
         level = max(1, points // 500 + 1)
         current_level_floor = (level - 1) * 500
         next_level_points = level * 500
@@ -9020,13 +9007,6 @@ def learning_growth_summary(db: Session) -> dict[str, Any]:
                     "value": today_correct,
                     "target": 10,
                     "percent": percent_value(today_correct, 10),
-                },
-                {
-                    "key": "science_seed",
-                    "label": "科学探索库",
-                    "value": values["science_discoveries"],
-                    "target": 100,
-                    "percent": percent_value(values["science_discoveries"], 100),
                 },
             ],
         }

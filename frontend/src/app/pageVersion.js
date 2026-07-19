@@ -8,7 +8,6 @@ const ROUTE_MODULES = [
   { names: ["lists", "listDetail", "wordDetail"], key: "word-lists", label: "我的单词表" },
   { names: ["upload", "preview"], key: "upload-import", label: "上传导入" },
   { prefix: "newspaper", key: "newspaper", label: "英文小报" },
-  { names: ["booklearnerScienceHome", "booklearnerScience"], key: "science-discovery", label: "科学探索" },
   { prefix: "booklearner", key: "booklearner", label: "好词好句" },
   { names: ["spb"], key: "spb", label: "SPB" },
   { names: ["wrongWords"], key: "wrong-words", label: "我的生词本" },
