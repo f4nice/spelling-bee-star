@@ -8,6 +8,10 @@ export const studyRouteMatchers = [
     route: () => ({ name: "admin", params: {} }),
   },
   {
+    match: ([section]) => section === "cat-world",
+    route: () => ({ name: "catWorld", params: {} }),
+  },
+  {
     match: ([section, collection]) => section === "spb" && (!collection || collection === "team"),
     route: ([, collection]) => ({ name: "spb", params: { collection: collection || "individual" } }),
   },

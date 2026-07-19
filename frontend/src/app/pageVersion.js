@@ -4,6 +4,7 @@ const ROUTE_MODULES = [
   { names: ["home"], key: "home", label: "首页" },
   { names: ["admin"], key: "admin", label: "后台管理" },
   { names: ["growth"], key: "growth", label: "成长体系" },
+  { names: ["catWorld"], key: "cat-world", label: "猫咪世界" },
   { names: ["lists", "listDetail", "wordDetail"], key: "word-lists", label: "我的单词表" },
   { names: ["upload", "preview"], key: "upload-import", label: "上传导入" },
   { prefix: "newspaper", key: "newspaper", label: "英文小报" },

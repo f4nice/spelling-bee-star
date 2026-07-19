@@ -187,6 +187,22 @@ class LearningGrowthMetric(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class CatWorldState(Base):
+    __tablename__ = "cat_world_states"
+    __table_args__ = (UniqueConstraint("phone", name="uq_cat_world_states_phone"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    energy_spent: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    inventory: Mapped[str | None] = mapped_column(Text)
+    cats: Mapped[str | None] = mapped_column(Text)
+    selected_cat: Mapped[str] = mapped_column(String(80), default="mimi", server_default="mimi", nullable=False)
+    last_play_item: Mapped[str | None] = mapped_column(String(80))
+    last_played_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class CacheEntry(Base):
     __tablename__ = "speakeasy_cache"
 

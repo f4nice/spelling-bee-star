@@ -6,6 +6,7 @@ export function routeTitle(route, data) {
     return route.params?.collection === "team" ? "SPB-团队赛冠军词组" : "SPB-个人赛冠军词库";
   }
   if (route.name === "growth") return "成长体系";
+  if (route.name === "catWorld") return "猫咪世界";
   if (route.name === "admin") return "后台管理";
   if (route.name === "challengeDay") return `${route.params.day} 挑战词汇`;
   if (route.name === "challenge") return "拼写挑战";

@@ -32,6 +32,7 @@ from app.config import get_settings
 from app.database import Base, SessionLocal, engine, get_db
 from app.models import (
     CacheEntry,
+    CatWorldState,
     ChallengeDailyStat,
     ChallengeDailyWord,
     ChallengeProgress,
@@ -85,8 +86,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260719-018"
-DEFAULT_PAGE_VERSION = "v20260719.18"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260719-019"
+DEFAULT_PAGE_VERSION = "v20260719.19"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -223,6 +224,149 @@ GROWTH_BADGE_CONFIG = [
         "tier": "emerald",
     },
 ]
+
+CAT_WORLD_DEFAULT_CAT_ID = "mimi"
+CAT_WORLD_SHOP = [
+    {
+        "id": "salmon-bowl",
+        "category": "food",
+        "label": "三文鱼能量碗",
+        "englishName": "Salmon Bowl",
+        "cost": 60,
+        "mood": 6,
+        "description": "给猫咪补充一顿香香的学习奖励餐。",
+    },
+    {
+        "id": "tuna-can",
+        "category": "food",
+        "label": "金枪鱼罐头",
+        "englishName": "Tuna Can",
+        "cost": 90,
+        "mood": 8,
+        "description": "适合完成一轮挑战后打开的小奖励。",
+    },
+    {
+        "id": "goat-milk",
+        "category": "food",
+        "label": "羊奶布丁",
+        "englishName": "Goat Milk Pudding",
+        "cost": 120,
+        "mood": 10,
+        "description": "柔软、甜一点，心情会明显变好。",
+    },
+    {
+        "id": "rolling-ball",
+        "category": "toy",
+        "label": "滚滚球",
+        "englishName": "Rolling Ball",
+        "cost": 80,
+        "mood": 7,
+        "description": "轻轻一点，猫咪就会追着跑。",
+    },
+    {
+        "id": "feather-wand",
+        "category": "toy",
+        "label": "羽毛逗猫棒",
+        "englishName": "Feather Wand",
+        "cost": 110,
+        "mood": 10,
+        "description": "用来陪猫咪玩一会儿，互动感更强。",
+    },
+    {
+        "id": "scratch-board",
+        "category": "toy",
+        "label": "猫抓板",
+        "englishName": "Scratch Board",
+        "cost": 160,
+        "mood": 14,
+        "description": "学习获得能量后，可以买来逗她玩。",
+    },
+    {
+        "id": "cloud-rug",
+        "category": "decor",
+        "label": "云朵地毯",
+        "englishName": "Cloud Rug",
+        "cost": 180,
+        "mood": 5,
+        "description": "把猫窝旁边铺得更软一点。",
+    },
+    {
+        "id": "sun-window",
+        "category": "decor",
+        "label": "阳光窗台",
+        "englishName": "Sunny Window",
+        "cost": 220,
+        "mood": 8,
+        "description": "猫咪最喜欢晒太阳的安静角落。",
+    },
+    {
+        "id": "book-shelf",
+        "category": "decor",
+        "label": "英文书架",
+        "englishName": "English Bookshelf",
+        "cost": 260,
+        "mood": 9,
+        "description": "把读过的书和好句收进猫咪房间。",
+    },
+    {
+        "id": "british-shorthair",
+        "category": "cat",
+        "label": "英短银渐层",
+        "englishName": "British Shorthair",
+        "cost": 520,
+        "mood": 8,
+        "description": "圆脸、安静，适合陪你背长单词。",
+    },
+    {
+        "id": "siamese",
+        "category": "cat",
+        "label": "暹罗猫",
+        "englishName": "Siamese",
+        "cost": 620,
+        "mood": 10,
+        "description": "聪明又爱说话，听你朗读英文很认真。",
+    },
+    {
+        "id": "ragdoll",
+        "category": "cat",
+        "label": "布偶猫",
+        "englishName": "Ragdoll",
+        "cost": 680,
+        "mood": 11,
+        "description": "温柔黏人，适合阅读日一起出现。",
+    },
+    {
+        "id": "maine-coon",
+        "category": "cat",
+        "label": "缅因猫",
+        "englishName": "Maine Coon",
+        "cost": 800,
+        "mood": 13,
+        "description": "像猫咪世界里的守护者，适合大目标解锁。",
+    },
+]
+CAT_WORLD_CATS = [
+    {
+        "id": CAT_WORLD_DEFAULT_CAT_ID,
+        "label": "咪咪",
+        "englishName": "Mimi",
+        "rarity": "Starter",
+        "description": "第一只陪你学习的猫。",
+    },
+    *[
+        {
+            "id": item["id"],
+            "label": item["label"],
+            "englishName": item["englishName"],
+            "rarity": "Famous Cat",
+            "description": item["description"],
+        }
+        for item in CAT_WORLD_SHOP
+        if item["category"] == "cat"
+    ],
+]
+CAT_WORLD_SHOP_BY_ID = {item["id"]: item for item in CAT_WORLD_SHOP}
+CAT_WORLD_CAT_BY_ID = {item["id"]: item for item in CAT_WORLD_CATS}
 
 
 SCIENCE_LEVELS = [
@@ -3012,6 +3156,94 @@ def vue_growth_api(db: Session = Depends(get_db)):
     return {"growth": learning_growth_summary(db)}
 
 
+@app.get("/api/vue/cat-world")
+def vue_cat_world_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    state = get_or_create_cat_world_state(db, phone)
+    return serialize_cat_world_payload(db, state)
+
+
+@app.post("/api/vue/cat-world/purchase")
+async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="购买数据不是有效 JSON。") from exc
+    item_id = str((payload or {}).get("itemId") or "").strip()
+    item = CAT_WORLD_SHOP_BY_ID.get(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="没有找到这个猫咪物品。")
+
+    state = get_or_create_cat_world_state(db, phone)
+    current = serialize_cat_world_payload(db, state)
+    if current["energy"]["available"] < int(item["cost"]):
+        raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点。")
+
+    inventory = parse_cat_world_inventory(state.inventory)
+    owned_cats = parse_cat_world_cats(state.cats)
+    if item["category"] == "cat":
+        if item_id in owned_cats:
+            state.selected_cat = item_id
+            db.add(state)
+            db.commit()
+            db.refresh(state)
+            return {"ok": True, **serialize_cat_world_payload(db, state)}
+        owned_cats.append(item_id)
+        state.cats = encode_cat_world_cats(owned_cats)
+        state.selected_cat = item_id
+    else:
+        inventory[item_id] = inventory.get(item_id, 0) + 1
+        state.inventory = encode_cat_world_inventory(inventory)
+    state.energy_spent = max(int(state.energy_spent or 0), 0) + int(item["cost"])
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return {"ok": True, **serialize_cat_world_payload(db, state)}
+
+
+@app.post("/api/vue/cat-world/play")
+async def vue_cat_world_play_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="互动数据不是有效 JSON。") from exc
+    item_id = str((payload or {}).get("itemId") or "").strip()
+    item = CAT_WORLD_SHOP_BY_ID.get(item_id)
+    if not item or item["category"] != "toy":
+        raise HTTPException(status_code=400, detail="请选择已经拥有的玩具来逗猫。")
+    state = get_or_create_cat_world_state(db, phone)
+    inventory = parse_cat_world_inventory(state.inventory)
+    if inventory.get(item_id, 0) <= 0:
+        raise HTTPException(status_code=400, detail="还没有这个玩具，先用能量值买一个。")
+    state.last_play_item = item_id
+    state.last_played_at = datetime.utcnow()
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return {"ok": True, **serialize_cat_world_payload(db, state)}
+
+
+@app.post("/api/vue/cat-world/select-cat")
+async def vue_cat_world_select_cat_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="猫咪数据不是有效 JSON。") from exc
+    cat_id = str((payload or {}).get("catId") or "").strip()
+    state = get_or_create_cat_world_state(db, phone)
+    owned_cats = parse_cat_world_cats(state.cats)
+    if cat_id not in owned_cats:
+        raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
+    state.selected_cat = cat_id
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return {"ok": True, **serialize_cat_world_payload(db, state)}
+
+
 @app.get("/api/vue/admin")
 def vue_admin_api(request: Request, db: Session = Depends(get_db)):
     current = require_admin_panel_access(request, db)
@@ -3995,6 +4227,11 @@ def wrong_words_page(request: Request, db: Session = Depends(get_db)):
 @app.get("/growth", response_class=HTMLResponse)
 def growth_page(request: Request, db: Session = Depends(get_db)):
     return vue_shell(request, db, "growth")
+
+
+@app.get("/cat-world", response_class=HTMLResponse)
+def cat_world_page(request: Request, db: Session = Depends(get_db)):
+    return vue_shell(request, db, "cat-world")
 
 
 @app.get("/admin", response_class=HTMLResponse)
@@ -8796,6 +9033,191 @@ def learning_growth_summary(db: Session) -> dict[str, Any]:
     except Exception:
         db.rollback()
         return default_learning_growth_summary()
+
+
+def cat_world_growth_source_rows(growth: dict[str, Any]) -> list[dict[str, Any]]:
+    rules = {item["key"]: item for item in growth.get("scoreRules", []) if isinstance(item, dict)}
+    rows = []
+    for metric in growth.get("metrics", []):
+        if not isinstance(metric, dict):
+            continue
+        key = str(metric.get("key") or "")
+        rule = rules.get(key, {})
+        value = int(metric.get("value") or 0)
+        energy_per_unit = int(rule.get("points") or 0)
+        rows.append(
+            {
+                "key": key,
+                "label": metric.get("label") or rule.get("label") or key,
+                "value": value,
+                "unit": metric.get("unit") or "",
+                "energyPerUnit": energy_per_unit,
+                "energy": value * energy_per_unit,
+            }
+        )
+    return rows
+
+
+def parse_cat_world_inventory(raw: str | None) -> dict[str, int]:
+    try:
+        loaded = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(loaded, dict):
+        return {}
+    inventory = {}
+    for key, value in loaded.items():
+        item_id = str(key)
+        if item_id not in CAT_WORLD_SHOP_BY_ID:
+            continue
+        try:
+            count = max(int(value or 0), 0)
+        except (TypeError, ValueError):
+            count = 0
+        if count:
+            inventory[item_id] = count
+    return inventory
+
+
+def parse_cat_world_cats(raw: str | None) -> list[str]:
+    try:
+        loaded = json.loads(raw or "[]")
+    except json.JSONDecodeError:
+        loaded = []
+    if not isinstance(loaded, list):
+        loaded = []
+    cats = [str(item) for item in loaded if str(item) in CAT_WORLD_CAT_BY_ID]
+    if CAT_WORLD_DEFAULT_CAT_ID not in cats:
+        cats.insert(0, CAT_WORLD_DEFAULT_CAT_ID)
+    return list(dict.fromkeys(cats))
+
+
+def encode_cat_world_inventory(inventory: dict[str, int]) -> str:
+    clean = {}
+    for item_id, count in inventory.items():
+        if item_id not in CAT_WORLD_SHOP_BY_ID:
+            continue
+        try:
+            normalized_count = max(int(count or 0), 0)
+        except (TypeError, ValueError):
+            normalized_count = 0
+        if normalized_count:
+            clean[item_id] = normalized_count
+    return json.dumps(clean, ensure_ascii=False, sort_keys=True)
+
+
+def encode_cat_world_cats(cats: list[str]) -> str:
+    clean = [item for item in list(dict.fromkeys(cats)) if item in CAT_WORLD_CAT_BY_ID]
+    if CAT_WORLD_DEFAULT_CAT_ID not in clean:
+        clean.insert(0, CAT_WORLD_DEFAULT_CAT_ID)
+    return json.dumps(clean, ensure_ascii=False)
+
+
+def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
+    normalized = normalize_login_phone(phone)
+    state = db.scalar(select(CatWorldState).where(CatWorldState.phone == normalized))
+    if state:
+        return state
+    state = CatWorldState(
+        phone=normalized,
+        energy_spent=0,
+        inventory=encode_cat_world_inventory({}),
+        cats=encode_cat_world_cats([CAT_WORLD_DEFAULT_CAT_ID]),
+        selected_cat=CAT_WORLD_DEFAULT_CAT_ID,
+    )
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return state
+
+
+def cat_world_mood(
+    state: CatWorldState,
+    inventory: dict[str, int],
+    owned_cats: list[str],
+    available_energy: int,
+) -> dict[str, Any]:
+    food_bonus = min(
+        18,
+        sum(
+            int(CAT_WORLD_SHOP_BY_ID[item_id].get("mood") or 0) * count
+            for item_id, count in inventory.items()
+            if CAT_WORLD_SHOP_BY_ID[item_id]["category"] == "food"
+        ),
+    )
+    toy_bonus = min(
+        18,
+        sum(
+            int(CAT_WORLD_SHOP_BY_ID[item_id].get("mood") or 0)
+            for item_id, count in inventory.items()
+            if CAT_WORLD_SHOP_BY_ID[item_id]["category"] == "toy" and count > 0
+        ),
+    )
+    decor_bonus = min(
+        16,
+        sum(
+            int(CAT_WORLD_SHOP_BY_ID[item_id].get("mood") or 0)
+            for item_id, count in inventory.items()
+            if CAT_WORLD_SHOP_BY_ID[item_id]["category"] == "decor" and count > 0
+        ),
+    )
+    cat_bonus = min(max(len(owned_cats) - 1, 0) * 3, 12)
+    energy_bonus = min(max(available_energy, 0) // 250, 8)
+    recent_play = bool(state.last_played_at and datetime.utcnow() - state.last_played_at <= timedelta(hours=24))
+    play_bonus = 12 if recent_play else 0
+    score = max(35, min(100, 48 + food_bonus + toy_bonus + decor_bonus + cat_bonus + energy_bonus + play_bonus))
+    if score >= 88:
+        label = "开心到打呼噜"
+    elif score >= 72:
+        label = "心情很好"
+    elif score >= 56:
+        label = "安静陪读"
+    else:
+        label = "想要你陪她玩"
+    return {
+        "score": score,
+        "label": label,
+        "recentPlay": recent_play,
+        "lastPlayItem": state.last_play_item or "",
+        "lastPlayedAt": state.last_played_at.isoformat() if state.last_played_at else "",
+    }
+
+
+def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, Any]:
+    growth = learning_growth_summary(db)
+    earned_energy = int(growth.get("points") or 0)
+    spent_energy = max(int(state.energy_spent or 0), 0)
+    available_energy = max(earned_energy - spent_energy, 0)
+    inventory = parse_cat_world_inventory(state.inventory)
+    owned_cats = parse_cat_world_cats(state.cats)
+    if state.selected_cat not in owned_cats:
+        state.selected_cat = owned_cats[0]
+        db.add(state)
+        db.commit()
+        db.refresh(state)
+    return {
+        "energy": {
+            "earned": earned_energy,
+            "spent": spent_energy,
+            "available": available_energy,
+            "sources": cat_world_growth_source_rows(growth),
+        },
+        "state": {
+            "inventory": inventory,
+            "ownedCats": owned_cats,
+            "selectedCat": state.selected_cat,
+            "mood": cat_world_mood(state, inventory, owned_cats, available_energy),
+        },
+        "cats": CAT_WORLD_CATS,
+        "shop": CAT_WORLD_SHOP,
+    }
+
+
+def require_cat_world_phone(request: Request) -> str:
+    phone = authenticated_phone_from_request(request)
+    if not phone:
+        raise HTTPException(status_code=401, detail="请先用手机号登录。")
+    return phone
 
 
 def page_context(request: Request, db: Session, extra: dict | None = None) -> dict:
