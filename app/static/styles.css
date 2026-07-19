@@ -133,37 +133,30 @@ body {
   line-height: 1.8;
 }
 
-.login-hero-metrics {
+.login-hero-quote {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-}
-
-.login-hero-metrics span {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
+  margin: 0;
   border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: 10px;
+  padding: 18px;
   background: rgba(255, 255, 255, 0.1);
 }
 
-.login-hero-metrics strong {
-  overflow: hidden;
+.login-hero-quote p {
+  margin: 0;
   color: #fff;
-  font-size: 18px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.45;
+  letter-spacing: 0;
 }
 
-.login-hero-metrics small {
-  overflow: hidden;
+.login-hero-quote cite {
   color: rgba(248, 250, 252, 0.78);
-  font-size: 12px;
+  font-size: 13px;
+  font-style: normal;
   font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .login-card-head {
@@ -222,28 +215,26 @@ body {
 }
 
 .login-password-field {
-  position: relative;
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 10px;
 }
 
 .login-password-field input {
-  padding-right: 50px;
+  min-width: 0;
 }
 
 .login-password-toggle {
-  position: absolute;
-  top: 50%;
-  right: 8px;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
   color: var(--accent);
   cursor: pointer;
-  transform: translateY(-50%);
 }
 
 .login-password-toggle svg {
@@ -8829,8 +8820,8 @@ select {
     font-size: 30px;
   }
 
-  .login-hero-metrics {
-    grid-template-columns: 1fr;
+  .login-hero-quote p {
+    font-size: 18px;
   }
 
   .login-footer {
