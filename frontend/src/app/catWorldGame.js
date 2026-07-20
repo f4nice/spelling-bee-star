@@ -31,7 +31,7 @@ const CAT_COLORS = {
   mimi: { body: 0xffc46b, shade: 0xd88a3d, stripe: 0x7a4a28, belly: 0xffdf9f, nose: 0xf06f91 },
   "british-shorthair": { body: 0xb9c2c8, shade: 0x7e8b95, stripe: 0x4d5962, belly: 0xdde4e8, nose: 0xf08aac },
   ragdoll: { body: 0xf4e5cf, shade: 0xb88663, stripe: 0x79523f, belly: 0xfff4df, nose: 0xf38ca7 },
-  maine: { body: 0xae7c4f, shade: 0x754926, stripe: 0xf1c17f, belly: 0xd6a06b, nose: 0xf08a7c },
+  "maine-coon": { body: 0xae7c4f, shade: 0x754926, stripe: 0xf1c17f, belly: 0xd6a06b, nose: 0xf08a7c },
   siamese: { body: 0xf1ddbd, shade: 0x5c433e, stripe: 0x382c2d, belly: 0xffefd2, nose: 0xf1a2b2 },
 };
 
@@ -112,10 +112,20 @@ function seededRatio(seed) {
   return value - Math.floor(value);
 }
 
+function seededOffset(seed, span) {
+  return Math.round((seededRatio(Math.abs(hashText(seed))) * 2 - 1) * span);
+}
+
 function isSleepHour(hour, start, end) {
   if (start === end) return false;
   if (start < end) return hour >= start && hour < end;
   return hour >= start || hour < end;
+}
+
+function shortCatText(text, max = 8) {
+  const value = String(text || "").trim();
+  if (value.length <= max) return value;
+  return `${value.slice(0, max)}...`;
 }
 
 function catEnergyForSnapshot(snapshot, cat) {
@@ -525,7 +535,15 @@ class CatWorldScene extends Phaser.Scene {
     if (snapshot.activeFood?.active && snapshot.activeFood.targetCatId === cat.id) {
       return this.foodRestPosition(cat, index) || fallback;
     }
+    const goal = this.dailyGoalForCat(cat);
+    if (Number(goal.priority || 0) >= 76) {
+      return this.stableAgentGoalPosition(cat, index, goal) || fallback;
+    }
     return fallback;
+  }
+
+  dailyGoalForCat(cat = {}) {
+    return this.owner.snapshot?.dailyLogs?.[cat.id]?.agentState?.dailyGoal || {};
   }
 
   foodRestPosition(cat, index) {
@@ -547,6 +565,28 @@ class CatWorldScene extends Phaser.Scene {
     );
     if (!decorId) return null;
     return this.nearDecorPosition(decorId, index);
+  }
+
+  stableAgentGoalPosition(cat, index, goal = {}) {
+    const targetItemId = goal.targetItemId || "";
+    if (!targetItemId || isDamaged(this.owner.snapshot, targetItemId)) return null;
+    const seed = `${cat.id || "cat"}:${targetItemId}:${goal.key || "goal"}:${index}`;
+    if (goal.targetType === "toy" && owned(this.owner.snapshot.inventory, targetItemId) && ROOM_TOY_TARGETS[targetItemId]) {
+      const target = ROOM_TOY_TARGETS[targetItemId];
+      return {
+        x: clamp(target.x + seededOffset(`${seed}:x`, 38), 38, GAME_WIDTH - 132),
+        y: clamp(target.y + seededOffset(`${seed}:y`, 20), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+      };
+    }
+    if (owned(this.owner.snapshot.inventory, targetItemId) && DECOR_SPECS[targetItemId]) {
+      const spec = DECOR_SPECS[targetItemId];
+      const position = this.positionForDecor(targetItemId, spec);
+      return {
+        x: clamp(position.x + spec.width / 2 - 45 + seededOffset(`${seed}:x`, 40), 38, GAME_WIDTH - 132),
+        y: clamp(Math.max(FLOOR_TOP + 52, position.y + spec.height + 22) + seededOffset(`${seed}:y`, 18), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+      };
+    }
+    return null;
   }
 
   nearDecorPosition(decorId, index) {
@@ -615,6 +655,59 @@ class CatWorldScene extends Phaser.Scene {
         .setOrigin(0.5);
       container.add(warning);
     }
+    this.drawCatIntentBadge(container, cat, snapshot, behavior);
+  }
+
+  catIntentInfo(cat, snapshot, behavior = {}) {
+    const agent = snapshot?.dailyLogs?.[cat.id]?.agentState || {};
+    const goal = agent.dailyGoal || {};
+    const targetLabel = shortCatText(goal.targetLabel || "", 5);
+    if (behavior.sleeping || goal.key === "sleep") {
+      return { text: "睡觉", color: "#263047", background: "#fff8df" };
+    }
+    if (behavior.key === "resting" || goal.key === "rest") {
+      return { text: "休息", color: "#263047", background: "#d9f6ff" };
+    }
+    if (goal.key === "mischief-watch") {
+      return { text: targetLabel ? `盯着${targetLabel}` : "想捣蛋", color: "#fff8df", background: "#db2777" };
+    }
+    if (goal.key === "toy-play") {
+      return { text: targetLabel ? `想玩${targetLabel}` : "想玩", color: "#263047", background: "#fff07d" };
+    }
+    if (goal.key === "favorite-decor") {
+      return { text: targetLabel ? `喜欢${targetLabel}` : "去喜欢处", color: "#fff8df", background: "#1d7f5b" };
+    }
+    if (goal.key === "room-patrol" || behavior.key === "night-watch") {
+      return { text: behavior.key === "night-watch" ? "夜巡" : "巡逻", color: "#fff8df", background: "#236b55" };
+    }
+    if (behavior.key === "exploring") {
+      return { text: "探索", color: "#263047", background: "#87d9ff" };
+    }
+    if (behavior.key === "sulking") {
+      return { text: "闹情绪", color: "#fff8df", background: "#db2777" };
+    }
+    if (behavior.key === "slow") {
+      return { text: "慢走", color: "#263047", background: "#f6d48f" };
+    }
+    const label = String(agent.dailyMoodLabel || behavior.dailyLabel || "").replace(/^今天/, "");
+    return { text: shortCatText(label || "活动", 6), color: "#263047", background: "#fff8df" };
+  }
+
+  drawCatIntentBadge(container, cat, snapshot, behavior = {}) {
+    const intent = this.catIntentInfo(cat, snapshot, behavior);
+    if (!intent.text) return;
+    const badge = this.add
+      .text(45, -43, intent.text, {
+        color: intent.color,
+        backgroundColor: intent.background,
+        fontFamily: "Consolas, monospace",
+        fontSize: "10px",
+        fontStyle: "bold",
+        padding: { x: 5, y: 2 },
+      })
+      .setOrigin(0.5);
+    badge.setData("catIntentBadge", true);
+    container.add(badge);
   }
 
   drawStatusBars(graphics, catEnergy, moodScore) {
