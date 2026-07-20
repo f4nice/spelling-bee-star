@@ -477,10 +477,9 @@ class CatWorldScene extends Phaser.Scene {
     const cats = snapshot.cats.filter((cat) => ownedCatIds.has(cat.id));
     const visibleCats = cats.length ? cats : snapshot.cats.slice(0, 1);
     visibleCats.forEach((cat, index) => {
-      const x = 150 + (index % 6) * 176;
-      const y = FLOOR_BOTTOM - 68 - Math.floor(index / 5) * 56;
       const behavior = this.catBehavior(cat, index);
-      const container = this.add.container(x, y);
+      const position = this.initialCatPosition(snapshot, cat, index, behavior);
+      const container = this.add.container(position.x, position.y);
       container.setSize(100, 70);
       container.setData("kind", "cat");
       container.setData("id", cat.id);
@@ -504,6 +503,61 @@ class CatWorldScene extends Phaser.Scene {
       this.catContainers.set(cat.id, container);
       this.scheduleCatWalk(container, index, cat);
     });
+  }
+
+  defaultCatPosition(index) {
+    return {
+      x: 150 + (index % 6) * 176,
+      y: FLOOR_BOTTOM - 68 - Math.floor(index / 5) * 56,
+    };
+  }
+
+  initialCatPosition(snapshot, cat, index, behavior = {}) {
+    const fallback = this.defaultCatPosition(index);
+    if (behavior.sleeping) {
+      return this.restDecorPosition(cat, index, ["cloud-rug", "sun-window", "book-shelf"]) || fallback;
+    }
+    if (behavior.key === "resting") {
+      return this.foodRestPosition(cat, index)
+        || this.restDecorPosition(cat, index, ["cloud-rug", "sun-window", "study-desk"])
+        || fallback;
+    }
+    if (snapshot.activeFood?.active && snapshot.activeFood.targetCatId === cat.id) {
+      return this.foodRestPosition(cat, index) || fallback;
+    }
+    return fallback;
+  }
+
+  foodRestPosition(cat, index) {
+    const activeFood = this.owner.snapshot.activeFood || {};
+    if (!activeFood.active || Number(activeFood.remainingEnergy || 0) <= 0) return null;
+    if (activeFood.targetCatId && activeFood.targetCatId !== cat.id) return null;
+    const side = index % 2 === 0 ? -1 : 1;
+    return {
+      x: clamp(ACTIVE_FOOD_SPOT.x + 52 + side * (34 + (index % 3) * 12), 38, GAME_WIDTH - 132),
+      y: clamp(ACTIVE_FOOD_SPOT.y + 62 + (index % 3) * 8, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+    };
+  }
+
+  restDecorPosition(cat, index, fallbackDecorIds = []) {
+    const preferred = Array.isArray(cat.favoriteDecorIds) ? cat.favoriteDecorIds : [];
+    const decorIds = [...preferred, ...fallbackDecorIds].filter((decorId, decorIndex, all) => all.indexOf(decorId) === decorIndex);
+    const decorId = decorIds.find(
+      (candidate) => owned(this.owner.snapshot.inventory, candidate) && DECOR_SPECS[candidate] && !isDamaged(this.owner.snapshot, candidate),
+    );
+    if (!decorId) return null;
+    return this.nearDecorPosition(decorId, index);
+  }
+
+  nearDecorPosition(decorId, index) {
+    const spec = DECOR_SPECS[decorId];
+    if (!spec) return null;
+    const position = this.positionForDecor(decorId, spec);
+    const lane = index % 3;
+    return {
+      x: clamp(position.x + spec.width / 2 - 45 + (lane - 1) * 34, 38, GAME_WIDTH - 132),
+      y: clamp(Math.max(FLOOR_TOP + 52, position.y + spec.height + 24) + (lane - 1) * 8, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+    };
   }
 
   drawCatShape(container, cat, selected, snapshot, behavior = {}) {
