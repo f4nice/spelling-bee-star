@@ -8,7 +8,7 @@ const ROOM_BORDER = 12;
 const INK = 0x2c2f3a;
 const CREAM = 0xfff8df;
 const CAT_INTERACTION_DEPTH = 980;
-const CAT_HITBOX = { x: -34, y: -58, width: 184, height: 154 };
+const CAT_HITBOX = { x: -58, y: -74, width: 232, height: 184 };
 const ACTIVE_FOOD_SPOT = { x: GAME_WIDTH - 260, y: 408, width: 118, height: 46 };
 const ROOM_TOY_TARGETS = {
   "rolling-ball": { label: "滚滚球", x: 334, y: 414 },
@@ -499,6 +499,7 @@ class CatWorldScene extends Phaser.Scene {
         new Phaser.Geom.Rectangle(CAT_HITBOX.x, CAT_HITBOX.y, CAT_HITBOX.width, CAT_HITBOX.height),
         Phaser.Geom.Rectangle.Contains,
       );
+      if (container.input) container.input.cursor = "pointer";
       container.on("pointerdown", (_pointer, _localX, _localY, event) => {
         this.children.bringToTop(container);
         this.stopPointerEvent(event);
@@ -928,10 +929,10 @@ class CatWorldScene extends Phaser.Scene {
       if (!container.active) return;
       const foodTarget = this.foodTargetForCat(cat);
       const goalTarget = this.agentGoalTarget(cat);
-      const favoriteTarget = this.favoriteDecorTarget(cat);
+      const favoriteTarget = this.favoriteItemTarget(cat);
       const shouldVisitFood = Boolean(foodTarget && Phaser.Math.Between(1, 100) <= foodTarget.priority);
       const shouldVisitGoal = !shouldVisitFood && Boolean(goalTarget && Phaser.Math.Between(1, 100) <= goalTarget.priority);
-      const shouldVisitFavorite = !shouldVisitFood && !shouldVisitGoal && Boolean(favoriteTarget && Phaser.Math.Between(1, 100) <= 64);
+      const shouldVisitFavorite = !shouldVisitFood && !shouldVisitGoal && Boolean(favoriteTarget && Phaser.Math.Between(1, 100) <= favoriteTarget.priority);
       const nextX = shouldVisitFood
         ? foodTarget.x
         : shouldVisitGoal
@@ -965,7 +966,7 @@ class CatWorldScene extends Phaser.Scene {
               this.spawnGoalBubble(container, cat, goalTarget);
             }
           } else if (shouldVisitFavorite) {
-            this.spawnDecorPlayBubble(container, cat, favoriteTarget);
+            this.spawnFavoritePlayBubble(container, cat, favoriteTarget);
           }
           this.scheduleCatWalk(container, index, cat);
         },
@@ -1009,6 +1010,40 @@ class CatWorldScene extends Phaser.Scene {
     return null;
   }
 
+  favoriteItemTarget(cat = {}) {
+    const toyTarget = this.favoriteToyTarget(cat);
+    const decorTarget = this.favoriteDecorTarget(cat);
+    if (toyTarget && decorTarget) {
+      const agent = this.owner.snapshot?.dailyLogs?.[cat.id]?.agentState || {};
+      const curious = Number(agent.curiosity || 50);
+      return Phaser.Math.Between(1, 100) <= 48 + Math.round(curious / 5) ? toyTarget : decorTarget;
+    }
+    return toyTarget || decorTarget;
+  }
+
+  favoriteToyTarget(cat = {}) {
+    const favoriteToyIds = Array.isArray(cat.favoriteToyIds) ? cat.favoriteToyIds : [];
+    const ownedFavorites = favoriteToyIds.filter(
+      (toyId) => owned(this.owner.snapshot.inventory, toyId) && ROOM_TOY_TARGETS[toyId] && !isDamaged(this.owner.snapshot, toyId),
+    );
+    if (!ownedFavorites.length) return null;
+    const itemId = ownedFavorites[Phaser.Math.Between(0, ownedFavorites.length - 1)];
+    const target = ROOM_TOY_TARGETS[itemId];
+    const agent = this.owner.snapshot?.dailyLogs?.[cat.id]?.agentState || {};
+    const energy = catEnergyForSnapshot(this.owner.snapshot, cat);
+    const mood = catMoodForSnapshot(this.owner.snapshot, cat);
+    const curiosity = clamp(Number(agent.curiosity || 45), 0, 100);
+    const priority = clamp(42 + Math.round(curiosity / 4) + (mood < 56 ? 16 : 0) - (energy < 38 ? 18 : 0), 18, 78);
+    return {
+      itemId,
+      label: target.label,
+      kind: "favorite-toy",
+      priority,
+      x: clamp(target.x + Phaser.Math.Between(-48, 48), 38, GAME_WIDTH - 132),
+      y: clamp(target.y + Phaser.Math.Between(-24, 26), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+    };
+  }
+
   favoriteDecorTarget(cat = {}) {
     const favoriteDecorIds = Array.isArray(cat.favoriteDecorIds) ? cat.favoriteDecorIds : [];
     const ownedFavorites = favoriteDecorIds.filter(
@@ -1023,6 +1058,8 @@ class CatWorldScene extends Phaser.Scene {
     return {
       decorId,
       label: spec.label,
+      kind: "favorite-decor",
+      priority: 64,
       x: clamp(nearX, 38, GAME_WIDTH - 132),
       y: clamp(nearY, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
     };
@@ -1110,8 +1147,9 @@ class CatWorldScene extends Phaser.Scene {
     this.owner.handlers.onCatThought?.(cat, message);
   }
 
-  spawnDecorPlayBubble(container, cat, target) {
-    const message = `${cat?.label || "猫咪"} 跑到${target.label}旁边玩。`;
+  spawnFavoritePlayBubble(container, cat, target) {
+    const action = target.kind === "favorite-toy" ? "玩最喜欢的" : "跑到喜欢的";
+    const message = `${cat?.label || "猫咪"} ${action}${target.label}。`;
     const bubble = this.add
       .text(container.x + 36, container.y - 28, message, {
         color: "#263047",
