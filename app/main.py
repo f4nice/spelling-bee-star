@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-019"
-DEFAULT_PAGE_VERSION = "v20260721.19"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-020"
+DEFAULT_PAGE_VERSION = "v20260721.20"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -10494,7 +10494,7 @@ def cat_world_agent_daily_goal(
     room_layout: dict[str, dict[str, float]],
     favorite_active_ids: list[str],
 ) -> dict[str, Any]:
-    seed = f"{log.log_date.isoformat()}:{cat['id']}:goal"
+    seed = f"{cat_world_daily_agent_seed(log.log_date, cat['id'], log.phone)}:goal"
     mood_key = str(agent_state.get("dailyMoodKey") or "")
     temperament = str(traits.get("temperament") or "balanced")
     owned_toys = sorted(
@@ -10840,8 +10840,9 @@ def cat_world_apply_agent_damage_events(
                 changed = True
             continue
         agent_state["mischiefChecked"] = True
-        probability = cat_world_damage_probability(agent_state, traits, int(log.mood_score or 0))
-        seed = f"{today.isoformat()}:{cat_id}:damage"
+        adjusted_mood_score = clamp_cat_world_score(int(log.mood_score or 0) + int(agent_state.get("moodOffset") or 0))
+        probability = cat_world_damage_probability(agent_state, traits, adjusted_mood_score)
+        seed = f"{cat_world_daily_agent_seed(today, cat_id, state.phone)}:damage"
         if cat_world_stable_ratio(seed) <= probability:
             candidate_index = min(int(cat_world_stable_ratio(f"{seed}:item") * len(candidates)), len(candidates) - 1)
             item_id = candidates.pop(candidate_index)
