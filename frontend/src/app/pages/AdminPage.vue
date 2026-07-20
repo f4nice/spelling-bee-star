@@ -39,6 +39,15 @@ const pricingItemsByCategory = computed(() => {
   }
   return groups;
 });
+const activePricingCategory = ref(catWorldPricing.value.plans?.[0]?.category || "");
+const activePricingPlan = computed(
+  () => (catWorldPricing.value.plans || []).find((plan) => plan.category === activePricingCategory.value)
+    || catWorldPricing.value.plans?.[0]
+    || null,
+);
+const activePricingItems = computed(
+  () => (activePricingPlan.value ? pricingItemsByCategory.value[activePricingPlan.value.category] || [] : []),
+);
 const siteSummaryCards = computed(() => [
   { label: "登录方式", value: "手机号 + 密码", detail: "手机号仍是唯一登录标识，页面只展示昵称。" },
   { label: "图片 AI", value: `${props.data.imageAiOptions?.length || 0} 项`, detail: "在用户中心为不同用户选择默认图片 AI。" },
@@ -136,6 +145,10 @@ async function addUser() {
 
 function resetPrice(item) {
   priceDrafts.value = { ...priceDrafts.value, [item.id]: Number(item.defaultCost || item.cost || 0) };
+}
+
+function selectPricingCategory(plan) {
+  activePricingCategory.value = plan.category;
 }
 
 async function savePrice(item) {
@@ -353,19 +366,34 @@ async function savePrice(item) {
             </div>
           </div>
 
-          <div class="admin-pricing-plans">
-            <article v-for="plan in catWorldPricing.plans || []" :key="plan.category">
+          <div class="admin-pricing-plans" role="tablist" aria-label="猫咪商品分类">
+            <button
+              v-for="plan in catWorldPricing.plans || []"
+              :key="plan.category"
+              class="admin-pricing-plan-card"
+              :class="{ active: activePricingPlan?.category === plan.category }"
+              type="button"
+              role="tab"
+              :aria-selected="activePricingPlan?.category === plan.category"
+              @click="selectPricingCategory(plan)"
+            >
               <strong>{{ plan.label }}</strong>
               <span>{{ plan.range }} 积分</span>
               <p>{{ plan.strategy }}</p>
-            </article>
+            </button>
           </div>
 
-          <div class="admin-pricing-groups">
-            <section v-for="plan in catWorldPricing.plans || []" :key="`items-${plan.category}`" class="admin-pricing-group">
-              <h3>{{ plan.label }}</h3>
+          <div v-if="activePricingPlan" class="admin-pricing-groups">
+            <section class="admin-pricing-group admin-pricing-group-active">
+              <header class="admin-pricing-group-head">
+                <div>
+                  <h3>{{ activePricingPlan.label }}</h3>
+                  <p>{{ activePricingPlan.strategy }}</p>
+                </div>
+                <span>{{ activePricingItems.length }} 个商品</span>
+              </header>
               <div class="admin-pricing-list">
-                <article v-for="item in pricingItemsByCategory[plan.category] || []" :key="item.id" class="admin-price-row">
+                <article v-for="item in activePricingItems" :key="item.id" class="admin-price-row">
                   <div>
                     <strong>{{ item.label }}</strong>
                     <span>{{ item.englishName }} · 默认 {{ item.defaultCost }} 积分</span>
@@ -383,6 +411,7 @@ async function savePrice(item) {
               </div>
             </section>
           </div>
+          <p v-else class="empty-state compact-empty-state">还没有可配置的猫咪商品分类。</p>
         </section>
       </main>
     </div>

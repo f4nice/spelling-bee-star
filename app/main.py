@@ -87,8 +87,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260720-006"
-DEFAULT_PAGE_VERSION = "v20260720.6"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260720-007"
+DEFAULT_PAGE_VERSION = "v20260720.7"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -526,6 +526,14 @@ CAT_WORLD_DECOR_LABELS = {
     item["id"]: item["label"]
     for item in CAT_WORLD_SHOP
     if item["category"] == "decor"
+}
+CAT_WORLD_DECOR_DEFAULT_LAYOUT = {
+    "sun-window": {"x": 5, "y": 5},
+    "book-shelf": {"x": 73, "y": 8},
+    "cloud-rug": {"x": 17, "y": 77},
+    "study-desk": {"x": 43, "y": 62},
+    "reading-lamp": {"x": 62, "y": 47},
+    "word-gallery": {"x": 31, "y": 31},
 }
 CAT_WORLD_PRICING_PLANS = [
     {
@@ -3543,6 +3551,41 @@ async def vue_cat_world_decor_style_api(request: Request, db: Session = Depends(
     db.commit()
     db.refresh(state)
     return {"ok": True, "style": next_option, **serialize_cat_world_payload(db, state)}
+
+
+@app.post("/api/vue/cat-world/room-layout")
+async def vue_cat_world_room_layout_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="房间布局数据不是有效 JSON。") from exc
+    incoming = payload.get("layout") if isinstance(payload, dict) else None
+    if not isinstance(incoming, dict):
+        incoming = payload.get("positions") if isinstance(payload, dict) else None
+    if not isinstance(incoming, dict):
+        raise HTTPException(status_code=400, detail="请提交可保存的房间布局。")
+    state = get_or_create_cat_world_state(db, phone)
+    inventory = parse_cat_world_inventory(state.inventory)
+    current_layout = parse_cat_world_room_layout(state.room_layout, inventory)
+    owned_decor_ids = {
+        item_id
+        for item_id, count in inventory.items()
+        if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") == "decor"
+    }
+    saved_layout = {**current_layout}
+    for decor_id, position in incoming.items():
+        decor_key = str(decor_id)
+        if decor_key not in owned_decor_ids:
+            continue
+        normalized = normalize_cat_world_room_position(position)
+        if normalized:
+            saved_layout[decor_key] = normalized
+    state.room_layout = encode_cat_world_room_layout(saved_layout)
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return {"ok": True, **serialize_cat_world_payload(db, state)}
 
 
 @app.post("/api/vue/cat-world/select-cat")
@@ -9519,6 +9562,57 @@ def encode_cat_world_room_styles(styles: dict[str, str]) -> str:
     return json.dumps(clean, ensure_ascii=False, sort_keys=True)
 
 
+def normalize_cat_world_room_position(value: Any) -> dict[str, float] | None:
+    if not isinstance(value, dict):
+        return None
+    try:
+        x = float(value.get("x"))
+        y = float(value.get("y"))
+    except (TypeError, ValueError):
+        return None
+    return {
+        "x": round(min(max(x, 0.0), 92.0), 2),
+        "y": round(min(max(y, 0.0), 86.0), 2),
+    }
+
+
+def parse_cat_world_room_layout(raw: str | None, inventory: dict[str, int] | None = None) -> dict[str, dict[str, float]]:
+    try:
+        loaded = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        loaded = {}
+    if not isinstance(loaded, dict):
+        loaded = {}
+    inventory = inventory or {}
+    owned_decor_ids = [
+        item_id
+        for item_id, count in inventory.items()
+        if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") == "decor"
+    ]
+    layout: dict[str, dict[str, float]] = {}
+    for decor_id in owned_decor_ids:
+        default_position = CAT_WORLD_DECOR_DEFAULT_LAYOUT.get(decor_id, {"x": 8, "y": 58})
+        layout[decor_id] = {
+            "x": float(default_position["x"]),
+            "y": float(default_position["y"]),
+        }
+        custom_position = normalize_cat_world_room_position(loaded.get(decor_id))
+        if custom_position:
+            layout[decor_id] = custom_position
+    return layout
+
+
+def encode_cat_world_room_layout(layout: dict[str, Any]) -> str:
+    clean: dict[str, dict[str, float]] = {}
+    for decor_id, position in layout.items():
+        if decor_id not in CAT_WORLD_DECOR_LABELS:
+            continue
+        normalized = normalize_cat_world_room_position(position)
+        if normalized:
+            clean[decor_id] = normalized
+    return json.dumps(clean, ensure_ascii=False, sort_keys=True)
+
+
 def cat_world_owned_style_options(inventory: dict[str, int], decor_id: str) -> list[dict[str, str]]:
     options = [{"itemId": "default", "tone": "default", "label": "默认色"}]
     for item in CAT_WORLD_SHOP:
@@ -9540,6 +9634,7 @@ def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
         inventory=encode_cat_world_inventory({}),
         cats=encode_cat_world_cats([CAT_WORLD_DEFAULT_CAT_ID]),
         room_styles=encode_cat_world_room_styles({}),
+        room_layout=encode_cat_world_room_layout({}),
         selected_cat=CAT_WORLD_DEFAULT_CAT_ID,
     )
     db.add(state)
@@ -9608,6 +9703,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     inventory = parse_cat_world_inventory(state.inventory)
     owned_cats = parse_cat_world_cats(state.cats)
     room_styles = parse_cat_world_room_styles(state.room_styles, inventory)
+    room_layout = parse_cat_world_room_layout(state.room_layout, inventory)
     shop = cat_world_effective_shop(db)
     style_options = {
         decor_id: cat_world_owned_style_options(inventory, decor_id)
@@ -9630,6 +9726,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "inventory": inventory,
             "ownedCats": owned_cats,
             "roomStyles": room_styles,
+            "roomLayout": room_layout,
             "styleOptions": style_options,
             "selectedCat": state.selected_cat,
             "mood": cat_world_mood(state, inventory, owned_cats, available_energy),
@@ -9859,6 +9956,8 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE admin_user_settings ADD COLUMN login_password_hash TEXT NULL"))
         if "cat_world_states" in table_names and "room_styles" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN room_styles TEXT NULL"))
+        if "cat_world_states" in table_names and "room_layout" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN room_layout TEXT NULL"))
         if "wrong_words" in table_names and "wrong_date" not in wrong_columns:
             if dialect == "mysql":
                 connection.execute(text("ALTER TABLE wrong_words ADD COLUMN wrong_date DATE NULL"))
