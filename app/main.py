@@ -32,6 +32,7 @@ from app.config import get_settings
 from app.database import Base, SessionLocal, engine, get_db
 from app.models import (
     CacheEntry,
+    CatWorldShopSetting,
     CatWorldState,
     ChallengeDailyStat,
     ChallengeDailyWord,
@@ -86,8 +87,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260720-003"
-DEFAULT_PAGE_VERSION = "v20260720.3"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260720-004"
+DEFAULT_PAGE_VERSION = "v20260720.4"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -301,6 +302,121 @@ CAT_WORLD_SHOP = [
         "description": "把读过的书和好句收进猫咪房间。",
     },
     {
+        "id": "study-desk",
+        "category": "decor",
+        "label": "英文书桌",
+        "englishName": "Study Desk",
+        "cost": 320,
+        "mood": 10,
+        "description": "给猫咪准备一个可以陪你背单词的小书桌。",
+    },
+    {
+        "id": "reading-lamp",
+        "category": "decor",
+        "label": "阅读台灯",
+        "englishName": "Reading Lamp",
+        "cost": 180,
+        "mood": 6,
+        "description": "晚上练英文时，房间会亮起一盏温柔的小灯。",
+    },
+    {
+        "id": "word-gallery",
+        "category": "decor",
+        "label": "单词挂画",
+        "englishName": "Word Gallery",
+        "cost": 240,
+        "mood": 7,
+        "description": "把今天记住的词挂在墙上，房间会更像学习基地。",
+    },
+    {
+        "id": "rug-candy",
+        "category": "color",
+        "label": "地毯莓粉色",
+        "englishName": "Candy Rug",
+        "cost": 80,
+        "mood": 2,
+        "description": "给云朵地毯换成甜甜的莓粉色。",
+        "targetDecor": "cloud-rug",
+        "tone": "candy",
+    },
+    {
+        "id": "rug-sky",
+        "category": "color",
+        "label": "地毯天空蓝",
+        "englishName": "Sky Rug",
+        "cost": 80,
+        "mood": 2,
+        "description": "给云朵地毯换成清爽的天空蓝。",
+        "targetDecor": "cloud-rug",
+        "tone": "sky",
+    },
+    {
+        "id": "desk-cherry",
+        "category": "color",
+        "label": "书桌樱桃木",
+        "englishName": "Cherry Desk",
+        "cost": 110,
+        "mood": 2,
+        "description": "给英文书桌换成暖暖的樱桃木色。",
+        "targetDecor": "study-desk",
+        "tone": "cherry",
+    },
+    {
+        "id": "desk-mint",
+        "category": "color",
+        "label": "书桌薄荷绿",
+        "englishName": "Mint Desk",
+        "cost": 110,
+        "mood": 2,
+        "description": "给英文书桌换成清新的薄荷绿色。",
+        "targetDecor": "study-desk",
+        "tone": "mint",
+    },
+    {
+        "id": "shelf-lavender",
+        "category": "color",
+        "label": "书架薰衣草",
+        "englishName": "Lavender Shelf",
+        "cost": 120,
+        "mood": 2,
+        "description": "给英文书架换成柔和的薰衣草色。",
+        "targetDecor": "book-shelf",
+        "tone": "lavender",
+    },
+    {
+        "id": "window-sunset",
+        "category": "color",
+        "label": "窗台晚霞色",
+        "englishName": "Sunset Window",
+        "cost": 120,
+        "mood": 2,
+        "description": "给阳光窗台换成黄昏晚霞的颜色。",
+        "targetDecor": "sun-window",
+        "tone": "sunset",
+    },
+    {
+        "id": "lamp-moon",
+        "category": "color",
+        "label": "台灯月光色",
+        "englishName": "Moon Lamp",
+        "cost": 90,
+        "mood": 2,
+        "description": "给阅读台灯换成淡淡的月光色。",
+        "targetDecor": "reading-lamp",
+        "tone": "moon",
+    },
+    {
+        "id": "gallery-peach",
+        "category": "color",
+        "label": "挂画蜜桃色",
+        "englishName": "Peach Gallery",
+        "cost": 100,
+        "mood": 2,
+        "description": "给单词挂画换成柔和的蜜桃色。",
+        "targetDecor": "word-gallery",
+        "tone": "peach",
+    },
+    {
         "id": "british-shorthair",
         "category": "cat",
         "label": "英短银渐层",
@@ -406,6 +522,43 @@ CAT_WORLD_CATS = [
 ]
 CAT_WORLD_SHOP_BY_ID = {item["id"]: item for item in CAT_WORLD_SHOP}
 CAT_WORLD_CAT_BY_ID = {item["id"]: item for item in CAT_WORLD_CATS}
+CAT_WORLD_DECOR_LABELS = {
+    item["id"]: item["label"]
+    for item in CAT_WORLD_SHOP
+    if item["category"] == "decor"
+}
+CAT_WORLD_PRICING_PLANS = [
+    {
+        "category": "food",
+        "label": "猫粮",
+        "range": "60-120",
+        "strategy": "低价可重复购买，用来做每天学习后的即时奖励。",
+    },
+    {
+        "category": "toy",
+        "label": "玩具",
+        "range": "80-160",
+        "strategy": "中价一次性解锁，主要提高互动感和心情值。",
+    },
+    {
+        "category": "decor",
+        "label": "装修",
+        "range": "180-320",
+        "strategy": "中高价长期布置，书桌、书架、窗台会直接出现在房间。",
+    },
+    {
+        "category": "color",
+        "label": "配色",
+        "range": "80-120",
+        "strategy": "低价皮肤解锁，购买后点击已拥有家具切换颜色。",
+    },
+    {
+        "category": "cat",
+        "label": "名猫",
+        "range": "520-800",
+        "strategy": "高价长期目标，解锁后会增加房间里的猫咪数量。",
+    },
+]
 
 
 SCIENCE_LEVELS = [
@@ -3208,15 +3361,13 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
     except Exception as exc:
         raise HTTPException(status_code=400, detail="购买数据不是有效 JSON。") from exc
     item_id = str((payload or {}).get("itemId") or "").strip()
-    item = CAT_WORLD_SHOP_BY_ID.get(item_id)
+    shop_by_id = cat_world_effective_shop_by_id(db)
+    item = shop_by_id.get(item_id)
     if not item:
         raise HTTPException(status_code=404, detail="没有找到这个猫咪物品。")
 
     state = get_or_create_cat_world_state(db, phone)
     current = serialize_cat_world_payload(db, state)
-    if current["energy"]["available"] < int(item["cost"]):
-        raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点。")
-
     inventory = parse_cat_world_inventory(state.inventory)
     owned_cats = parse_cat_world_cats(state.cats)
     if item["category"] == "cat":
@@ -3226,10 +3377,40 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
             db.commit()
             db.refresh(state)
             return {"ok": True, **serialize_cat_world_payload(db, state)}
+        if current["energy"]["available"] < int(item["cost"]):
+            raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点。")
         owned_cats.append(item_id)
         state.cats = encode_cat_world_cats(owned_cats)
         state.selected_cat = item_id
+    elif item["category"] == "color":
+        target_decor = str(item.get("targetDecor") or "")
+        if not target_decor or inventory.get(target_decor, 0) <= 0:
+            target_label = item.get("targetDecorLabel") or "对应家具"
+            raise HTTPException(status_code=400, detail=f"请先购买{target_label}，再解锁它的颜色。")
+        room_styles = parse_cat_world_room_styles(state.room_styles, inventory)
+        if inventory.get(item_id, 0) > 0:
+            room_styles[target_decor] = str(item.get("tone") or "default")
+            state.room_styles = encode_cat_world_room_styles(room_styles)
+            db.add(state)
+            db.commit()
+            db.refresh(state)
+            return {"ok": True, **serialize_cat_world_payload(db, state)}
+        if current["energy"]["available"] < int(item["cost"]):
+            raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点。")
+        inventory[item_id] = 1
+        room_styles[target_decor] = str(item.get("tone") or "default")
+        state.inventory = encode_cat_world_inventory(inventory)
+        state.room_styles = encode_cat_world_room_styles(room_styles)
+    elif item["category"] in {"toy", "decor"}:
+        if inventory.get(item_id, 0) > 0:
+            return {"ok": True, **serialize_cat_world_payload(db, state)}
+        if current["energy"]["available"] < int(item["cost"]):
+            raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点。")
+        inventory[item_id] = 1
+        state.inventory = encode_cat_world_inventory(inventory)
     else:
+        if current["energy"]["available"] < int(item["cost"]):
+            raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点。")
         inventory[item_id] = inventory.get(item_id, 0) + 1
         state.inventory = encode_cat_world_inventory(inventory)
     state.energy_spent = max(int(state.energy_spent or 0), 0) + int(item["cost"])
@@ -3260,6 +3441,35 @@ async def vue_cat_world_play_api(request: Request, db: Session = Depends(get_db)
     db.commit()
     db.refresh(state)
     return {"ok": True, **serialize_cat_world_payload(db, state)}
+
+
+@app.post("/api/vue/cat-world/decor-style")
+async def vue_cat_world_decor_style_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="装修数据不是有效 JSON。") from exc
+    decor_id = str((payload or {}).get("decorId") or "").strip()
+    if decor_id not in CAT_WORLD_DECOR_LABELS:
+        raise HTTPException(status_code=404, detail="没有找到这个装修。")
+    state = get_or_create_cat_world_state(db, phone)
+    inventory = parse_cat_world_inventory(state.inventory)
+    if inventory.get(decor_id, 0) <= 0:
+        raise HTTPException(status_code=400, detail="请先购买这个装修。")
+    options = cat_world_owned_style_options(inventory, decor_id)
+    if len(options) <= 1:
+        raise HTTPException(status_code=400, detail="还没有解锁这个装修的颜色，先去配色商店购买。")
+    room_styles = parse_cat_world_room_styles(state.room_styles, inventory)
+    current_tone = room_styles.get(decor_id, "default")
+    current_index = next((index for index, option in enumerate(options) if option["tone"] == current_tone), 0)
+    next_option = options[(current_index + 1) % len(options)]
+    room_styles[decor_id] = next_option["tone"]
+    state.room_styles = encode_cat_world_room_styles(room_styles)
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return {"ok": True, "style": next_option, **serialize_cat_world_payload(db, state)}
 
 
 @app.post("/api/vue/cat-world/select-cat")
@@ -3302,6 +3512,7 @@ def vue_admin_api(request: Request, db: Session = Depends(get_db)):
             {"key": "female", "label": "女声"},
             {"key": "male", "label": "男声"},
         ],
+        "catWorldPricing": admin_cat_world_pricing_payload(db),
     }
 
 
@@ -3352,6 +3563,31 @@ async def vue_admin_save_user_api(request: Request, db: Session = Depends(get_db
         "user": serialize_admin_user(user),
         "users": [serialize_admin_user(item) for item in db.scalars(select(AdminUserSetting).order_by(AdminUserSetting.role.asc(), AdminUserSetting.updated_at.desc())).all()],
     }
+
+
+@app.post("/api/vue/admin/cat-world/pricing")
+async def vue_admin_cat_world_pricing_api(request: Request, db: Session = Depends(get_db)):
+    require_admin_panel_access(request, db)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="商品价格数据不是有效 JSON。") from exc
+    item_id = str((payload or {}).get("itemId") or "").strip()
+    if item_id not in CAT_WORLD_SHOP_BY_ID:
+        raise HTTPException(status_code=404, detail="没有找到这个猫咪商品。")
+    try:
+        cost = int((payload or {}).get("cost"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="请输入有效积分价格。") from exc
+    if cost < 0 or cost > 99999:
+        raise HTTPException(status_code=400, detail="商品价格需要在 0 到 99999 积分之间。")
+    setting = db.scalar(select(CatWorldShopSetting).where(CatWorldShopSetting.item_id == item_id))
+    if not setting:
+        setting = CatWorldShopSetting(item_id=item_id)
+        db.add(setting)
+    setting.cost = cost
+    db.commit()
+    return {"ok": True, "catWorldPricing": admin_cat_world_pricing_payload(db)}
 
 
 @app.get("/api/vue/shell")
@@ -9140,6 +9376,86 @@ def encode_cat_world_cats(cats: list[str]) -> str:
     return json.dumps(clean, ensure_ascii=False)
 
 
+def cat_world_shop_settings_map(db: Session) -> dict[str, int]:
+    settings_rows = db.scalars(select(CatWorldShopSetting)).all()
+    costs: dict[str, int] = {}
+    for row in settings_rows:
+        if row.item_id not in CAT_WORLD_SHOP_BY_ID:
+            continue
+        try:
+            costs[row.item_id] = max(int(row.cost or 0), 0)
+        except (TypeError, ValueError):
+            continue
+    return costs
+
+
+def cat_world_effective_shop(db: Session) -> list[dict[str, Any]]:
+    override_costs = cat_world_shop_settings_map(db)
+    items = []
+    for item in CAT_WORLD_SHOP:
+        effective = {**item, "defaultCost": int(item["cost"])}
+        if item["id"] in override_costs:
+            effective["cost"] = override_costs[item["id"]]
+            effective["hasCustomCost"] = effective["cost"] != effective["defaultCost"]
+        else:
+            effective["hasCustomCost"] = False
+        if effective.get("targetDecor"):
+            effective["targetDecorLabel"] = CAT_WORLD_DECOR_LABELS.get(str(effective["targetDecor"]), "")
+        items.append(effective)
+    return items
+
+
+def cat_world_effective_shop_by_id(db: Session) -> dict[str, dict[str, Any]]:
+    return {item["id"]: item for item in cat_world_effective_shop(db)}
+
+
+def parse_cat_world_room_styles(raw: str | None, inventory: dict[str, int] | None = None) -> dict[str, str]:
+    try:
+        loaded = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(loaded, dict):
+        return {}
+    inventory = inventory or {}
+    styles: dict[str, str] = {}
+    for decor_id, tone in loaded.items():
+        decor_key = str(decor_id)
+        tone_key = str(tone)
+        if decor_key not in CAT_WORLD_DECOR_LABELS:
+            continue
+        if tone_key == "default":
+            styles[decor_key] = tone_key
+            continue
+        if any(
+            item.get("category") == "color"
+            and item.get("targetDecor") == decor_key
+            and item.get("tone") == tone_key
+            and inventory.get(item["id"], 0) > 0
+            for item in CAT_WORLD_SHOP
+        ):
+            styles[decor_key] = tone_key
+    return styles
+
+
+def encode_cat_world_room_styles(styles: dict[str, str]) -> str:
+    clean = {
+        decor_id: tone
+        for decor_id, tone in styles.items()
+        if decor_id in CAT_WORLD_DECOR_LABELS and str(tone).strip()
+    }
+    return json.dumps(clean, ensure_ascii=False, sort_keys=True)
+
+
+def cat_world_owned_style_options(inventory: dict[str, int], decor_id: str) -> list[dict[str, str]]:
+    options = [{"itemId": "default", "tone": "default", "label": "默认色"}]
+    for item in CAT_WORLD_SHOP:
+        if item.get("category") != "color" or item.get("targetDecor") != decor_id:
+            continue
+        if inventory.get(item["id"], 0) > 0:
+            options.append({"itemId": item["id"], "tone": str(item.get("tone") or ""), "label": item["label"]})
+    return options
+
+
 def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
     normalized = normalize_login_phone(phone)
     state = db.scalar(select(CatWorldState).where(CatWorldState.phone == normalized))
@@ -9150,6 +9466,7 @@ def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
         energy_spent=0,
         inventory=encode_cat_world_inventory({}),
         cats=encode_cat_world_cats([CAT_WORLD_DEFAULT_CAT_ID]),
+        room_styles=encode_cat_world_room_styles({}),
         selected_cat=CAT_WORLD_DEFAULT_CAT_ID,
     )
     db.add(state)
@@ -9217,6 +9534,13 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     available_energy = max(earned_energy - spent_energy, 0)
     inventory = parse_cat_world_inventory(state.inventory)
     owned_cats = parse_cat_world_cats(state.cats)
+    room_styles = parse_cat_world_room_styles(state.room_styles, inventory)
+    shop = cat_world_effective_shop(db)
+    style_options = {
+        decor_id: cat_world_owned_style_options(inventory, decor_id)
+        for decor_id, count in inventory.items()
+        if count > 0 and CAT_WORLD_SHOP_BY_ID.get(decor_id, {}).get("category") == "decor"
+    }
     if state.selected_cat not in owned_cats:
         state.selected_cat = owned_cats[0]
         db.add(state)
@@ -9232,11 +9556,14 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         "state": {
             "inventory": inventory,
             "ownedCats": owned_cats,
+            "roomStyles": room_styles,
+            "styleOptions": style_options,
             "selectedCat": state.selected_cat,
             "mood": cat_world_mood(state, inventory, owned_cats, available_energy),
         },
         "cats": CAT_WORLD_CATS,
-        "shop": CAT_WORLD_SHOP,
+        "shop": shop,
+        "pricingPlans": CAT_WORLD_PRICING_PLANS,
     }
 
 
@@ -9245,6 +9572,13 @@ def require_cat_world_phone(request: Request) -> str:
     if not phone:
         raise HTTPException(status_code=401, detail="请先用手机号登录。")
     return phone
+
+
+def admin_cat_world_pricing_payload(db: Session) -> dict[str, Any]:
+    return {
+        "plans": CAT_WORLD_PRICING_PLANS,
+        "items": cat_world_effective_shop(db),
+    }
 
 
 def page_context(request: Request, db: Session, extra: dict | None = None) -> dict:
@@ -9416,6 +9750,11 @@ def ensure_schema_columns() -> None:
         if "admin_user_settings" in table_names
         else set()
     )
+    cat_world_state_columns = (
+        {column["name"] for column in inspector.get_columns("cat_world_states")}
+        if "cat_world_states" in table_names
+        else set()
+    )
 
     with engine.begin() as connection:
         for column in missing_boolean_columns:
@@ -9445,6 +9784,8 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE challenge_progress ADD COLUMN completed_rounds INTEGER NOT NULL DEFAULT 0"))
         if "admin_user_settings" in table_names and "login_password_hash" not in admin_user_columns:
             connection.execute(text("ALTER TABLE admin_user_settings ADD COLUMN login_password_hash TEXT NULL"))
+        if "cat_world_states" in table_names and "room_styles" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN room_styles TEXT NULL"))
         if "wrong_words" in table_names and "wrong_date" not in wrong_columns:
             if dialect == "mysql":
                 connection.execute(text("ALTER TABLE wrong_words ADD COLUMN wrong_date DATE NULL"))

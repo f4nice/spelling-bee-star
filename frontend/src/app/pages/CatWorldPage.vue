@@ -42,12 +42,15 @@ const categories = [
   { key: "food", label: "猫粮" },
   { key: "toy", label: "玩具" },
   { key: "decor", label: "装修" },
+  { key: "color", label: "配色" },
   { key: "cat", label: "名猫" },
 ];
 
 const energy = computed(() => payload.value.energy || {});
 const state = computed(() => payload.value.state || {});
 const inventory = computed(() => state.value.inventory || {});
+const roomStyles = computed(() => state.value.roomStyles || {});
+const styleOptions = computed(() => state.value.styleOptions || {});
 const ownedCats = computed(() => state.value.ownedCats || ["mimi"]);
 const cats = computed(() => payload.value.cats || []);
 const shop = computed(() => payload.value.shop || []);
@@ -101,12 +104,62 @@ function itemCount(itemId) {
   return Number(inventory.value[itemId] || 0);
 }
 
+function decorTone(decorId) {
+  return roomStyles.value[decorId] || "default";
+}
+
 function ownsCat(catId) {
   return ownedCats.value.includes(catId);
 }
 
 function canAfford(item) {
   return Number(energy.value.available || 0) >= Number(item.cost || 0);
+}
+
+function targetDecorOwned(item) {
+  return !item?.targetDecor || itemCount(item.targetDecor) > 0;
+}
+
+function colorApplied(item) {
+  return item?.category === "color" && decorTone(item.targetDecor) === item.tone;
+}
+
+function isOneTimeOwned(item) {
+  return ["toy", "decor", "color"].includes(item?.category) && itemCount(item.id) > 0;
+}
+
+function canPurchase(item) {
+  if (!item?.id) return false;
+  if (item.category === "cat") return ownsCat(item.id) ? state.value.selectedCat !== item.id : canAfford(item);
+  if (item.category === "color") return targetDecorOwned(item) && (itemCount(item.id) > 0 || canAfford(item));
+  if (["toy", "decor"].includes(item.category)) return !isOneTimeOwned(item) && canAfford(item);
+  return canAfford(item);
+}
+
+function purchaseHint(item) {
+  if (!item?.id) return "";
+  if (item.category === "color" && !targetDecorOwned(item)) {
+    return `需要先购买${item.targetDecorLabel || "对应家具"}`;
+  }
+  if (isOneTimeOwned(item) && item.category !== "color") {
+    return "已拥有，不会重复扣分";
+  }
+  if (item.category === "color" && itemCount(item.id) > 0) {
+    return colorApplied(item) ? "当前正在使用" : "已拥有，点击应用";
+  }
+  const remaining = Math.max(Number(energy.value.available || 0) - Number(item.cost || 0), 0);
+  return `将扣 ${item.cost} 积分 · 购买后剩余 ${remaining}`;
+}
+
+function purchaseButtonText(item) {
+  if (busyItemId.value === item.id) return "处理中...";
+  if (item.category === "cat" && ownsCat(item.id) && state.value.selectedCat !== item.id) return "设为主猫";
+  if (item.category === "cat" && ownsCat(item.id)) return "已选择";
+  if (item.category === "color" && !targetDecorOwned(item)) return "先买家具";
+  if (item.category === "color" && colorApplied(item)) return "已应用";
+  if (item.category === "color" && itemCount(item.id) > 0) return "应用配色";
+  if (isOneTimeOwned(item)) return "已拥有";
+  return canAfford(item) ? `扣 ${item.cost} 积分购买` : "能量不足";
 }
 
 function petCat(cat = selectedCat.value) {
@@ -165,6 +218,25 @@ async function play(item) {
   }
 }
 
+async function cycleDecorStyle(decorId) {
+  if (!decorId || busyItemId.value) return;
+  busyItemId.value = decorId;
+  notice.value = "";
+  try {
+    const nextPayload = await fetchJson(routeApiPaths.catWorldDecorStyle(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ decorId }),
+    });
+    replacePayload(nextPayload);
+    notice.value = nextPayload.style?.label ? `已切换为${nextPayload.style.label}。` : "装修颜色已切换。";
+  } catch (error) {
+    notice.value = error.message || "颜色切换失败，请先购买更多配色。";
+  } finally {
+    busyItemId.value = "";
+  }
+}
+
 async function selectCat(catId) {
   if (!catId || busyItemId.value) return;
   busyItemId.value = catId;
@@ -207,7 +279,7 @@ async function selectCat(catId) {
         <div class="cat-world-room-head">
           <div>
             <p class="section-kicker">Room</p>
-            <h2>像素猫小屋</h2>
+            <h2>像素猫活动室</h2>
           </div>
           <div class="cat-world-mood">
             <span>{{ mood.label || "安静陪读" }}</span>
@@ -222,11 +294,57 @@ async function selectCat(catId) {
         </div>
 
         <div class="cat-world-room" aria-label="猫咪房间场景">
-          <div v-if="inventory['sun-window']" class="cat-world-window"></div>
-          <div v-if="inventory['book-shelf']" class="cat-world-shelf">
+          <button
+            v-if="inventory['sun-window']"
+            type="button"
+            :class="['cat-world-window', 'cat-world-decor-item', `decor-tone-${decorTone('sun-window')}`]"
+            :aria-label="`切换阳光窗台颜色，已解锁 ${styleOptions['sun-window']?.length || 1} 款`"
+            @click="cycleDecorStyle('sun-window')"
+          ></button>
+          <button
+            v-if="inventory['book-shelf']"
+            type="button"
+            :class="['cat-world-shelf', 'cat-world-decor-item', `decor-tone-${decorTone('book-shelf')}`]"
+            :aria-label="`切换英文书架颜色，已解锁 ${styleOptions['book-shelf']?.length || 1} 款`"
+            @click="cycleDecorStyle('book-shelf')"
+          >
             <span></span><span></span><span></span><span></span>
-          </div>
-          <div v-if="inventory['cloud-rug']" class="cat-world-rug"></div>
+          </button>
+          <button
+            v-if="inventory['cloud-rug']"
+            type="button"
+            :class="['cat-world-rug', 'cat-world-decor-item', `decor-tone-${decorTone('cloud-rug')}`]"
+            :aria-label="`切换云朵地毯颜色，已解锁 ${styleOptions['cloud-rug']?.length || 1} 款`"
+            @click="cycleDecorStyle('cloud-rug')"
+          ></button>
+          <button
+            v-if="inventory['study-desk']"
+            type="button"
+            :class="['cat-world-desk', 'cat-world-decor-item', `decor-tone-${decorTone('study-desk')}`]"
+            :aria-label="`切换英文书桌颜色，已解锁 ${styleOptions['study-desk']?.length || 1} 款`"
+            @click="cycleDecorStyle('study-desk')"
+          >
+            <span class="cat-world-desk-book"></span>
+            <span class="cat-world-desk-cup"></span>
+          </button>
+          <button
+            v-if="inventory['reading-lamp']"
+            type="button"
+            :class="['cat-world-lamp', 'cat-world-decor-item', `decor-tone-${decorTone('reading-lamp')}`]"
+            :aria-label="`切换阅读台灯颜色，已解锁 ${styleOptions['reading-lamp']?.length || 1} 款`"
+            @click="cycleDecorStyle('reading-lamp')"
+          >
+            <span></span>
+          </button>
+          <button
+            v-if="inventory['word-gallery']"
+            type="button"
+            :class="['cat-world-gallery', 'cat-world-decor-item', `decor-tone-${decorTone('word-gallery')}`]"
+            :aria-label="`切换单词挂画颜色，已解锁 ${styleOptions['word-gallery']?.length || 1} 款`"
+            @click="cycleDecorStyle('word-gallery')"
+          >
+            <span>ABC</span>
+          </button>
           <div v-if="ownedFoodCount" class="cat-world-bowl"></div>
           <div v-if="inventory['scratch-board']" class="cat-world-scratcher"></div>
           <div v-if="inventory['feather-wand']" class="cat-world-wand"></div>
@@ -339,23 +457,25 @@ async function selectCat(catId) {
           </div>
           <div class="cat-world-shop-meta">
             <strong>{{ item.cost }} 能量</strong>
+            <em v-if="item.hasCustomCost">后台价 · 默认 {{ item.defaultCost }}</em>
             <span v-if="item.category === 'cat' && ownsCat(item.id)">
               {{ state.selectedCat === item.id ? "正在陪读" : "已拥有" }}
             </span>
+            <span v-else-if="item.category === 'color' && itemCount(item.id)">
+              {{ colorApplied(item) ? "已应用" : "已解锁" }}
+            </span>
+            <span v-else-if="item.category === 'color' && item.targetDecorLabel">用于 {{ item.targetDecorLabel }}</span>
             <span v-else-if="item.category !== 'cat' && itemCount(item.id)">已有 {{ itemCount(item.id) }}</span>
             <span v-else>心情 +{{ item.mood }}</span>
           </div>
+          <p class="cat-world-cost-preview">{{ purchaseHint(item) }}</p>
           <button
             class="primary-action-button"
             type="button"
-            :disabled="busyItemId === item.id || (item.category === 'cat' && state.selectedCat === item.id) || (item.category !== 'cat' && !canAfford(item)) || (item.category === 'cat' && !ownsCat(item.id) && !canAfford(item))"
+            :disabled="busyItemId === item.id || !canPurchase(item) || (item.category === 'color' && colorApplied(item))"
             @click="purchase(item)"
           >
-            <template v-if="busyItemId === item.id">处理中...</template>
-            <template v-else-if="item.category === 'cat' && ownsCat(item.id) && state.selectedCat !== item.id">设为主猫</template>
-            <template v-else-if="item.category === 'cat' && ownsCat(item.id)">已选择</template>
-            <template v-else-if="canAfford(item)">购买</template>
-            <template v-else>能量不足</template>
+            {{ purchaseButtonText(item) }}
           </button>
         </article>
       </div>

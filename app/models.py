@@ -196,10 +196,21 @@ class CatWorldState(Base):
     energy_spent: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     inventory: Mapped[str | None] = mapped_column(Text)
     cats: Mapped[str | None] = mapped_column(Text)
+    room_styles: Mapped[str | None] = mapped_column(Text)
     selected_cat: Mapped[str] = mapped_column(String(80), default="mimi", server_default="mimi", nullable=False)
     last_play_item: Mapped[str | None] = mapped_column(String(80))
     last_played_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class CatWorldShopSetting(Base):
+    __tablename__ = "cat_world_shop_settings"
+    __table_args__ = (UniqueConstraint("item_id", name="uq_cat_world_shop_settings_item"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    item_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    cost: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
