@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-013"
-DEFAULT_PAGE_VERSION = "v20260721.13"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-014"
+DEFAULT_PAGE_VERSION = "v20260721.14"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -10340,6 +10340,84 @@ def cat_world_current_behavior(
     }
 
 
+def cat_world_signed_change(value: int | float) -> str:
+    numeric = int(round(float(value or 0)))
+    if numeric > 0:
+        return f"+{numeric}"
+    return str(numeric)
+
+
+def cat_world_behavior_hourly_change(
+    log: CatWorldDailyLog,
+    traits: dict[str, Any],
+    inventory: dict[str, int],
+    favorite_count: int,
+    now: datetime,
+) -> dict[str, Any]:
+    mood_decay, energy_decay, relief = cat_world_decay_rates(traits, inventory, favorite_count)
+    cat = CAT_WORLD_CAT_BY_ID.get(log.cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
+    mood_score = clamp_cat_world_score(int(log.mood_score or 0) + int(agent_state.get("moodOffset") or 0))
+    energy_score = clamp_cat_world_score(int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0))
+    behavior = cat_world_current_behavior(agent_state, traits, mood_score, energy_score, now)
+    mood_key = str(agent_state.get("dailyMoodKey") or "")
+
+    mood_delta = -mood_decay
+    energy_delta = -energy_decay
+    label = "自然消耗"
+    reason = "自由活动"
+
+    if behavior["key"] == "sleeping":
+        energy_delta = max(1, round(3 / max(float(traits["energyDrain"]), 0.5)))
+        mood_delta = 1 if mood_key not in {"quiet", "grumpy"} else 0
+        label = "睡觉恢复"
+        reason = "按自己的作息睡觉"
+    elif behavior["key"] == "resting":
+        energy_delta = -max(1, round(energy_decay * 0.35))
+        mood_delta = -max(1, round(mood_decay * 0.45))
+        label = "原地休息"
+        reason = "体力低，减少走动"
+    elif behavior["key"] == "night-watch":
+        energy_delta -= max(1, round(float(traits["movement"])))
+        mood_delta = min(mood_delta + 1, 0)
+        label = "夜间巡逻"
+        reason = "夜猫按性格巡房间"
+    elif behavior["key"] == "exploring":
+        energy_delta -= 1
+        label = "探索消耗"
+        reason = "今天想探索"
+    elif behavior["key"] == "slow":
+        energy_delta = -max(1, round(energy_decay * 0.65))
+        mood_delta = -max(1, round(mood_decay * 0.7))
+        label = "慢慢散步"
+        reason = "今天想慢慢来"
+    elif behavior["key"] == "sulking":
+        mood_delta -= 2
+        label = "心情低落"
+        reason = "心情差，消耗更明显"
+
+    if mood_key == "bright" and mood_delta < 2:
+        mood_delta += 1
+    elif mood_key == "grumpy":
+        mood_delta -= 1
+
+    if favorite_count > 0 and mood_delta < 0:
+        mood_delta = min(0, mood_delta + min(favorite_count, 2))
+
+    return {
+        "moodDelta": int(mood_delta),
+        "energyDelta": int(energy_delta),
+        "hourlyMood": int(mood_delta),
+        "hourlyEnergy": int(energy_delta),
+        "baseMoodDecay": int(mood_decay),
+        "baseEnergyDecay": int(energy_decay),
+        "relief": int(relief),
+        "label": label,
+        "reason": reason,
+        "behavior": behavior,
+    }
+
+
 def cat_world_pick_stable_item(seed: str, item_ids: list[str]) -> str:
     if not item_ids:
         return ""
@@ -10564,28 +10642,30 @@ def apply_cat_world_hourly_decay(
 ) -> bool:
     last_decay_at = log.last_decay_at or datetime.combine(log.log_date, datetime.min.time())
     elapsed_hours = int(max((now - last_decay_at).total_seconds(), 0) // 3600)
-    mood_decay, energy_decay, relief = cat_world_decay_rates(traits, inventory, favorite_count)
+    hourly_change = cat_world_behavior_hourly_change(log, traits, inventory, favorite_count, now)
     log.favorite_decor_ids = ",".join(cat_world_cat_favorite_decor_ids(log.cat_id))
     favorite_bonus = favorite_count * 8
-    relief_bonus = relief
+    relief_bonus = int(hourly_change["relief"])
     log.decor_bonus = max(favorite_bonus, relief_bonus)
     if elapsed_hours <= 0:
-        log.hourly_mood_decay = mood_decay
-        log.hourly_energy_decay = energy_decay
+        log.hourly_mood_decay = int(hourly_change["hourlyMood"])
+        log.hourly_energy_decay = int(hourly_change["hourlyEnergy"])
         return False
-    log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) - mood_decay * elapsed_hours)
-    log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) - energy_decay * elapsed_hours)
-    log.hourly_mood_decay = mood_decay
-    log.hourly_energy_decay = energy_decay
+    mood_delta = int(hourly_change["moodDelta"]) * elapsed_hours
+    energy_delta = int(hourly_change["energyDelta"]) * elapsed_hours
+    log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_delta)
+    log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) + energy_delta)
+    log.hourly_mood_decay = int(hourly_change["hourlyMood"])
+    log.hourly_energy_decay = int(hourly_change["hourlyEnergy"])
     log.last_decay_at = now
     cat = CAT_WORLD_CAT_BY_ID.get(log.cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     append_cat_world_agent_event(
         log,
         cat,
         traits,
-        "hourly-decay",
-        "自然消耗",
-        f"{cat['label']}过了 {elapsed_hours} 小时，体力 -{energy_decay * elapsed_hours}，心情 -{mood_decay * elapsed_hours}。",
+        "hourly-change",
+        str(hourly_change["label"]),
+        f"{cat['label']}过了 {elapsed_hours} 小时，{hourly_change['reason']}，体力 {cat_world_signed_change(energy_delta)}，心情 {cat_world_signed_change(mood_delta)}。",
         now,
     )
     return True

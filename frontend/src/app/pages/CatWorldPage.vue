@@ -216,7 +216,7 @@ const focusedCatDailyNote = computed(() => {
   const agent = focusedAgentState.value || {};
   const favoriteDecorLabels = focusedCat.value.favoriteDecorLabels || [];
   const damaged = agent.mischiefLabel ? ` · 今天弄坏过 ${agent.mischiefLabel}` : "";
-  return `每小时 体力 -${log.hourlyEnergyDecay || 0} / 心情 -${log.hourlyMoodDecay || 0} · 独立状态 ${agent.dailyMoodLabel || "稳定"} · 喜欢 ${favoriteDecorLabels.join("、") || "安静角落"}${damaged}`;
+  return `每小时 体力 ${signedHourlyValue(log.hourlyEnergyDecay)} / 心情 ${signedHourlyValue(log.hourlyMoodDecay)} · 独立状态 ${agent.dailyMoodLabel || "稳定"} · 喜欢 ${favoriteDecorLabels.join("、") || "安静角落"}${damaged}`;
 });
 const focusedAgentEvents = computed(() => {
   const events = focusedAgentState.value.events;
@@ -238,6 +238,12 @@ function decorLabel(decorId) {
   return shopById.value[decorId]?.label
     || (payload.value.decorFavorites || []).find((favorite) => favorite.decorId === decorId)?.decorLabel
     || decorId;
+}
+
+function signedHourlyValue(value) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric) || numeric === 0) return "0";
+  return numeric > 0 ? `+${numeric}` : `${numeric}`;
 }
 
 const catAgentCards = computed(() =>
@@ -283,7 +289,7 @@ const catAgentDiaries = computed(() =>
         goalLabel: dailyGoal.label || "自由散步",
         goalMessage: dailyGoal.message || "",
         damageRiskLabel: dailyGoal.damageRiskLabel || "很低",
-        decayLabel: `体力 -${log.hourlyEnergyDecay || 0}/h · 心情 -${log.hourlyMoodDecay || 0}/h`,
+        decayLabel: `体力 ${signedHourlyValue(log.hourlyEnergyDecay)}/h · 心情 ${signedHourlyValue(log.hourlyMoodDecay)}/h`,
         activeFavoriteLabel: activeFavoriteLabels.length ? activeFavoriteLabels.join("、") : "喜欢的家具还没摆出来",
         countsLabel: `食物 ${log.foodCount || 0} · 玩具 ${log.toyCount || 0} · 摸摸 ${agent.petCount || 0}`,
         damageLabel: damagedItem ? `今天弄坏过 ${damagedItem}` : "今天没有破坏记录",
