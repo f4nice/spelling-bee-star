@@ -268,6 +268,7 @@ const catAgentDiaries = computed(() =>
       const traits = cat.traits || {};
       const agent = cat.agent || {};
       const log = cat.log || {};
+      const dailyGoal = agent.dailyGoal || {};
       const activeFavoriteLabels = (log.favoriteActiveDecorIds || []).map(decorLabel);
       const sleepStart = formatCatHour(traits.sleepStart ?? 23);
       const sleepEnd = formatCatHour(traits.sleepEnd ?? 7);
@@ -279,6 +280,9 @@ const catAgentDiaries = computed(() =>
         mischief: clampCatScore(agent.mischief ?? 0),
         sleepLabel: traits.nightOwl ? `夜猫子 · ${sleepStart}-${sleepEnd}` : `${sleepStart}-${sleepEnd}`,
         routineLabel: agent.routine || traits.routine || "观察房间里的学习节奏",
+        goalLabel: dailyGoal.label || "自由散步",
+        goalMessage: dailyGoal.message || "",
+        damageRiskLabel: dailyGoal.damageRiskLabel || "很低",
         decayLabel: `体力 -${log.hourlyEnergyDecay || 0}/h · 心情 -${log.hourlyMoodDecay || 0}/h`,
         activeFavoriteLabel: activeFavoriteLabels.length ? activeFavoriteLabels.join("、") : "喜欢的家具还没摆出来",
         countsLabel: `食物 ${log.foodCount || 0} · 玩具 ${log.toyCount || 0} · 摸摸 ${agent.petCount || 0}`,
@@ -958,6 +962,7 @@ async function selectCat(catId) {
             <strong>{{ cat.dailyMoodLabel }}</strong>
           </header>
           <p>{{ cat.behaviorLabel }} · {{ cat.routineLabel }}</p>
+          <p class="cat-world-agent-goal">{{ cat.goalLabel }} · {{ cat.goalMessage }}</p>
           <div class="cat-world-agent-meter-row" aria-label="猫咪 agent 参数">
             <span class="cat-world-agent-meter energy">
               体力
@@ -996,6 +1001,10 @@ async function selectCat(catId) {
             <div>
               <dt>互动</dt>
               <dd>{{ cat.countsLabel }}</dd>
+            </div>
+            <div>
+              <dt>破坏风险</dt>
+              <dd>{{ cat.damageRiskLabel }}</dd>
             </div>
           </dl>
           <small>{{ cat.damageLabel }}</small>

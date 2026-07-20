@@ -8,8 +8,13 @@ const ROOM_BORDER = 12;
 const INK = 0x2c2f3a;
 const CREAM = 0xfff8df;
 const CAT_INTERACTION_DEPTH = 980;
-const CAT_HITBOX = { x: -20, y: -42, width: 150, height: 126 };
+const CAT_HITBOX = { x: -34, y: -58, width: 184, height: 154 };
 const ACTIVE_FOOD_SPOT = { x: GAME_WIDTH - 260, y: 408, width: 118, height: 46 };
+const ROOM_TOY_TARGETS = {
+  "rolling-ball": { label: "滚滚球", x: 334, y: 414 },
+  "scratch-board": { label: "猫抓板", x: 164, y: 418 },
+  "feather-wand": { label: "逗猫棒", x: GAME_WIDTH - 120, y: 320 },
+};
 
 const DECOR_SPECS = {
   "sun-window": { label: "阳光窗台", width: 150, height: 88, defaultX: 146, defaultY: 34 },
@@ -656,16 +661,30 @@ class CatWorldScene extends Phaser.Scene {
       }
       return;
     }
-    const delay = Math.round((Phaser.Math.Between(2800, 6200) + index * 520) / Math.max(movement, 0.7));
+    const delay = Math.round((Phaser.Math.Between(4200, 8400) + index * 680) / Math.max(movement, 0.62));
     this.time.delayedCall(delay, () => {
       if (!container.active) return;
       const foodTarget = this.foodTargetForCat(cat);
+      const goalTarget = this.agentGoalTarget(cat);
       const favoriteTarget = this.favoriteDecorTarget(cat);
       const shouldVisitFood = Boolean(foodTarget && Phaser.Math.Between(1, 100) <= foodTarget.priority);
-      const shouldVisitFavorite = !shouldVisitFood && Boolean(favoriteTarget && Phaser.Math.Between(1, 100) <= 72);
-      const nextX = shouldVisitFood ? foodTarget.x : shouldVisitFavorite ? favoriteTarget.x : Phaser.Math.Between(38, GAME_WIDTH - 132);
-      const nextY = shouldVisitFood ? foodTarget.y : shouldVisitFavorite ? favoriteTarget.y : Phaser.Math.Between(FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
-      const duration = Math.round(Phaser.Math.Between(15000, 24000) / movement);
+      const shouldVisitGoal = !shouldVisitFood && Boolean(goalTarget && Phaser.Math.Between(1, 100) <= goalTarget.priority);
+      const shouldVisitFavorite = !shouldVisitFood && !shouldVisitGoal && Boolean(favoriteTarget && Phaser.Math.Between(1, 100) <= 64);
+      const nextX = shouldVisitFood
+        ? foodTarget.x
+        : shouldVisitGoal
+          ? goalTarget.x
+          : shouldVisitFavorite
+            ? favoriteTarget.x
+            : Phaser.Math.Between(38, GAME_WIDTH - 132);
+      const nextY = shouldVisitFood
+        ? foodTarget.y
+        : shouldVisitGoal
+          ? goalTarget.y
+          : shouldVisitFavorite
+            ? favoriteTarget.y
+            : Phaser.Math.Between(FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
+      const duration = Math.round(Phaser.Math.Between(26000, 42000) / movement);
       this.turnCat(container, nextX);
       this.tweens.add({
         targets: container,
@@ -677,6 +696,8 @@ class CatWorldScene extends Phaser.Scene {
         onComplete: () => {
           if (shouldVisitFood) {
             this.spawnFoodPlayBubble(container, cat, foodTarget);
+          } else if (shouldVisitGoal) {
+            this.spawnGoalBubble(container, cat, goalTarget);
           } else if (shouldVisitFavorite) {
             this.spawnDecorPlayBubble(container, cat, favoriteTarget);
           }
@@ -684,6 +705,39 @@ class CatWorldScene extends Phaser.Scene {
         },
       });
     });
+  }
+
+  agentGoalTarget(cat = {}) {
+    const log = this.owner.snapshot?.dailyLogs?.[cat.id] || {};
+    const goal = log.agentState?.dailyGoal || {};
+    const targetItemId = goal.targetItemId || "";
+    if (!targetItemId || isDamaged(this.owner.snapshot, targetItemId)) return null;
+    if (goal.targetType === "toy" && owned(this.owner.snapshot.inventory, targetItemId) && ROOM_TOY_TARGETS[targetItemId]) {
+      const target = ROOM_TOY_TARGETS[targetItemId];
+      return {
+        itemId: targetItemId,
+        label: goal.targetLabel || target.label,
+        message: goal.message || "",
+        kind: "toy",
+        priority: Number(goal.priority || 72),
+        x: clamp(target.x + Phaser.Math.Between(-42, 42), 38, GAME_WIDTH - 132),
+        y: clamp(target.y + Phaser.Math.Between(-22, 24), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+      };
+    }
+    if (owned(this.owner.snapshot.inventory, targetItemId) && DECOR_SPECS[targetItemId]) {
+      const spec = DECOR_SPECS[targetItemId];
+      const position = this.positionForDecor(targetItemId, spec);
+      return {
+        itemId: targetItemId,
+        label: goal.targetLabel || spec.label,
+        message: goal.message || "",
+        kind: goal.targetType || "decor",
+        priority: Number(goal.priority || 72),
+        x: clamp(position.x + spec.width / 2 - 45 + Phaser.Math.Between(-44, 44), 38, GAME_WIDTH - 132),
+        y: clamp(Math.max(FLOOR_TOP + 52, position.y + spec.height + 18) + Phaser.Math.Between(-18, 24), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+      };
+    }
+    return null;
   }
 
   favoriteDecorTarget(cat = {}) {
@@ -813,6 +867,43 @@ class CatWorldScene extends Phaser.Scene {
       y: bubble.y - 22,
       alpha: 0,
       duration: 1800,
+      ease: "Cubic.easeOut",
+      onComplete: () => bubble.destroy(),
+    });
+    this.owner.handlers.onCatThought?.(cat, message);
+  }
+
+  spawnGoalBubble(container, cat, target) {
+    const fallback = target.kind === "toy"
+      ? `${cat?.label || "猫咪"} 今天想玩${target.label}。`
+      : `${cat?.label || "猫咪"} 今天想去${target.label}附近。`;
+    const message = target.message || fallback;
+    const bubble = this.add
+      .text(container.x + 36, container.y - 28, message, {
+        color: "#263047",
+        backgroundColor: "#fff8df",
+        fontFamily: "Consolas, monospace",
+        fontSize: "12px",
+        fontStyle: "bold",
+        padding: { x: 8, y: 5 },
+        wordWrap: { width: 260 },
+        align: "center",
+      })
+      .setOrigin(0.5)
+      .setDepth(CAT_INTERACTION_DEPTH + 145);
+    this.tweens.add({
+      targets: container,
+      y: container.y - (target.kind === "mischief" ? 4 : 8),
+      yoyo: true,
+      repeat: target.kind === "toy" ? 3 : 1,
+      duration: target.kind === "toy" ? 220 : 280,
+      ease: "Sine.easeInOut",
+    });
+    this.tweens.add({
+      targets: bubble,
+      y: bubble.y - 22,
+      alpha: 0,
+      duration: 2200,
       ease: "Cubic.easeOut",
       onComplete: () => bubble.destroy(),
     });

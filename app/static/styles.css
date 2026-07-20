@@ -12319,6 +12319,12 @@ select {
   line-height: 1.4;
 }
 
+.cat-world-agent-card .cat-world-agent-goal {
+  padding: 7px;
+  border: 2px solid rgba(44, 47, 58, 0.45);
+  background: rgba(255, 191, 215, 0.22);
+}
+
 .cat-world-agent-meter-row {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -12392,6 +12398,12 @@ select {
 
 .cat-world-agent-card.active .cat-world-agent-facts div,
 .cat-world-agent-card:not(:disabled):hover .cat-world-agent-facts div {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.cat-world-agent-card.active .cat-world-agent-goal,
+.cat-world-agent-card:not(:disabled):hover .cat-world-agent-goal {
+  border-color: rgba(255, 255, 255, 0.38);
   background: rgba(255, 255, 255, 0.14);
 }
 
@@ -12686,6 +12698,8 @@ select {
 .cat-world-tool-tabs button.active,
 .cat-world-tool-tabs button:not(:disabled):hover,
 .cat-world-owned-item:not(:disabled):hover,
+.cat-world-agent-card.active,
+.cat-world-agent-card:not(:disabled):hover,
 .cat-world-cat-chip.active,
 .cat-world-cat-chip:not(:disabled):hover,
 .cat-world-tabs button.active,
@@ -12719,6 +12733,8 @@ select {
 .cat-world-tool-tabs button.active :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
 .cat-world-tool-tabs button:not(:disabled):hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
 .cat-world-owned-item:not(:disabled):hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.cat-world-agent-card.active :where(span, strong, small, em, b, i, p, h1, h2, h3, h4, dt, dd),
+.cat-world-agent-card:not(:disabled):hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4, dt, dd),
 .cat-world-cat-chip.active :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
 .cat-world-cat-chip:not(:disabled):hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
 .cat-world-tabs button.active :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),

@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-010"
-DEFAULT_PAGE_VERSION = "v20260721.10"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-011"
+DEFAULT_PAGE_VERSION = "v20260721.11"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -10342,10 +10342,159 @@ def cat_world_current_behavior(
     }
 
 
+def cat_world_pick_stable_item(seed: str, item_ids: list[str]) -> str:
+    if not item_ids:
+        return ""
+    item_index = min(int(cat_world_stable_ratio(seed) * len(item_ids)), len(item_ids) - 1)
+    return item_ids[item_index]
+
+
+def cat_world_damage_risk_label(probability: float) -> str:
+    if probability >= 0.24:
+        return "偏高"
+    if probability >= 0.12:
+        return "中等"
+    if probability >= 0.055:
+        return "偏低"
+    return "很低"
+
+
+def cat_world_agent_daily_goal(
+    log: CatWorldDailyLog,
+    cat: dict[str, Any],
+    traits: dict[str, Any],
+    agent_state: dict[str, Any],
+    behavior: dict[str, Any],
+    mood_score: int,
+    energy_score: int,
+    inventory: dict[str, int],
+    room_layout: dict[str, dict[str, float]],
+    favorite_active_ids: list[str],
+) -> dict[str, Any]:
+    seed = f"{log.log_date.isoformat()}:{cat['id']}:goal"
+    mood_key = str(agent_state.get("dailyMoodKey") or "")
+    temperament = str(traits.get("temperament") or "balanced")
+    owned_toys = sorted(
+        item_id
+        for item_id, count in inventory.items()
+        if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") == "toy"
+    )
+    owned_decor = sorted(
+        item_id
+        for item_id, count in inventory.items()
+        if count > 0 and item_id in room_layout and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") == "decor"
+    )
+    active_favorites = [item_id for item_id in favorite_active_ids if item_id in owned_decor]
+    damage_candidates = sorted(set(owned_toys + owned_decor))
+    damage_probability = cat_world_damage_probability(agent_state, traits, mood_score)
+    risk_label = cat_world_damage_risk_label(damage_probability)
+
+    def goal(
+        key: str,
+        label: str,
+        message: str,
+        target_type: str = "walk",
+        target_item_id: str = "",
+        priority: int = 62,
+    ) -> dict[str, Any]:
+        item = CAT_WORLD_SHOP_BY_ID.get(target_item_id, {})
+        return {
+            "key": key,
+            "label": label,
+            "message": message,
+            "targetType": target_type,
+            "targetItemId": target_item_id,
+            "targetLabel": item.get("label") or "",
+            "priority": int(min(max(priority, 0), 100)),
+            "damageRisk": round(damage_probability, 3),
+            "damageRiskLabel": risk_label,
+        }
+
+    if behavior.get("key") == "sleeping":
+        return goal(
+            "sleep",
+            "睡觉补能",
+            f"{cat['label']}现在按自己的作息睡觉，醒来后会继续巡房间。",
+            "rest",
+            "",
+            8,
+        )
+    if energy_score < int(traits.get("restThreshold") or 34):
+        return goal(
+            "rest",
+            "原地休息",
+            f"{cat['label']}体力偏低，今天会少走动，优先等食物补能。",
+            "rest",
+            "",
+            12,
+        )
+
+    if (mood_key == "grumpy" or mood_score < 38) and damage_candidates:
+        target_item_id = cat_world_pick_stable_item(f"{seed}:mischief", damage_candidates)
+        return goal(
+            "mischief-watch",
+            "盯着道具",
+            f"{cat['label']}今天心情差，正在盯着{CAT_WORLD_SHOP_BY_ID[target_item_id]['label']}，最好陪玩或喂食安抚一下。",
+            CAT_WORLD_SHOP_BY_ID[target_item_id].get("category") or "decor",
+            target_item_id,
+            86,
+        )
+
+    wants_toy = (
+        mood_key in {"bright", "curious"}
+        or temperament in {"chatty", "guardian"}
+        or behavior.get("key") in {"exploring", "night-watch"}
+    )
+    if wants_toy and owned_toys:
+        target_item_id = cat_world_pick_stable_item(f"{seed}:toy", owned_toys)
+        return goal(
+            "toy-play",
+            "想玩玩具",
+            f"{cat['label']}今天想玩{CAT_WORLD_SHOP_BY_ID[target_item_id]['label']}，靠近后会在旁边转一会儿。",
+            "toy",
+            target_item_id,
+            82,
+        )
+
+    if active_favorites:
+        target_item_id = cat_world_pick_stable_item(f"{seed}:favorite", active_favorites)
+        return goal(
+            "favorite-decor",
+            "去喜欢的家具",
+            f"{cat['label']}今天会优先跑到喜欢的{CAT_WORLD_SHOP_BY_ID[target_item_id]['label']}附近待着。",
+            "decor",
+            target_item_id,
+            78,
+        )
+
+    if owned_decor:
+        target_item_id = cat_world_pick_stable_item(f"{seed}:decor", owned_decor)
+        return goal(
+            "room-patrol",
+            "巡逻房间",
+            f"{cat['label']}今天会在{CAT_WORLD_SHOP_BY_ID[target_item_id]['label']}附近巡逻。",
+            "decor",
+            target_item_id,
+            66,
+        )
+
+    return goal(
+        "free-walk",
+        "自由散步",
+        f"{cat['label']}今天没有特别目标，会在活动室里慢慢走动。",
+        "walk",
+        "",
+        48,
+    )
+
+
 def cat_world_agent_payload(
     log: CatWorldDailyLog,
     cat: dict[str, Any],
     traits: dict[str, Any],
+    inventory: dict[str, int] | None = None,
+    room_layout: dict[str, dict[str, float]] | None = None,
+    favorite_active_ids: list[str] | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     agent_state, changed = ensure_cat_world_agent_state(log, cat, traits)
@@ -10353,9 +10502,23 @@ def cat_world_agent_payload(
         log.agent_state = encode_cat_world_agent_state(agent_state)
     mood_score = clamp_cat_world_score(int(log.mood_score or 0) + int(agent_state.get("moodOffset") or 0))
     energy_score = clamp_cat_world_score(int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0))
+    behavior = cat_world_current_behavior(agent_state, traits, mood_score, energy_score, now)
+    daily_goal = cat_world_agent_daily_goal(
+        log,
+        cat,
+        traits,
+        agent_state,
+        behavior,
+        mood_score,
+        energy_score,
+        inventory or {},
+        room_layout or {},
+        favorite_active_ids or [],
+    )
     return {
         **agent_state,
-        "currentBehavior": cat_world_current_behavior(agent_state, traits, mood_score, energy_score, now),
+        "currentBehavior": behavior,
+        "dailyGoal": daily_goal,
         "adjustedMoodScore": mood_score,
         "adjustedEnergyScore": energy_score,
         "damagedItemId": log.damaged_item_id or agent_state.get("mischiefItemId") or "",
@@ -10433,10 +10596,12 @@ def apply_cat_world_hourly_decay(
 def cat_world_daily_log_payload(
     log: CatWorldDailyLog,
     favorite_active_ids: list[str],
+    inventory: dict[str, int] | None = None,
+    room_layout: dict[str, dict[str, float]] | None = None,
 ) -> dict[str, Any]:
     cat = CAT_WORLD_CAT_BY_ID.get(log.cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     traits = cat_world_cat_traits(cat)
-    agent_state = cat_world_agent_payload(log, cat, traits)
+    agent_state = cat_world_agent_payload(log, cat, traits, inventory, room_layout, favorite_active_ids)
     return {
         "date": log.log_date.isoformat(),
         "catId": log.cat_id,
@@ -10610,7 +10775,7 @@ def cat_world_apply_daily_decay(
         log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, today, now)
         changed = apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now) or changed
         db.add(log)
-        payload[cat_id] = cat_world_daily_log_payload(log, favorite_active_ids)
+        payload[cat_id] = cat_world_daily_log_payload(log, favorite_active_ids, inventory, room_layout)
     if changed or payload:
         db.commit()
     return payload
