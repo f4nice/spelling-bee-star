@@ -1,21 +1,40 @@
 import * as Phaser from "phaser";
 
-const GAME_WIDTH = 720;
-const GAME_HEIGHT = 460;
-const FLOOR_TOP = 214;
-const FLOOR_BOTTOM = 424;
-const ROOM_BORDER = 10;
+const GAME_WIDTH = 960;
+const GAME_HEIGHT = 560;
+const FLOOR_TOP = 260;
+const FLOOR_BOTTOM = 522;
+const ROOM_BORDER = 12;
 const INK = 0x2c2f3a;
 const CREAM = 0xfff8df;
 
 const DECOR_SPECS = {
-  "sun-window": { label: "阳光窗台", width: 132, height: 78, defaultX: 42, defaultY: 28 },
-  "book-shelf": { label: "英文书架", width: 150, height: 72, defaultX: 535, defaultY: 38 },
-  "cloud-rug": { label: "云朵地毯", width: 300, height: 70, defaultX: 210, defaultY: 348 },
-  "study-desk": { label: "英文书桌", width: 176, height: 86, defaultX: 334, defaultY: 278 },
-  "reading-lamp": { label: "阅读台灯", width: 62, height: 108, defaultX: 486, defaultY: 236 },
-  "word-gallery": { label: "单词挂画", width: 102, height: 74, defaultX: 215, defaultY: 120 },
+  "sun-window": { label: "阳光窗台", width: 150, height: 88, defaultX: 56, defaultY: 34 },
+  "book-shelf": { label: "英文书架", width: 170, height: 78, defaultX: 736, defaultY: 46 },
+  "cloud-rug": { label: "云朵地毯", width: 380, height: 78, defaultX: 290, defaultY: 432 },
+  "study-desk": { label: "英文书桌", width: 200, height: 96, defaultX: 455, defaultY: 348 },
+  "reading-lamp": { label: "阅读台灯", width: 72, height: 118, defaultX: 660, defaultY: 314 },
+  "word-gallery": { label: "单词挂画", width: 120, height: 82, defaultX: 286, defaultY: 140 },
 };
+
+const CAT_PIXEL_SIZE = 2;
+const CAT_PIXEL_ROWS = [
+  "....................OO....OO....",
+  "...................OBBO..OBBO...",
+  "..................OBPPBOOBPPBO..",
+  ".................OBBBBBBBBBBBBO..",
+  "....OOO..........OBBEEBBBEEBBBO..",
+  "...OBBBOO........OBBBBBNBBBBBBO..",
+  "..OBBBBBBOOOOOOOOOBBBMMMMMBBBO...",
+  ".OBBBBBBBBBBBBBBBBBBMMMMMBBBO....",
+  "OBBBBBBSBBBBBSBBBBBBMMMMBBBO.....",
+  "OBBBBBBBBBBBBBBBBBBBBBBBBBBO.....",
+  ".OBBBBBBBBBBBBBBBBBBBBBBBBBO.....",
+  "..OBBBBBOOBBBBBBBBBOOBBBBBO......",
+  "...OBBBO..OBBBBBBBO..OBBBO.......",
+  "....OBBO...OOBBOO....OBBO........",
+  ".....OO......OO.......OO.........",
+];
 
 const CAT_COLORS = {
   mimi: { body: 0xffc46b, shade: 0xd88a3d, stripe: 0x7a4a28, belly: 0xffdf9f, nose: 0xf06f91 },
@@ -177,9 +196,9 @@ class CatWorldScene extends Phaser.Scene {
     bg.fillStyle(0xc29258, 1);
     bg.fillRect(0, FLOOR_TOP, GAME_WIDTH, GAME_HEIGHT - FLOOR_TOP);
 
-    bg.lineStyle(1, 0x2c2f3a, 0.18);
-    for (let x = 0; x <= GAME_WIDTH; x += 16) bg.lineBetween(x, 0, x, GAME_HEIGHT);
-    for (let y = 0; y <= GAME_HEIGHT; y += 16) bg.lineBetween(0, y, GAME_WIDTH, y);
+    bg.lineStyle(1, 0x2c2f3a, 0.12);
+    for (let x = 0; x <= GAME_WIDTH; x += 12) bg.lineBetween(x, 0, x, GAME_HEIGHT);
+    for (let y = 0; y <= GAME_HEIGHT; y += 12) bg.lineBetween(0, y, GAME_WIDTH, y);
 
     bg.lineStyle(5, INK, 1);
     bg.strokeRect(2, 2, GAME_WIDTH - 4, GAME_HEIGHT - 4);
@@ -201,7 +220,11 @@ class CatWorldScene extends Phaser.Scene {
       container.setDepth(position.y + 20);
       container.setInteractive(new Phaser.Geom.Rectangle(0, 0, spec.width, spec.height), Phaser.Geom.Rectangle.Contains);
       this.input.setDraggable(container);
-      container.on("pointerup", () => {
+      container.on("pointerdown", (_pointer, _localX, _localY, event) => {
+        this.stopPointerEvent(event);
+      });
+      container.on("pointerup", (_pointer, _localX, _localY, event) => {
+        this.stopPointerEvent(event);
         if (!container.getData("dragMoved")) {
           this.owner.handlers.onDecorClick?.(decorId);
         }
@@ -214,27 +237,30 @@ class CatWorldScene extends Phaser.Scene {
   drawInventoryItems(snapshot) {
     if (snapshot.ownedFoodCount > 0) {
       const bowl = this.add.graphics();
-      drawPixelRect(bowl, 590, 344, 62, 32, 0xff8cad);
+      drawPixelRect(bowl, 786, 418, 72, 34, 0xff8cad);
       bowl.fillStyle(0xfff07d, 1);
-      bowl.fillRect(600, 348, 42, 8);
-      bowl.setDepth(380);
+      bowl.fillRect(798, 423, 48, 8);
+      bowl.setDepth(456);
+      this.addRoomHitZone("food-bowl", 778, 408, 92, 58);
     }
     if (owned(snapshot.inventory, "scratch-board")) {
       const scratcher = this.add.graphics();
-      drawPixelRect(scratcher, 70, 348, 110, 24, 0xe6b06f);
+      drawPixelRect(scratcher, 96, 426, 136, 26, 0xe6b06f);
       scratcher.lineStyle(1, 0x7a573b, 0.45);
-      for (let x = 80; x < 170; x += 12) scratcher.lineBetween(x, 352, x + 8, 366);
-      scratcher.setDepth(370);
+      for (let x = 108; x < 218; x += 12) scratcher.lineBetween(x, 431, x + 8, 445);
+      scratcher.setDepth(464);
+      this.addRoomHitZone("scratch-board", 90, 418, 150, 44);
     }
     if (owned(snapshot.inventory, "feather-wand")) {
       const wand = this.add.graphics();
       wand.lineStyle(6, 0x7b5834, 1);
-      wand.lineBetween(585, 262, 670, 230);
+      wand.lineBetween(780, 320, 894, 280);
       wand.fillStyle(0xff8cad, 1);
-      wand.fillTriangle(666, 218, 688, 226, 670, 248);
+      wand.fillTriangle(888, 263, 915, 274, 894, 304);
       wand.fillStyle(0xa9e8c8, 1);
-      wand.fillTriangle(648, 216, 672, 224, 658, 244);
-      wand.setDepth(260);
+      wand.fillTriangle(864, 262, 895, 272, 877, 298);
+      wand.setDepth(330);
+      this.addRoomHitZone("feather-wand", 752, 250, 172, 70);
     }
   }
 
@@ -291,17 +317,6 @@ class CatWorldScene extends Phaser.Scene {
         .setOrigin(0.5);
       container.add(text);
     }
-    const label = this.add
-      .text(0, spec.height + 4, spec.label, {
-        color: "#263047",
-        backgroundColor: "#fff8df",
-        fontFamily: "Consolas, monospace",
-        fontSize: "10px",
-        fontStyle: "bold",
-        padding: { x: 3, y: 2 },
-      })
-      .setDepth(999);
-    container.add(label);
   }
 
   drawCats(snapshot) {
@@ -309,15 +324,19 @@ class CatWorldScene extends Phaser.Scene {
     const cats = snapshot.cats.filter((cat) => ownedCatIds.has(cat.id));
     const visibleCats = cats.length ? cats : snapshot.cats.slice(0, 1);
     visibleCats.forEach((cat, index) => {
-      const x = 96 + (index % 5) * 118;
-      const y = FLOOR_BOTTOM - 52 - Math.floor(index / 5) * 46;
+      const x = 130 + (index % 6) * 116;
+      const y = FLOOR_BOTTOM - 44 - Math.floor(index / 6) * 42;
       const container = this.add.container(x, y);
-      container.setSize(80, 50);
+      container.setSize(76, 48);
       container.setData("kind", "cat");
       container.setData("id", cat.id);
       container.setDepth(y + 80);
-      container.setInteractive(new Phaser.Geom.Rectangle(-12, -16, 104, 74), Phaser.Geom.Rectangle.Contains);
-      container.on("pointerup", () => {
+      container.setInteractive(new Phaser.Geom.Rectangle(0, 0, 78, 40), Phaser.Geom.Rectangle.Contains);
+      container.on("pointerdown", (_pointer, _localX, _localY, event) => {
+        this.stopPointerEvent(event);
+      });
+      container.on("pointerup", (_pointer, _localX, _localY, event) => {
+        this.stopPointerEvent(event);
         this.spawnCatBubble(container, cat);
         this.owner.handlers.onCatPet?.(cat);
       });
@@ -331,91 +350,72 @@ class CatWorldScene extends Phaser.Scene {
     const colors = CAT_COLORS[cat.id] || CAT_COLORS.mimi;
     const graphics = makeLocalGraphics(this, container);
     graphics.fillStyle(0x203041, 0.18);
-    graphics.fillRect(8, 44, 66, 8);
-
-    this.drawPixelBlock(graphics, 4, 23, 8, 8, colors.shade);
-    this.drawPixelBlock(graphics, -2, 17, 8, 8, colors.shade);
-    this.drawPixelBlock(graphics, -8, 11, 8, 8, colors.shade);
-    this.drawPixelBlock(graphics, 10, 18, 47, 24, colors.body);
-    this.drawPixelBlock(graphics, 18, 35, 9, 11, colors.shade);
-    this.drawPixelBlock(graphics, 43, 35, 9, 11, colors.shade);
-    this.drawPixelBlock(graphics, 22, 26, 26, 10, colors.belly);
-    this.drawPixelBlock(graphics, 53, 12, 27, 25, colors.body);
-    this.drawPixelBlock(graphics, 56, 3, 9, 13, colors.body);
-    this.drawPixelBlock(graphics, 68, 3, 9, 13, colors.body);
-
-    graphics.fillStyle(0xffbfd7, 1);
-    graphics.fillRect(58, 8, 4, 5);
-    graphics.fillRect(71, 8, 4, 5);
-    graphics.fillStyle(0x111827, 1);
-    graphics.fillRect(60, 22, 4, 4);
-    graphics.fillRect(72, 22, 4, 4);
-    graphics.fillStyle(colors.nose, 1);
-    graphics.fillRect(67, 28, 4, 3);
-    graphics.fillStyle(colors.stripe, 1);
-    graphics.fillRect(18, 20, 5, 6);
-    graphics.fillRect(30, 18, 5, 6);
-    graphics.fillRect(42, 20, 5, 6);
-    graphics.fillRect(58, 16, 4, 4);
-    graphics.fillRect(70, 16, 4, 4);
-
-    graphics.lineStyle(2, INK, 1);
-    graphics.lineBetween(66, 30, 58, 29);
-    graphics.lineBetween(66, 33, 58, 35);
-    graphics.lineBetween(72, 30, 82, 28);
-    graphics.lineBetween(72, 33, 82, 35);
-
-    if (cat.id === "siamese") {
-      graphics.fillStyle(colors.shade, 1);
-      graphics.fillRect(56, 18, 21, 16);
-      graphics.fillRect(4, 23, 8, 8);
-    }
-
-    graphics.lineStyle(3, INK, 1);
-    graphics.strokeRect(10, 18, 47, 24);
-    graphics.strokeRect(53, 12, 27, 25);
-    graphics.strokeRect(56, 3, 9, 13);
-    graphics.strokeRect(68, 3, 9, 13);
-    graphics.strokeRect(18, 35, 9, 11);
-    graphics.strokeRect(43, 35, 9, 11);
-    graphics.strokeRect(4, 23, 8, 8);
-    graphics.strokeRect(-2, 17, 8, 8);
-    graphics.strokeRect(-8, 11, 8, 8);
+    graphics.fillRect(4, 32, 72, 6);
+    this.drawCatPixels(graphics, cat, colors);
 
     graphics.fillStyle(selected ? 0xfff07d : 0xff8cad, 1);
-    graphics.fillRect(22, 0, selected ? 26 : 16, 10);
-    graphics.lineStyle(3, INK, 1);
-    graphics.strokeRect(22, 0, selected ? 26 : 16, 10);
+    graphics.fillRect(34, -8, selected ? 18 : 10, 8);
+    graphics.lineStyle(2, INK, 1);
+    graphics.strokeRect(34, -8, selected ? 18 : 10, 8);
     if (selected) {
       graphics.fillStyle(0x2c2f3a, 1);
-      graphics.fillRect(28, 3, 3, 4);
-      graphics.fillRect(36, 3, 3, 4);
-      graphics.fillRect(44, 3, 3, 4);
+      graphics.fillRect(38, -5, 2, 3);
+      graphics.fillRect(44, -5, 2, 3);
+      graphics.fillRect(50, -5, 2, 3);
     }
-    const label = this.add
-      .text(4, 55, cat.label || "猫咪", {
-        color: "#263047",
-        backgroundColor: "#fff8df",
-        fontFamily: "Consolas, monospace",
-        fontSize: "10px",
-        fontStyle: "bold",
-        padding: { x: 3, y: 2 },
-      })
-      .setDepth(999);
-    container.add(label);
   }
 
-  drawPixelBlock(graphics, x, y, width, height, color) {
-    graphics.fillStyle(color, 1);
-    graphics.fillRect(x, y, width, height);
+  addRoomHitZone(itemId, x, y, width, height) {
+    const zone = this.add.zone(x, y, width, height);
+    zone.setOrigin(0, 0);
+    zone.setDepth(1200);
+    zone.setData("kind", "room-item");
+    zone.setData("id", itemId);
+    zone.setInteractive(new Phaser.Geom.Rectangle(0, 0, width, height), Phaser.Geom.Rectangle.Contains);
+    zone.on("pointerdown", (_pointer, _localX, _localY, event) => {
+      this.stopPointerEvent(event);
+    });
+    zone.on("pointerup", (_pointer, _localX, _localY, event) => {
+      this.stopPointerEvent(event);
+      this.owner.handlers.onToyClick?.(itemId);
+    });
+  }
+
+  stopPointerEvent(event) {
+    event?.stopPropagation?.();
+  }
+
+  drawCatPixels(graphics, cat, colors) {
+    CAT_PIXEL_ROWS.forEach((row, rowIndex) => {
+      [...row].forEach((token, columnIndex) => {
+        const color = this.colorForCatPixel(token, rowIndex, columnIndex, cat, colors);
+        if (color === null) return;
+        graphics.fillStyle(color, 1);
+        graphics.fillRect(columnIndex * CAT_PIXEL_SIZE, rowIndex * CAT_PIXEL_SIZE, CAT_PIXEL_SIZE, CAT_PIXEL_SIZE);
+      });
+    });
+  }
+
+  colorForCatPixel(token, rowIndex, columnIndex, cat, colors) {
+    if (token === ".") return null;
+    if (token === "O") return INK;
+    if (token === "P") return 0xffbfd7;
+    if (token === "E") return 0x111827;
+    if (token === "N") return colors.nose;
+    if (token === "S") return colors.stripe;
+    if (token === "M") return colors.belly;
+    if (cat.id === "siamese" && columnIndex >= 18 && columnIndex <= 29 && rowIndex >= 3 && rowIndex <= 7) {
+      return colors.shade;
+    }
+    return token === "B" ? colors.body : null;
   }
 
   scheduleCatWalk(container, index) {
     const delay = Phaser.Math.Between(600, 1800) + index * 220;
     this.time.delayedCall(delay, () => {
       if (!container.active) return;
-      const nextX = Phaser.Math.Between(48, GAME_WIDTH - 112);
-      const nextY = Phaser.Math.Between(FLOOR_TOP + 42, FLOOR_BOTTOM - 54);
+      const nextX = Phaser.Math.Between(56, GAME_WIDTH - 116);
+      const nextY = Phaser.Math.Between(FLOOR_TOP + 48, FLOOR_BOTTOM - 46);
       const duration = Phaser.Math.Between(2600, 5600);
       this.tweens.add({
         targets: container,

@@ -59,6 +59,7 @@ onMounted(async () => {
       selectedDecorId.value = decorId || "";
     },
     onLayoutChange: handleGameLayoutChange,
+    onToyClick: handleRoomToyClick,
   });
   updateCatWorldGame();
 });
@@ -185,6 +186,13 @@ function normalizeLayoutDraft(layout) {
 function handleDecorClick(decorId) {
   selectedDecorId.value = decorId;
   cycleDecorStyle(decorId);
+}
+
+function handleRoomToyClick(itemId) {
+  const toy = ownedToys.value.find((item) => item.id === itemId);
+  if (toy) {
+    play(toy);
+  }
 }
 
 async function saveRoomLayout() {

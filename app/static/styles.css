@@ -11084,15 +11084,19 @@ select {
   position: absolute;
   inset: 0;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
   background: #fff8df;
 }
 
 .cat-world-game-stage canvas {
   display: block;
-  width: 100% !important;
-  height: 100% !important;
+  max-width: 100%;
+  max-height: 100%;
   image-rendering: pixelated;
+  image-rendering: crisp-edges;
   cursor: grab;
 }
 
