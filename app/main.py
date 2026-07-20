@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-029"
-DEFAULT_PAGE_VERSION = "v20260721.29"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-030"
+DEFAULT_PAGE_VERSION = "v20260721.30"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -11409,7 +11409,7 @@ def cat_world_apply_active_food_progress(
     changed = False
     target_cat_id = str(state.active_food_cat_id or "").strip()
     if target_cat_id not in CAT_WORLD_CAT_BY_ID:
-        target_cat_id = cat_world_effect_target_cat_id(db, state, inventory, room_layout, "food")
+        target_cat_id = cat_world_effect_target_cat_id(db, state, inventory, room_layout, "food", item_id)
         state.active_food_cat_id = target_cat_id
         changed = True
     cat = CAT_WORLD_CAT_BY_ID.get(target_cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
@@ -11499,7 +11499,7 @@ def cat_world_apply_daily_effect(
     room_layout: dict[str, dict[str, float]],
     effect_type: str,
 ) -> dict[str, Any]:
-    cat_id = cat_world_effect_target_cat_id(db, state, inventory, room_layout, effect_type)
+    cat_id = cat_world_effect_target_cat_id(db, state, inventory, room_layout, effect_type, item.get("id") or "")
     cat = CAT_WORLD_CAT_BY_ID.get(cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     traits = cat_world_cat_traits(cat)
     now = datetime.utcnow()
@@ -11620,26 +11620,31 @@ def cat_world_effect_target_cat_id(
     inventory: dict[str, int],
     room_layout: dict[str, dict[str, float]],
     effect_type: str,
+    item_id: str = "",
 ) -> str:
     selected_cat_id = state.selected_cat if state.selected_cat in CAT_WORLD_CAT_BY_ID else CAT_WORLD_DEFAULT_CAT_ID
     if effect_type != "food":
         return selected_cat_id
     now = datetime.utcnow()
-    lowest_cat_id = selected_cat_id
-    lowest_energy = 101
+    target_rows: list[tuple[int, int, int, str]] = []
     for cat_id in parse_cat_world_cats(state.cats):
         cat = CAT_WORLD_CAT_BY_ID.get(cat_id)
         if not cat:
             continue
+        traits = cat_world_cat_traits(cat)
         favorite_active_ids = cat_world_active_favorite_decor_ids(cat_id, inventory, room_layout)
         log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now)
-        apply_cat_world_hourly_decay(log, cat_world_cat_traits(cat), inventory, len(favorite_active_ids), now)
+        apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now)
+        agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
         db.add(log)
-        energy_score = int(log.energy_score or 0)
-        if energy_score < lowest_energy:
-            lowest_energy = energy_score
-            lowest_cat_id = cat_id
-    return lowest_cat_id
+        energy_score = clamp_cat_world_score(int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0))
+        favorite_rank = 0 if item_id and cat_world_item_favorite_cat_id(item_id) == cat_id else 1
+        target_rows.append((energy_score, favorite_rank, len(target_rows), cat_id))
+    if not target_rows:
+        return selected_cat_id
+    lowest_energy = min(row[0] for row in target_rows)
+    hungry_rows = [row for row in target_rows if row[0] <= lowest_energy + 6]
+    return sorted(hungry_rows, key=lambda row: (row[1], row[0], row[2]))[0][3]
 
 
 def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
