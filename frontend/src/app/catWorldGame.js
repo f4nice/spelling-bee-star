@@ -629,6 +629,7 @@ class CatWorldScene extends Phaser.Scene {
           padding: { x: 4, y: 2 },
         })
         .setOrigin(0.5);
+      this.pinCatTextOverlay(sleepText);
       container.add(sleepText);
     }
     if (behavior.key === "resting") {
@@ -653,9 +654,11 @@ class CatWorldScene extends Phaser.Scene {
           fontStyle: "bold",
         })
         .setOrigin(0.5);
+      this.pinCatTextOverlay(warning);
       container.add(warning);
     }
     this.drawCatIntentBadge(container, cat, snapshot, behavior);
+    this.syncCatTextOverlays(container);
   }
 
   catIntentInfo(cat, snapshot, behavior = {}) {
@@ -707,7 +710,32 @@ class CatWorldScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     badge.setData("catIntentBadge", true);
+    this.pinCatTextOverlay(badge);
     container.add(badge);
+  }
+
+  pinCatTextOverlay(textObject) {
+    textObject.setData("catTextOverlay", true);
+    textObject.setData("baseX", Number(textObject.x || 0));
+    return textObject;
+  }
+
+  catTextOverlays(container) {
+    return (container.list || []).filter((child) => child.getData?.("catTextOverlay"));
+  }
+
+  hideCatTextOverlays(container) {
+    this.catTextOverlays(container).forEach((child) => child.setVisible(false));
+  }
+
+  syncCatTextOverlays(container) {
+    const facing = container.scaleX < 0 ? -1 : 1;
+    this.catTextOverlays(container).forEach((child) => {
+      const baseX = Number(child.getData("baseX") ?? child.x ?? 0);
+      child.setX(baseX * facing);
+      child.setScale(facing, 1);
+      child.setVisible(true);
+    });
   }
 
   drawStatusBars(graphics, catEnergy, moodScore) {
@@ -835,6 +863,7 @@ class CatWorldScene extends Phaser.Scene {
     const currentSign = container.scaleX < 0 ? -1 : 1;
     if (currentSign === nextScale) return;
     this.spawnTurnPuff(container);
+    this.hideCatTextOverlays(container);
     this.tweens.add({
       targets: container,
       scaleX: currentSign * 0.16,
@@ -847,6 +876,10 @@ class CatWorldScene extends Phaser.Scene {
           scaleX: nextScale,
           duration: 140,
           ease: "Sine.easeInOut",
+          onComplete: () => {
+            if (!container.active) return;
+            this.syncCatTextOverlays(container);
+          },
         });
       },
     });
