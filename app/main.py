@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-024"
-DEFAULT_PAGE_VERSION = "v20260721.24"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-025"
+DEFAULT_PAGE_VERSION = "v20260721.25"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -10589,6 +10589,28 @@ def cat_world_damage_risk_label(probability: float) -> str:
     return "很低"
 
 
+def cat_world_damage_risk_reason(agent_state: dict[str, Any], mood_score: int) -> str:
+    mood_key = str(agent_state.get("dailyMoodKey") or "")
+    if mood_key == "grumpy" or mood_score < 38:
+        return "心情差时更容易捣蛋"
+    if mood_score < 50:
+        return "心情有点低，偶尔会碰倒道具"
+    if mood_key == "curious":
+        return "今天想探索，会轻微增加碰坏概率"
+    return "心情稳定时破坏概率很低"
+
+
+def cat_world_damage_event_motive(agent_state: dict[str, Any], mood_score: int) -> str:
+    mood_key = str(agent_state.get("dailyMoodKey") or "")
+    if mood_key == "grumpy" or mood_score < 38:
+        return "心情差"
+    if mood_score < 50:
+        return "有点烦躁"
+    if mood_key == "curious":
+        return "探索时太兴奋"
+    return "偶尔调皮"
+
+
 def cat_world_agent_daily_goal(
     log: CatWorldDailyLog,
     cat: dict[str, Any],
@@ -10619,6 +10641,7 @@ def cat_world_agent_daily_goal(
     damage_candidates = sorted(set(owned_toys + owned_decor))
     damage_probability = cat_world_damage_probability(agent_state, traits, mood_score)
     risk_label = cat_world_damage_risk_label(damage_probability)
+    risk_reason = cat_world_damage_risk_reason(agent_state, mood_score)
 
     def goal(
         key: str,
@@ -10639,6 +10662,7 @@ def cat_world_agent_daily_goal(
             "priority": int(min(max(priority, 0), 100)),
             "damageRisk": round(damage_probability, 3),
             "damageRiskLabel": risk_label,
+            "damageRiskReason": risk_reason,
         }
 
     if behavior.get("key") == "sleeping":
@@ -10910,14 +10934,16 @@ def cat_world_usable_inventory(inventory: dict[str, int], damaged_items: dict[st
 
 
 def cat_world_damage_probability(agent_state: dict[str, Any], traits: dict[str, Any], mood_score: int) -> float:
-    if mood_score >= 58:
-        base = 0.015
+    if mood_score >= 72:
+        base = 0.002
+    elif mood_score >= 58:
+        base = 0.006
     elif mood_score >= 44:
-        base = 0.055
+        base = 0.04
     elif mood_score >= 32:
-        base = 0.12
+        base = 0.13
     else:
-        base = 0.22
+        base = 0.26
     temperament = str(traits.get("temperament") or "balanced")
     temperament_multiplier = {
         "calm": 0.35,
@@ -10927,11 +10953,13 @@ def cat_world_damage_probability(agent_state: dict[str, Any], traits: dict[str, 
         "guardian": 1.15,
     }.get(temperament, 1.0)
     if agent_state.get("dailyMoodKey") == "grumpy":
-        base += 0.055
+        base += 0.075
     if agent_state.get("dailyMoodKey") == "curious":
-        base += 0.025
+        base += 0.015
+    if agent_state.get("dailyMoodKey") == "bright":
+        base *= 0.55
     mischief = min(max(int(agent_state.get("mischief") or 35), 0), 100) / 100
-    return min(base * temperament_multiplier * (0.65 + mischief), 0.38)
+    return min(base * temperament_multiplier * (0.65 + mischief), 0.42)
 
 
 def cat_world_apply_agent_damage_events(
@@ -10959,13 +10987,14 @@ def cat_world_apply_agent_damage_events(
         if not cat:
             continue
         traits = cat_world_cat_traits(cat)
+        usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
         favorite_active_ids = cat_world_active_favorite_decor_ids(
             cat_id,
-            cat_world_usable_inventory(inventory, damaged_items),
-            parse_cat_world_room_layout(state.room_layout, inventory),
+            usable_inventory,
+            parse_cat_world_room_layout(state.room_layout, usable_inventory),
         )
         log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, today, now)
-        apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now)
+        apply_cat_world_hourly_decay(log, traits, usable_inventory, len(favorite_active_ids), now)
         agent_state, agent_changed = ensure_cat_world_agent_state(log, cat, traits)
         if agent_state.get("mischiefChecked"):
             if agent_changed:
@@ -10981,7 +11010,8 @@ def cat_world_apply_agent_damage_events(
             item_id = candidates.pop(candidate_index)
             item = shop_by_id.get(item_id) or CAT_WORLD_SHOP_BY_ID[item_id]
             repair_cost = max(round(int(item.get("cost") or 0) * 0.35), 10)
-            reason = f"{cat['label']}心情差，弄坏了{item.get('label') or item_id}。"
+            motive = cat_world_damage_event_motive(agent_state, adjusted_mood_score)
+            reason = f"{cat['label']}{motive}，弄坏了{item.get('label') or item_id}。"
             damaged_items[item_id] = {
                 "itemId": item_id,
                 "label": item.get("label") or item_id,

@@ -293,7 +293,9 @@ const catAgentDiaries = computed(() =>
         routineLabel: agent.routine || traits.routine || "观察房间里的学习节奏",
         goalLabel: dailyGoal.label || "自由散步",
         goalMessage: dailyGoal.message || "",
-        damageRiskLabel: dailyGoal.damageRiskLabel || "很低",
+        damageRiskLabel: dailyGoal.damageRiskReason
+          ? `${dailyGoal.damageRiskLabel || "很低"} · ${dailyGoal.damageRiskReason}`
+          : dailyGoal.damageRiskLabel || "很低",
         decayLabel: `体力 ${signedHourlyValue(log.hourlyEnergyDecay)}/h · 心情 ${signedHourlyValue(log.hourlyMoodDecay)}/h`,
         comfortLabel: agent.comfortLabel || "暂无道具减耗",
         favoriteItemLabel,
