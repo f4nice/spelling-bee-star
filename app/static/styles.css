@@ -5123,9 +5123,22 @@ a:focus-visible {
 }
 
 .challenge-day-list-card:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-dark);
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  color: #fff;
   box-shadow: var(--shadow);
   transform: translateY(-1px);
+}
+
+.challenge-day-list-card:hover .challenge-day-list-title,
+.challenge-day-list-card:hover .challenge-day-list-count,
+.challenge-day-list-card:hover .challenge-day-list-metrics em {
+  color: #fff;
+}
+
+.challenge-day-list-card:hover .challenge-day-list-count,
+.challenge-day-list-card:hover .challenge-day-list-metrics em {
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .challenge-day-list-title {
