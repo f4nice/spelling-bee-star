@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-011"
-DEFAULT_PAGE_VERSION = "v20260721.11"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-012"
+DEFAULT_PAGE_VERSION = "v20260721.12"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3630,8 +3630,6 @@ async def vue_cat_world_play_api(request: Request, db: Session = Depends(get_db)
         room_layout,
         "food" if item["category"] == "food" else "toy",
     )
-    if item["category"] == "food":
-        state.active_food_cat_id = effect.get("catId") or ""
     db.add(state)
     db.commit()
     db.refresh(state)
@@ -10781,6 +10779,138 @@ def cat_world_apply_daily_decay(
     return payload
 
 
+def cat_world_active_food_token(state: CatWorldState, item_id: str, cat_id: str) -> str:
+    started_at = state.active_food_at.replace(microsecond=0).isoformat() if state.active_food_at else ""
+    return f"{item_id}:{cat_id}:{started_at}"
+
+
+def cat_world_food_progress_targets(
+    item: dict[str, Any],
+    traits: dict[str, Any],
+    active_food_at: datetime,
+    now: datetime,
+    force_initial: bool = False,
+) -> dict[str, int | bool]:
+    duration_seconds = max(int(item.get("durationMinutes") or 30), 1) * 60
+    elapsed_seconds = max(int((now - active_food_at).total_seconds()), 0)
+    ratio = min(max(elapsed_seconds / duration_seconds, 0.0), 1.0)
+    total_energy = max(round(int(item.get("catEnergy") or 0) * float(traits["foodEnergyGain"])), 0)
+    total_mood = max(round(int(item.get("mood") or 0) * float(traits["foodEnergyGain"])), 0)
+    consumed_energy = min(total_energy, round(total_energy * ratio))
+    consumed_mood = min(total_mood, round(total_mood * ratio))
+    if force_initial:
+        consumed_energy = min(total_energy, max(consumed_energy, min(total_energy, max(1, round(total_energy * 0.18)))))
+        consumed_mood = min(total_mood, max(consumed_mood, min(total_mood, max(1, round(total_mood * 0.18)))))
+    remaining_seconds = max(duration_seconds - elapsed_seconds, 0)
+    return {
+        "totalEnergy": total_energy,
+        "totalMood": total_mood,
+        "consumedEnergy": consumed_energy,
+        "consumedMood": consumed_mood,
+        "remainingEnergy": max(total_energy - consumed_energy, 0),
+        "remainingMood": max(total_mood - consumed_mood, 0),
+        "remainingSeconds": remaining_seconds,
+        "durationSeconds": duration_seconds,
+        "complete": remaining_seconds <= 0 or consumed_energy >= total_energy,
+    }
+
+
+def cat_world_apply_active_food_progress(
+    db: Session,
+    state: CatWorldState,
+    inventory: dict[str, int],
+    room_layout: dict[str, dict[str, float]],
+    now: datetime | None = None,
+    force_initial: bool = False,
+) -> dict[str, Any]:
+    item_id = str(state.active_food_item or "").strip()
+    item = CAT_WORLD_SHOP_BY_ID.get(item_id)
+    if not item or item.get("category") != "food" or not state.active_food_at:
+        return {"active": False, "changed": False}
+    now = now or datetime.utcnow()
+    changed = False
+    target_cat_id = str(state.active_food_cat_id or "").strip()
+    if target_cat_id not in CAT_WORLD_CAT_BY_ID:
+        target_cat_id = cat_world_effect_target_cat_id(db, state, inventory, room_layout, "food")
+        state.active_food_cat_id = target_cat_id
+        changed = True
+    cat = CAT_WORLD_CAT_BY_ID.get(target_cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    traits = cat_world_cat_traits(cat)
+    favorite_active_ids = cat_world_active_favorite_decor_ids(target_cat_id, inventory, room_layout)
+    log = get_or_create_cat_world_daily_log(db, state.phone, target_cat_id, date.today(), now)
+    changed = apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now) or changed
+    agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
+    token = cat_world_active_food_token(state, item_id, target_cat_id)
+    if agent_state.get("activeFoodToken") != token:
+        agent_state["activeFoodToken"] = token
+        agent_state["activeFoodConsumedEnergy"] = 0
+        agent_state["activeFoodConsumedMood"] = 0
+        agent_state["activeFoodLabel"] = item.get("label") or item_id
+        agent_state["activeFoodStartedAt"] = state.active_food_at.replace(microsecond=0).isoformat() + "Z"
+        changed = True
+    progress = cat_world_food_progress_targets(item, traits, state.active_food_at, now, force_initial=force_initial)
+    previous_energy = max(int(agent_state.get("activeFoodConsumedEnergy") or 0), 0)
+    previous_mood = max(int(agent_state.get("activeFoodConsumedMood") or 0), 0)
+    next_energy = int(progress["consumedEnergy"])
+    next_mood = int(progress["consumedMood"])
+    delta_energy = max(next_energy - previous_energy, 0)
+    delta_mood = max(next_mood - previous_mood, 0)
+    if delta_energy or delta_mood:
+        log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) + delta_energy)
+        log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + delta_mood)
+        agent_state["activeFoodConsumedEnergy"] = next_energy
+        agent_state["activeFoodConsumedMood"] = next_mood
+        append_cat_world_agent_event(
+            log,
+            cat,
+            traits,
+            "food-progress",
+            "食物补能",
+            f"{cat['label']}吃掉一部分{item.get('label') or item_id}，体力 +{delta_energy}，心情 +{delta_mood}，剩余体力 {progress['remainingEnergy']}。",
+            now,
+        )
+        changed = True
+    agent_state["activeFoodRemainingEnergy"] = int(progress["remainingEnergy"])
+    agent_state["activeFoodRemainingMood"] = int(progress["remainingMood"])
+    agent_state["activeFoodRemainingSeconds"] = int(progress["remainingSeconds"])
+    if progress["complete"]:
+        append_cat_world_agent_event(
+            log,
+            cat,
+            traits,
+            "food-finished",
+            "食物吃完",
+            f"{cat['label']}把{item.get('label') or item_id}吃完了，食物已经从房间里消失。",
+            now,
+        )
+        agent_state["activeFoodRemainingEnergy"] = 0
+        agent_state["activeFoodRemainingMood"] = 0
+        state.active_food_item = None
+        state.active_food_cat_id = None
+        state.active_food_at = None
+        changed = True
+    log.agent_state = encode_cat_world_agent_state(agent_state)
+    db.add(log)
+    db.add(state)
+    if changed:
+        db.commit()
+        db.refresh(state)
+    return {
+        "active": not bool(progress["complete"]),
+        "changed": changed,
+        "catId": cat["id"],
+        "catLabel": cat["label"],
+        "moodGain": delta_mood,
+        "energyGain": delta_energy,
+        "totalMoodGain": int(progress["totalMood"]),
+        "totalEnergyGain": int(progress["totalEnergy"]),
+        "remainingMood": int(progress["remainingMood"]),
+        "remainingEnergy": int(progress["remainingEnergy"]),
+        "remainingSeconds": int(progress["remainingSeconds"]),
+        "finished": bool(progress["complete"]),
+    }
+
+
 def cat_world_apply_daily_effect(
     db: Session,
     state: CatWorldState,
@@ -10788,7 +10918,7 @@ def cat_world_apply_daily_effect(
     inventory: dict[str, int],
     room_layout: dict[str, dict[str, float]],
     effect_type: str,
-) -> dict[str, int]:
+) -> dict[str, Any]:
     cat_id = cat_world_effect_target_cat_id(db, state, inventory, room_layout, effect_type)
     cat = CAT_WORLD_CAT_BY_ID.get(cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     traits = cat_world_cat_traits(cat)
@@ -10797,8 +10927,10 @@ def cat_world_apply_daily_effect(
     log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now)
     apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now)
     if effect_type == "food":
-        mood_gain = round(int(item.get("mood") or 0) * float(traits["foodEnergyGain"]))
-        energy_gain = round(int(item.get("catEnergy") or 0) * float(traits["foodEnergyGain"]))
+        state.active_food_cat_id = cat["id"]
+        if not state.active_food_at:
+            state.active_food_at = now
+        state.active_food_item = item["id"]
         log.food_count = int(log.food_count or 0) + 1
         log.last_food_item = item["id"]
         append_cat_world_agent_event(
@@ -10806,24 +10938,33 @@ def cat_world_apply_daily_effect(
             cat,
             traits,
             "food",
-            "吃到食物",
-            f"{cat['label']}吃了{item.get('label') or item['id']}，体力 +{energy_gain}，心情 +{mood_gain}。",
+            "摆入食物",
+            f"{item.get('label') or item['id']}摆进房间，优先给体力低的{cat['label']}慢慢吃。",
             now,
         )
-    else:
-        mood_gain = round(int(item.get("mood") or 0) * float(traits["playMoodGain"]))
-        energy_gain = -max(1, round(4 * float(traits["energyDrain"])))
-        log.toy_count = int(log.toy_count or 0) + 1
-        log.last_play_item = item["id"]
-        append_cat_world_agent_event(
-            log,
-            cat,
-            traits,
-            "play",
-            "玩具互动",
-            f"{cat['label']}玩了{item.get('label') or item['id']}，心情 +{mood_gain}，体力 {energy_gain}。",
-            now,
+        db.add(log)
+        db.add(state)
+        return cat_world_apply_active_food_progress(
+            db,
+            state,
+            inventory,
+            room_layout,
+            now=now,
+            force_initial=True,
         )
+    mood_gain = round(int(item.get("mood") or 0) * float(traits["playMoodGain"]))
+    energy_gain = -max(1, round(4 * float(traits["energyDrain"])))
+    log.toy_count = int(log.toy_count or 0) + 1
+    log.last_play_item = item["id"]
+    append_cat_world_agent_event(
+        log,
+        cat,
+        traits,
+        "play",
+        "玩具互动",
+        f"{cat['label']}玩了{item.get('label') or item['id']}，心情 +{mood_gain}，体力 {energy_gain}。",
+        now,
+    )
     log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_gain)
     log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) + energy_gain)
     db.add(log)
@@ -10949,14 +11090,14 @@ def cat_world_active_food(state: CatWorldState) -> dict[str, Any]:
     remaining_seconds = max(duration_seconds - elapsed_seconds, 0)
     if remaining_seconds <= 0:
         return {"active": False, "itemId": "", "label": "", "remainingSeconds": 0, "durationSeconds": duration_seconds}
-    remaining_energy = max(
-        int((int(item.get("catEnergy") or 0) * remaining_seconds + duration_seconds - 1) // duration_seconds),
-        0,
-    )
+    target_cat = CAT_WORLD_CAT_BY_ID.get(str(state.active_food_cat_id or ""))
+    traits = cat_world_cat_traits(target_cat or CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    total_energy = round(int(item.get("catEnergy") or 0) * float(traits["foodEnergyGain"]))
+    total_mood = round(int(item.get("mood") or 0) * float(traits["foodEnergyGain"]))
+    remaining_energy = max(int((total_energy * remaining_seconds + duration_seconds - 1) // duration_seconds), 0)
     if remaining_energy <= 0:
         return {"active": False, "itemId": "", "label": "", "remainingSeconds": 0, "durationSeconds": duration_seconds}
     expires_at = state.active_food_at + timedelta(seconds=duration_seconds)
-    target_cat = CAT_WORLD_CAT_BY_ID.get(str(state.active_food_cat_id or ""))
     return {
         "active": True,
         "itemId": item_id,
@@ -10964,8 +11105,8 @@ def cat_world_active_food(state: CatWorldState) -> dict[str, Any]:
         "englishName": item.get("englishName") or "",
         "targetCatId": target_cat["id"] if target_cat else "",
         "targetCatLabel": target_cat["label"] if target_cat else "",
-        "mood": int(item.get("mood") or 0),
-        "catEnergy": int(item.get("catEnergy") or 0),
+        "mood": total_mood,
+        "catEnergy": total_energy,
         "remainingEnergy": remaining_energy,
         "consumeCount": 1,
         "remainingSeconds": remaining_seconds,
@@ -10992,16 +11133,8 @@ def cat_world_mood(
         inventory,
         room_layout or {},
     )
-    food_bonus = (
-        round(int(active_food.get("mood") or 0) * float(traits["foodEnergyGain"]))
-        if active_food.get("active")
-        else 0
-    )
-    food_energy_bonus = (
-        round(int(active_food.get("catEnergy") or 0) * float(traits["foodEnergyGain"]))
-        if active_food.get("active")
-        else 0
-    )
+    food_bonus = int(active_food.get("mood") or 0) if active_food.get("active") else 0
+    food_energy_bonus = int(active_food.get("catEnergy") or 0) if active_food.get("active") else 0
     if active_food.get("active"):
         active_food = {
             **active_food,
@@ -11111,6 +11244,14 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
     room_styles = parse_cat_world_room_styles(state.room_styles, inventory)
     room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
+    active_food_effect = cat_world_apply_active_food_progress(db, state, usable_inventory, room_layout)
+    if active_food_effect.get("changed"):
+        db.refresh(state)
+        inventory = parse_cat_world_inventory(state.inventory)
+        damaged_items = parse_cat_world_damaged_items(state.damaged_items)
+        usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
+        room_styles = parse_cat_world_room_styles(state.room_styles, inventory)
+        room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
     if state.selected_cat not in owned_cats:
         state.selected_cat = owned_cats[0]
         db.add(state)
