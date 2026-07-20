@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-022"
-DEFAULT_PAGE_VERSION = "v20260721.22"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-023"
+DEFAULT_PAGE_VERSION = "v20260721.23"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3649,6 +3649,73 @@ async def vue_cat_world_play_api(request: Request, db: Session = Depends(get_db)
     db.commit()
     db.refresh(state)
     return {"ok": True, "effect": effect, **serialize_cat_world_payload(db, state)}
+
+
+@app.post("/api/vue/cat-world/agent-event")
+async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="猫咪事件数据不是有效 JSON。") from exc
+    payload = payload if isinstance(payload, dict) else {}
+    cat_id = str(payload.get("catId") or "").strip()
+    item_id = str(payload.get("itemId") or "").strip()
+    event_kind = str(payload.get("kind") or "").strip()
+    if event_kind not in {"favorite-toy", "favorite-decor"}:
+        raise HTTPException(status_code=400, detail="不支持这个猫咪事件。")
+    state = get_or_create_cat_world_state(db, phone)
+    owned_cats = parse_cat_world_cats(state.cats)
+    if cat_id not in owned_cats:
+        raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
+    item = CAT_WORLD_SHOP_BY_ID.get(item_id)
+    expected_category = "toy" if event_kind == "favorite-toy" else "decor"
+    if not item or item.get("category") != expected_category:
+        raise HTTPException(status_code=400, detail="这个道具不能记录为猫咪偏好事件。")
+    inventory = parse_cat_world_inventory(state.inventory)
+    damaged_items = parse_cat_world_damaged_items(state.damaged_items)
+    if inventory.get(item_id, 0) <= 0 or item_id in damaged_items:
+        return {"ok": True, "recorded": False}
+    cat = CAT_WORLD_CAT_BY_ID.get(cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    traits = cat_world_cat_traits(cat)
+    now = datetime.utcnow()
+    log = get_or_create_cat_world_daily_log(db, state.phone, cat["id"], date.today(), now)
+    agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
+    ambient_event_at = agent_state.get("ambientEventAt") if isinstance(agent_state.get("ambientEventAt"), dict) else {}
+    token = f"{event_kind}:{item_id}"
+    last_seen_raw = str(ambient_event_at.get(token) or "")
+    try:
+        last_seen = datetime.fromisoformat(last_seen_raw.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        last_seen = None
+    if last_seen and now - last_seen < timedelta(minutes=8):
+        return {"ok": True, "recorded": False}
+    label = item.get("label") or item_id
+    if event_kind == "favorite-toy":
+        event_label = "自主玩耍"
+        message = f"{cat['label']}自己跑去玩最喜欢的{label}。"
+    else:
+        event_label = "偏好停留"
+        message = f"{cat['label']}自己跑到喜欢的{label}旁边待了一会儿。"
+    agent_state = append_cat_world_agent_event(
+        log,
+        cat,
+        traits,
+        event_kind,
+        event_label,
+        message,
+        now,
+    )
+    ambient_event_at[token] = now.replace(microsecond=0).isoformat() + "Z"
+    agent_state["ambientEventAt"] = ambient_event_at
+    log.agent_state = encode_cat_world_agent_state(agent_state)
+    db.add(log)
+    db.commit()
+    return {
+        "ok": True,
+        "recorded": True,
+        "event": {"kind": event_kind, "label": event_label, "message": message},
+    }
 
 
 @app.post("/api/vue/cat-world/repair")
@@ -10329,6 +10396,7 @@ CAT_WORLD_AGENT_STATE_CARRY_KEYS = {
     "activeFoodRemainingSeconds",
     "activeFoodStartedAt",
     "activeFoodToken",
+    "ambientEventAt",
     "lastPetAt",
     "mischiefChecked",
     "mischiefItemId",

@@ -27,6 +27,7 @@ const activeToolCategory = ref("decor");
 const clockNow = ref(Date.now());
 const energyModalOpen = ref(false);
 const petBusyCatId = ref("");
+const ambientEventCooldowns = new Map();
 
 const catReactionTexts = [
   "收到摸摸指令，开心值上升",
@@ -70,6 +71,7 @@ onMounted(async () => {
     onLayoutChange: handleGameLayoutChange,
     onToyClick: handleRoomToyClick,
     onCatThought: (cat, message) => showCatReaction(cat, message),
+    onCatAmbient: recordCatAmbientEvent,
   });
   updateCatWorldGame();
 });
@@ -396,6 +398,25 @@ function handleRoomToyClick(itemId) {
     }
     play(item);
   }
+}
+
+function recordCatAmbientEvent(cat, event = {}) {
+  if (!cat?.id || !event?.kind || !event?.itemId) return;
+  const key = `${cat.id}:${event.kind}:${event.itemId}`;
+  const now = Date.now();
+  if (now - Number(ambientEventCooldowns.get(key) || 0) < 4 * 60 * 1000) return;
+  ambientEventCooldowns.set(key, now);
+  fetchJson(routeApiPaths.catWorldAgentEvent(), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      catId: cat.id,
+      kind: event.kind,
+      itemId: event.itemId,
+    }),
+  }).catch(() => {
+    ambientEventCooldowns.delete(key);
+  });
 }
 
 function ownedToolCount(categoryKey) {

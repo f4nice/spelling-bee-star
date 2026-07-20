@@ -1178,6 +1178,11 @@ class CatWorldScene extends Phaser.Scene {
       onComplete: () => bubble.destroy(),
     });
     this.owner.handlers.onCatThought?.(cat, message);
+    this.owner.handlers.onCatAmbient?.(cat, {
+      kind: target.kind,
+      itemId: target.itemId || target.decorId,
+      label: target.label,
+    });
   }
 
   spawnGoalBubble(container, cat, target) {
