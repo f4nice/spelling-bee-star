@@ -219,6 +219,32 @@ const focusedAgentEvents = computed(() => {
   if (!Array.isArray(events)) return [];
   return events.filter((event) => event?.message).slice(-4).reverse();
 });
+function clampCatScore(value) {
+  const score = Number(value);
+  if (!Number.isFinite(score)) return 0;
+  return Math.max(0, Math.min(100, score));
+}
+const catAgentCards = computed(() =>
+  cats.value.map((cat) => {
+    const owned = ownsCat(cat.id);
+    const log = dailyLogs.value[cat.id] || {};
+    const agent = log.agentState || {};
+    const behavior = agent.currentBehavior || {};
+    const agentEvents = Array.isArray(agent.events) ? agent.events.filter((event) => event?.message) : [];
+    const latestEvent = agentEvents.length ? agentEvents[agentEvents.length - 1] : null;
+    return {
+      ...cat,
+      owned,
+      log,
+      agent,
+      behaviorLabel: behavior.label || (owned ? "自由活动" : "未解锁"),
+      moodScore: clampCatScore(log.moodScore ?? agent.adjustedMoodScore ?? 0),
+      energyScore: clampCatScore(log.energyScore ?? agent.adjustedEnergyScore ?? 0),
+      dailyMoodLabel: agent.dailyMoodLabel || (owned ? "今天状态稳定" : "等待解锁"),
+      latestEvent,
+    };
+  }),
+);
 const gameSnapshot = computed(() => ({
   cats: cats.value,
   inventory: usableInventory.value,
@@ -852,15 +878,29 @@ async function selectCat(catId) {
       </div>
       <div class="cat-world-cat-list">
         <button
-          v-for="cat in cats"
+          v-for="cat in catAgentCards"
           :key="cat.id"
           type="button"
-          :class="['cat-world-cat-chip', { active: state.selectedCat === cat.id, locked: !ownsCat(cat.id) }]"
-          :disabled="!ownsCat(cat.id) || busyItemId === cat.id"
+          :class="['cat-world-cat-chip', { active: state.selectedCat === cat.id, locked: !cat.owned }]"
+          :disabled="!cat.owned || busyItemId === cat.id"
           @click="selectCat(cat.id)"
         >
+          <span>{{ cat.owned ? cat.rarity || cat.englishName : "未解锁" }}</span>
           <strong>{{ cat.label }}</strong>
-          <span>{{ ownsCat(cat.id) ? cat.personality || cat.englishName : "未解锁" }}</span>
+          <small>{{ cat.owned ? cat.personality || cat.englishName : cat.description }}</small>
+          <div v-if="cat.owned" class="cat-world-cat-agent-status">
+            <p>
+              <b>{{ cat.dailyMoodLabel }}</b>
+              <em>{{ cat.behaviorLabel }}</em>
+            </p>
+            <div class="cat-world-cat-agent-bars" aria-label="猫咪状态">
+              <i class="energy" :style="{ width: `${cat.energyScore}%` }"></i>
+              <i class="mood" :style="{ width: `${cat.moodScore}%` }"></i>
+            </div>
+            <p v-if="cat.latestEvent" class="cat-world-cat-agent-event">
+              {{ cat.latestEvent.time }} · {{ cat.latestEvent.message }}
+            </p>
+          </div>
         </button>
       </div>
     </section>

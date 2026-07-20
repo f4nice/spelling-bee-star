@@ -12190,6 +12190,77 @@ select {
   background: #fff8df;
 }
 
+.cat-world-cat-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cat-world-cat-chip {
+  align-content: start;
+  gap: 7px;
+  min-height: 132px;
+  padding: 10px;
+}
+
+.cat-world-cat-chip small {
+  color: #40516b;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.cat-world-cat-agent-status {
+  display: grid;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.cat-world-cat-agent-status p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.cat-world-cat-agent-status b,
+.cat-world-cat-agent-status em {
+  color: #263047;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.cat-world-cat-agent-status em {
+  color: #236b55;
+}
+
+.cat-world-cat-agent-bars {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+}
+
+.cat-world-cat-agent-bars i {
+  display: block;
+  min-width: 4px;
+  height: 7px;
+  border: 2px solid #2c2f3a;
+  border-radius: 0;
+  box-shadow: 2px 2px 0 #2c2f3a;
+}
+
+.cat-world-cat-agent-bars i.energy {
+  background: #ff6b7d;
+}
+
+.cat-world-cat-agent-bars i.mood {
+  background: #78cdf1;
+}
+
+.cat-world-cat-agent-event {
+  color: #5f6472;
+  overflow-wrap: anywhere;
+}
+
 .cat-world-tabs button.active,
 .cat-world-cat-chip.active {
   color: #fff8df;
