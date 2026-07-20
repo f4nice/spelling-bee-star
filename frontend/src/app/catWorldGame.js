@@ -144,9 +144,21 @@ function catMoodForSnapshot(snapshot, cat) {
   return 50;
 }
 
+function catAgentForSnapshot(snapshot, cat) {
+  return snapshot?.dailyLogs?.[cat?.id]?.agentState || {};
+}
+
+function catDailyGoalForSnapshot(snapshot, cat) {
+  return catAgentForSnapshot(snapshot, cat).dailyGoal || {};
+}
+
 function catTraitNumber(cat, key, fallback = 1) {
   const value = Number(cat?.traits?.[key]);
   return Number.isFinite(value) ? value : fallback;
+}
+
+function uniqueLines(lines) {
+  return [...new Set(lines.filter(Boolean).map((line) => String(line).trim()).filter(Boolean))];
 }
 
 function palette(tone) {
@@ -544,7 +556,7 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   dailyGoalForCat(cat = {}) {
-    return this.owner.snapshot?.dailyLogs?.[cat.id]?.agentState?.dailyGoal || {};
+    return catDailyGoalForSnapshot(this.owner.snapshot, cat);
   }
 
   foodRestPosition(cat, index) {
@@ -604,10 +616,13 @@ class CatWorldScene extends Phaser.Scene {
   drawCatShape(container, cat, selected, snapshot, behavior = {}) {
     const colors = CAT_COLORS[cat.id] || CAT_COLORS.mimi;
     const graphics = makeLocalGraphics(this, container);
+    const energyScore = catEnergyForSnapshot(snapshot, cat);
+    const moodScore = catMoodForSnapshot(snapshot, cat);
     graphics.fillStyle(0x203041, 0.18);
     graphics.fillRect(7, 49, 82, 7);
     this.drawCatPixels(graphics, cat, colors);
-    this.drawStatusBars(graphics, catEnergyForSnapshot(snapshot, cat), catMoodForSnapshot(snapshot, cat));
+    this.drawStatusBars(graphics, energyScore, moodScore);
+    this.drawCatMoodCue(graphics, behavior, energyScore, moodScore);
 
     graphics.fillStyle(selected ? 0xfff07d : 0xff8cad, 1);
     graphics.fillRect(42, -24, selected ? 18 : 10, 8);
@@ -641,7 +656,7 @@ class CatWorldScene extends Phaser.Scene {
       graphics.fillRect(84, 3, 4, 2);
       graphics.fillRect(89, 5, 4, 2);
     }
-    const dailyGoal = snapshot?.dailyLogs?.[cat.id]?.agentState?.dailyGoal || {};
+    const dailyGoal = catDailyGoalForSnapshot(snapshot, cat);
     if (dailyGoal.key === "mischief-watch") {
       graphics.fillStyle(0xdb2777, 1);
       graphics.fillRect(76, -35, 18, 18);
@@ -662,8 +677,35 @@ class CatWorldScene extends Phaser.Scene {
     this.syncCatTextOverlays(container);
   }
 
+  drawCatMoodCue(graphics, behavior, energyScore, moodScore) {
+    if (behavior.sleeping) return;
+    if (energyScore < Number(behavior.restThreshold || 34)) {
+      graphics.fillStyle(0x87d9ff, 0.95);
+      graphics.fillRect(82, 10, 8, 8);
+      graphics.fillRect(90, 14, 8, 8);
+      graphics.fillStyle(INK, 0.9);
+      graphics.fillRect(84, 13, 3, 2);
+      return;
+    }
+    if (moodScore < 38) {
+      graphics.fillStyle(0x2c2f3a, 0.88);
+      graphics.fillRect(78, 2, 20, 9);
+      graphics.fillRect(82, -2, 13, 13);
+      graphics.fillStyle(0x87d9ff, 1);
+      graphics.fillRect(82, 15, 3, 7);
+      graphics.fillRect(92, 17, 3, 7);
+      return;
+    }
+    if (moodScore >= 82) {
+      graphics.fillStyle(0xff6f9f, 1);
+      graphics.fillRect(80, 1, 6, 6);
+      graphics.fillRect(88, 1, 6, 6);
+      graphics.fillRect(82, 7, 10, 6);
+    }
+  }
+
   catIntentInfo(cat, snapshot, behavior = {}) {
-    const agent = snapshot?.dailyLogs?.[cat.id]?.agentState || {};
+    const agent = catAgentForSnapshot(snapshot, cat);
     const goal = agent.dailyGoal || {};
     const targetLabel = shortCatText(goal.targetLabel || "", 5);
     if (behavior.sleeping || goal.key === "sleep") {
@@ -843,11 +885,29 @@ class CatWorldScene extends Phaser.Scene {
     const nightOwl = Boolean(traits.nightOwl);
     const sleeping = Boolean(serverBehavior.sleeping || (isSleepHour(hour, sleepStart, sleepEnd) && !nightOwl));
     const energy = catEnergyForSnapshot(this.owner.snapshot, cat);
+    const mood = catMoodForSnapshot(this.owner.snapshot, cat);
     const restThreshold = Number(traits.restThreshold ?? 34);
     let key = serverBehavior.key || "active";
     if (sleeping) key = "sleeping";
     else if (energy < restThreshold) key = "resting";
     else if (nightOwl && (hour >= 22 || hour < 5)) key = "night-watch";
+    const moodFactor = mood < 38 ? 0.72 : mood < 56 ? 0.84 : 1;
+    const energyFactor = energy < restThreshold + 8 ? 0.58 : energy < 58 ? 0.78 : 1;
+    const behaviorFactor = key === "slow" ? 0.72 : key === "exploring" ? 1.04 : key === "night-watch" ? 0.94 : 1;
+    const walkSpeed = clamp(catTraitNumber(cat, "movement", 1) * moodFactor * energyFactor * behaviorFactor, 0.34, 0.92);
+    const idleChance = sleeping
+      ? 100
+      : key === "resting"
+        ? 92
+        : energy < restThreshold + 8
+          ? 72
+          : mood < 38
+            ? 54
+            : key === "slow"
+              ? 38
+              : key === "night-watch"
+                ? 18
+                : 24;
     return {
       key,
       sleeping,
@@ -855,6 +915,11 @@ class CatWorldScene extends Phaser.Scene {
       dailyLabel,
       routine: agent.routine || traits.routine || "观察房间里的学习节奏",
       canWalk: !sleeping && energy >= restThreshold,
+      energy,
+      mood,
+      restThreshold,
+      walkSpeed,
+      idleChance,
       restless: nightOwl && (hour >= 22 || hour < 5),
     };
   }
@@ -906,8 +971,8 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   scheduleCatWalk(container, index, cat = {}) {
-    const movement = clamp(catTraitNumber(cat, "movement", 1), 0.58, 1.12);
     const behavior = this.catBehavior(cat, index);
+    const movement = Number(behavior.walkSpeed || 0.62);
     container.setData("behavior", behavior);
     if (!behavior.canWalk) {
       this.tweens.add({
@@ -924,9 +989,15 @@ class CatWorldScene extends Phaser.Scene {
       }
       return;
     }
-    const delay = Math.round((Phaser.Math.Between(4200, 8400) + index * 680) / Math.max(movement, 0.62));
+    const delay = Math.round((Phaser.Math.Between(5800, 12200) + index * 780) / Math.max(movement, 0.38));
     this.time.delayedCall(delay, () => {
       if (!container.active) return;
+      const latestBehavior = this.catBehavior(cat, index);
+      container.setData("behavior", latestBehavior);
+      if (this.shouldCatIdle(latestBehavior)) {
+        this.playCatIdle(container, index, cat, latestBehavior);
+        return;
+      }
       const foodTarget = this.foodTargetForCat(cat);
       const goalTarget = this.agentGoalTarget(cat);
       const favoriteTarget = this.favoriteItemTarget(cat);
@@ -947,7 +1018,7 @@ class CatWorldScene extends Phaser.Scene {
           : shouldVisitFavorite
             ? favoriteTarget.y
             : Phaser.Math.Between(FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
-      const duration = Math.round(Phaser.Math.Between(26000, 42000) / movement);
+      const duration = Math.round(Phaser.Math.Between(34000, 56000) / Math.max(Number(latestBehavior.walkSpeed || movement), 0.34));
       this.turnCat(container, nextX);
       this.tweens.add({
         targets: container,
@@ -972,6 +1043,38 @@ class CatWorldScene extends Phaser.Scene {
         },
       });
     });
+  }
+
+  shouldCatIdle(behavior = {}) {
+    return Phaser.Math.Between(1, 100) <= Number(behavior.idleChance || 20);
+  }
+
+  playCatIdle(container, index, cat = {}, behavior = {}) {
+    const message = this.catIdleMessage(cat, behavior);
+    if (message) this.spawnRestBubble(container, cat, message);
+    const idleMs = Phaser.Math.Between(3600, 7600) + index * 280;
+    this.tweens.add({
+      targets: container,
+      y: container.y + Phaser.Math.Between(-2, 3),
+      yoyo: true,
+      repeat: 1,
+      duration: 520,
+      ease: "Sine.easeInOut",
+    });
+    this.time.delayedCall(idleMs, () => {
+      if (container.active) this.scheduleCatWalk(container, index, cat);
+    });
+  }
+
+  catIdleMessage(cat = {}, behavior = {}) {
+    const goal = this.dailyGoalForCat(cat);
+    if (behavior.energy < Number(behavior.restThreshold || 34) + 8) return "体力有点低，先坐一会儿。";
+    if (behavior.mood < 38) return "今天心情不太好，想安静一下。";
+    if (goal.key === "mischief-watch") return `正在犹豫要不要碰${goal.targetLabel || "那个道具"}。`;
+    if (goal.key === "favorite-decor") return `在想${goal.targetLabel || "喜欢的角落"}。`;
+    if (behavior.key === "slow") return "今天想慢慢走。";
+    if (behavior.key === "night-watch") return "夜巡路线确认中。";
+    return Phaser.Math.Between(1, 100) <= 45 ? "停下来观察房间。" : "";
   }
 
   agentGoalTarget(cat = {}) {
@@ -1282,12 +1385,8 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   spawnCatBubble(container, cat) {
-    const lines = cat?.thoughts?.length ? cat.thoughts : [
-      "我想听一个新单词。",
-      "能量已同步，今天也很棒。",
-      "摸摸接收成功。",
-      "我在检查书桌路线。",
-    ];
+    const behavior = container.getData("behavior") || this.catBehavior(cat);
+    const lines = this.catThoughtLines(cat, behavior);
     const message = lines[Math.floor(Math.random() * lines.length)];
     const bubble = this.add
       .text(container.x + 34, container.y - 24, message, {
@@ -1309,6 +1408,33 @@ class CatWorldScene extends Phaser.Scene {
       onComplete: () => bubble.destroy(),
     });
     this.owner.handlers.onCatThought?.(cat, message);
+  }
+
+  catThoughtLines(cat = {}, behavior = {}) {
+    const agent = catAgentForSnapshot(this.owner.snapshot, cat);
+    const goal = agent.dailyGoal || {};
+    const activeFood = this.owner.snapshot.activeFood || {};
+    const lines = [
+      ...(cat?.thoughts?.length ? cat.thoughts : [
+        "我想听一个新单词。",
+        "能量已同步，今天也很棒。",
+        "摸摸接收成功。",
+        "我在检查书桌路线。",
+      ]),
+    ];
+    if (agent.dailyMoodLabel) lines.unshift(`${agent.dailyMoodLabel}，${behavior.routine || "想按自己的节奏活动"}。`);
+    if (goal.message) lines.unshift(goal.message);
+    if (activeFood.active && activeFood.targetCatId === cat.id) {
+      lines.unshift(`那份${activeFood.label || "食物"}是给我的，我会慢慢吃。`);
+    }
+    if (behavior.energy < Number(behavior.restThreshold || 34) + 8) {
+      lines.unshift("体力低的时候，我会先休息再走动。");
+    }
+    if (behavior.mood < 38) {
+      lines.unshift("今天心情不太好，陪我玩一下会好很多。");
+    }
+    if (agent.hourlyReason) lines.push(`现在的节奏: ${agent.hourlyReason}。`);
+    return uniqueLines(lines).slice(0, 8);
   }
 
   positionForDecor(decorId, spec) {
