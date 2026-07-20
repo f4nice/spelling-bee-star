@@ -206,8 +206,8 @@ onBeforeUnmount(() => {
 
   <section v-if="selectedList" class="challenge-day-grid">
     <ChallengeDayWordCard
-      v-for="item in filteredWords"
-      :key="`${item.id}-${item.status}`"
+      v-for="(item, index) in filteredWords"
+      :key="`${item.id}-${item.word_list_id || 'none'}-${item.status}-${index}`"
       :item="item"
       :day="data.date"
       :fallback-letter="fallbackLetter"

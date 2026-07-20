@@ -87,8 +87,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-001"
-DEFAULT_PAGE_VERSION = "v20260721.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-002"
+DEFAULT_PAGE_VERSION = "v20260721.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -467,6 +467,16 @@ CAT_WORLD_CATS = [
         "rarity": "Starter",
         "description": "第一只陪你学习的猫。",
         "personality": "黏人的学习搭子",
+        "traits": {
+            "activity": "balanced",
+            "movement": 0.9,
+            "energyDrain": 0.85,
+            "moodDrain": 0.75,
+            "playMoodGain": 1.1,
+            "foodEnergyGain": 1.0,
+            "restThreshold": 30,
+            "label": "慢热黏人，消耗低，摸摸后心情涨得快。",
+        },
         "thoughts": [
             "检测到你今天练过单词，想靠近一点听。",
             "如果你读英文，我会把尾巴调成陪读模式。",
@@ -480,6 +490,16 @@ CAT_WORLD_CATS = [
         "rarity": "Famous Cat",
         "description": "圆脸、安静，适合陪你背长单词。",
         "personality": "冷静的词库管理员",
+        "traits": {
+            "activity": "calm",
+            "movement": 0.72,
+            "energyDrain": 0.68,
+            "moodDrain": 0.62,
+            "playMoodGain": 0.9,
+            "foodEnergyGain": 0.95,
+            "restThreshold": 26,
+            "label": "安静省电，走得慢，适合长时间陪读。",
+        },
         "thoughts": [
             "正在把新单词按难度排好队。",
             "建议先复习三个旧词，再挑战一个新词。",
@@ -493,6 +513,16 @@ CAT_WORLD_CATS = [
         "rarity": "Famous Cat",
         "description": "聪明又爱说话，听你朗读英文很认真。",
         "personality": "话多的语音小助手",
+        "traits": {
+            "activity": "chatty",
+            "movement": 1.18,
+            "energyDrain": 1.22,
+            "moodDrain": 1.35,
+            "playMoodGain": 1.35,
+            "foodEnergyGain": 1.06,
+            "restThreshold": 42,
+            "label": "爱跑爱说话，能量掉得快，但互动心情涨得最多。",
+        },
         "thoughts": [
             "我听见了一个发音，可以再读一遍吗？",
             "朗读会让能量灯亮得更快。",
@@ -506,6 +536,16 @@ CAT_WORLD_CATS = [
         "rarity": "Famous Cat",
         "description": "温柔黏人，适合阅读日一起出现。",
         "personality": "温柔的阅读陪伴员",
+        "traits": {
+            "activity": "gentle",
+            "movement": 0.62,
+            "energyDrain": 0.58,
+            "moodDrain": 0.5,
+            "playMoodGain": 0.82,
+            "foodEnergyGain": 1.18,
+            "restThreshold": 24,
+            "label": "最省体力，喜欢慢慢走，吃东西恢复更明显。",
+        },
         "thoughts": [
             "今天适合慢慢读一段好句。",
             "你的学习节奏很好，我想在旁边趴着。",
@@ -519,6 +559,16 @@ CAT_WORLD_CATS = [
         "rarity": "Famous Cat",
         "description": "像猫咪世界里的守护者，适合大目标解锁。",
         "personality": "冒险型房间守护者",
+        "traits": {
+            "activity": "adventurous",
+            "movement": 1.08,
+            "energyDrain": 1.32,
+            "moodDrain": 1.02,
+            "playMoodGain": 1.12,
+            "foodEnergyGain": 1.08,
+            "restThreshold": 46,
+            "label": "体型大、巡逻多，能量消耗最高，心情比较稳。",
+        },
         "thoughts": [
             "目标已锁定：把今天的挑战完成。",
             "能量充足，可以扩建一格房间。",
@@ -6960,11 +7010,125 @@ def import_spb_word_bank_rows(db: Session, group: dict[str, Any], source_rows: l
     return word_ids, split_lists
 
 
+def is_wrong_word_list(word_list: WordList | None) -> bool:
+    return bool(word_list and str(word_list.name or "").startswith("生词本 "))
+
+
+def challenge_word_display_list(
+    db: Session,
+    word_id: int,
+    preferred_list: WordList | None = None,
+) -> WordList | None:
+    if preferred_list and not is_wrong_word_list(preferred_list):
+        return preferred_list
+    row = db.execute(
+        select(WordList)
+        .join(WordListItem, WordListItem.word_list_id == WordList.id)
+        .where(WordListItem.word_id == word_id)
+        .where(WordList.name.not_like("生词本 %"))
+        .order_by(WordList.display_order.asc(), WordList.sequence_offset.asc(), WordList.id.asc())
+        .limit(1)
+    ).first()
+    return row[0] if row else preferred_list
+
+
+def challenge_day_word_item(
+    word: Word,
+    *,
+    status: str,
+    daily_wrong_ids: set[int],
+    corrected_wrong_ids: set[int],
+    correct_count: int = 0,
+    wrong_count: int = 0,
+    word_list: WordList | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": word.id,
+        "word": word.word,
+        "status": status,
+        "was_wrong": bool((wrong_count or 0) > 0 or word.id in daily_wrong_ids),
+        "corrected": word.id in corrected_wrong_ids,
+        "correct_count": max(int(correct_count or 0), 0),
+        "wrong_count": max(int(wrong_count or 0), 0),
+        "word_list_id": word_list.id if word_list else None,
+        "word_list_name": word_list.name if word_list else "",
+        "image_url": word.image_url,
+        "phonetic": word.phonetic,
+        "part_of_speech": word.part_of_speech,
+        "english_definition": word.english_definition,
+        "chinese_definition": word.chinese_definition,
+    }
+
+
+def challenge_day_wrong_word_counts(db: Session, challenge_date: date) -> dict[int, int]:
+    return {
+        int(word_id): max(int(wrong_count or 0), 1)
+        for word_id, wrong_count in db.execute(
+            select(WrongWord.word_id, WrongWord.wrong_count).where(WrongWord.wrong_date == challenge_date)
+        ).all()
+    }
+
+
+def challenge_day_attempt_items(
+    db: Session,
+    challenge_date: date,
+    daily_wrong_ids: set[int],
+    corrected_wrong_ids: set[int],
+) -> list[dict[str, Any]]:
+    day_start = datetime.combine(challenge_date, datetime.min.time())
+    day_end = day_start + timedelta(days=1)
+    attempt_rows = db.execute(
+        select(ChallengeSpellingAttempt, Word, WordList)
+        .join(Word, Word.id == ChallengeSpellingAttempt.word_id)
+        .outerjoin(WordList, WordList.id == ChallengeSpellingAttempt.word_list_id)
+        .where(ChallengeSpellingAttempt.created_at >= day_start)
+        .where(ChallengeSpellingAttempt.created_at < day_end)
+        .order_by(ChallengeSpellingAttempt.created_at.asc(), ChallengeSpellingAttempt.id.asc())
+    ).all()
+    summaries: dict[tuple[int, int | None], dict[str, Any]] = {}
+    display_list_cache: dict[tuple[int, int | None], WordList | None] = {}
+    for attempt, word, attempt_list in attempt_rows:
+        cache_key = (word.id, attempt_list.id if attempt_list else None)
+        if cache_key not in display_list_cache:
+            display_list_cache[cache_key] = challenge_word_display_list(db, word.id, attempt_list)
+        word_list = display_list_cache[cache_key]
+        summary_key = (word.id, word_list.id if word_list else None)
+        summary = summaries.get(summary_key)
+        if not summary:
+            summary = {
+                "word": word,
+                "word_list": word_list,
+                "correct_count": 0,
+                "wrong_count": 0,
+                "last_result": "correct",
+            }
+            summaries[summary_key] = summary
+        if attempt.is_correct:
+            summary["correct_count"] += 1
+            summary["last_result"] = "correct"
+        else:
+            summary["wrong_count"] += 1
+            summary["last_result"] = "wrong"
+    return [
+        challenge_day_word_item(
+            summary["word"],
+            status=summary["last_result"],
+            daily_wrong_ids=daily_wrong_ids,
+            corrected_wrong_ids=corrected_wrong_ids,
+            correct_count=summary["correct_count"],
+            wrong_count=summary["wrong_count"],
+            word_list=summary["word_list"],
+        )
+        for summary in summaries.values()
+    ]
+
+
 def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
     daily_wrong_ids = challenge_day_wrong_word_ids(db, challenge_date)
     corrected_wrong_ids = challenge_day_corrected_wrong_word_ids(db, challenge_date, daily_wrong_ids)
     pending_wrong_ids = daily_wrong_ids - corrected_wrong_ids
     wrong_word_list = get_wrong_word_list(db, challenge_date)
+    wrong_count_by_word = challenge_day_wrong_word_counts(db, challenge_date)
     stat = db.scalar(select(ChallengeDailyStat).where(ChallengeDailyStat.stat_date == challenge_date))
     detail_rows = db.execute(
         select(ChallengeDailyWord, Word, WordList)
@@ -6975,22 +7139,15 @@ def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
     ).all()
 
     words = [
-        {
-            "id": word.id,
-            "word": word.word,
-            "status": detail.last_result,
-            "was_wrong": bool((detail.wrong_count or 0) > 0 or word.id in daily_wrong_ids),
-            "corrected": word.id in corrected_wrong_ids,
-            "correct_count": detail.correct_count,
-            "wrong_count": detail.wrong_count,
-            "word_list_id": word_list.id if word_list else None,
-            "word_list_name": word_list.name if word_list else "",
-            "image_url": word.image_url,
-            "phonetic": word.phonetic,
-            "part_of_speech": word.part_of_speech,
-            "english_definition": word.english_definition,
-            "chinese_definition": word.chinese_definition,
-        }
+        challenge_day_word_item(
+            word,
+            status=detail.last_result,
+            daily_wrong_ids=daily_wrong_ids,
+            corrected_wrong_ids=corrected_wrong_ids,
+            correct_count=detail.correct_count,
+            wrong_count=detail.wrong_count,
+            word_list=challenge_word_display_list(db, word.id, word_list),
+        )
         for detail, word, word_list in detail_rows
     ]
     seen_word_ids = {item["id"] for item in words}
@@ -6998,24 +7155,58 @@ def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
     if missing_wrong_ids:
         wrong_words = db.scalars(select(Word).where(Word.id.in_(missing_wrong_ids)).order_by(Word.word.asc())).all()
         words.extend(
-            {
-                "id": word.id,
-                "word": word.word,
-                "status": "correct" if word.id in corrected_wrong_ids else "wrong",
-                "was_wrong": True,
-                "corrected": word.id in corrected_wrong_ids,
-                "correct_count": 0,
-                "wrong_count": 1,
-                "word_list_id": wrong_word_list.id if wrong_word_list else None,
-                "word_list_name": "\u5f53\u65e5\u751f\u8bcd\u672c",
-                "image_url": word.image_url,
-                "phonetic": word.phonetic,
-                "part_of_speech": word.part_of_speech,
-                "english_definition": word.english_definition,
-                "chinese_definition": word.chinese_definition,
-            }
+            challenge_day_word_item(
+                word,
+                status="correct" if word.id in corrected_wrong_ids else "wrong",
+                daily_wrong_ids=daily_wrong_ids,
+                corrected_wrong_ids=corrected_wrong_ids,
+                correct_count=0,
+                wrong_count=wrong_count_by_word.get(word.id, 1),
+                word_list=challenge_word_display_list(db, word.id, wrong_word_list),
+            )
             for word in wrong_words
         )
+
+    attempt_items = challenge_day_attempt_items(db, challenge_date, daily_wrong_ids, corrected_wrong_ids)
+    words_by_pair: dict[tuple[int, int | None], dict[str, Any]] = {
+        (item["id"], item.get("word_list_id")): item for item in words
+    }
+    words_by_id: dict[int, dict[str, Any]] = {item["id"]: item for item in words}
+    for attempt_item in attempt_items:
+        pair_key = (attempt_item["id"], attempt_item.get("word_list_id"))
+        existing = words_by_pair.get(pair_key)
+        fallback = words_by_id.get(attempt_item["id"])
+        if (
+            not existing
+            and fallback
+            and attempt_item.get("word_list_id")
+            and (not fallback.get("word_list_name") or str(fallback.get("word_list_name")).startswith("生词本 "))
+        ):
+            existing = fallback
+        if existing:
+            existing["correct_count"] = max(
+                int(existing.get("correct_count") or 0),
+                int(attempt_item.get("correct_count") or 0),
+            )
+            existing["wrong_count"] = max(
+                int(existing.get("wrong_count") or 0),
+                int(attempt_item.get("wrong_count") or 0),
+            )
+            existing["was_wrong"] = bool(existing.get("was_wrong") or attempt_item.get("was_wrong"))
+            if attempt_item.get("word_list_id") and (
+                not existing.get("word_list_id") or str(existing.get("word_list_name") or "").startswith("生词本 ")
+            ):
+                old_pair_key = (existing["id"], existing.get("word_list_id"))
+                existing["word_list_id"] = attempt_item.get("word_list_id")
+                existing["word_list_name"] = attempt_item.get("word_list_name") or existing.get("word_list_name") or ""
+                words_by_pair.pop(old_pair_key, None)
+                words_by_pair[(existing["id"], existing.get("word_list_id"))] = existing
+            if attempt_item.get("status"):
+                existing["status"] = attempt_item["status"]
+        else:
+            words.append(attempt_item)
+            words_by_pair[pair_key] = attempt_item
+            words_by_id[attempt_item["id"]] = attempt_item
 
     correct = stat.correct_count if stat else sum(item["correct_count"] for item in words)
     wrong_attempts = stat.wrong_count if stat else sum(item["wrong_count"] for item in words)
@@ -9667,6 +9858,38 @@ def cat_world_owned_style_options(inventory: dict[str, int], decor_id: str) -> l
     return options
 
 
+def cat_world_selected_cat(state: CatWorldState) -> dict[str, Any]:
+    return CAT_WORLD_CAT_BY_ID.get(state.selected_cat) or CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID]
+
+
+def cat_world_cat_traits(cat: dict[str, Any] | None) -> dict[str, Any]:
+    raw_traits = (cat or {}).get("traits") if isinstance(cat, dict) else {}
+    raw_traits = raw_traits if isinstance(raw_traits, dict) else {}
+    defaults = {
+        "activity": "balanced",
+        "movement": 1.0,
+        "energyDrain": 1.0,
+        "moodDrain": 1.0,
+        "playMoodGain": 1.0,
+        "foodEnergyGain": 1.0,
+        "restThreshold": 34,
+        "label": "均衡型猫咪，心情和体力消耗都比较稳定。",
+    }
+    traits = {**defaults, **raw_traits}
+    for key in ("movement", "energyDrain", "moodDrain", "playMoodGain", "foodEnergyGain"):
+        try:
+            traits[key] = round(min(max(float(traits[key]), 0.35), 1.8), 2)
+        except (TypeError, ValueError):
+            traits[key] = defaults[key]
+    try:
+        traits["restThreshold"] = int(min(max(int(traits["restThreshold"]), 18), 60))
+    except (TypeError, ValueError):
+        traits["restThreshold"] = defaults["restThreshold"]
+    traits["activity"] = str(traits["activity"] or defaults["activity"])
+    traits["label"] = str(traits["label"] or defaults["label"])
+    return traits
+
+
 def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
     normalized = normalize_login_phone(phone)
     state = db.scalar(select(CatWorldState).where(CatWorldState.phone == normalized))
@@ -9716,8 +9939,14 @@ def cat_world_mood(
     owned_cats: list[str],
     available_energy: int,
 ) -> dict[str, Any]:
+    selected_cat = cat_world_selected_cat(state)
+    traits = cat_world_cat_traits(selected_cat)
     active_food = cat_world_active_food(state)
-    food_bonus = int(active_food.get("mood") or 0) if active_food.get("active") else 0
+    food_bonus = (
+        round(int(active_food.get("mood") or 0) * float(traits["foodEnergyGain"]))
+        if active_food.get("active")
+        else 0
+    )
     toy_bonus = min(
         18,
         sum(
@@ -9737,16 +9966,26 @@ def cat_world_mood(
     cat_bonus = min(max(len(owned_cats) - 1, 0) * 3, 12)
     energy_bonus = min(max(available_energy, 0) // 250, 8)
     recent_play = bool(state.last_played_at and datetime.utcnow() - state.last_played_at <= timedelta(hours=24))
-    play_bonus = 12 if recent_play else 0
-    score = max(35, min(100, 48 + food_bonus + toy_bonus + decor_bonus + cat_bonus + energy_bonus + play_bonus))
+    play_bonus = round(12 * float(traits["playMoodGain"])) if recent_play else 0
+    movement_cost = round(6 * float(traits["movement"]) * float(traits["moodDrain"]))
+    energy_cost = round(12 * float(traits["movement"]) * float(traits["energyDrain"]))
+    score = max(
+        28,
+        min(100, 52 + food_bonus + toy_bonus + decor_bonus + cat_bonus + energy_bonus + play_bonus - movement_cost),
+    )
     cat_energy = max(
         5,
         min(
             100,
-            18
+            28
             + min(max(available_energy, 0) // 160, 36)
-            + (int(active_food.get("catEnergy") or 0) if active_food.get("active") else 0)
-            + (8 if recent_play else 0),
+            + (
+                round(int(active_food.get("catEnergy") or 0) * float(traits["foodEnergyGain"]))
+                if active_food.get("active")
+                else 0
+            )
+            + (8 if recent_play else 0)
+            - energy_cost,
         ),
     )
     if score >= 88:
@@ -9761,12 +10000,16 @@ def cat_world_mood(
         "score": score,
         "label": label,
         "catEnergy": cat_energy,
-        "catEnergyLabel": "体力充足" if cat_energy >= 58 else ("原地休息" if cat_energy < 34 else "慢慢走动"),
-        "canWalk": cat_energy >= 34,
+        "catEnergyLabel": "体力充足" if cat_energy >= 58 else ("原地休息" if cat_energy < traits["restThreshold"] else "慢慢走动"),
+        "canWalk": cat_energy >= traits["restThreshold"],
         "activeFood": active_food,
         "recentPlay": recent_play,
         "lastPlayItem": state.last_play_item or "",
         "lastPlayedAt": state.last_played_at.isoformat() if state.last_played_at else "",
+        "selectedCatId": selected_cat["id"],
+        "traits": traits,
+        "movementCost": movement_cost,
+        "energyCost": energy_cost,
     }
 
 

@@ -12406,3 +12406,76 @@ select {
     transform: translateX(-50%) translateY(-8px) scale(0.98);
   }
 }
+
+.cat-world-tool-tabs button:not(.active):not(:disabled):hover,
+.cat-world-owned-item:not(:disabled):hover {
+  color: #fff;
+  background: #236b55;
+}
+
+.green-hover-readable,
+.primary-link:hover,
+.primary-action-button:not(:disabled):hover,
+.challenge-button:not(:disabled):hover,
+.topbar-account-panel button:hover,
+.sidebar-session button:hover,
+.list-card:hover .plain-card-button,
+.home-stat-card:hover,
+.newspaper-card:hover,
+.calendar-day.has-records:hover,
+.challenge-day-back:hover,
+.challenge-day-list-card:hover,
+.spb-collection-card:hover,
+.spb-bank-card:hover,
+.spb-list-card:hover,
+.science-discovery-card:hover,
+.science-answer-toggle:hover,
+.audio-manager-trigger:hover,
+.audio-manager-target-button:hover,
+.word-audio-quick-button:not(:disabled):hover,
+.definition-audio-button:not(:disabled):hover,
+.password-toggle-button:hover,
+.cat-world-tool-tabs button.active,
+.cat-world-tool-tabs button:not(:disabled):hover,
+.cat-world-owned-item:not(:disabled):hover,
+.audio-manager-accent-switch button.active {
+  color: #fff;
+}
+
+.green-hover-readable :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.primary-link:hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.primary-action-button:not(:disabled):hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.challenge-button:not(:disabled):hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.topbar-account-panel button:hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.sidebar-session button:hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.list-card:hover .plain-card-button :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.home-stat-card:hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.newspaper-card:hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.calendar-day.has-records:hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.challenge-day-back:hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.challenge-day-list-card:hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.spb-collection-card:hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.spb-bank-card:hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.spb-list-card:hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.science-discovery-card:hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.science-answer-toggle:hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.audio-manager-trigger:hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.audio-manager-target-button:hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.word-audio-quick-button:not(:disabled):hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.definition-audio-button:not(:disabled):hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.password-toggle-button:hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.cat-world-tool-tabs button.active :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.cat-world-tool-tabs button:not(:disabled):hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.cat-world-owned-item:not(:disabled):hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.audio-manager-accent-switch button.active :where(span, strong, small, em, b, i, p, h1, h2, h3, h4) {
+  color: #fff;
+}
+
+.list-card:hover .plain-card-button :where(.status, .challenge-summary-badge, .nav-count),
+.challenge-day-list-card:hover :where(.challenge-day-list-count, .challenge-day-list-metrics em),
+.cat-world-tool-tabs button.active span,
+.cat-world-tool-tabs button:not(:disabled):hover span,
+.cat-world-owned-item:not(:disabled):hover em {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+}

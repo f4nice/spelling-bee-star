@@ -7,6 +7,8 @@ const FLOOR_BOTTOM = 522;
 const ROOM_BORDER = 12;
 const INK = 0x2c2f3a;
 const CREAM = 0xfff8df;
+const CAT_INTERACTION_DEPTH = 980;
+const CAT_HITBOX = { x: -20, y: -42, width: 150, height: 126 };
 
 const DECOR_SPECS = {
   "sun-window": { label: "阳光窗台", width: 150, height: 88, defaultX: 146, defaultY: 34 },
@@ -87,6 +89,11 @@ function yToPercent(y) {
 
 function owned(inventory, itemId) {
   return Number(inventory?.[itemId] || 0) > 0;
+}
+
+function catTraitNumber(cat, key, fallback = 1) {
+  const value = Number(cat?.traits?.[key]);
+  return Number.isFinite(value) ? value : fallback;
 }
 
 function palette(tone) {
@@ -336,19 +343,24 @@ class CatWorldScene extends Phaser.Scene {
       container.setSize(100, 70);
       container.setData("kind", "cat");
       container.setData("id", cat.id);
-      container.setDepth(y + 100);
-      container.setInteractive(new Phaser.Geom.Rectangle(0, -24, 102, 88), Phaser.Geom.Rectangle.Contains);
+      container.setDepth(CAT_INTERACTION_DEPTH + index);
+      container.setInteractive(
+        new Phaser.Geom.Rectangle(CAT_HITBOX.x, CAT_HITBOX.y, CAT_HITBOX.width, CAT_HITBOX.height),
+        Phaser.Geom.Rectangle.Contains,
+      );
       container.on("pointerdown", (_pointer, _localX, _localY, event) => {
+        this.children.bringToTop(container);
         this.stopPointerEvent(event);
       });
       container.on("pointerup", (_pointer, _localX, _localY, event) => {
+        this.children.bringToTop(container);
         this.stopPointerEvent(event);
         this.spawnCatBubble(container, cat);
         this.owner.handlers.onCatPet?.(cat);
       });
       this.drawCatShape(container, cat, snapshot.selectedCatId === cat.id, snapshot);
       this.catContainers.set(cat.id, container);
-      this.scheduleCatWalk(container, index);
+      this.scheduleCatWalk(container, index, cat);
     });
   }
 
@@ -468,39 +480,40 @@ class CatWorldScene extends Phaser.Scene {
     pixelBlock(graphics, 48, 17, 4, 1, INK);
   }
 
-  scheduleCatWalk(container, index) {
+  scheduleCatWalk(container, index, cat = {}) {
+    const movement = clamp(catTraitNumber(cat, "movement", 1), 0.62, 1.2);
     if (this.owner.snapshot?.mood?.canWalk === false) {
       this.tweens.add({
         targets: container,
         y: container.y - 3,
         yoyo: true,
         repeat: -1,
-        duration: 900 + index * 120,
+        duration: Math.round((1650 + index * 180) / Math.max(movement, 0.82)),
         ease: "Sine.easeInOut",
-        onUpdate: () => container.setDepth(container.y + 80),
+        onUpdate: () => container.setDepth(CAT_INTERACTION_DEPTH + index),
       });
       return;
     }
-    const delay = Phaser.Math.Between(600, 1800) + index * 220;
+    const delay = Math.round((Phaser.Math.Between(2200, 4600) + index * 430) / Math.max(movement, 0.72));
     this.time.delayedCall(delay, () => {
       if (!container.active) return;
       const nextX = Phaser.Math.Between(38, GAME_WIDTH - 132);
       const nextY = Phaser.Math.Between(FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
-      const duration = Phaser.Math.Between(2600, 5600);
+      const duration = Math.round(Phaser.Math.Between(9000, 15000) / movement);
       this.tweens.add({
         targets: container,
         x: nextX,
         y: nextY,
         duration,
         ease: "Sine.easeInOut",
-        onUpdate: () => container.setDepth(container.y + 100),
-        onComplete: () => this.scheduleCatWalk(container, index),
+        onUpdate: () => container.setDepth(CAT_INTERACTION_DEPTH + index),
+        onComplete: () => this.scheduleCatWalk(container, index, cat),
       });
     });
   }
 
   spawnCatBubble(container, cat) {
-    const lines = [
+    const lines = cat?.thoughts?.length ? cat.thoughts : [
       "我想听一个新单词。",
       "能量已同步，今天也很棒。",
       "摸摸接收成功。",
@@ -517,7 +530,7 @@ class CatWorldScene extends Phaser.Scene {
         padding: { x: 8, y: 5 },
       })
       .setOrigin(0.5)
-      .setDepth(900);
+      .setDepth(CAT_INTERACTION_DEPTH + 120);
     this.tweens.add({
       targets: bubble,
       y: bubble.y - 22,
