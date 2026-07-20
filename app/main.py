@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-028"
-DEFAULT_PAGE_VERSION = "v20260721.28"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-029"
+DEFAULT_PAGE_VERSION = "v20260721.29"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -10337,6 +10337,17 @@ def cat_world_local_time_label(now: datetime | None = None) -> str:
     return cat_world_local_now(now).strftime("%H:%M")
 
 
+def cat_world_routine_period(now: datetime | None = None) -> tuple[str, str]:
+    hour = cat_world_local_now(now).hour
+    if 5 <= hour < 11:
+        return "morning", "早晨"
+    if 11 <= hour < 17:
+        return "afternoon", "午后"
+    if 17 <= hour < 22:
+        return "evening", "傍晚"
+    return "night", "夜间"
+
+
 def cat_world_is_sleep_hour(hour: int, sleep_start: int, sleep_end: int) -> bool:
     if sleep_start == sleep_end:
         return False
@@ -10472,6 +10483,7 @@ CAT_WORLD_AGENT_STATE_CARRY_KEYS = {
     "mischiefItemId",
     "mischiefLabel",
     "petCount",
+    "routinePeriodEvents",
 }
 
 
@@ -11173,6 +11185,148 @@ def cat_world_apply_favorite_decor_rewards(
     return rewards
 
 
+def cat_world_routine_effect_message(
+    cat: dict[str, Any],
+    traits: dict[str, Any],
+    period_label: str,
+    behavior: dict[str, Any],
+    mood_key: str,
+    roll: float,
+    favorite_count: int,
+) -> tuple[str, str, int, int]:
+    temperament = str(traits.get("temperament") or "balanced")
+    cat_label = cat.get("label") or "猫咪"
+    behavior_key = str(behavior.get("key") or "")
+    if behavior.get("sleeping"):
+        return (
+            f"{period_label}睡觉",
+            f"{cat_label}{period_label}按自己的作息睡了一会儿，体力慢慢回来了。",
+            1 if mood_key not in {"grumpy", "quiet"} else 0,
+            2,
+        )
+    if behavior_key == "resting":
+        return (
+            f"{period_label}休息",
+            f"{cat_label}{period_label}体力偏低，自己找了个角落趴着省电。",
+            0,
+            1,
+        )
+    if period_label == "夜间" and bool(traits.get("nightOwl")):
+        return (
+            "夜间巡房",
+            f"{cat_label}夜里不太想睡，沿着房间边界巡逻了一圈。",
+            1,
+            -2,
+        )
+    if mood_key == "grumpy":
+        return (
+            f"{period_label}闹情绪",
+            f"{cat_label}{period_label}有点别扭，绕开了最热闹的地方。",
+            -2,
+            -1,
+        )
+    if temperament == "chatty":
+        return (
+            f"{period_label}喵语广播",
+            f"{cat_label}{period_label}对着房间说了一串喵语，像在复盘刚学的英文。",
+            3 if roll > 0.3 else 2,
+            -1,
+        )
+    if temperament == "gentle":
+        return (
+            f"{period_label}陪读",
+            f"{cat_label}{period_label}慢慢趴到柔软的位置旁边，安静陪读。",
+            2 + (1 if favorite_count else 0),
+            0,
+        )
+    if temperament == "calm":
+        return (
+            f"{period_label}整理",
+            f"{cat_label}{period_label}检查了一下书架和窗台，确认房间很适合背单词。",
+            1 + (1 if favorite_count else 0),
+            0,
+        )
+    if temperament == "guardian":
+        return (
+            f"{period_label}巡逻",
+            f"{cat_label}{period_label}守着房间入口巡逻，顺便看看有没有东西被碰歪。",
+            1,
+            -2 if roll > 0.45 else -1,
+        )
+    if mood_key in {"bright", "curious"}:
+        return (
+            f"{period_label}探索",
+            f"{cat_label}{period_label}兴致很好，去房间里找了一个新路线。",
+            2,
+            -1,
+        )
+    return (
+        f"{period_label}日常",
+        f"{cat_label}{period_label}按自己的节奏在房间里待了一会儿。",
+        1 + (1 if favorite_count and roll > 0.5 else 0),
+        0,
+    )
+
+
+def cat_world_apply_agent_routine_event(
+    log: CatWorldDailyLog,
+    cat: dict[str, Any],
+    traits: dict[str, Any],
+    inventory: dict[str, int],
+    favorite_active_ids: list[str],
+    now: datetime,
+) -> bool:
+    agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
+    period_key, period_label = cat_world_routine_period(now)
+    routine_periods = agent_state.get("routinePeriodEvents")
+    if not isinstance(routine_periods, dict):
+        routine_periods = {}
+    token = f"{log.log_date.isoformat()}:{period_key}"
+    if routine_periods.get(period_key) == token:
+        return False
+    mood_score = clamp_cat_world_score(int(log.mood_score or 0) + int(agent_state.get("moodOffset") or 0))
+    energy_score = clamp_cat_world_score(int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0))
+    behavior = cat_world_current_behavior(agent_state, traits, mood_score, energy_score, now)
+    seed = f"{cat_world_daily_agent_seed(log.log_date, cat['id'], log.phone)}:routine:{period_key}"
+    roll = cat_world_stable_ratio(seed)
+    label, message, mood_delta, energy_delta = cat_world_routine_effect_message(
+        cat,
+        traits,
+        period_label,
+        behavior,
+        str(agent_state.get("dailyMoodKey") or ""),
+        roll,
+        len(favorite_active_ids),
+    )
+    mood_delta = int(min(max(mood_delta, -3), 5))
+    energy_delta = int(min(max(energy_delta, -4), 4))
+    if mood_delta:
+        log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_delta)
+    if energy_delta:
+        log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) + energy_delta)
+    effect_parts = []
+    if energy_delta:
+        effect_parts.append(f"体力 {cat_world_signed_change(energy_delta)}")
+    if mood_delta:
+        effect_parts.append(f"心情 {cat_world_signed_change(mood_delta)}")
+    if effect_parts:
+        effect_text = "，".join(effect_parts)
+        message = f"{message}（{effect_text}）"
+    agent_state = append_cat_world_agent_event(
+        log,
+        cat,
+        traits,
+        "routine-period",
+        label,
+        message,
+        now,
+    )
+    routine_periods[period_key] = token
+    agent_state["routinePeriodEvents"] = routine_periods
+    log.agent_state = encode_cat_world_agent_state(agent_state)
+    return True
+
+
 def cat_world_apply_daily_decay(
     db: Session,
     state: CatWorldState,
@@ -11192,6 +11346,7 @@ def cat_world_apply_daily_decay(
         favorite_active_ids = cat_world_active_favorite_decor_ids(cat_id, inventory, room_layout)
         log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, today, now)
         changed = apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now) or changed
+        changed = cat_world_apply_agent_routine_event(log, cat, traits, inventory, favorite_active_ids, now) or changed
         db.add(log)
         payload[cat_id] = cat_world_daily_log_payload(log, favorite_active_ids, inventory, room_layout)
     if changed or payload:
