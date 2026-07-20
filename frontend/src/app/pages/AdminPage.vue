@@ -22,6 +22,16 @@ const savingPriceItemId = ref("");
 const priceDrafts = ref(
   Object.fromEntries((catWorldPricing.value.items || []).map((item) => [item.id, Number(item.cost || 0)])),
 );
+const adminSections = [
+  { key: "planning", label: "规划", description: "登录、权限、AI 和积分体系的管理蓝图。" },
+  { key: "users", label: "用户中心", description: "管理昵称、登录密码、角色和后台权限。" },
+  { key: "site", label: "网站管理", description: "查看站点版本、登录方式和默认服务。" },
+  { key: "catShop", label: "猫咪商城", description: "规划猫咪世界商品和积分价格。" },
+];
+const activeAdminSection = ref("planning");
+const activeSection = computed(
+  () => adminSections.find((section) => section.key === activeAdminSection.value) || adminSections[0],
+);
 const pricingItemsByCategory = computed(() => {
   const groups = {};
   for (const item of catWorldPricing.value.items || []) {
@@ -29,6 +39,12 @@ const pricingItemsByCategory = computed(() => {
   }
   return groups;
 });
+const siteSummaryCards = computed(() => [
+  { label: "登录方式", value: "手机号 + 密码", detail: "手机号仍是唯一登录标识，页面只展示昵称。" },
+  { label: "图片 AI", value: `${props.data.imageAiOptions?.length || 0} 项`, detail: "在用户中心为不同用户选择默认图片 AI。" },
+  { label: "音频 AI", value: `${props.data.audioAiOptions?.length || 0} 项`, detail: "在用户中心为不同用户选择默认音频服务。" },
+  { label: "声音", value: `${props.data.voiceOptions?.length || 0} 项`, detail: "可配置女声或男声作为默认声音。" },
+]);
 
 function createEditableUser(user) {
   return {
@@ -149,154 +165,226 @@ async function savePrice(item) {
 
 <template>
   <section class="admin-page">
-    <div class="panel admin-hero">
-      <div>
-        <p class="section-kicker">ADMIN</p>
-        <h1>后台管理</h1>
-        <p>按手机号、密码管理登录用户、权限和默认 AI 服务。</p>
-      </div>
-      <div class="admin-current-user">
-        <span>当前账号</span>
-        <strong>{{ data.currentUser.username || data.currentUser.phoneMasked }}</strong>
-        <em>{{ data.currentUser.phoneMasked }}</em>
-      </div>
-    </div>
-
-    <section class="panel admin-create-panel">
-      <div>
-        <h2>新增用户</h2>
-        <p>手机号是唯一登录标识，用户名只用于后台显示。</p>
-      </div>
-      <input v-model="newUser.phone" type="tel" inputmode="numeric" placeholder="手机号">
-      <input v-model="newUser.loginPassword" type="password" autocomplete="new-password" placeholder="登录密码">
-      <input v-model="newUser.username" type="text" placeholder="用户名">
-      <select v-model="newUser.role">
-        <option v-for="role in data.roleOptions" :key="role.key" :value="role.key">{{ role.label }}</option>
-      </select>
-      <button class="challenge-button" type="button" @click="addUser">添加</button>
-    </section>
-
-    <section class="panel admin-pricing-panel">
-      <div class="admin-section-head">
-        <div>
-          <p class="section-kicker">CAT WORLD</p>
-          <h2>猫咪商品定价</h2>
-          <p>按积分规划商品价格，前台购买时会显示扣除积分和剩余积分。</p>
+    <div class="admin-workspace">
+      <aside class="panel admin-section-nav" aria-label="后台管理分区">
+        <div class="admin-nav-account">
+          <span>当前账号</span>
+          <strong>{{ data.currentUser.username || "管理员" }}</strong>
         </div>
-      </div>
+        <button
+          v-for="section in adminSections"
+          :key="section.key"
+          type="button"
+          :class="{ active: activeAdminSection === section.key }"
+          @click="activeAdminSection = section.key"
+        >
+          <strong>{{ section.label }}</strong>
+          <span>{{ section.description }}</span>
+        </button>
+      </aside>
 
-      <div class="admin-pricing-plans">
-        <article v-for="plan in catWorldPricing.plans || []" :key="plan.category">
-          <strong>{{ plan.label }}</strong>
-          <span>{{ plan.range }} 积分</span>
-          <p>{{ plan.strategy }}</p>
-        </article>
-      </div>
+      <main class="admin-main-panel">
+        <header class="panel admin-hero">
+          <div>
+            <p class="section-kicker">ADMIN</p>
+            <h1>{{ activeSection.label }}</h1>
+            <p>{{ activeSection.description }}</p>
+          </div>
+          <div class="admin-current-user">
+            <span>当前账号</span>
+            <strong>{{ data.currentUser.username || data.currentUser.phoneMasked }}</strong>
+            <em>{{ data.currentUser.phoneMasked }}</em>
+          </div>
+        </header>
 
-      <div class="admin-pricing-groups">
-        <section v-for="plan in catWorldPricing.plans || []" :key="`items-${plan.category}`" class="admin-pricing-group">
-          <h3>{{ plan.label }}</h3>
-          <div class="admin-pricing-list">
-            <article v-for="item in pricingItemsByCategory[plan.category] || []" :key="item.id" class="admin-price-row">
-              <div>
-                <strong>{{ item.label }}</strong>
-                <span>{{ item.englishName }} · 默认 {{ item.defaultCost }} 积分</span>
-                <em v-if="item.targetDecorLabel">用于 {{ item.targetDecorLabel }}</em>
-              </div>
-              <label>
-                <span>当前价格</span>
-                <input v-model.number="priceDrafts[item.id]" type="number" min="0" max="99999" step="10">
-              </label>
-              <button class="secondary-button compact-button" type="button" @click="resetPrice(item)">默认价</button>
-              <button class="challenge-button compact-button" type="button" :disabled="savingPriceItemId === item.id" @click="savePrice(item)">
-                {{ savingPriceItemId === item.id ? "保存中" : "保存" }}
-              </button>
+        <p v-if="notice" class="notice admin-notice">{{ notice }}</p>
+
+        <section v-if="activeAdminSection === 'planning'" class="panel admin-planning-panel">
+          <div class="admin-section-head">
+            <div>
+              <p class="section-kicker">PLAN</p>
+              <h2>后台规划</h2>
+              <p>这里先做全局策略总览，后续新的管理模块都从左侧栏拆进来。</p>
+            </div>
+          </div>
+          <div class="admin-planning-grid">
+            <article>
+              <strong>登录规划</strong>
+              <span>手机号 + 密码</span>
+              <p>手机号作为唯一登录标识，页面入口只显示后台设置的昵称。</p>
+            </article>
+            <article>
+              <strong>权限规划</strong>
+              <span>{{ data.roleOptions?.length || 0 }} 类角色</span>
+              <p>管理员、老师、只读角色分别控制后台和业务功能权限。</p>
+            </article>
+            <article>
+              <strong>AI 规划</strong>
+              <span>图片 / 音频</span>
+              <p>图片 AI、音频 AI、默认声音都按用户独立配置。</p>
+            </article>
+            <article>
+              <strong>猫咪经济</strong>
+              <span>{{ catWorldPricing.items?.length || 0 }} 个商品</span>
+              <p>猫咪商城价格从后台维护，前台实时显示积分扣取。</p>
             </article>
           </div>
         </section>
-      </div>
-    </section>
 
-    <section class="admin-user-list" aria-label="后台用户权限">
-      <article v-for="user in users" :key="user.phone" class="panel admin-user-card">
-        <header class="admin-user-head">
-          <div class="admin-user-identity">
-            <span>{{ user.phoneMasked }}</span>
-            <div class="admin-user-head-fields">
-              <input v-model="user.username" type="text" aria-label="用户名">
-              <label class="admin-header-password">
-                <span>登录密码 · {{ user.hasLoginPassword ? "已设置" : "未设置" }}</span>
-                <div class="admin-password-field">
-                  <input
-                    v-model="user.loginPassword"
-                    :type="isPasswordVisible(user.phone) ? 'text' : 'password'"
-                    autocomplete="new-password"
-                    :placeholder="user.hasLoginPassword ? '留空不改' : '设置登录密码'"
-                  >
-                  <button
-                    class="admin-password-toggle"
-                    type="button"
-                    :aria-label="isPasswordVisible(user.phone) ? '隐藏登录密码' : '显示登录密码'"
-                    :title="isPasswordVisible(user.phone) ? '隐藏登录密码' : '显示登录密码'"
-                    @click="togglePasswordVisibility(user.phone)"
-                  >
-                    <EyeOff v-if="isPasswordVisible(user.phone)" :size="18" aria-hidden="true" />
-                    <Eye v-else :size="18" aria-hidden="true" />
-                  </button>
-                </div>
-              </label>
+        <section v-if="activeAdminSection === 'users'" class="admin-section-stack">
+          <section class="panel admin-create-panel">
+            <div>
+              <h2>新增用户</h2>
+              <p>手机号是唯一登录标识，昵称用于前台右上角显示。</p>
             </div>
-          </div>
-          <label class="admin-active-switch">
-            <input v-model="user.isActive" type="checkbox">
-            <span>{{ user.isActive ? "启用" : "停用" }}</span>
-          </label>
-        </header>
-
-        <div class="admin-user-grid">
-          <label>
-            <span>角色</span>
-            <select v-model="user.role" @change="applyRoleDefaults(user)">
+            <input v-model="newUser.phone" type="tel" inputmode="numeric" placeholder="手机号">
+            <input v-model="newUser.loginPassword" type="password" autocomplete="new-password" placeholder="登录密码">
+            <input v-model="newUser.username" type="text" placeholder="昵称">
+            <select v-model="newUser.role">
               <option v-for="role in data.roleOptions" :key="role.key" :value="role.key">{{ role.label }}</option>
             </select>
-          </label>
-          <label>
-            <span>图片 AI</span>
-            <select v-model="user.imageAiValue" class="admin-model-select">
-              <option v-for="option in data.imageAiOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-            </select>
-          </label>
-          <label>
-            <span>音频 AI</span>
-            <select v-model="user.audioAiProvider">
-              <option v-for="option in data.audioAiOptions" :key="option.provider" :value="option.provider">{{ option.label }}</option>
-            </select>
-          </label>
-          <label>
-            <span>默认声音</span>
-            <select v-model="user.audioVoiceGender">
-              <option v-for="option in data.voiceOptions" :key="option.key" :value="option.key">{{ option.label }}</option>
-            </select>
-          </label>
-        </div>
+            <button class="challenge-button" type="button" @click="addUser">添加</button>
+          </section>
 
-        <div class="admin-permission-grid">
-          <label v-for="permission in data.permissionOptions" :key="permission.key" class="admin-permission-chip">
-            <input v-model="user.permissions[permission.key]" type="checkbox">
-            <span>{{ permission.label }}</span>
-          </label>
-        </div>
+          <section class="admin-user-list" aria-label="后台用户权限">
+            <article v-for="user in users" :key="user.phone" class="panel admin-user-card">
+              <header class="admin-user-head">
+                <div class="admin-user-identity">
+                  <span>{{ user.phoneMasked }}</span>
+                  <div class="admin-user-head-fields">
+                    <input v-model="user.username" type="text" aria-label="昵称">
+                    <label class="admin-header-password">
+                      <span>登录密码 · {{ user.hasLoginPassword ? "已设置" : "未设置" }}</span>
+                      <div class="admin-password-field">
+                        <input
+                          v-model="user.loginPassword"
+                          :type="isPasswordVisible(user.phone) ? 'text' : 'password'"
+                          autocomplete="new-password"
+                          :placeholder="user.hasLoginPassword ? '留空不改' : '设置登录密码'"
+                        >
+                        <button
+                          class="admin-password-toggle"
+                          type="button"
+                          :aria-label="isPasswordVisible(user.phone) ? '隐藏登录密码' : '显示登录密码'"
+                          :title="isPasswordVisible(user.phone) ? '隐藏登录密码' : '显示登录密码'"
+                          @click="togglePasswordVisibility(user.phone)"
+                        >
+                          <EyeOff v-if="isPasswordVisible(user.phone)" :size="18" aria-hidden="true" />
+                          <Eye v-else :size="18" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+                <label class="admin-active-switch">
+                  <input v-model="user.isActive" type="checkbox">
+                  <span>{{ user.isActive ? "启用" : "停用" }}</span>
+                </label>
+              </header>
 
-        <footer class="admin-user-actions">
-          <span>{{ user.role === "admin" ? "管理员拥有全部权限" : "按勾选项控制后台权限" }}</span>
-          <button class="challenge-button" type="button" :disabled="isSaving(user.phone)" @click="saveUser(user)">
-            {{ isSaving(user.phone) ? "保存中..." : "保存设置" }}
-          </button>
-        </footer>
-      </article>
-    </section>
+              <div class="admin-user-grid">
+                <label>
+                  <span>角色</span>
+                  <select v-model="user.role" @change="applyRoleDefaults(user)">
+                    <option v-for="role in data.roleOptions" :key="role.key" :value="role.key">{{ role.label }}</option>
+                  </select>
+                </label>
+                <label>
+                  <span>图片 AI</span>
+                  <select v-model="user.imageAiValue" class="admin-model-select">
+                    <option v-for="option in data.imageAiOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                  </select>
+                </label>
+                <label>
+                  <span>音频 AI</span>
+                  <select v-model="user.audioAiProvider">
+                    <option v-for="option in data.audioAiOptions" :key="option.provider" :value="option.provider">{{ option.label }}</option>
+                  </select>
+                </label>
+                <label>
+                  <span>默认声音</span>
+                  <select v-model="user.audioVoiceGender">
+                    <option v-for="option in data.voiceOptions" :key="option.key" :value="option.key">{{ option.label }}</option>
+                  </select>
+                </label>
+              </div>
 
-    <p v-if="notice" class="notice admin-notice">{{ notice }}</p>
-    <VersionStamp label="后台管理" />
+              <div class="admin-permission-grid">
+                <label v-for="permission in data.permissionOptions" :key="permission.key" class="admin-permission-chip">
+                  <input v-model="user.permissions[permission.key]" type="checkbox">
+                  <span>{{ permission.label }}</span>
+                </label>
+              </div>
+
+              <footer class="admin-user-actions">
+                <span>{{ user.role === "admin" ? "管理员拥有全部权限" : "按勾选项控制后台权限" }}</span>
+                <button class="challenge-button" type="button" :disabled="isSaving(user.phone)" @click="saveUser(user)">
+                  {{ isSaving(user.phone) ? "保存中..." : "保存设置" }}
+                </button>
+              </footer>
+            </article>
+          </section>
+        </section>
+
+        <section v-if="activeAdminSection === 'site'" class="panel admin-site-panel">
+          <div class="admin-section-head">
+            <div>
+              <p class="section-kicker">SITE</p>
+              <h2>网站管理</h2>
+              <p>当前先集中展示站点策略和默认服务，后续可继续拆入备案、版本和全局开关。</p>
+            </div>
+          </div>
+          <div class="admin-site-grid">
+            <article v-for="card in siteSummaryCards" :key="card.label">
+              <span>{{ card.label }}</span>
+              <strong>{{ card.value }}</strong>
+              <p>{{ card.detail }}</p>
+            </article>
+          </div>
+          <VersionStamp label="后台管理" />
+        </section>
+
+        <section v-if="activeAdminSection === 'catShop'" class="panel admin-pricing-panel">
+          <div class="admin-section-head">
+            <div>
+              <p class="section-kicker">CAT WORLD</p>
+              <h2>猫咪商品定价</h2>
+              <p>按积分规划商品价格，前台购买时会显示扣除积分和剩余积分。</p>
+            </div>
+          </div>
+
+          <div class="admin-pricing-plans">
+            <article v-for="plan in catWorldPricing.plans || []" :key="plan.category">
+              <strong>{{ plan.label }}</strong>
+              <span>{{ plan.range }} 积分</span>
+              <p>{{ plan.strategy }}</p>
+            </article>
+          </div>
+
+          <div class="admin-pricing-groups">
+            <section v-for="plan in catWorldPricing.plans || []" :key="`items-${plan.category}`" class="admin-pricing-group">
+              <h3>{{ plan.label }}</h3>
+              <div class="admin-pricing-list">
+                <article v-for="item in pricingItemsByCategory[plan.category] || []" :key="item.id" class="admin-price-row">
+                  <div>
+                    <strong>{{ item.label }}</strong>
+                    <span>{{ item.englishName }} · 默认 {{ item.defaultCost }} 积分</span>
+                    <em v-if="item.targetDecorLabel">用于 {{ item.targetDecorLabel }}</em>
+                  </div>
+                  <label>
+                    <span>当前价格</span>
+                    <input v-model.number="priceDrafts[item.id]" type="number" min="0" max="99999" step="10">
+                  </label>
+                  <button class="secondary-button compact-button" type="button" @click="resetPrice(item)">默认价</button>
+                  <button class="challenge-button compact-button" type="button" :disabled="savingPriceItemId === item.id" @click="savePrice(item)">
+                    {{ savingPriceItemId === item.id ? "保存中" : "保存" }}
+                  </button>
+                </article>
+              </div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
   </section>
 </template>

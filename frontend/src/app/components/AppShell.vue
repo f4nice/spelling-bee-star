@@ -25,14 +25,15 @@ const props = defineProps({
 });
 
 const pageVersion = computed(() => pageVersionForRoute(props.route, props.shell.versionMatrix));
+const isAdminRoute = computed(() => props.route?.name === "admin");
 </script>
 
 <template>
   <input class="shell-sidebar-toggle" id="shellSidebarToggle" type="checkbox" aria-hidden="true">
   <AppTopbar :shell="shell" :go="go" />
 
-  <div class="app-layout">
-    <AppSidebar :route="route" :shell="shell" :go="go" />
+  <div :class="['app-layout', { 'app-layout-admin': isAdminRoute }]">
+    <AppSidebar v-if="!isAdminRoute" :route="route" :shell="shell" :go="go" />
 
     <main
       class="shell"

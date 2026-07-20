@@ -21,8 +21,6 @@ const props = defineProps({
 });
 
 const navItems = computed(() => buildSidebarNavItems({ route: props.route, shell: props.shell }));
-const phoneLabel = computed(() => props.shell.currentUser?.phoneMasked || "");
-
 function navigate(path) {
   props.go(path);
 }
@@ -34,18 +32,6 @@ function navigate(path) {
       <SidebarNavList :items="navItems" :navigate="navigate" />
       <SidebarGrowthPanel :growth="shell.learningGrowth" :navigate="navigate" />
       <SidebarChallengeProgress :challenges="shell.sidebarChallenges" :navigate="navigate" />
-      <form class="sidebar-session" method="post" action="/logout">
-        <span v-if="phoneLabel">已登录 {{ phoneLabel }}</span>
-        <button
-          v-if="shell.currentUser?.canAdmin"
-          class="sidebar-admin-button"
-          type="button"
-          @click="navigate('/admin')"
-        >
-          后台管理
-        </button>
-        <button type="submit">退出登录</button>
-      </form>
     </nav>
   </aside>
 </template>

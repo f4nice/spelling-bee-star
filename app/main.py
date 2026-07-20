@@ -87,8 +87,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260720-004"
-DEFAULT_PAGE_VERSION = "v20260720.4"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260720-005"
+DEFAULT_PAGE_VERSION = "v20260720.5"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2223,6 +2223,44 @@ def login_cookie_secure(request: Request) -> bool:
     return request.url.scheme == "https" or "https" in forwarded_proto.lower().split(",")
 
 
+def canonical_public_host_redirect_url(request: Request) -> str:
+    host = request.headers.get("host", "").split(":", 1)[0].lower()
+    if host != "newabby.com":
+        return ""
+    target = f"https://www.newabby.com{request.url.path or '/'}"
+    if request.url.query:
+        target = f"{target}?{request.url.query}"
+    return target
+
+
+def login_cookie_domain(request: Request) -> str | None:
+    host = request.headers.get("host", "").split(":", 1)[0].lower()
+    return ".newabby.com" if host in {"newabby.com", "www.newabby.com"} else None
+
+
+def clear_login_cookies(response: Response) -> None:
+    response.delete_cookie(key=settings.login_cookie_name, path="/")
+    response.delete_cookie(key=settings.login_cookie_name, path="/", domain=".newabby.com")
+    response.delete_cookie(key=settings.login_cookie_name, path="/", domain="newabby.com")
+
+
+def set_login_cookie(response: Response, request: Request, phone: str) -> None:
+    clear_login_cookies(response)
+    cookie_args: dict[str, Any] = {
+        "key": settings.login_cookie_name,
+        "value": build_login_cookie(phone),
+        "max_age": login_cookie_max_age_seconds(),
+        "httponly": True,
+        "secure": login_cookie_secure(request),
+        "samesite": "lax",
+        "path": "/",
+    }
+    domain = login_cookie_domain(request)
+    if domain:
+        cookie_args["domain"] = domain
+    response.set_cookie(**cookie_args)
+
+
 LOGIN_PASSWORD_ALGORITHM = "pbkdf2_sha256"
 LOGIN_PASSWORD_ITERATIONS = 260000
 LOGIN_PASSWORD_MIN_LENGTH = 6
@@ -2391,6 +2429,9 @@ def get_or_create_admin_user(db: Session, phone: str) -> AdminUserSetting | None
     existing = db.scalar(select(AdminUserSetting).where(AdminUserSetting.phone == normalized))
     if existing:
         changed = normalize_admin_user_ai_fields(existing)
+        if not existing.username:
+            existing.username = admin_user_display_name(existing.phone, existing.role)
+            changed = True
         if existing.is_active and active_admin_user_count(db) == 0:
             changed = promote_admin_user(existing) or changed
         if changed:
@@ -2468,10 +2509,13 @@ def admin_user_summary(user: AdminUserSetting | None, phone: str | None = None) 
     masked_phone = masked_login_phone(user.phone if user else phone)
     if not masked_phone:
         return None
+    username = user.username if user else ""
+    if user and not username:
+        username = admin_user_display_name(user.phone, user.role)
     permissions = parse_admin_permissions(user.permissions, user.role) if user else {}
     return {
         "phoneMasked": masked_phone,
-        "username": user.username if user else "",
+        "username": username,
         "role": user.role if user else "viewer",
         "canAdmin": admin_user_can(user, "admin"),
         "permissions": permissions,
@@ -2518,6 +2562,9 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 @app.middleware("http")
 async def require_phone_login(request: Request, call_next):
     path = request.url.path
+    canonical_redirect = canonical_public_host_redirect_url(request)
+    if canonical_redirect and path != "/logout":
+        return RedirectResponse(url=canonical_redirect, status_code=308)
     if not settings.login_enabled or request.method == "OPTIONS" or is_login_public_path(path):
         return await call_next(request)
     if authenticated_phone_from_request(request):
@@ -2751,22 +2798,17 @@ def login_submit(
             status_code=403,
         )
     response = RedirectResponse(url=next_path, status_code=303)
-    response.set_cookie(
-        key=settings.login_cookie_name,
-        value=build_login_cookie(normalized),
-        max_age=login_cookie_max_age_seconds(),
-        httponly=True,
-        secure=login_cookie_secure(request),
-        samesite="lax",
-        path="/",
-    )
+    set_login_cookie(response, request, normalized)
     return response
 
 
 @app.api_route("/logout", methods=["GET", "POST"], include_in_schema=False)
-def logout():
-    response = RedirectResponse(url="/login", status_code=303)
-    response.delete_cookie(key=settings.login_cookie_name, path="/")
+def logout(request: Request):
+    response = RedirectResponse(
+        url="https://www.newabby.com/login" if canonical_public_host_redirect_url(request) else "/login",
+        status_code=303,
+    )
+    clear_login_cookies(response)
     return response
 
 
