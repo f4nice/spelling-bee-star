@@ -1179,10 +1179,15 @@ class CatWorldScene extends Phaser.Scene {
     const activeFood = this.owner.snapshot.activeFood || {};
     if (!activeFood.active || Number(activeFood.remainingEnergy || 0) <= 0) return null;
     const targetCatId = activeFood.targetCatId || "";
+    const isTarget = !targetCatId || cat.id === targetCatId;
     if (targetCatId) {
       return {
+        itemId: activeFood.itemId || "active-food",
         label: activeFood.label || "食物",
-        priority: cat.id === targetCatId ? 96 : 12,
+        targetCatId,
+        targetCatLabel: activeFood.targetCatLabel || "",
+        isTarget,
+        priority: isTarget ? 96 : 12,
         x: clamp(ACTIVE_FOOD_SPOT.x + 58 + Phaser.Math.Between(-28, 28), 38, GAME_WIDTH - 132),
         y: clamp(ACTIVE_FOOD_SPOT.y + 52 + Phaser.Math.Between(-14, 20), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
       };
@@ -1195,7 +1200,11 @@ class CatWorldScene extends Phaser.Scene {
       : energy;
     const priority = energy <= lowestEnergy + 4 ? 92 : energy < 42 ? 78 : energy < 66 ? 48 : 18;
     return {
+      itemId: activeFood.itemId || "active-food",
       label: activeFood.label || "食物",
+      targetCatId: "",
+      targetCatLabel: "",
+      isTarget: true,
       priority,
       x: clamp(ACTIVE_FOOD_SPOT.x + 58 + Phaser.Math.Between(-28, 28), 38, GAME_WIDTH - 132),
       y: clamp(ACTIVE_FOOD_SPOT.y + 52 + Phaser.Math.Between(-14, 20), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
@@ -1226,7 +1235,11 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   spawnFoodPlayBubble(container, cat, target) {
-    const message = `${cat?.label || "猫咪"} 先去吃${target.label}。`;
+    const isReserved = Boolean(target?.targetCatId && target.targetCatId !== cat?.id);
+    const targetName = target?.targetCatLabel || "体力最低的小猫";
+    const message = isReserved
+      ? `${cat?.label || "猫咪"}闻了闻${target.label}，决定留给${targetName}。`
+      : `${cat?.label || "猫咪"} 先去吃${target.label}。`;
     const bubble = this.add
       .text(container.x + 36, container.y - 28, message, {
         color: "#263047",
@@ -1255,6 +1268,12 @@ class CatWorldScene extends Phaser.Scene {
       onComplete: () => bubble.destroy(),
     });
     this.owner.handlers.onCatThought?.(cat, message);
+    if (!isReserved) {
+      this.owner.handlers.onFoodVisit?.(cat, {
+        itemId: target?.itemId || "",
+        label: target?.label || "",
+      });
+    }
   }
 
   spawnFavoritePlayBubble(container, cat, target) {

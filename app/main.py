@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-031"
-DEFAULT_PAGE_VERSION = "v20260721.31"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-032"
+DEFAULT_PAGE_VERSION = "v20260721.32"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3648,6 +3648,27 @@ async def vue_cat_world_play_api(request: Request, db: Session = Depends(get_db)
     db.add(state)
     db.commit()
     db.refresh(state)
+    return {"ok": True, "effect": effect, **serialize_cat_world_payload(db, state)}
+
+
+@app.post("/api/vue/cat-world/food-nibble")
+async def vue_cat_world_food_nibble_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="猫咪进食数据不是有效 JSON。") from exc
+    payload = payload if isinstance(payload, dict) else {}
+    cat_id = str(payload.get("catId") or "").strip()
+    state = get_or_create_cat_world_state(db, phone)
+    owned_cats = parse_cat_world_cats(state.cats)
+    if cat_id not in owned_cats:
+        raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
+    inventory = parse_cat_world_inventory(state.inventory)
+    damaged_items = parse_cat_world_damaged_items(state.damaged_items)
+    usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
+    room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
+    effect = cat_world_apply_active_food_nibble(db, state, cat_id, usable_inventory, room_layout)
     return {"ok": True, "effect": effect, **serialize_cat_world_payload(db, state)}
 
 
@@ -10554,6 +10575,8 @@ CAT_WORLD_AGENT_STATE_CARRY_KEYS = {
     "activeFoodRemainingSeconds",
     "activeFoodStartedAt",
     "activeFoodToken",
+    "activeFoodManualBites",
+    "activeFoodNibbleAt",
     "ambientEffectCount",
     "ambientEventAt",
     "favoriteDecorRewarded",
@@ -11025,6 +11048,14 @@ def get_or_create_cat_world_daily_log(
     now: datetime,
 ) -> CatWorldDailyLog:
     normalized = normalize_login_phone(phone)
+    for pending in db.new:
+        if (
+            isinstance(pending, CatWorldDailyLog)
+            and pending.phone == normalized
+            and pending.log_date == log_date
+            and pending.cat_id == cat_id
+        ):
+            return pending
     log = db.scalar(
         select(CatWorldDailyLog).where(
             CatWorldDailyLog.phone == normalized,
@@ -11564,35 +11595,51 @@ def cat_world_apply_active_food_progress(
         agent_state["activeFoodConsumedMood"] = 0
         agent_state["activeFoodLabel"] = item.get("label") or item_id
         agent_state["activeFoodStartedAt"] = state.active_food_at.replace(microsecond=0).isoformat() + "Z"
+        agent_state["activeFoodManualBites"] = 0
+        agent_state["activeFoodNibbleAt"] = ""
         changed = True
     favorite_match = cat_world_item_favorite_cat_id(item_id) == cat["id"]
     progress = cat_world_food_progress_targets(item, traits, state.active_food_at, now, cat["id"], force_initial=force_initial)
     previous_energy = max(int(agent_state.get("activeFoodConsumedEnergy") or 0), 0)
     previous_mood = max(int(agent_state.get("activeFoodConsumedMood") or 0), 0)
-    next_energy = int(progress["consumedEnergy"])
-    next_mood = int(progress["consumedMood"])
+    total_energy = int(progress["totalEnergy"])
+    total_mood = int(progress["totalMood"])
+    next_energy = min(total_energy, max(int(progress["consumedEnergy"]), previous_energy))
+    next_mood = min(total_mood, max(int(progress["consumedMood"]), previous_mood))
     delta_energy = max(next_energy - previous_energy, 0)
     delta_mood = max(next_mood - previous_mood, 0)
+    remaining_energy = max(total_energy - next_energy, 0)
+    remaining_mood = max(total_mood - next_mood, 0)
+    remaining_seconds = int(progress["remainingSeconds"])
+    complete = remaining_seconds <= 0 or next_energy >= total_energy
     if delta_energy or delta_mood:
         log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) + delta_energy)
         log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + delta_mood)
         agent_state["activeFoodConsumedEnergy"] = next_energy
         agent_state["activeFoodConsumedMood"] = next_mood
-        append_cat_world_agent_event(
+        agent_state["activeFoodRemainingEnergy"] = remaining_energy
+        agent_state["activeFoodRemainingMood"] = remaining_mood
+        agent_state["activeFoodRemainingSeconds"] = remaining_seconds
+        log.agent_state = encode_cat_world_agent_state(agent_state)
+        agent_state = append_cat_world_agent_event(
             log,
             cat,
             traits,
             "food-progress",
             "食物补能",
-            f"{cat['label']}吃掉一部分{item.get('label') or item_id}，体力 +{delta_energy}，心情 +{delta_mood}，剩余体力 {progress['remainingEnergy']}。",
+            f"{cat['label']}吃掉一部分{item.get('label') or item_id}，体力 +{delta_energy}，心情 +{delta_mood}，剩余体力 {remaining_energy}。",
             now,
         )
         changed = True
-    agent_state["activeFoodRemainingEnergy"] = int(progress["remainingEnergy"])
-    agent_state["activeFoodRemainingMood"] = int(progress["remainingMood"])
-    agent_state["activeFoodRemainingSeconds"] = int(progress["remainingSeconds"])
-    if progress["complete"]:
-        append_cat_world_agent_event(
+    else:
+        agent_state["activeFoodConsumedEnergy"] = next_energy
+        agent_state["activeFoodConsumedMood"] = next_mood
+    agent_state["activeFoodRemainingEnergy"] = remaining_energy
+    agent_state["activeFoodRemainingMood"] = remaining_mood
+    agent_state["activeFoodRemainingSeconds"] = remaining_seconds
+    if complete:
+        log.agent_state = encode_cat_world_agent_state(agent_state)
+        agent_state = append_cat_world_agent_event(
             log,
             cat,
             traits,
@@ -11603,6 +11650,7 @@ def cat_world_apply_active_food_progress(
         )
         agent_state["activeFoodRemainingEnergy"] = 0
         agent_state["activeFoodRemainingMood"] = 0
+        agent_state["activeFoodRemainingSeconds"] = 0
         state.active_food_item = None
         state.active_food_cat_id = None
         state.active_food_at = None
@@ -11614,19 +11662,174 @@ def cat_world_apply_active_food_progress(
         db.commit()
         db.refresh(state)
     return {
-        "active": not bool(progress["complete"]),
+        "active": not bool(complete),
         "changed": changed,
         "catId": cat["id"],
         "catLabel": cat["label"],
         "moodGain": delta_mood,
         "energyGain": delta_energy,
-        "totalMoodGain": int(progress["totalMood"]),
-        "totalEnergyGain": int(progress["totalEnergy"]),
-        "remainingMood": int(progress["remainingMood"]),
-        "remainingEnergy": int(progress["remainingEnergy"]),
-        "remainingSeconds": int(progress["remainingSeconds"]),
-        "finished": bool(progress["complete"]),
+        "totalMoodGain": total_mood,
+        "totalEnergyGain": total_energy,
+        "remainingMood": remaining_mood,
+        "remainingEnergy": remaining_energy,
+        "remainingSeconds": remaining_seconds,
+        "finished": bool(complete),
         "favoriteMatch": favorite_match,
+    }
+
+
+def cat_world_apply_active_food_nibble(
+    db: Session,
+    state: CatWorldState,
+    cat_id: str,
+    inventory: dict[str, int],
+    room_layout: dict[str, dict[str, float]],
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    item_id = str(state.active_food_item or "").strip()
+    item = CAT_WORLD_SHOP_BY_ID.get(item_id)
+    if not item or item.get("category") != "food" or not state.active_food_at:
+        return {"active": False, "recorded": False, "message": "房间里没有正在吃的食物。"}
+    now = now or datetime.utcnow()
+    if str(state.active_food_cat_id or "") not in CAT_WORLD_CAT_BY_ID:
+        state.active_food_cat_id = cat_world_effect_target_cat_id(db, state, inventory, room_layout, "food", item_id)
+    target_cat_id = str(state.active_food_cat_id or CAT_WORLD_DEFAULT_CAT_ID)
+    target_cat = CAT_WORLD_CAT_BY_ID.get(target_cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    if cat_id and cat_id != target_cat_id:
+        return {
+            "active": True,
+            "recorded": False,
+            "catId": target_cat["id"],
+            "catLabel": target_cat["label"],
+            "itemId": item_id,
+            "itemLabel": item.get("label") or item_id,
+            "message": f"这份{item.get('label') or item_id}优先留给体力最低的{target_cat['label']}。",
+        }
+
+    time_progress = cat_world_apply_active_food_progress(db, state, inventory, room_layout, now=now)
+    if time_progress.get("finished") or not state.active_food_item:
+        return {"recorded": False, **time_progress}
+
+    cat = target_cat
+    traits = cat_world_cat_traits(cat)
+    favorite_active_ids = cat_world_active_favorite_decor_ids(cat["id"], inventory, room_layout)
+    log = get_or_create_cat_world_daily_log(db, state.phone, cat["id"], date.today(), now)
+    apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now)
+    agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
+    token = cat_world_active_food_token(state, item_id, cat["id"])
+    if agent_state.get("activeFoodToken") != token:
+        agent_state["activeFoodToken"] = token
+        agent_state["activeFoodConsumedEnergy"] = int(time_progress.get("totalEnergy") or 0) - int(time_progress.get("remainingEnergy") or 0)
+        agent_state["activeFoodConsumedMood"] = int(time_progress.get("totalMood") or 0) - int(time_progress.get("remainingMood") or 0)
+        agent_state["activeFoodLabel"] = item.get("label") or item_id
+        agent_state["activeFoodStartedAt"] = state.active_food_at.replace(microsecond=0).isoformat() + "Z"
+
+    last_nibble_raw = str(agent_state.get("activeFoodNibbleAt") or "")
+    try:
+        last_nibble_at = datetime.fromisoformat(last_nibble_raw.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        last_nibble_at = None
+    if last_nibble_at and now - last_nibble_at < timedelta(seconds=45):
+        return {
+            "recorded": False,
+            "cooldown": True,
+            "catId": cat["id"],
+            "catLabel": cat["label"],
+            "itemId": item_id,
+            "itemLabel": item.get("label") or item_id,
+            "message": f"{cat['label']}刚刚吃过一口，正在慢慢咽下去。",
+            **time_progress,
+        }
+
+    previous_energy = max(int(agent_state.get("activeFoodConsumedEnergy") or 0), 0)
+    previous_mood = max(int(agent_state.get("activeFoodConsumedMood") or 0), 0)
+    remaining_energy = max(int(agent_state.get("activeFoodRemainingEnergy") or time_progress.get("remainingEnergy") or 0), 0)
+    remaining_mood = max(int(agent_state.get("activeFoodRemainingMood") or time_progress.get("remainingMood") or 0), 0)
+    total_energy = max(int(time_progress.get("totalEnergy") or 0), previous_energy + remaining_energy)
+    total_mood = max(int(time_progress.get("totalMood") or 0), previous_mood + remaining_mood)
+    if remaining_energy <= 0 and remaining_mood <= 0:
+        state.active_food_item = None
+        state.active_food_cat_id = None
+        state.active_food_at = None
+        db.add(state)
+        db.commit()
+        db.refresh(state)
+        return {"active": False, "recorded": False, "finished": True}
+
+    manual_bites = max(int(agent_state.get("activeFoodManualBites") or 0), 0)
+    energy_bite = min(remaining_energy, max(1, round(max(total_energy, 1) * 0.14)))
+    mood_bite = min(remaining_mood, max(1, round(max(total_mood, 1) * 0.14))) if remaining_mood else 0
+    old_energy_score = int(log.energy_score or 0)
+    old_mood_score = int(log.mood_score or 0)
+    log.energy_score = clamp_cat_world_score(old_energy_score + energy_bite)
+    if mood_bite:
+        log.mood_score = clamp_cat_world_score(old_mood_score + mood_bite)
+    actual_energy_gain = max(int(log.energy_score or 0) - old_energy_score, 0)
+    actual_mood_gain = max(int(log.mood_score or 0) - old_mood_score, 0)
+    next_consumed_energy = min(total_energy, previous_energy + energy_bite)
+    next_consumed_mood = min(total_mood, previous_mood + mood_bite)
+    next_remaining_energy = max(total_energy - next_consumed_energy, 0)
+    next_remaining_mood = max(total_mood - next_consumed_mood, 0)
+    message = (
+        f"{cat['label']}主动吃了一口{item.get('label') or item_id}，"
+        f"食物减少 {energy_bite}，体力 +{actual_energy_gain}，心情 +{actual_mood_gain}。"
+    )
+    agent_state = append_cat_world_agent_event(
+        log,
+        cat,
+        traits,
+        "food-nibble",
+        "主动进食",
+        message,
+        now,
+    )
+    agent_state["activeFoodToken"] = token
+    agent_state["activeFoodConsumedEnergy"] = next_consumed_energy
+    agent_state["activeFoodConsumedMood"] = next_consumed_mood
+    agent_state["activeFoodRemainingEnergy"] = next_remaining_energy
+    agent_state["activeFoodRemainingMood"] = next_remaining_mood
+    agent_state["activeFoodRemainingSeconds"] = int(time_progress.get("remainingSeconds") or 0)
+    agent_state["activeFoodManualBites"] = manual_bites + 1
+    agent_state["activeFoodNibbleAt"] = now.replace(microsecond=0).isoformat() + "Z"
+    finished = next_remaining_energy <= 0
+    if finished:
+        log.agent_state = encode_cat_world_agent_state(agent_state)
+        agent_state = append_cat_world_agent_event(
+            log,
+            cat,
+            traits,
+            "food-finished",
+            "食物吃完",
+            f"{cat['label']}把{item.get('label') or item_id}吃完了，食物已经从房间里消失。",
+            now,
+        )
+        agent_state["activeFoodRemainingEnergy"] = 0
+        agent_state["activeFoodRemainingMood"] = 0
+        agent_state["activeFoodRemainingSeconds"] = 0
+        state.active_food_item = None
+        state.active_food_cat_id = None
+        state.active_food_at = None
+    log.agent_state = encode_cat_world_agent_state(agent_state)
+    db.add(log)
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return {
+        "active": not finished,
+        "recorded": True,
+        "finished": finished,
+        "catId": cat["id"],
+        "catLabel": cat["label"],
+        "itemId": item_id,
+        "itemLabel": item.get("label") or item_id,
+        "energyGain": actual_energy_gain,
+        "moodGain": actual_mood_gain,
+        "foodEnergyConsumed": energy_bite,
+        "remainingEnergy": next_remaining_energy,
+        "remainingMood": next_remaining_mood,
+        "remainingSeconds": int(time_progress.get("remainingSeconds") or 0),
+        "manualBites": manual_bites + 1,
+        "message": message,
     }
 
 
@@ -11663,6 +11866,7 @@ def cat_world_apply_daily_effect(
         )
         db.add(log)
         db.add(state)
+        db.flush()
         return cat_world_apply_active_food_progress(
             db,
             state,
@@ -11856,6 +12060,41 @@ def cat_world_mood(
     traits = cat_world_cat_traits(selected_cat)
     active_food = cat_world_active_food(state)
     daily_logs = daily_logs or {}
+    if active_food.get("active"):
+        target_cat_id = str(active_food.get("targetCatId") or state.active_food_cat_id or "")
+        target_daily_log = daily_logs.get(target_cat_id) or {}
+        agent_state = target_daily_log.get("agentState") if isinstance(target_daily_log, dict) else {}
+        if isinstance(agent_state, dict):
+            token = cat_world_active_food_token(state, str(active_food.get("itemId") or ""), target_cat_id)
+            if agent_state.get("activeFoodToken") == token:
+                consumed_energy = max(int(agent_state.get("activeFoodConsumedEnergy") or 0), 0)
+                consumed_mood = max(int(agent_state.get("activeFoodConsumedMood") or 0), 0)
+                remaining_energy = max(int(agent_state.get("activeFoodRemainingEnergy") or 0), 0)
+                remaining_mood = max(int(agent_state.get("activeFoodRemainingMood") or 0), 0)
+                active_remaining_seconds = max(int(active_food.get("remainingSeconds") or 0), 0)
+                logged_remaining_seconds = max(int(agent_state.get("activeFoodRemainingSeconds") or 0), 0)
+                remaining_seconds = (
+                    min(active_remaining_seconds, logged_remaining_seconds)
+                    if logged_remaining_seconds
+                    else active_remaining_seconds
+                )
+                if remaining_energy <= 0:
+                    active_food = {
+                        "active": False,
+                        "itemId": "",
+                        "label": "",
+                        "remainingSeconds": 0,
+                        "durationSeconds": int(active_food.get("durationSeconds") or 0),
+                    }
+                else:
+                    active_food = {
+                        **active_food,
+                        "catEnergy": max(int(active_food.get("catEnergy") or 0), consumed_energy + remaining_energy),
+                        "mood": max(int(active_food.get("mood") or 0), consumed_mood + remaining_mood),
+                        "remainingEnergy": remaining_energy,
+                        "remainingMood": remaining_mood,
+                        "remainingSeconds": min(int(active_food.get("remainingSeconds") or remaining_seconds), remaining_seconds),
+                    }
     daily_log = daily_logs.get(selected_cat["id"]) or {}
     favorite_active_ids = daily_log.get("favoriteActiveDecorIds") or cat_world_active_favorite_decor_ids(
         selected_cat["id"],

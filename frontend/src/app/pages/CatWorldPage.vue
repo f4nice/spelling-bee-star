@@ -28,6 +28,7 @@ const clockNow = ref(Date.now());
 const energyModalOpen = ref(false);
 const petBusyCatId = ref("");
 const ambientEventCooldowns = new Map();
+const foodNibbleCooldowns = new Map();
 
 const catReactionTexts = [
   "收到摸摸指令，开心值上升",
@@ -72,6 +73,7 @@ onMounted(async () => {
     onToyClick: handleRoomToyClick,
     onCatThought: (cat, message) => showCatReaction(cat, message),
     onCatAmbient: recordCatAmbientEvent,
+    onFoodVisit: recordCatFoodNibble,
   });
   updateCatWorldGame();
 });
@@ -429,6 +431,33 @@ function recordCatAmbientEvent(cat, event = {}) {
     }
   }).catch(() => {
     ambientEventCooldowns.delete(key);
+  });
+}
+
+function recordCatFoodNibble(cat, event = {}) {
+  if (!cat?.id || !activeFood.value.active) return;
+  if (activeFood.value.targetCatId && activeFood.value.targetCatId !== cat.id) return;
+  const token = rawActiveFood.value?.expiresAt || activeFood.value.itemId || "active-food";
+  const key = `${cat.id}:${token}`;
+  const now = Date.now();
+  if (now - Number(foodNibbleCooldowns.get(key) || 0) < 45 * 1000) return;
+  foodNibbleCooldowns.set(key, now);
+  fetchJson(routeApiPaths.catWorldFoodNibble(), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      catId: cat.id,
+      itemId: event.itemId || activeFood.value.itemId,
+    }),
+  }).then((nextPayload) => {
+    replacePayload(nextPayload);
+    const effect = nextPayload?.effect || {};
+    if (effect.recorded && effect.message) {
+      const targetCat = cats.value.find((item) => item.id === effect.catId) || cat;
+      showCatReaction(targetCat, effect.message);
+    }
+  }).catch(() => {
+    foodNibbleCooldowns.delete(key);
   });
 }
 
