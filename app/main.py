@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-018"
-DEFAULT_PAGE_VERSION = "v20260721.18"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-019"
+DEFAULT_PAGE_VERSION = "v20260721.19"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -10229,12 +10229,24 @@ CAT_WORLD_DAILY_MOODS = [
 ]
 
 
-def cat_world_daily_agent_seed(log_date: date, cat_id: str) -> str:
-    return f"{log_date.isoformat()}:{cat_id}:agent"
+def cat_world_daily_agent_seed(log_date: date, cat_id: str, phone: str | None = "") -> str:
+    normalized_phone = normalize_login_phone(phone)
+    owner_key = hashlib.sha256(normalized_phone.encode("utf-8")).hexdigest()[:12] if normalized_phone else "global"
+    return f"{log_date.isoformat()}:{cat_id}:{owner_key}:agent"
 
 
-def cat_world_default_agent_state(log_date: date, cat: dict[str, Any], traits: dict[str, Any]) -> dict[str, Any]:
-    seed = cat_world_daily_agent_seed(log_date, cat["id"])
+def cat_world_daily_agent_seed_key(log_date: date, cat_id: str, phone: str | None = "") -> str:
+    seed = cat_world_daily_agent_seed(log_date, cat_id, phone)
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
+
+
+def cat_world_default_agent_state(
+    log_date: date,
+    cat: dict[str, Any],
+    traits: dict[str, Any],
+    phone: str | None = "",
+) -> dict[str, Any]:
+    seed = cat_world_daily_agent_seed(log_date, cat["id"], phone)
     mood_index = min(int(cat_world_stable_ratio(f"{seed}:mood") * len(CAT_WORLD_DAILY_MOODS)), len(CAT_WORLD_DAILY_MOODS) - 1)
     daily_mood = CAT_WORLD_DAILY_MOODS[mood_index]
     attention = int(35 + cat_world_stable_ratio(f"{seed}:attention") * 55)
@@ -10247,6 +10259,7 @@ def cat_world_default_agent_state(log_date: date, cat: dict[str, Any], traits: d
         mischief = min(92, mischief + 12)
     return {
         "date": log_date.isoformat(),
+        "seedKey": cat_world_daily_agent_seed_key(log_date, cat["id"], phone),
         "dailyMoodKey": daily_mood["key"],
         "dailyMoodLabel": daily_mood["label"],
         "moodOffset": daily_mood["moodOffset"],
@@ -10268,12 +10281,46 @@ def cat_world_default_agent_state(log_date: date, cat: dict[str, Any], traits: d
     }
 
 
+CAT_WORLD_AGENT_STATE_CARRY_KEYS = {
+    "activeFoodConsumedEnergy",
+    "activeFoodConsumedMood",
+    "activeFoodLabel",
+    "activeFoodRemainingEnergy",
+    "activeFoodRemainingMood",
+    "activeFoodRemainingSeconds",
+    "activeFoodStartedAt",
+    "activeFoodToken",
+    "lastPetAt",
+    "mischiefChecked",
+    "mischiefItemId",
+    "mischiefLabel",
+    "petCount",
+}
+
+
+def merge_cat_world_agent_state(new_state: dict[str, Any], previous_state: dict[str, Any]) -> dict[str, Any]:
+    for key in CAT_WORLD_AGENT_STATE_CARRY_KEYS:
+        if key in previous_state:
+            new_state[key] = previous_state[key]
+    previous_events = [
+        event
+        for event in cat_world_trim_agent_events(previous_state.get("events"))
+        if event.get("kind") != "daily-mood"
+    ]
+    new_state["events"] = cat_world_trim_agent_events(cat_world_trim_agent_events(new_state.get("events")) + previous_events)
+    return new_state
+
+
 def ensure_cat_world_agent_state(log: CatWorldDailyLog, cat: dict[str, Any], traits: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     state = parse_cat_world_agent_state(log.agent_state)
-    if state.get("date") == log.log_date.isoformat() and state.get("dailyMoodKey"):
+    expected_seed_key = cat_world_daily_agent_seed_key(log.log_date, cat["id"], log.phone)
+    if state.get("date") == log.log_date.isoformat() and state.get("dailyMoodKey") and state.get("seedKey") == expected_seed_key:
         state["events"] = cat_world_trim_agent_events(state.get("events"))
         return state, False
-    state = cat_world_default_agent_state(log.log_date, cat, traits)
+    previous_state = state if state.get("date") == log.log_date.isoformat() else {}
+    state = cat_world_default_agent_state(log.log_date, cat, traits, log.phone)
+    if previous_state:
+        state = merge_cat_world_agent_state(state, previous_state)
     log.agent_state = encode_cat_world_agent_state(state)
     return state, True
 
@@ -10591,8 +10638,9 @@ def cat_world_agent_payload(
         room_layout or {},
         favorite_active_ids or [],
     )
+    public_agent_state = {key: value for key, value in agent_state.items() if key != "seedKey"}
     return {
-        **agent_state,
+        **public_agent_state,
         "currentBehavior": behavior,
         "dailyGoal": daily_goal,
         "adjustedMoodScore": mood_score,
