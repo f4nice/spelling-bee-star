@@ -5061,6 +5061,127 @@ a:focus-visible {
   line-height: 1.7;
 }
 
+.challenge-day-list-overview {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 18px;
+}
+
+.challenge-day-list-heading,
+.challenge-day-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.challenge-day-list-heading h2,
+.challenge-day-detail-head h2 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  letter-spacing: 0;
+}
+
+.challenge-day-list-heading p,
+.challenge-day-detail-head p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.challenge-day-list-heading > strong {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: #e4f6ee;
+  color: var(--accent-dark);
+  font-size: 13px;
+}
+
+.challenge-day-list-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.challenge-day-list-card {
+  display: grid;
+  gap: 10px;
+  min-height: 132px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 15px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(235, 248, 241, 0.9)),
+    radial-gradient(circle at top right, rgba(29, 127, 91, 0.14), transparent 62%);
+  color: var(--ink);
+  text-align: left;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.challenge-day-list-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
+}
+
+.challenge-day-list-title {
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.challenge-day-list-count {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: rgba(29, 127, 91, 0.1);
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.challenge-day-list-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.challenge-day-list-metrics em {
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.challenge-day-list-metrics .is-correct {
+  background: #dff7ec;
+  color: var(--accent-dark);
+}
+
+.challenge-day-list-metrics .is-wrong {
+  background: #fde6e6;
+  color: var(--error);
+}
+
+.challenge-day-list-metrics .is-pending {
+  background: #fff1d7;
+  color: #8a5a14;
+}
+
+.challenge-day-detail-head {
+  margin-bottom: 14px;
+  padding: 16px 18px;
+}
+
+.challenge-day-detail-head .secondary-button {
+  flex: 0 0 auto;
+}
+
 .challenge-day-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -10264,6 +10385,16 @@ dd {
   .challenge-day-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .challenge-day-list-heading,
+  .challenge-day-detail-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .challenge-day-detail-head .secondary-button {
+    width: 100%;
+  }
 }
 
 @media (max-width: 1360px) {
@@ -10971,8 +11102,8 @@ select {
 }
 
 .cat-world-layout {
-  grid-template-columns: minmax(0, 1.52fr) minmax(220px, 0.48fr);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 14px;
 }
 
 .cat-world-room-panel,
@@ -11105,8 +11236,8 @@ select {
 
 .cat-world-game-stage canvas {
   display: block;
-  max-width: 100%;
-  max-height: 100%;
+  width: 100% !important;
+  height: 100% !important;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   cursor: grab;
@@ -11118,7 +11249,7 @@ select {
 
 .shell[data-quant-radar-page-key="cat-world"] {
   justify-self: center;
-  width: min(1760px, calc(100vw - 24px));
+  width: min(1900px, calc(100vw - 24px));
 }
 
 .shell[data-quant-radar-page-key="cat-world"] .cat-world-page {
@@ -11132,12 +11263,13 @@ select {
 
 .shell[data-quant-radar-page-key="cat-world"] .cat-world-layout {
   align-items: start;
-  grid-template-columns: minmax(720px, 1fr) 320px;
+  grid-template-columns: minmax(860px, 1fr) 360px;
 }
 
 .shell[data-quant-radar-page-key="cat-world"] .cat-world-room {
-  height: clamp(520px, 52vw, 650px);
-  min-height: 520px;
+  aspect-ratio: 16 / 7;
+  height: auto;
+  min-height: 500px;
 }
 
 .shell[data-quant-radar-page-key="cat-world"] .cat-world-ledger,
@@ -11158,6 +11290,9 @@ select {
 .cat-world-owned-panel {
   position: sticky;
   top: 90px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   display: grid;
   gap: 12px;
   border: 4px solid #2c2f3a;
@@ -11193,6 +11328,7 @@ select {
 .cat-world-status-bars {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .cat-world-status-bar {
@@ -11205,6 +11341,8 @@ select {
   border: 3px solid #2c2f3a;
   border-radius: 4px;
   padding: 5px 8px;
+  width: 100%;
+  min-width: 0;
   color: #263047;
   background: #fff8df;
   box-shadow: 3px 3px 0 #2c2f3a;
@@ -11262,6 +11400,7 @@ select {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  min-width: 0;
 }
 
 .cat-world-tool-tabs button,
@@ -11301,7 +11440,8 @@ select {
   display: grid;
   gap: 8px;
   max-height: 330px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 2px 4px 4px 0;
 }
 
@@ -11309,6 +11449,8 @@ select {
   display: grid;
   gap: 2px;
   min-height: 76px;
+  width: 100%;
+  min-width: 0;
   padding: 9px;
   text-align: left;
 }
@@ -11368,6 +11510,10 @@ select {
 }
 
 .cat-world-ledger-compact .cat-world-energy-list {
+  grid-template-columns: 1fr;
+}
+
+.shell[data-quant-radar-page-key="cat-world"] .cat-world-owned-panel .cat-world-energy-list {
   grid-template-columns: 1fr;
 }
 

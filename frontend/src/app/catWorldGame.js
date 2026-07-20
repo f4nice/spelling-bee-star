@@ -1,6 +1,6 @@
 import * as Phaser from "phaser";
 
-const GAME_WIDTH = 960;
+const GAME_WIDTH = 1280;
 const GAME_HEIGHT = 560;
 const FLOOR_TOP = 260;
 const FLOOR_BOTTOM = 522;
@@ -9,12 +9,12 @@ const INK = 0x2c2f3a;
 const CREAM = 0xfff8df;
 
 const DECOR_SPECS = {
-  "sun-window": { label: "阳光窗台", width: 150, height: 88, defaultX: 56, defaultY: 34 },
-  "book-shelf": { label: "英文书架", width: 170, height: 78, defaultX: 736, defaultY: 46 },
-  "cloud-rug": { label: "云朵地毯", width: 380, height: 78, defaultX: 290, defaultY: 432 },
-  "study-desk": { label: "英文书桌", width: 200, height: 96, defaultX: 455, defaultY: 348 },
-  "reading-lamp": { label: "阅读台灯", width: 72, height: 118, defaultX: 660, defaultY: 314 },
-  "word-gallery": { label: "单词挂画", width: 120, height: 82, defaultX: 286, defaultY: 140 },
+  "sun-window": { label: "阳光窗台", width: 150, height: 88, defaultX: 146, defaultY: 34 },
+  "book-shelf": { label: "英文书架", width: 170, height: 78, defaultX: 1010, defaultY: 46 },
+  "cloud-rug": { label: "云朵地毯", width: 380, height: 78, defaultX: 790, defaultY: 432 },
+  "study-desk": { label: "英文书桌", width: 200, height: 96, defaultX: 496, defaultY: 348 },
+  "reading-lamp": { label: "阅读台灯", width: 72, height: 118, defaultX: 712, defaultY: 314 },
+  "word-gallery": { label: "单词挂画", width: 120, height: 82, defaultX: 360, defaultY: 140 },
 };
 
 const CAT_PIXEL_SIZE = 2;
@@ -227,15 +227,16 @@ class CatWorldScene extends Phaser.Scene {
   drawInventoryItems(snapshot) {
     if (snapshot.activeFood?.active) {
       const foodLabel = snapshot.activeFood.label || "食物";
+      const bowlX = GAME_WIDTH - 174;
       const bowl = this.add.graphics();
-      drawPixelRect(bowl, 786, 418, 72, 34, 0xff8cad);
+      drawPixelRect(bowl, bowlX + 8, 418, 72, 34, 0xff8cad);
       bowl.fillStyle(0xfff07d, 1);
-      bowl.fillRect(798, 423, 48, 8);
+      bowl.fillRect(bowlX + 20, 423, 48, 8);
       bowl.fillStyle(0xfff8df, 1);
-      bowl.fillRect(810, 434, 24, 6);
+      bowl.fillRect(bowlX + 32, 434, 24, 6);
       bowl.setDepth(456);
       this.add
-        .text(822, 408, foodLabel, {
+        .text(bowlX + 44, 408, foodLabel, {
           color: "#263047",
           backgroundColor: "#fff8df",
           fontFamily: "Consolas, monospace",
@@ -245,7 +246,7 @@ class CatWorldScene extends Phaser.Scene {
         })
         .setOrigin(0.5)
         .setDepth(460);
-      this.addRoomHitZone(snapshot.activeFood.itemId || "active-food", 778, 408, 92, 58, 461);
+      this.addRoomHitZone(snapshot.activeFood.itemId || "active-food", bowlX, 408, 92, 58, 461);
     }
     if (owned(snapshot.inventory, "scratch-board")) {
       const scratcher = this.add.graphics();
@@ -256,15 +257,16 @@ class CatWorldScene extends Phaser.Scene {
       this.addRoomHitZone("scratch-board", 90, 418, 150, 44, 466);
     }
     if (owned(snapshot.inventory, "feather-wand")) {
+      const wandX = GAME_WIDTH - 208;
       const wand = this.add.graphics();
       wand.lineStyle(6, 0x7b5834, 1);
-      wand.lineBetween(780, 320, 894, 280);
+      wand.lineBetween(wandX + 28, 320, wandX + 142, 280);
       wand.fillStyle(0xff8cad, 1);
-      wand.fillTriangle(888, 263, 915, 274, 894, 304);
+      wand.fillTriangle(wandX + 136, 263, wandX + 163, 274, wandX + 142, 304);
       wand.fillStyle(0xa9e8c8, 1);
-      wand.fillTriangle(864, 262, 895, 272, 877, 298);
+      wand.fillTriangle(wandX + 112, 262, wandX + 143, 272, wandX + 125, 298);
       wand.setDepth(330);
-      this.addRoomHitZone("feather-wand", 752, 250, 172, 70, 332);
+      this.addRoomHitZone("feather-wand", wandX, 250, 172, 70, 332);
     }
   }
 
@@ -328,7 +330,7 @@ class CatWorldScene extends Phaser.Scene {
     const cats = snapshot.cats.filter((cat) => ownedCatIds.has(cat.id));
     const visibleCats = cats.length ? cats : snapshot.cats.slice(0, 1);
     visibleCats.forEach((cat, index) => {
-      const x = 98 + (index % 5) * 160;
+      const x = 150 + (index % 6) * 176;
       const y = FLOOR_BOTTOM - 68 - Math.floor(index / 5) * 56;
       const container = this.add.container(x, y);
       container.setSize(100, 70);

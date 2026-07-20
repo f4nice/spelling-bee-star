@@ -87,8 +87,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260720-011"
-DEFAULT_PAGE_VERSION = "v20260720.11"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260720-012"
+DEFAULT_PAGE_VERSION = "v20260720.12"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -7111,6 +7111,35 @@ def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
             "\u9519\u8bef\u5355\u8bcd\u5df2\u4ece\u5f53\u65e5\u751f\u8bcd\u672c\u6062\u590d\uff1b"
             "\u4e4b\u540e\u65b0\u7684\u6311\u6218\u4f1a\u81ea\u52a8\u5b8c\u6574\u8bb0\u5f55\u6bcf\u4e2a\u5355\u8bcd\u3002"
         )
+    list_summary_map: dict[str, dict[str, Any]] = {}
+    for item in words:
+        list_id = item.get("word_list_id")
+        list_key = str(list_id) if list_id else "none"
+        summary = list_summary_map.get(list_key)
+        if not summary:
+            summary = {
+                "key": list_key,
+                "id": list_id,
+                "name": item.get("word_list_name") or "\u672a\u5f52\u5c5e\u5355\u8bcd\u8868",
+                "word_count": 0,
+                "correct": 0,
+                "wrong": 0,
+                "wrong_attempts": 0,
+                "corrected": 0,
+                "pending": 0,
+            }
+            list_summary_map[list_key] = summary
+        summary["word_count"] += 1
+        summary["correct"] += int(item.get("correct_count") or 0)
+        wrong_count = int(item.get("wrong_count") or 0)
+        if item.get("was_wrong") or wrong_count:
+            summary["wrong"] += 1
+        summary["wrong_attempts"] += wrong_count
+        if item.get("corrected"):
+            summary["corrected"] += 1
+        if item.get("was_wrong") and not item.get("corrected"):
+            summary["pending"] += 1
+    list_summaries = list(list_summary_map.values())
     return {
         "date": challenge_date.isoformat(),
         "total": correct + wrong_attempts,
@@ -7121,6 +7150,7 @@ def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
         "correction_pending": len(pending_wrong_ids),
         "wrong_challenge_count": len(pending_wrong_ids),
         "wrong_word_list_id": wrong_word_list.id if wrong_word_list else None,
+        "list_summaries": list_summaries,
         "words": words,
         "has_detail_rows": bool(detail_rows),
         "recovery_note": recovery_note,
@@ -11070,6 +11100,8 @@ def word_navigation_context(
             .join(ChallengeDailyWord, ChallengeDailyWord.word_id == Word.id)
             .where(ChallengeDailyWord.challenge_date == challenge_date)
         )
+        if list_id:
+            day_query = day_query.where(ChallengeDailyWord.word_list_id == list_id)
         if challenge_status in {"correct", "wrong"}:
             day_query = day_query.where(ChallengeDailyWord.last_result == challenge_status)
         day_word_ids = db.scalars(
