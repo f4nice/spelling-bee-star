@@ -219,7 +219,11 @@ const focusedCatDailyNote = computed(() => {
   const log = focusedDailyLog.value || {};
   const agent = focusedAgentState.value || {};
   const favoriteDecorLabels = focusedCat.value.favoriteDecorLabels || [];
-  const damaged = agent.mischiefLabel ? ` · 今天弄坏过 ${agent.mischiefLabel}` : "";
+  const damaged = agent.mischiefLabel
+    ? ` · 今天弄坏过 ${agent.mischiefLabel}`
+    : agent.mischiefAttemptReason
+      ? ` · 捣蛋观察: ${agent.mischiefAttemptReason}`
+      : "";
   const comfort = agent.comfortLabel || "暂无道具减耗";
   const reason = agent.hourlyReason || "自由活动";
   return `每小时 体力 ${signedHourlyValue(log.hourlyEnergyDecay)} / 心情 ${signedHourlyValue(log.hourlyMoodDecay)} · ${reason} · ${comfort} · 独立状态 ${agent.dailyMoodLabel || "稳定"} · 喜欢 ${favoriteDecorLabels.join("、") || "安静角落"}${damaged}`;
@@ -286,6 +290,7 @@ const catAgentDiaries = computed(() =>
       const sleepStart = formatCatHour(traits.sleepStart ?? 23);
       const sleepEnd = formatCatHour(traits.sleepEnd ?? 7);
       const damagedItem = log.damagedItemId ? shopById.value[log.damagedItemId]?.label || log.damagedItemId : "";
+      const mischiefAttemptReason = agent.mischiefAttemptReason || "";
       const hourlyHistory = Array.isArray(agent.hourlyHistory)
         ? agent.hourlyHistory.filter((row) => row?.label).slice(-3).reverse()
         : [];
@@ -310,7 +315,11 @@ const catAgentDiaries = computed(() =>
         favoriteItemLabel,
         activeFavoriteLabel: activeFavoriteLabels.length ? activeFavoriteLabels.join("、") : "喜欢的家具还没摆出来",
         countsLabel: `食物 ${log.foodCount || 0} · 玩具 ${log.toyCount || 0} · 摸摸 ${agent.petCount || 0}`,
-        damageLabel: damagedItem ? `今天弄坏过 ${damagedItem}` : "今天没有破坏记录",
+        damageLabel: damagedItem
+          ? `今天弄坏过 ${damagedItem}`
+          : mischiefAttemptReason
+            ? `今天有捣蛋冲动: ${mischiefAttemptReason}，但没有弄坏东西`
+            : "今天没有破坏记录",
         hourlyHistory,
       };
     }),

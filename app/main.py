@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-034"
-DEFAULT_PAGE_VERSION = "v20260721.34"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-035"
+DEFAULT_PAGE_VERSION = "v20260721.35"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -10644,6 +10644,9 @@ CAT_WORLD_AGENT_STATE_CARRY_KEYS = {
     "favoriteDecorRewarded",
     "hourlyHistory",
     "lastPetAt",
+    "mischiefAttemptedAt",
+    "mischiefAttemptMood",
+    "mischiefAttemptReason",
     "mischiefChecked",
     "mischiefItemId",
     "mischiefLabel",
@@ -10883,7 +10886,10 @@ def cat_world_damage_risk_label(probability: float) -> str:
     return "很低"
 
 
-def cat_world_damage_risk_reason(agent_state: dict[str, Any], mood_score: int) -> str:
+def cat_world_damage_risk_reason(agent_state: dict[str, Any], traits: dict[str, Any], mood_score: int) -> str:
+    ready, reason = cat_world_damage_attempt_ready(agent_state, traits, mood_score)
+    if not ready:
+        return reason
     mood_key = str(agent_state.get("dailyMoodKey") or "")
     if mood_key == "grumpy" or mood_score < 38:
         return "心情差时更容易捣蛋"
@@ -10903,6 +10909,21 @@ def cat_world_damage_event_motive(agent_state: dict[str, Any], mood_score: int) 
     if mood_key == "curious":
         return "探索时太兴奋"
     return "偶尔调皮"
+
+
+def cat_world_damage_attempt_ready(agent_state: dict[str, Any], traits: dict[str, Any], mood_score: int) -> tuple[bool, str]:
+    mood_key = str(agent_state.get("dailyMoodKey") or "")
+    temperament = str(traits.get("temperament") or "balanced")
+    mischief = min(max(int(agent_state.get("mischief") or 35), 0), 100)
+    if mood_key == "grumpy":
+        return True, "今天不太高兴，进入捣蛋观察"
+    if mood_score < 44:
+        return True, "心情已经偏低，可能会弄坏道具"
+    if mood_score < 54 and mischief >= 62:
+        return True, "心情偏低且捣蛋值高"
+    if mood_score < 60 and mischief >= 78 and temperament in {"chatty", "guardian"}:
+        return True, "活跃猫咪心情不稳时更容易闯祸"
+    return False, "心情稳定，今天先不破坏道具"
 
 
 def cat_world_agent_daily_goal(
@@ -10934,9 +10955,10 @@ def cat_world_agent_daily_goal(
     active_favorites = [item_id for item_id in favorite_active_ids if item_id in owned_decor]
     favorite_owned_toys = [item_id for item_id in owned_toys if cat_world_item_favorite_cat_id(item_id) == cat["id"]]
     damage_candidates = sorted(set(owned_toys + owned_decor))
+    damage_ready, damage_ready_reason = cat_world_damage_attempt_ready(agent_state, traits, mood_score)
     damage_probability = cat_world_damage_probability(agent_state, traits, mood_score)
     risk_label = cat_world_damage_risk_label(damage_probability)
-    risk_reason = cat_world_damage_risk_reason(agent_state, mood_score)
+    risk_reason = cat_world_damage_risk_reason(agent_state, traits, mood_score)
 
     def goal(
         key: str,
@@ -10979,12 +11001,12 @@ def cat_world_agent_daily_goal(
             12,
         )
 
-    if (mood_key == "grumpy" or mood_score < 38) and damage_candidates:
+    if damage_ready and damage_candidates:
         target_item_id = cat_world_pick_stable_item(f"{seed}:mischief", damage_candidates)
         return goal(
             "mischief-watch",
             "盯着道具",
-            f"{cat['label']}今天心情差，正在盯着{CAT_WORLD_SHOP_BY_ID[target_item_id]['label']}，最好陪玩或喂食安抚一下。",
+            f"{cat['label']}{damage_ready_reason}，正在盯着{CAT_WORLD_SHOP_BY_ID[target_item_id]['label']}，最好陪玩或喂食安抚一下。",
             CAT_WORLD_SHOP_BY_ID[target_item_id].get("category") or "decor",
             target_item_id,
             86,
@@ -11295,6 +11317,9 @@ def cat_world_usable_inventory(inventory: dict[str, int], damaged_items: dict[st
 
 
 def cat_world_damage_probability(agent_state: dict[str, Any], traits: dict[str, Any], mood_score: int) -> float:
+    ready, _reason = cat_world_damage_attempt_ready(agent_state, traits, mood_score)
+    if not ready:
+        return 0.0
     if mood_score >= 72:
         base = 0.002
     elif mood_score >= 58:
@@ -11362,8 +11387,17 @@ def cat_world_apply_agent_damage_events(
                 db.add(log)
                 changed = True
             continue
-        agent_state["mischiefChecked"] = True
         adjusted_mood_score = clamp_cat_world_score(int(log.mood_score or 0) + int(agent_state.get("moodOffset") or 0))
+        ready, ready_reason = cat_world_damage_attempt_ready(agent_state, traits, adjusted_mood_score)
+        if not ready:
+            if agent_changed:
+                db.add(log)
+                changed = True
+            continue
+        agent_state["mischiefChecked"] = True
+        agent_state["mischiefAttemptedAt"] = now.replace(microsecond=0).isoformat() + "Z"
+        agent_state["mischiefAttemptMood"] = adjusted_mood_score
+        agent_state["mischiefAttemptReason"] = ready_reason
         probability = cat_world_damage_probability(agent_state, traits, adjusted_mood_score)
         seed = f"{cat_world_daily_agent_seed(today, cat_id, state.phone)}:damage"
         if cat_world_stable_ratio(seed) <= probability:
@@ -11398,6 +11432,17 @@ def cat_world_apply_agent_damage_events(
             changed = True
             if not candidates:
                 agent_state["mischiefChecked"] = True
+        else:
+            append_cat_world_agent_event(
+                log,
+                cat,
+                traits,
+                "mischief-check",
+                "忍住捣蛋",
+                f"{cat['label']}{ready_reason}，但这次没有弄坏道具。",
+                now,
+            )
+            changed = True
         current_state = parse_cat_world_agent_state(log.agent_state)
         agent_state["events"] = cat_world_trim_agent_events(current_state.get("events") or agent_state.get("events"))
         log.agent_state = encode_cat_world_agent_state(agent_state)
