@@ -19,6 +19,8 @@ const notice = ref("");
 const newUser = ref({ phone: "", username: "", role: "viewer", loginPassword: "" });
 const catWorldPricing = ref(props.data.catWorldPricing || { plans: [], items: [] });
 const savingPriceItemId = ref("");
+const catWorldResetPassword = ref("");
+const resettingCatWorld = ref(false);
 const priceDrafts = ref(
   Object.fromEntries((catWorldPricing.value.items || []).map((item) => [item.id, Number(item.cost || 0)])),
 );
@@ -172,6 +174,31 @@ async function savePrice(item) {
     notice.value = error.message || "价格保存失败。";
   } finally {
     savingPriceItemId.value = "";
+  }
+}
+
+async function resetCatWorldData() {
+  const password = catWorldResetPassword.value.trim();
+  if (!password) {
+    notice.value = "请输入当前后台账号的登录密码。";
+    return;
+  }
+  resettingCatWorld.value = true;
+  notice.value = "";
+  try {
+    const result = await fetchJson(routeApiPaths.adminCatWorldReset(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    catWorldPricing.value = result.catWorldPricing || catWorldPricing.value;
+    const deleted = result.deleted || {};
+    notice.value = `猫咪世界测试数据已清零：状态 ${deleted.state || 0} 条，每日日志 ${deleted.dailyLogs || 0} 条。`;
+    catWorldResetPassword.value = "";
+  } catch (error) {
+    notice.value = error.message || "猫咪世界清零失败。";
+  } finally {
+    resettingCatWorld.value = false;
   }
 }
 </script>
@@ -382,6 +409,22 @@ async function savePrice(item) {
               <p>{{ plan.strategy }}</p>
             </button>
           </div>
+
+          <section class="admin-reset-panel">
+            <div>
+              <strong>测试数据清零</strong>
+              <p>删除当前账号的猫咪、库存、布局、食物和每日日志，商品价格不会受影响。</p>
+            </div>
+            <input
+              v-model="catWorldResetPassword"
+              type="password"
+              autocomplete="current-password"
+              placeholder="输入后台登录密码"
+            >
+            <button class="danger-button compact-button" type="button" :disabled="resettingCatWorld" @click="resetCatWorldData">
+              {{ resettingCatWorld ? "清零中..." : "一键清零" }}
+            </button>
+          </section>
 
           <div v-if="activePricingPlan" class="admin-pricing-groups">
             <section class="admin-pricing-group admin-pricing-group-active">

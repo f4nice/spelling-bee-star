@@ -234,26 +234,28 @@ class CatWorldScene extends Phaser.Scene {
   drawInventoryItems(snapshot) {
     if (snapshot.activeFood?.active) {
       const foodLabel = snapshot.activeFood.label || "食物";
-      const bowlX = GAME_WIDTH - 174;
+      const foodEnergy = Number(snapshot.activeFood.catEnergyEffective ?? snapshot.activeFood.catEnergy ?? 0);
+      const bowlX = GAME_WIDTH - 260;
       const bowl = this.add.graphics();
-      drawPixelRect(bowl, bowlX + 8, 418, 72, 34, 0xff8cad);
+      drawPixelRect(bowl, bowlX + 8, 408, 118, 46, 0xff8cad);
       bowl.fillStyle(0xfff07d, 1);
-      bowl.fillRect(bowlX + 20, 423, 48, 8);
+      bowl.fillRect(bowlX + 24, 416, 76, 10);
       bowl.fillStyle(0xfff8df, 1);
-      bowl.fillRect(bowlX + 32, 434, 24, 6);
-      bowl.setDepth(456);
+      bowl.fillRect(bowlX + 42, 432, 40, 8);
+      bowl.setDepth(720);
       this.add
-        .text(bowlX + 44, 408, foodLabel, {
+        .text(bowlX + 68, 380, `${foodLabel}\n+${foodEnergy} 体力`, {
           color: "#263047",
           backgroundColor: "#fff8df",
           fontFamily: "Consolas, monospace",
-          fontSize: "10px",
+          fontSize: "12px",
           fontStyle: "bold",
           padding: { x: 4, y: 2 },
+          align: "center",
         })
         .setOrigin(0.5)
-        .setDepth(460);
-      this.addRoomHitZone(snapshot.activeFood.itemId || "active-food", bowlX, 408, 92, 58, 461);
+        .setDepth(726);
+      this.addRoomHitZone(snapshot.activeFood.itemId || "active-food", bowlX, 374, 142, 86, 728);
     }
     if (owned(snapshot.inventory, "scratch-board")) {
       const scratcher = this.add.graphics();

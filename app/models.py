@@ -217,6 +217,29 @@ class CatWorldShopSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class CatWorldDailyLog(Base):
+    __tablename__ = "cat_world_daily_logs"
+    __table_args__ = (UniqueConstraint("phone", "log_date", "cat_id", name="uq_cat_world_daily_logs_phone_date_cat"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    log_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    cat_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    favorite_decor_ids: Mapped[str | None] = mapped_column(String(255))
+    mood_score: Mapped[int] = mapped_column(Integer, default=62, server_default="62", nullable=False)
+    energy_score: Mapped[int] = mapped_column(Integer, default=58, server_default="58", nullable=False)
+    hourly_mood_decay: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    hourly_energy_decay: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    food_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    toy_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    decor_bonus: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    last_food_item: Mapped[str | None] = mapped_column(String(80))
+    last_play_item: Mapped[str | None] = mapped_column(String(80))
+    last_decay_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class CacheEntry(Base):
     __tablename__ = "speakeasy_cache"
 

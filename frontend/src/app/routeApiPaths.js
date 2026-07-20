@@ -9,6 +9,7 @@ export const routeApiPaths = {
   catWorldSelectCat: () => "/api/vue/cat-world/select-cat",
   admin: () => "/api/vue/admin",
   adminCatWorldPricing: () => "/api/vue/admin/cat-world/pricing",
+  adminCatWorldReset: () => "/api/vue/admin/cat-world/reset",
   spb: (route = {}) => `/api/vue/spb?collection=${encodeURIComponent(route.params?.collection || "individual")}`,
   spbSync: () => "/api/vue/spb/sync",
   spbSyncStatus: (jobId) => `/api/vue/spb/sync/${encodeURIComponent(jobId)}`,

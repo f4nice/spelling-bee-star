@@ -12479,3 +12479,216 @@ select {
   color: #fff;
   background: rgba(255, 255, 255, 0.18);
 }
+
+.eyebrow,
+.section-kicker {
+  letter-spacing: 0;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 3px 9px;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.topbar-nav a.active {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+  background: #147b59;
+}
+
+.topbar-nav a.active em {
+  color: #147b59;
+  background: #fff;
+}
+
+.shell[data-quant-radar-page-key="cat-world"] {
+  width: min(1760px, calc(100vw - 24px));
+}
+
+.shell[data-quant-radar-page-key="cat-world"] .cat-world-layout {
+  grid-template-columns: minmax(720px, 1fr) minmax(300px, 360px);
+  align-items: start;
+}
+
+.cat-world-wallet {
+  appearance: none;
+  display: grid;
+  justify-items: start;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cat-world-wallet:hover,
+.cat-world-wallet:focus-visible {
+  transform: translateY(-1px);
+  filter: saturate(1.08);
+}
+
+.cat-world-ai-panel small {
+  color: #9de8ff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.cat-world-owned-item {
+  padding: 0;
+  overflow: hidden;
+}
+
+.cat-world-owned-main {
+  appearance: none;
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  border: 0;
+  padding: 9px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cat-world-owned-main:disabled {
+  opacity: 0.62;
+  cursor: wait;
+}
+
+.cat-world-color-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-top: 2px solid rgba(44, 47, 58, 0.18);
+  padding: 7px 9px 9px;
+}
+
+.cat-world-color-swatch {
+  width: 22px;
+  height: 22px;
+  border: 3px solid #2c2f3a;
+  border-radius: 50%;
+  padding: 0;
+  background: var(--swatch-color);
+  box-shadow: 2px 2px 0 #2c2f3a;
+  cursor: pointer;
+}
+
+.cat-world-color-swatch.active {
+  outline: 3px solid #fff8df;
+  outline-offset: -6px;
+}
+
+.cat-world-color-swatch:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.cat-world-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(16, 26, 34, 0.42);
+}
+
+.cat-world-energy-modal {
+  display: grid;
+  gap: 16px;
+  width: min(760px, 94vw);
+  max-height: min(720px, 88vh);
+  overflow: auto;
+  border: 4px solid #2c2f3a;
+  border-radius: 8px;
+  padding: 18px;
+  background: #fff8df;
+  box-shadow: 8px 8px 0 #2c2f3a;
+}
+
+.cat-world-energy-modal header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.cat-world-energy-modal h2 {
+  margin: 0;
+  color: #263047;
+  font-size: 24px;
+}
+
+.cat-world-energy-modal p {
+  margin: 6px 0 0;
+  color: #56627a;
+  font-weight: 800;
+}
+
+.cat-world-modal-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.cat-world-modal-summary span {
+  border: 3px solid #2c2f3a;
+  border-radius: 4px;
+  padding: 10px;
+  color: #263047;
+  background: #d9f6ff;
+  box-shadow: 3px 3px 0 #2c2f3a;
+  font-weight: 900;
+}
+
+.admin-reset-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 260px) auto;
+  gap: 12px;
+  align-items: end;
+  border: 1px solid rgba(183, 32, 32, 0.16);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: #fff8f8;
+}
+
+.admin-reset-panel strong {
+  color: #9d1c1c;
+  font-weight: 900;
+}
+
+.admin-reset-panel p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.admin-reset-panel input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-weight: 800;
+}
+
+@media (max-width: 1180px) {
+  .shell[data-quant-radar-page-key="cat-world"] .cat-world-layout,
+  .admin-reset-panel {
+    grid-template-columns: 1fr;
+  }
+}
