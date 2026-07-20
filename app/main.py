@@ -86,8 +86,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260720-001"
-DEFAULT_PAGE_VERSION = "v20260720.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260720-002"
+DEFAULT_PAGE_VERSION = "v20260720.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -344,18 +344,65 @@ CAT_WORLD_CATS = [
         "englishName": "Mimi",
         "rarity": "Starter",
         "description": "第一只陪你学习的猫。",
+        "personality": "黏人的学习搭子",
+        "thoughts": [
+            "检测到你今天练过单词，想靠近一点听。",
+            "如果你读英文，我会把尾巴调成陪读模式。",
+            "能量值很香，适合换一口小鱼干。",
+        ],
     },
-    *[
-        {
-            "id": item["id"],
-            "label": item["label"],
-            "englishName": item["englishName"],
-            "rarity": "Famous Cat",
-            "description": item["description"],
-        }
-        for item in CAT_WORLD_SHOP
-        if item["category"] == "cat"
-    ],
+    {
+        "id": "british-shorthair",
+        "label": "英短银渐层",
+        "englishName": "British Shorthair",
+        "rarity": "Famous Cat",
+        "description": "圆脸、安静，适合陪你背长单词。",
+        "personality": "冷静的词库管理员",
+        "thoughts": [
+            "正在把新单词按难度排好队。",
+            "建议先复习三个旧词，再挑战一个新词。",
+            "情绪稳定，适合长时间陪读。",
+        ],
+    },
+    {
+        "id": "siamese",
+        "label": "暹罗猫",
+        "englishName": "Siamese",
+        "rarity": "Famous Cat",
+        "description": "聪明又爱说话，听你朗读英文很认真。",
+        "personality": "话多的语音小助手",
+        "thoughts": [
+            "我听见了一个发音，可以再读一遍吗？",
+            "朗读会让能量灯亮得更快。",
+            "正在准备一串很想说的英文例句。",
+        ],
+    },
+    {
+        "id": "ragdoll",
+        "label": "布偶猫",
+        "englishName": "Ragdoll",
+        "rarity": "Famous Cat",
+        "description": "温柔黏人，适合阅读日一起出现。",
+        "personality": "温柔的阅读陪伴员",
+        "thoughts": [
+            "今天适合慢慢读一段好句。",
+            "你的学习节奏很好，我想在旁边趴着。",
+            "如果累了，就摸摸我再继续。",
+        ],
+    },
+    {
+        "id": "maine-coon",
+        "label": "缅因猫",
+        "englishName": "Maine Coon",
+        "rarity": "Famous Cat",
+        "description": "像猫咪世界里的守护者，适合大目标解锁。",
+        "personality": "冒险型房间守护者",
+        "thoughts": [
+            "目标已锁定：把今天的挑战完成。",
+            "能量充足，可以扩建一格房间。",
+            "我负责守门，你负责把单词拿下。",
+        ],
+    },
 ]
 CAT_WORLD_SHOP_BY_ID = {item["id"]: item for item in CAT_WORLD_SHOP}
 CAT_WORLD_CAT_BY_ID = {item["id"]: item for item in CAT_WORLD_CATS}

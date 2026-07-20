@@ -16,12 +16,14 @@ const busyItemId = ref("");
 const notice = ref("");
 const catReaction = ref("");
 const catPetSequence = ref(0);
+const pettedCatId = ref("");
+const focusedCatId = ref("");
 
 const catReactionTexts = [
-  "轻轻蹭了一下手心",
-  "眯起眼睛陪你学英语",
-  "尾巴开心地晃了晃",
-  "今天也想听你读单词",
+  "收到摸摸指令，开心值上升",
+  "启动陪读模式，正在靠近你",
+  "尾巴雷达晃了晃，发现新单词",
+  "想法缓存刷新，准备继续陪你学",
 ];
 let catReactionTimer = 0;
 
@@ -51,6 +53,18 @@ const cats = computed(() => payload.value.cats || []);
 const shop = computed(() => payload.value.shop || []);
 const shopById = computed(() => Object.fromEntries(shop.value.map((item) => [item.id, item])));
 const selectedCat = computed(() => cats.value.find((cat) => cat.id === state.value.selectedCat) || cats.value[0] || {});
+const roomCats = computed(() => {
+  const owned = new Set(ownedCats.value);
+  const visibleCats = cats.value.filter((cat) => owned.has(cat.id));
+  return visibleCats.length ? visibleCats : [selectedCat.value].filter((cat) => cat?.id);
+});
+const focusedCat = computed(
+  () =>
+    roomCats.value.find((cat) => cat.id === focusedCatId.value) ||
+    roomCats.value.find((cat) => cat.id === state.value.selectedCat) ||
+    roomCats.value[0] ||
+    {},
+);
 const mood = computed(() => state.value.mood || {});
 const selectedItems = computed(() => shop.value.filter((item) => item.category === activeCategory.value));
 const ownedDecor = computed(() =>
@@ -69,6 +83,13 @@ const ownedFoodCount = computed(() =>
     .reduce((sum, [, count]) => sum + Number(count || 0), 0),
 );
 const lastPlayLabel = computed(() => shopById.value[mood.value.lastPlayItem]?.label || "");
+const focusedCatThought = computed(() => {
+  const thoughts = focusedCat.value.thoughts || [];
+  if (!thoughts.length) {
+    return "正在观察你的学习节奏。";
+  }
+  return thoughts[catPetSequence.value % thoughts.length];
+});
 
 function replacePayload(nextPayload) {
   if (nextPayload?.energy && nextPayload?.state) {
@@ -88,13 +109,17 @@ function canAfford(item) {
   return Number(energy.value.available || 0) >= Number(item.cost || 0);
 }
 
-function petCat() {
+function petCat(cat = selectedCat.value) {
+  const catLabel = cat?.label || "猫咪";
   const nextIndex = catPetSequence.value % catReactionTexts.length;
-  catReaction.value = catReactionTexts[nextIndex];
+  focusedCatId.value = cat?.id || "";
+  pettedCatId.value = cat?.id || "";
+  catReaction.value = `${catLabel}: ${catReactionTexts[nextIndex]}`;
   catPetSequence.value += 1;
   window.clearTimeout(catReactionTimer);
   catReactionTimer = window.setTimeout(() => {
     catReaction.value = "";
+    pettedCatId.value = "";
   }, 2200);
 }
 
@@ -152,6 +177,7 @@ async function selectCat(catId) {
     });
     replacePayload(nextPayload);
     const cat = cats.value.find((item) => item.id === catId);
+    focusedCatId.value = catId;
     notice.value = `${cat?.label || "猫咪"} 正在房间里陪读。`;
   } catch (error) {
     notice.value = error.message || "切换猫咪失败，请稍后再试。";
@@ -181,12 +207,18 @@ async function selectCat(catId) {
         <div class="cat-world-room-head">
           <div>
             <p class="section-kicker">Room</p>
-            <h2>{{ selectedCat.label || "咪咪" }}的房间</h2>
+            <h2>像素猫小屋</h2>
           </div>
           <div class="cat-world-mood">
             <span>{{ mood.label || "安静陪读" }}</span>
             <strong>{{ mood.score || 50 }}</strong>
           </div>
+        </div>
+
+        <div class="cat-world-ai-panel" aria-live="polite">
+          <span>CAT-OS</span>
+          <strong>{{ focusedCat.label || "猫咪" }} · {{ focusedCat.personality || "学习陪伴型" }}</strong>
+          <p>{{ focusedCatThought }}</p>
         </div>
 
         <div class="cat-world-room" aria-label="猫咪房间场景">
@@ -214,29 +246,33 @@ async function selectCat(catId) {
           >
             <span></span><span></span><span></span><span></span>
           </div>
-          <svg
-            :key="`cat-pet-${catPetSequence}`"
-            :class="['cat-world-cat-svg', `cat-tone-${selectedCat.id || 'mimi'}`, { 'is-petted': catPetSequence }]"
-            viewBox="0 0 240 180"
-            role="button"
-            tabindex="0"
-            :aria-label="`摸摸${selectedCat.label || '咪咪'}`"
-            @click="petCat"
-            @keydown.enter.prevent="petCat"
-            @keydown.space.prevent="petCat"
+          <button
+            v-for="(cat, index) in roomCats"
+            :key="`${cat.id}-${catReaction && cat.id === pettedCatId ? catPetSequence : 0}`"
+            type="button"
+            :class="[
+              'cat-world-cat-sprite',
+              `cat-tone-${cat.id || 'mimi'}`,
+              `cat-slot-${index % 5}`,
+              { 'is-selected': state.selectedCat === cat.id, 'is-petted': catReaction && cat.id === pettedCatId },
+            ]"
+            :aria-label="`摸摸${cat.label || '猫咪'}`"
+            @click="petCat(cat)"
           >
-            <path class="cat-tail" d="M177 103c33-24 26-54 8-58-12-3-20 7-15 18 4 8 14 9 20 3" />
-            <path class="cat-body" d="M69 105c0-34 20-55 55-55s55 21 55 55v21c0 28-21 42-55 42s-55-14-55-42z" />
-            <path class="cat-ear" d="M82 59 93 26l24 28z" />
-            <path class="cat-ear" d="m130 54 24-28 11 33z" />
-            <path class="cat-face" d="M82 79c8-18 24-28 42-28s34 10 42 28c9 21-7 46-42 46S73 100 82 79z" />
-            <circle class="cat-eye" cx="107" cy="85" r="5" />
-            <circle class="cat-eye" cx="141" cy="85" r="5" />
-            <path class="cat-nose" d="M121 99h6l-3 4z" />
-            <path class="cat-mouth" d="M124 104c-4 7-12 8-17 3m17-3c4 7 12 8 17 3" />
-            <path class="cat-paw" d="M93 139c6 8 17 8 23 0" />
-            <path class="cat-paw" d="M132 139c6 8 17 8 23 0" />
-          </svg>
+            <span class="cat-pixel-shadow"></span>
+            <span class="cat-pixel-tail"></span>
+            <span class="cat-pixel-body"></span>
+            <span class="cat-pixel-head"></span>
+            <span class="cat-pixel-ear cat-pixel-ear-left"></span>
+            <span class="cat-pixel-ear cat-pixel-ear-right"></span>
+            <span class="cat-pixel-eye cat-pixel-eye-left"></span>
+            <span class="cat-pixel-eye cat-pixel-eye-right"></span>
+            <span class="cat-pixel-nose"></span>
+            <span class="cat-pixel-paw cat-pixel-paw-left"></span>
+            <span class="cat-pixel-paw cat-pixel-paw-right"></span>
+            <span v-if="state.selectedCat === cat.id" class="cat-pixel-marker">主</span>
+            <span class="cat-pixel-label">{{ cat.label }}</span>
+          </button>
         </div>
 
         <div class="cat-world-room-status">
@@ -342,7 +378,7 @@ async function selectCat(catId) {
           @click="selectCat(cat.id)"
         >
           <strong>{{ cat.label }}</strong>
-          <span>{{ ownsCat(cat.id) ? cat.englishName : "未解锁" }}</span>
+          <span>{{ ownsCat(cat.id) ? cat.personality || cat.englishName : "未解锁" }}</span>
         </button>
       </div>
     </section>
