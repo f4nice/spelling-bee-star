@@ -545,6 +545,22 @@ class CatWorldScene extends Phaser.Scene {
       graphics.fillRect(84, 3, 4, 2);
       graphics.fillRect(89, 5, 4, 2);
     }
+    const dailyGoal = snapshot?.dailyLogs?.[cat.id]?.agentState?.dailyGoal || {};
+    if (dailyGoal.key === "mischief-watch") {
+      graphics.fillStyle(0xdb2777, 1);
+      graphics.fillRect(76, -35, 18, 18);
+      graphics.lineStyle(2, INK, 1);
+      graphics.strokeRect(76, -35, 18, 18);
+      const warning = this.add
+        .text(85, -26, "!", {
+          color: "#fff8df",
+          fontFamily: "Consolas, monospace",
+          fontSize: "14px",
+          fontStyle: "bold",
+        })
+        .setOrigin(0.5);
+      container.add(warning);
+    }
   }
 
   drawStatusBars(graphics, catEnergy, moodScore) {
@@ -763,7 +779,11 @@ class CatWorldScene extends Phaser.Scene {
           if (shouldVisitFood) {
             this.spawnFoodPlayBubble(container, cat, foodTarget);
           } else if (shouldVisitGoal) {
-            this.spawnGoalBubble(container, cat, goalTarget);
+            if (goalTarget.kind === "mischief") {
+              this.spawnMischiefBubble(container, cat, goalTarget);
+            } else {
+              this.spawnGoalBubble(container, cat, goalTarget);
+            }
           } else if (shouldVisitFavorite) {
             this.spawnDecorPlayBubble(container, cat, favoriteTarget);
           }
@@ -778,14 +798,16 @@ class CatWorldScene extends Phaser.Scene {
     const goal = log.agentState?.dailyGoal || {};
     const targetItemId = goal.targetItemId || "";
     if (!targetItemId || isDamaged(this.owner.snapshot, targetItemId)) return null;
+    const isMischiefWatch = goal.key === "mischief-watch";
     if (goal.targetType === "toy" && owned(this.owner.snapshot.inventory, targetItemId) && ROOM_TOY_TARGETS[targetItemId]) {
       const target = ROOM_TOY_TARGETS[targetItemId];
       return {
         itemId: targetItemId,
         label: goal.targetLabel || target.label,
         message: goal.message || "",
-        kind: "toy",
-        priority: Number(goal.priority || 72),
+        kind: isMischiefWatch ? "mischief" : "toy",
+        itemKind: "toy",
+        priority: isMischiefWatch ? Math.max(Number(goal.priority || 86), 88) : Number(goal.priority || 72),
         x: clamp(target.x + Phaser.Math.Between(-42, 42), 38, GAME_WIDTH - 132),
         y: clamp(target.y + Phaser.Math.Between(-22, 24), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
       };
@@ -797,8 +819,9 @@ class CatWorldScene extends Phaser.Scene {
         itemId: targetItemId,
         label: goal.targetLabel || spec.label,
         message: goal.message || "",
-        kind: goal.targetType || "decor",
-        priority: Number(goal.priority || 72),
+        kind: isMischiefWatch ? "mischief" : goal.targetType || "decor",
+        itemKind: "decor",
+        priority: isMischiefWatch ? Math.max(Number(goal.priority || 86), 88) : Number(goal.priority || 72),
         x: clamp(position.x + spec.width / 2 - 45 + Phaser.Math.Between(-44, 44), 38, GAME_WIDTH - 132),
         y: clamp(Math.max(FLOOR_TOP + 52, position.y + spec.height + 18) + Phaser.Math.Between(-18, 24), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
       };
@@ -974,6 +997,65 @@ class CatWorldScene extends Phaser.Scene {
       onComplete: () => bubble.destroy(),
     });
     this.owner.handlers.onCatThought?.(cat, message);
+  }
+
+  spawnMischiefBubble(container, cat, target) {
+    const message = target.message || `${cat?.label || "猫咪"}今天心情不太好，正在盯着${target.label}。`;
+    const bubble = this.add
+      .text(container.x + 38, container.y - 31, message, {
+        color: "#fff8df",
+        backgroundColor: "#db2777",
+        fontFamily: "Consolas, monospace",
+        fontSize: "12px",
+        fontStyle: "bold",
+        padding: { x: 8, y: 5 },
+        wordWrap: { width: 270 },
+        align: "center",
+      })
+      .setOrigin(0.5)
+      .setDepth(CAT_INTERACTION_DEPTH + 150);
+    this.spawnMischiefMarks(target.x + 48, target.y - 18);
+    this.tweens.add({
+      targets: container,
+      x: container.x + 6,
+      yoyo: true,
+      repeat: 5,
+      duration: 90,
+      ease: "Sine.easeInOut",
+    });
+    this.tweens.add({
+      targets: bubble,
+      y: bubble.y - 24,
+      alpha: 0,
+      duration: 2400,
+      ease: "Cubic.easeOut",
+      onComplete: () => bubble.destroy(),
+    });
+    this.owner.handlers.onCatThought?.(cat, message);
+  }
+
+  spawnMischiefMarks(x, y) {
+    for (let index = 0; index < 3; index += 1) {
+      const mark = this.add
+        .text(x + index * 18, y - index * 8, "!", {
+          color: "#fff8df",
+          backgroundColor: "#db2777",
+          fontFamily: "Consolas, monospace",
+          fontSize: "13px",
+          fontStyle: "bold",
+          padding: { x: 4, y: 1 },
+        })
+        .setOrigin(0.5)
+        .setDepth(CAT_INTERACTION_DEPTH + 146 + index);
+      this.tweens.add({
+        targets: mark,
+        y: mark.y - 20,
+        alpha: 0,
+        duration: 900 + index * 180,
+        ease: "Cubic.easeOut",
+        onComplete: () => mark.destroy(),
+      });
+    }
   }
 
   spawnCatBubble(container, cat) {
