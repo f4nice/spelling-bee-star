@@ -16,16 +16,13 @@ const busyItemId = ref("");
 const notice = ref("");
 const catReaction = ref("");
 const catPetSequence = ref(0);
-const pettedCatId = ref("");
 const focusedCatId = ref("");
-const roomRef = ref(null);
+const gameMountRef = ref(null);
+const catWorldGame = ref(null);
 const layoutDraft = ref({});
 const selectedDecorId = ref("");
 const layoutDirty = ref(false);
-const draggingDecor = ref(null);
-const suppressDecorClickId = ref("");
 const savingRoomLayout = ref(false);
-const catMotions = ref({});
 
 const catReactionTexts = [
   "收到摸摸指令，开心值上升",
@@ -34,16 +31,7 @@ const catReactionTexts = [
   "想法缓存刷新，准备继续陪你学",
 ];
 let catReactionTimer = 0;
-let catMotionTimer = 0;
-
-const defaultRoomLayout = {
-  "sun-window": { x: 5, y: 5 },
-  "book-shelf": { x: 73, y: 8 },
-  "cloud-rug": { x: 17, y: 77 },
-  "study-desk": { x: 43, y: 62 },
-  "reading-lamp": { x: 62, y: 47 },
-  "word-gallery": { x: 31, y: 31 },
-};
+let gameMountActive = false;
 
 watch(
   () => props.data,
@@ -53,13 +41,26 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  gameMountActive = false;
   window.clearTimeout(catReactionTimer);
-  window.clearInterval(catMotionTimer);
+  catWorldGame.value?.destroy();
+  catWorldGame.value = null;
 });
 
-onMounted(() => {
-  refreshCatMotions();
-  catMotionTimer = window.setInterval(refreshCatMotions, 9200);
+onMounted(async () => {
+  if (!gameMountRef.value) return;
+  gameMountActive = true;
+  const { CatWorldGame } = await import("../catWorldGame.js");
+  if (!gameMountActive || !gameMountRef.value) return;
+  catWorldGame.value = new CatWorldGame(gameMountRef.value, {
+    onCatPet: petCat,
+    onDecorClick: handleDecorClick,
+    onDecorSelect: (decorId) => {
+      selectedDecorId.value = decorId || "";
+    },
+    onLayoutChange: handleGameLayoutChange,
+  });
+  updateCatWorldGame();
 });
 
 const categories = [
@@ -75,7 +76,6 @@ const state = computed(() => payload.value.state || {});
 const inventory = computed(() => state.value.inventory || {});
 const roomStyles = computed(() => state.value.roomStyles || {});
 const roomLayout = computed(() => state.value.roomLayout || {});
-const styleOptions = computed(() => state.value.styleOptions || {});
 const ownedCats = computed(() => state.value.ownedCats || ["mimi"]);
 const cats = computed(() => payload.value.cats || []);
 const shop = computed(() => payload.value.shop || []);
@@ -118,6 +118,24 @@ const focusedCatThought = computed(() => {
   }
   return thoughts[catPetSequence.value % thoughts.length];
 });
+const gameSnapshot = computed(() => ({
+  cats: cats.value,
+  inventory: inventory.value,
+  layout: roomLayout.value,
+  mood: mood.value,
+  ownedCats: ownedCats.value,
+  ownedFoodCount: ownedFoodCount.value,
+  roomStyles: roomStyles.value,
+  selectedCatId: state.value.selectedCat,
+}));
+
+watch(
+  gameSnapshot,
+  () => {
+    updateCatWorldGame();
+  },
+  { deep: true },
+);
 
 watch(
   roomLayout,
@@ -129,18 +147,20 @@ watch(
   { immediate: true },
 );
 
-watch(
-  roomCats,
-  () => {
-    refreshCatMotions();
-  },
-  { immediate: true },
-);
-
 function replacePayload(nextPayload) {
   if (nextPayload?.energy && nextPayload?.state) {
     payload.value = nextPayload;
   }
+}
+
+function updateCatWorldGame() {
+  catWorldGame.value?.update(gameSnapshot.value);
+}
+
+function handleGameLayoutChange(nextLayout, decorId) {
+  selectedDecorId.value = decorId || selectedDecorId.value;
+  layoutDraft.value = normalizeLayoutDraft(nextLayout);
+  layoutDirty.value = true;
 }
 
 function itemCount(itemId) {
@@ -162,87 +182,8 @@ function normalizeLayoutDraft(layout) {
   return nextLayout;
 }
 
-function layoutPosition(decorId) {
-  return layoutDraft.value[decorId] || roomLayout.value[decorId] || defaultRoomLayout[decorId] || { x: 8, y: 58 };
-}
-
-function decorLayoutStyle(decorId) {
-  const position = layoutPosition(decorId);
-  return {
-    left: `${position.x}%`,
-    top: `${position.y}%`,
-    right: "auto",
-    bottom: "auto",
-  };
-}
-
-function pointerPositionInRoom(event) {
-  const box = roomRef.value?.getBoundingClientRect();
-  if (!box) return null;
-  return {
-    x: clampNumber(((event.clientX - box.left) / box.width) * 100, 0, 92),
-    y: clampNumber(((event.clientY - box.top) / box.height) * 100, 0, 86),
-  };
-}
-
-function beginDecorDrag(event, decorId) {
-  if (event.button !== undefined && event.button !== 0) return;
-  const pointer = pointerPositionInRoom(event);
-  if (!pointer) return;
-  const currentPosition = layoutPosition(decorId);
-  selectedDecorId.value = decorId;
-  draggingDecor.value = {
-    id: decorId,
-    pointerId: event.pointerId,
-    offsetX: pointer.x - currentPosition.x,
-    offsetY: pointer.y - currentPosition.y,
-    startX: pointer.x,
-    startY: pointer.y,
-    moved: false,
-  };
-  event.currentTarget?.setPointerCapture?.(event.pointerId);
-}
-
-function moveDecor(event, decorId) {
-  const drag = draggingDecor.value;
-  if (!drag || drag.id !== decorId || drag.pointerId !== event.pointerId) return;
-  const pointer = pointerPositionInRoom(event);
-  if (!pointer) return;
-  const nextPosition = {
-    x: clampNumber(pointer.x - drag.offsetX, 0, 92),
-    y: clampNumber(pointer.y - drag.offsetY, 0, 86),
-  };
-  const distance = Math.abs(pointer.x - drag.startX) + Math.abs(pointer.y - drag.startY);
-  if (distance > 0.6) {
-    drag.moved = true;
-    layoutDirty.value = true;
-  }
-  layoutDraft.value = {
-    ...layoutDraft.value,
-    [decorId]: nextPosition,
-  };
-}
-
-function endDecorDrag(event, decorId) {
-  const drag = draggingDecor.value;
-  if (!drag || drag.id !== decorId || drag.pointerId !== event.pointerId) return;
-  event.currentTarget?.releasePointerCapture?.(event.pointerId);
-  if (drag.moved) {
-    suppressDecorClickId.value = decorId;
-    window.setTimeout(() => {
-      if (suppressDecorClickId.value === decorId) suppressDecorClickId.value = "";
-    }, 80);
-  }
-  draggingDecor.value = null;
-}
-
-function cancelDecorDrag() {
-  draggingDecor.value = null;
-}
-
 function handleDecorClick(decorId) {
   selectedDecorId.value = decorId;
-  if (suppressDecorClickId.value === decorId) return;
   cycleDecorStyle(decorId);
 }
 
@@ -251,6 +192,8 @@ async function saveRoomLayout() {
   savingRoomLayout.value = true;
   notice.value = "";
   try {
+    const nextLayout = catWorldGame.value?.getLayout() || layoutDraft.value;
+    layoutDraft.value = normalizeLayoutDraft(nextLayout);
     const nextPayload = await fetchJson(routeApiPaths.catWorldRoomLayout(), {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -264,55 +207,6 @@ async function saveRoomLayout() {
   } finally {
     savingRoomLayout.value = false;
   }
-}
-
-function motionSeed(cat, index) {
-  return Array.from(`${cat?.id || "cat"}-${catPetSequence.value}-${index}`).reduce(
-    (sum, char) => sum + char.charCodeAt(0),
-    0,
-  );
-}
-
-function buildCatMotion(cat, index) {
-  const seed = motionSeed(cat, index);
-  return {
-    left: 16 + ((seed * 17 + index * 13) % 66),
-    bottom: 54 + ((seed * 11 + index * 19) % 106),
-    scale: (0.54 + ((seed + index * 7) % 18) / 100).toFixed(2),
-    x1: -96 + ((seed * 5) % 190),
-    x2: -88 + ((seed * 7 + 37) % 178),
-    x3: -72 + ((seed * 11 + 53) % 146),
-    y1: -12 - ((seed * 3) % 26),
-    y2: -4 - ((seed * 5) % 18),
-    y3: -10 - ((seed * 7) % 24),
-    delay: `-${(seed + index * 3) % 7}s`,
-    duration: `${10 + ((seed + index) % 7)}s`,
-  };
-}
-
-function refreshCatMotions() {
-  const nextMotions = {};
-  roomCats.value.forEach((cat, index) => {
-    nextMotions[cat.id] = buildCatMotion(cat, index);
-  });
-  catMotions.value = nextMotions;
-}
-
-function catRoamStyle(cat, index) {
-  const motion = catMotions.value[cat.id] || buildCatMotion(cat, index);
-  return {
-    left: `${motion.left}%`,
-    bottom: `${motion.bottom}px`,
-    "--cat-scale": motion.scale,
-    "--walk-x1": `${motion.x1}px`,
-    "--walk-x2": `${motion.x2}px`,
-    "--walk-x3": `${motion.x3}px`,
-    "--walk-y1": `${motion.y1}px`,
-    "--walk-y2": `${motion.y2}px`,
-    "--walk-y3": `${motion.y3}px`,
-    "--cat-delay": motion.delay,
-    "--cat-duration": motion.duration,
-  };
 }
 
 function decorTone(decorId) {
@@ -377,13 +271,11 @@ function petCat(cat = selectedCat.value) {
   const catLabel = cat?.label || "猫咪";
   const nextIndex = catPetSequence.value % catReactionTexts.length;
   focusedCatId.value = cat?.id || "";
-  pettedCatId.value = cat?.id || "";
   catReaction.value = `${catLabel}: ${catReactionTexts[nextIndex]}`;
   catPetSequence.value += 1;
   window.clearTimeout(catReactionTimer);
   catReactionTimer = window.setTimeout(() => {
     catReaction.value = "";
-    pettedCatId.value = "";
   }, 2200);
 }
 
@@ -504,118 +396,8 @@ async function selectCat(catId) {
           <p>{{ focusedCatThought }}</p>
         </div>
 
-        <div ref="roomRef" class="cat-world-room" aria-label="猫咪房间场景">
-          <button
-            v-if="inventory['sun-window']"
-            type="button"
-            :class="[
-              'cat-world-window',
-              'cat-world-decor-item',
-              `decor-tone-${decorTone('sun-window')}`,
-              { 'is-layout-selected': selectedDecorId === 'sun-window', 'is-dragging': draggingDecor?.id === 'sun-window' },
-            ]"
-            :style="decorLayoutStyle('sun-window')"
-            :aria-label="`切换阳光窗台颜色，已解锁 ${styleOptions['sun-window']?.length || 1} 款`"
-            @pointerdown="beginDecorDrag($event, 'sun-window')"
-            @pointermove="moveDecor($event, 'sun-window')"
-            @pointerup="endDecorDrag($event, 'sun-window')"
-            @pointercancel="cancelDecorDrag"
-            @click="handleDecorClick('sun-window')"
-          ></button>
-          <button
-            v-if="inventory['book-shelf']"
-            type="button"
-            :class="[
-              'cat-world-shelf',
-              'cat-world-decor-item',
-              `decor-tone-${decorTone('book-shelf')}`,
-              { 'is-layout-selected': selectedDecorId === 'book-shelf', 'is-dragging': draggingDecor?.id === 'book-shelf' },
-            ]"
-            :style="decorLayoutStyle('book-shelf')"
-            :aria-label="`切换英文书架颜色，已解锁 ${styleOptions['book-shelf']?.length || 1} 款`"
-            @pointerdown="beginDecorDrag($event, 'book-shelf')"
-            @pointermove="moveDecor($event, 'book-shelf')"
-            @pointerup="endDecorDrag($event, 'book-shelf')"
-            @pointercancel="cancelDecorDrag"
-            @click="handleDecorClick('book-shelf')"
-          >
-            <span></span><span></span><span></span><span></span>
-          </button>
-          <button
-            v-if="inventory['cloud-rug']"
-            type="button"
-            :class="[
-              'cat-world-rug',
-              'cat-world-decor-item',
-              `decor-tone-${decorTone('cloud-rug')}`,
-              { 'is-layout-selected': selectedDecorId === 'cloud-rug', 'is-dragging': draggingDecor?.id === 'cloud-rug' },
-            ]"
-            :style="decorLayoutStyle('cloud-rug')"
-            :aria-label="`切换云朵地毯颜色，已解锁 ${styleOptions['cloud-rug']?.length || 1} 款`"
-            @pointerdown="beginDecorDrag($event, 'cloud-rug')"
-            @pointermove="moveDecor($event, 'cloud-rug')"
-            @pointerup="endDecorDrag($event, 'cloud-rug')"
-            @pointercancel="cancelDecorDrag"
-            @click="handleDecorClick('cloud-rug')"
-          ></button>
-          <button
-            v-if="inventory['study-desk']"
-            type="button"
-            :class="[
-              'cat-world-desk',
-              'cat-world-decor-item',
-              `decor-tone-${decorTone('study-desk')}`,
-              { 'is-layout-selected': selectedDecorId === 'study-desk', 'is-dragging': draggingDecor?.id === 'study-desk' },
-            ]"
-            :style="decorLayoutStyle('study-desk')"
-            :aria-label="`切换英文书桌颜色，已解锁 ${styleOptions['study-desk']?.length || 1} 款`"
-            @pointerdown="beginDecorDrag($event, 'study-desk')"
-            @pointermove="moveDecor($event, 'study-desk')"
-            @pointerup="endDecorDrag($event, 'study-desk')"
-            @pointercancel="cancelDecorDrag"
-            @click="handleDecorClick('study-desk')"
-          >
-            <span class="cat-world-desk-book"></span>
-            <span class="cat-world-desk-cup"></span>
-          </button>
-          <button
-            v-if="inventory['reading-lamp']"
-            type="button"
-            :class="[
-              'cat-world-lamp',
-              'cat-world-decor-item',
-              `decor-tone-${decorTone('reading-lamp')}`,
-              { 'is-layout-selected': selectedDecorId === 'reading-lamp', 'is-dragging': draggingDecor?.id === 'reading-lamp' },
-            ]"
-            :style="decorLayoutStyle('reading-lamp')"
-            :aria-label="`切换阅读台灯颜色，已解锁 ${styleOptions['reading-lamp']?.length || 1} 款`"
-            @pointerdown="beginDecorDrag($event, 'reading-lamp')"
-            @pointermove="moveDecor($event, 'reading-lamp')"
-            @pointerup="endDecorDrag($event, 'reading-lamp')"
-            @pointercancel="cancelDecorDrag"
-            @click="handleDecorClick('reading-lamp')"
-          >
-            <span></span>
-          </button>
-          <button
-            v-if="inventory['word-gallery']"
-            type="button"
-            :class="[
-              'cat-world-gallery',
-              'cat-world-decor-item',
-              `decor-tone-${decorTone('word-gallery')}`,
-              { 'is-layout-selected': selectedDecorId === 'word-gallery', 'is-dragging': draggingDecor?.id === 'word-gallery' },
-            ]"
-            :style="decorLayoutStyle('word-gallery')"
-            :aria-label="`切换单词挂画颜色，已解锁 ${styleOptions['word-gallery']?.length || 1} 款`"
-            @pointerdown="beginDecorDrag($event, 'word-gallery')"
-            @pointermove="moveDecor($event, 'word-gallery')"
-            @pointerup="endDecorDrag($event, 'word-gallery')"
-            @pointercancel="cancelDecorDrag"
-            @click="handleDecorClick('word-gallery')"
-          >
-            <span>ABC</span>
-          </button>
+        <div class="cat-world-room" aria-label="猫咪房间场景">
+          <div ref="gameMountRef" class="cat-world-game-stage"></div>
           <div v-if="selectedDecorId || layoutDirty" class="cat-world-layout-toolbar">
             <span>{{ layoutDirty ? "布局有改动" : "拖动家具后可保存布局" }}</span>
             <button
@@ -626,9 +408,6 @@ async function selectCat(catId) {
               {{ savingRoomLayout ? "保存中..." : "保存布局" }}
             </button>
           </div>
-          <div v-if="ownedFoodCount" class="cat-world-bowl"></div>
-          <div v-if="inventory['scratch-board']" class="cat-world-scratcher"></div>
-          <div v-if="inventory['feather-wand']" class="cat-world-wand"></div>
           <div
             v-if="catReaction"
             :key="`cat-reaction-${catPetSequence}`"
@@ -645,34 +424,6 @@ async function selectCat(catId) {
           >
             <span></span><span></span><span></span><span></span>
           </div>
-          <button
-            v-for="(cat, index) in roomCats"
-            :key="`${cat.id}-${catReaction && cat.id === pettedCatId ? catPetSequence : 0}`"
-            type="button"
-            :class="[
-              'cat-world-cat-sprite',
-              `cat-tone-${cat.id || 'mimi'}`,
-              `cat-slot-${index % 5}`,
-              { 'is-selected': state.selectedCat === cat.id, 'is-petted': catReaction && cat.id === pettedCatId },
-            ]"
-            :style="catRoamStyle(cat, index)"
-            :aria-label="`摸摸${cat.label || '猫咪'}`"
-            @click="petCat(cat)"
-          >
-            <span class="cat-pixel-shadow"></span>
-            <span class="cat-pixel-tail"></span>
-            <span class="cat-pixel-body"></span>
-            <span class="cat-pixel-head"></span>
-            <span class="cat-pixel-ear cat-pixel-ear-left"></span>
-            <span class="cat-pixel-ear cat-pixel-ear-right"></span>
-            <span class="cat-pixel-eye cat-pixel-eye-left"></span>
-            <span class="cat-pixel-eye cat-pixel-eye-right"></span>
-            <span class="cat-pixel-nose"></span>
-            <span class="cat-pixel-paw cat-pixel-paw-left"></span>
-            <span class="cat-pixel-paw cat-pixel-paw-right"></span>
-            <span v-if="state.selectedCat === cat.id" class="cat-pixel-marker">主</span>
-            <span class="cat-pixel-label">{{ cat.label }}</span>
-          </button>
         </div>
 
         <div class="cat-world-room-status">

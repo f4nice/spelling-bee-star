@@ -1,7 +1,6 @@
 <script setup>
 import { computed } from "vue";
 import AppFooter from "./AppFooter.vue";
-import AppSidebar from "./AppSidebar.vue";
 import AppTopbar from "./AppTopbar.vue";
 import { pageVersionForRoute } from "../pageVersion.js";
 
@@ -25,16 +24,13 @@ const props = defineProps({
 });
 
 const pageVersion = computed(() => pageVersionForRoute(props.route, props.shell.versionMatrix));
-const isAdminRoute = computed(() => props.route?.name === "admin");
 </script>
 
 <template>
   <input class="shell-sidebar-toggle" id="shellSidebarToggle" type="checkbox" aria-hidden="true">
-  <AppTopbar :shell="shell" :go="go" />
+  <AppTopbar :route="route" :shell="shell" :go="go" />
 
-  <div :class="['app-layout', { 'app-layout-admin': isAdminRoute }]">
-    <AppSidebar v-if="!isAdminRoute" :route="route" :shell="shell" :go="go" />
-
+  <div class="app-layout app-layout-topnav">
     <main
       class="shell"
       :aria-label="routeTitle"

@@ -2,8 +2,13 @@
 import { computed } from "vue";
 import AppBrandLink from "./AppBrandLink.vue";
 import AppDailyQuote from "./AppDailyQuote.vue";
+import { buildSidebarNavItems } from "../sidebarNav.js";
 
 const props = defineProps({
+  route: {
+    type: Object,
+    required: true,
+  },
   shell: {
     type: Object,
     required: true,
@@ -16,12 +21,24 @@ const props = defineProps({
 
 const accountName = computed(() => props.shell.currentUser?.username || "我的账号");
 const phoneLabel = computed(() => props.shell.currentUser?.phoneMasked || "");
+const navItems = computed(() => buildSidebarNavItems({ route: props.route, shell: props.shell }));
 </script>
 
 <template>
   <header class="app-topbar">
     <AppBrandLink :app-name="shell.appName" :go="go" />
-    <label class="menu-toggle" for="shellSidebarToggle" aria-label="缩放页面">☰</label>
+    <nav class="topbar-nav" aria-label="主导航">
+      <a
+        v-for="item in navItems"
+        :key="item.path"
+        :class="{ active: item.active }"
+        :href="item.path"
+        @click.prevent="go(item.path)"
+      >
+        <span>{{ item.label }}</span>
+        <em v-if="Number(item.count || 0) > 0">{{ item.count }}</em>
+      </a>
+    </nav>
     <AppDailyQuote :quote="shell.dailyQuote" />
     <details class="topbar-account-menu">
       <summary>

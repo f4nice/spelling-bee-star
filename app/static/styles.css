@@ -320,9 +320,9 @@ body {
 .app-topbar {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   min-height: 64px;
-  padding: 12px 24px;
+  padding: 10px 18px;
   background: linear-gradient(135deg, #22313d 0%, var(--topbar) 58%, #304452 100%);
   color: var(--topbar-text);
   position: sticky;
@@ -332,11 +332,12 @@ body {
 }
 
 .app-brand {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 10px;
   color: var(--topbar-text);
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 800;
   text-decoration: none;
 }
@@ -377,12 +378,70 @@ body {
   background: rgba(255, 255, 255, 0.16);
 }
 
+.topbar-nav {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 300px;
+  overflow-x: auto;
+  padding: 3px 2px 5px;
+  scrollbar-width: thin;
+}
+
+.topbar-nav a {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 0 12px;
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.topbar-nav a:hover,
+.topbar-nav a:focus-visible {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.topbar-nav a.active {
+  border-color: rgba(147, 235, 194, 0.52);
+  color: #123426;
+  background: linear-gradient(180deg, #e2fff1, #a7eccb);
+}
+
+.topbar-nav em {
+  min-width: 20px;
+  border-radius: 999px;
+  padding: 2px 6px;
+  color: #0f6f51;
+  background: #d9f7e9;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  text-align: center;
+}
+
 .daily-quote {
-  margin-left: auto;
+  flex: 0 1 320px;
+  max-width: 340px;
+  margin-left: 0;
   color: rgba(255, 255, 255, 0.9);
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 800;
   line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .daily-quote span {
@@ -491,8 +550,17 @@ body {
   width: min(1560px, calc(100vw - 48px));
 }
 
+.app-layout-topnav {
+  grid-template-columns: minmax(0, 1fr);
+  width: min(1560px, calc(100vw - 48px));
+}
+
 .shell-sidebar-toggle:checked ~ .app-layout {
   grid-template-columns: 0 minmax(0, 1fr);
+}
+
+.shell-sidebar-toggle:checked ~ .app-layout-topnav {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .sidebar {
@@ -10978,6 +11046,31 @@ select {
   height: 38px;
   border-radius: 0;
   background: rgba(44, 47, 58, 0.12);
+}
+
+.cat-world-room::before,
+.cat-world-room::after {
+  display: none;
+}
+
+.cat-world-game-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  background: #fff8df;
+}
+
+.cat-world-game-stage canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  image-rendering: pixelated;
+  cursor: grab;
+}
+
+.cat-world-game-stage canvas:active {
+  cursor: grabbing;
 }
 
 .cat-world-window {
