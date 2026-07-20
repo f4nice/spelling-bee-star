@@ -228,6 +228,18 @@ function clampCatScore(value) {
   if (!Number.isFinite(score)) return 0;
   return Math.max(0, Math.min(100, score));
 }
+
+function formatCatHour(value) {
+  const hour = Math.max(0, Math.min(23, Number(value) || 0));
+  return `${String(hour).padStart(2, "0")}:00`;
+}
+
+function decorLabel(decorId) {
+  return shopById.value[decorId]?.label
+    || (payload.value.decorFavorites || []).find((favorite) => favorite.decorId === decorId)?.decorLabel
+    || decorId;
+}
+
 const catAgentCards = computed(() =>
   cats.value.map((cat) => {
     const owned = ownsCat(cat.id);
@@ -248,6 +260,31 @@ const catAgentCards = computed(() =>
       latestEvent,
     };
   }),
+);
+const catAgentDiaries = computed(() =>
+  catAgentCards.value
+    .filter((cat) => cat.owned)
+    .map((cat) => {
+      const traits = cat.traits || {};
+      const agent = cat.agent || {};
+      const log = cat.log || {};
+      const activeFavoriteLabels = (log.favoriteActiveDecorIds || []).map(decorLabel);
+      const sleepStart = formatCatHour(traits.sleepStart ?? 23);
+      const sleepEnd = formatCatHour(traits.sleepEnd ?? 7);
+      const damagedItem = log.damagedItemId ? shopById.value[log.damagedItemId]?.label || log.damagedItemId : "";
+      return {
+        ...cat,
+        attention: clampCatScore(agent.attention ?? 0),
+        curiosity: clampCatScore(agent.curiosity ?? 0),
+        mischief: clampCatScore(agent.mischief ?? 0),
+        sleepLabel: traits.nightOwl ? `夜猫子 · ${sleepStart}-${sleepEnd}` : `${sleepStart}-${sleepEnd}`,
+        routineLabel: agent.routine || traits.routine || "观察房间里的学习节奏",
+        decayLabel: `体力 -${log.hourlyEnergyDecay || 0}/h · 心情 -${log.hourlyMoodDecay || 0}/h`,
+        activeFavoriteLabel: activeFavoriteLabels.length ? activeFavoriteLabels.join("、") : "喜欢的家具还没摆出来",
+        countsLabel: `食物 ${log.foodCount || 0} · 玩具 ${log.toyCount || 0} · 摸摸 ${agent.petCount || 0}`,
+        damageLabel: damagedItem ? `今天弄坏过 ${damagedItem}` : "今天没有破坏记录",
+      };
+    }),
 );
 const gameSnapshot = computed(() => ({
   cats: cats.value,
@@ -897,6 +934,73 @@ async function selectCat(catId) {
             {{ purchaseButtonText(item) }}
           </button>
         </article>
+      </div>
+    </section>
+
+    <section class="cat-world-agent-diary panel">
+      <div class="cat-world-market-head">
+        <div>
+          <p class="section-kicker">Agent Diary</p>
+          <h2>今日猫咪档案</h2>
+        </div>
+      </div>
+      <div class="cat-world-agent-diary-grid">
+        <button
+          v-for="cat in catAgentDiaries"
+          :key="`diary-${cat.id}`"
+          type="button"
+          :class="['cat-world-agent-card', { active: state.selectedCat === cat.id }]"
+          :disabled="busyItemId === cat.id"
+          @click="selectCat(cat.id)"
+        >
+          <header>
+            <span>{{ cat.label }}</span>
+            <strong>{{ cat.dailyMoodLabel }}</strong>
+          </header>
+          <p>{{ cat.behaviorLabel }} · {{ cat.routineLabel }}</p>
+          <div class="cat-world-agent-meter-row" aria-label="猫咪 agent 参数">
+            <span class="cat-world-agent-meter energy">
+              体力
+              <i><b :style="{ width: `${cat.energyScore}%` }"></b></i>
+            </span>
+            <span class="cat-world-agent-meter mood">
+              心情
+              <i><b :style="{ width: `${cat.moodScore}%` }"></b></i>
+            </span>
+            <span class="cat-world-agent-meter focus">
+              专注
+              <i><b :style="{ width: `${cat.attention}%` }"></b></i>
+            </span>
+            <span class="cat-world-agent-meter curious">
+              好奇
+              <i><b :style="{ width: `${cat.curiosity}%` }"></b></i>
+            </span>
+            <span class="cat-world-agent-meter mischief">
+              捣蛋
+              <i><b :style="{ width: `${cat.mischief}%` }"></b></i>
+            </span>
+          </div>
+          <dl class="cat-world-agent-facts">
+            <div>
+              <dt>作息</dt>
+              <dd>{{ cat.sleepLabel }}</dd>
+            </div>
+            <div>
+              <dt>消耗</dt>
+              <dd>{{ cat.decayLabel }}</dd>
+            </div>
+            <div>
+              <dt>喜欢</dt>
+              <dd>{{ cat.activeFavoriteLabel }}</dd>
+            </div>
+            <div>
+              <dt>互动</dt>
+              <dd>{{ cat.countsLabel }}</dd>
+            </div>
+          </dl>
+          <small>{{ cat.damageLabel }}</small>
+          <em v-if="cat.latestEvent">{{ cat.latestEvent.time }} · {{ cat.latestEvent.message }}</em>
+        </button>
       </div>
     </section>
 
