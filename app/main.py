@@ -87,8 +87,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260720-005"
-DEFAULT_PAGE_VERSION = "v20260720.5"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260720-006"
+DEFAULT_PAGE_VERSION = "v20260720.6"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -2144,29 +2144,58 @@ def build_login_cookie(phone: str, issued_at: int | None = None) -> str:
     return f"{payload}:{sign_login_payload(payload)}"
 
 
-def read_login_cookie(value: str | None) -> str:
+def read_login_cookie_info(value: str | None) -> tuple[str, int] | None:
     if not settings.login_enabled or not value:
-        return ""
+        return None
     parts = str(value).split(":")
     if len(parts) != 4:
-        return ""
+        return None
     version, phone, issued, signature = parts
     if version != "v1":
-        return ""
+        return None
     normalized = normalize_login_phone(phone)
     if not normalized or not issued.isdigit():
-        return ""
+        return None
     payload = f"{version}:{normalized}:{issued}"
     if not hmac.compare_digest(signature, sign_login_payload(payload)):
-        return ""
+        return None
     age = int(datetime.utcnow().timestamp()) - int(issued)
     if age < 0 or age > login_cookie_max_age_seconds():
-        return ""
-    return normalized if is_login_phone_allowed(normalized) else ""
+        return None
+    return (normalized, int(issued)) if is_login_phone_allowed(normalized) else None
+
+
+def read_login_cookie(value: str | None) -> str:
+    parsed = read_login_cookie_info(value)
+    return parsed[0] if parsed else ""
+
+
+def login_cookie_values_from_request(request: Request) -> list[str]:
+    values: list[str] = []
+    cookie_headers = request.headers.getlist("cookie")
+    for header in cookie_headers:
+        for item in str(header or "").split(";"):
+            if "=" not in item:
+                continue
+            name, value = item.split("=", 1)
+            if name.strip() != settings.login_cookie_name:
+                continue
+            values.append(value.strip().strip('"'))
+    fallback = request.cookies.get(settings.login_cookie_name)
+    if fallback and not values:
+        values.append(str(fallback))
+    return values
 
 
 def authenticated_phone_from_request(request: Request) -> str:
-    return read_login_cookie(request.cookies.get(settings.login_cookie_name))
+    candidates: list[tuple[str, int, int]] = []
+    for index, value in enumerate(login_cookie_values_from_request(request)):
+        parsed = read_login_cookie_info(value)
+        if parsed:
+            candidates.append((parsed[0], parsed[1], index))
+    if not candidates:
+        return ""
+    return max(candidates, key=lambda item: (item[1], item[2]))[0]
 
 
 def is_login_public_path(path: str) -> bool:
@@ -2242,23 +2271,25 @@ def clear_login_cookies(response: Response) -> None:
     response.delete_cookie(key=settings.login_cookie_name, path="/")
     response.delete_cookie(key=settings.login_cookie_name, path="/", domain=".newabby.com")
     response.delete_cookie(key=settings.login_cookie_name, path="/", domain="newabby.com")
+    response.delete_cookie(key=settings.login_cookie_name, path="/", domain="www.newabby.com")
 
 
 def set_login_cookie(response: Response, request: Request, phone: str) -> None:
     clear_login_cookies(response)
+    cookie_value = build_login_cookie(phone)
     cookie_args: dict[str, Any] = {
         "key": settings.login_cookie_name,
-        "value": build_login_cookie(phone),
+        "value": cookie_value,
         "max_age": login_cookie_max_age_seconds(),
         "httponly": True,
         "secure": login_cookie_secure(request),
         "samesite": "lax",
         "path": "/",
     }
+    response.set_cookie(**cookie_args)
     domain = login_cookie_domain(request)
     if domain:
-        cookie_args["domain"] = domain
-    response.set_cookie(**cookie_args)
+        response.set_cookie(**{**cookie_args, "domain": domain})
 
 
 LOGIN_PASSWORD_ALGORITHM = "pbkdf2_sha256"
