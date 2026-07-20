@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-020"
-DEFAULT_PAGE_VERSION = "v20260721.20"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-021"
+DEFAULT_PAGE_VERSION = "v20260721.21"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -616,6 +616,21 @@ CAT_WORLD_DECOR_FAVORITE_CAT = {
     "study-desk": "siamese",
     "reading-lamp": "maine-coon",
     "word-gallery": CAT_WORLD_DEFAULT_CAT_ID,
+}
+CAT_WORLD_TOY_FAVORITE_CAT = {
+    "rolling-ball": "siamese",
+    "feather-wand": "maine-coon",
+    "scratch-board": "british-shorthair",
+}
+CAT_WORLD_FOOD_FAVORITE_CAT = {
+    "salmon-bowl": CAT_WORLD_DEFAULT_CAT_ID,
+    "tuna-can": "maine-coon",
+    "goat-milk": "ragdoll",
+}
+CAT_WORLD_ITEM_FAVORITE_CAT = {
+    **CAT_WORLD_DECOR_FAVORITE_CAT,
+    **CAT_WORLD_TOY_FAVORITE_CAT,
+    **CAT_WORLD_FOOD_FAVORITE_CAT,
 }
 CAT_WORLD_DECOR_DEFAULT_LAYOUT = {
     "sun-window": {"x": 5, "y": 5},
@@ -9957,6 +9972,10 @@ def cat_world_effective_shop(db: Session) -> list[dict[str, Any]]:
             effective["hasCustomCost"] = False
         if effective.get("targetDecor"):
             effective["targetDecorLabel"] = CAT_WORLD_DECOR_LABELS.get(str(effective["targetDecor"]), "")
+        favorite_cat_id = cat_world_item_favorite_cat_id(effective["id"])
+        if favorite_cat_id:
+            effective["favoriteCatId"] = favorite_cat_id
+            effective["favoriteCatLabel"] = CAT_WORLD_CAT_BY_ID.get(favorite_cat_id, {}).get("label", favorite_cat_id)
         items.append(effective)
     return items
 
@@ -10114,6 +10133,26 @@ def cat_world_cat_favorite_decor_ids(cat_id: str) -> list[str]:
         for decor_id, favorite_cat_id in CAT_WORLD_DECOR_FAVORITE_CAT.items()
         if favorite_cat_id == cat_id
     ]
+
+
+def cat_world_item_favorite_cat_id(item_id: str) -> str:
+    favorite_cat_id = CAT_WORLD_ITEM_FAVORITE_CAT.get(str(item_id) or "")
+    return favorite_cat_id if favorite_cat_id in CAT_WORLD_CAT_BY_ID else ""
+
+
+def cat_world_cat_favorite_item_ids(cat_id: str, categories: set[str] | None = None) -> list[str]:
+    clean_cat_id = str(cat_id or "")
+    favorite_ids = []
+    for item_id, favorite_cat_id in CAT_WORLD_ITEM_FAVORITE_CAT.items():
+        if favorite_cat_id != clean_cat_id:
+            continue
+        item = CAT_WORLD_SHOP_BY_ID.get(item_id)
+        if not item:
+            continue
+        if categories and item.get("category") not in categories:
+            continue
+        favorite_ids.append(item_id)
+    return favorite_ids
 
 
 def cat_world_active_favorite_decor_ids(
@@ -10508,6 +10547,7 @@ def cat_world_agent_daily_goal(
         if count > 0 and item_id in room_layout and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") == "decor"
     )
     active_favorites = [item_id for item_id in favorite_active_ids if item_id in owned_decor]
+    favorite_owned_toys = [item_id for item_id in owned_toys if cat_world_item_favorite_cat_id(item_id) == cat["id"]]
     damage_candidates = sorted(set(owned_toys + owned_decor))
     damage_probability = cat_world_damage_probability(agent_state, traits, mood_score)
     risk_label = cat_world_damage_risk_label(damage_probability)
@@ -10568,15 +10608,16 @@ def cat_world_agent_daily_goal(
         or temperament in {"chatty", "guardian"}
         or behavior.get("key") in {"exploring", "night-watch"}
     )
-    if wants_toy and owned_toys:
-        target_item_id = cat_world_pick_stable_item(f"{seed}:toy", owned_toys)
+    if wants_toy and (favorite_owned_toys or owned_toys):
+        target_item_id = cat_world_pick_stable_item(f"{seed}:toy", favorite_owned_toys or owned_toys)
+        favorite_text = "最喜欢的" if target_item_id in favorite_owned_toys else ""
         return goal(
             "toy-play",
             "想玩玩具",
-            f"{cat['label']}今天想玩{CAT_WORLD_SHOP_BY_ID[target_item_id]['label']}，靠近后会在旁边转一会儿。",
+            f"{cat['label']}今天想玩{favorite_text}{CAT_WORLD_SHOP_BY_ID[target_item_id]['label']}，靠近后会在旁边转一会儿。",
             "toy",
             target_item_id,
-            82,
+            88 if favorite_owned_toys else 82,
         )
 
     if active_favorites:
@@ -10752,10 +10793,20 @@ def cat_world_daily_log_payload(
 
 def cat_world_cat_payload(cat: dict[str, Any]) -> dict[str, Any]:
     favorite_decor_ids = cat_world_cat_favorite_decor_ids(cat["id"])
+    favorite_food_ids = cat_world_cat_favorite_item_ids(cat["id"], {"food"})
+    favorite_toy_ids = cat_world_cat_favorite_item_ids(cat["id"], {"toy"})
+    favorite_item_ids = cat_world_cat_favorite_item_ids(cat["id"])
     return {
         **cat,
         "favoriteDecorIds": favorite_decor_ids,
         "favoriteDecorLabels": [CAT_WORLD_DECOR_LABELS.get(decor_id, decor_id) for decor_id in favorite_decor_ids],
+        "favoriteFoodIds": favorite_food_ids,
+        "favoriteToyIds": favorite_toy_ids,
+        "favoriteItemIds": favorite_item_ids,
+        "favoriteItemLabels": [
+            CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("label", item_id)
+            for item_id in favorite_item_ids
+        ],
     }
 
 
@@ -10918,13 +10969,16 @@ def cat_world_food_progress_targets(
     traits: dict[str, Any],
     active_food_at: datetime,
     now: datetime,
+    cat_id: str = "",
     force_initial: bool = False,
 ) -> dict[str, int | bool]:
     duration_seconds = max(int(item.get("durationMinutes") or 30), 1) * 60
     elapsed_seconds = max(int((now - active_food_at).total_seconds()), 0)
     ratio = min(max(elapsed_seconds / duration_seconds, 0.0), 1.0)
-    total_energy = max(round(int(item.get("catEnergy") or 0) * float(traits["foodEnergyGain"])), 0)
-    total_mood = max(round(int(item.get("mood") or 0) * float(traits["foodEnergyGain"])), 0)
+    favorite_multiplier = 1.18 if cat_world_item_favorite_cat_id(item.get("id") or "") == str(cat_id or "") else 1.0
+    food_multiplier = float(traits["foodEnergyGain"]) * favorite_multiplier
+    total_energy = max(round(int(item.get("catEnergy") or 0) * food_multiplier), 0)
+    total_mood = max(round(int(item.get("mood") or 0) * food_multiplier), 0)
     consumed_energy = min(total_energy, round(total_energy * ratio))
     consumed_mood = min(total_mood, round(total_mood * ratio))
     if force_initial:
@@ -10977,7 +11031,8 @@ def cat_world_apply_active_food_progress(
         agent_state["activeFoodLabel"] = item.get("label") or item_id
         agent_state["activeFoodStartedAt"] = state.active_food_at.replace(microsecond=0).isoformat() + "Z"
         changed = True
-    progress = cat_world_food_progress_targets(item, traits, state.active_food_at, now, force_initial=force_initial)
+    favorite_match = cat_world_item_favorite_cat_id(item_id) == cat["id"]
+    progress = cat_world_food_progress_targets(item, traits, state.active_food_at, now, cat["id"], force_initial=force_initial)
     previous_energy = max(int(agent_state.get("activeFoodConsumedEnergy") or 0), 0)
     previous_mood = max(int(agent_state.get("activeFoodConsumedMood") or 0), 0)
     next_energy = int(progress["consumedEnergy"])
@@ -11037,6 +11092,7 @@ def cat_world_apply_active_food_progress(
         "remainingEnergy": int(progress["remainingEnergy"]),
         "remainingSeconds": int(progress["remainingSeconds"]),
         "finished": bool(progress["complete"]),
+        "favoriteMatch": favorite_match,
     }
 
 
@@ -11081,7 +11137,8 @@ def cat_world_apply_daily_effect(
             now=now,
             force_initial=True,
         )
-    mood_gain = round(int(item.get("mood") or 0) * float(traits["playMoodGain"]))
+    favorite_match = cat_world_item_favorite_cat_id(item["id"]) == cat["id"]
+    mood_gain = round(int(item.get("mood") or 0) * float(traits["playMoodGain"])) + (4 if favorite_match else 0)
     energy_gain = -max(1, round(4 * float(traits["energyDrain"])))
     log.toy_count = int(log.toy_count or 0) + 1
     log.last_play_item = item["id"]
@@ -11091,7 +11148,7 @@ def cat_world_apply_daily_effect(
         traits,
         "play",
         "玩具互动",
-        f"{cat['label']}玩了{item.get('label') or item['id']}，心情 +{mood_gain}，体力 {energy_gain}。",
+        f"{cat['label']}玩了{'最喜欢的' if favorite_match else ''}{item.get('label') or item['id']}，心情 +{mood_gain}，体力 {energy_gain}。",
         now,
     )
     log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_gain)
@@ -11102,6 +11159,7 @@ def cat_world_apply_daily_effect(
         "energyGain": energy_gain,
         "catId": cat["id"],
         "catLabel": cat["label"],
+        "favoriteMatch": favorite_match,
     }
 
 
@@ -11221,8 +11279,10 @@ def cat_world_active_food(state: CatWorldState) -> dict[str, Any]:
         return {"active": False, "itemId": "", "label": "", "remainingSeconds": 0, "durationSeconds": duration_seconds}
     target_cat = CAT_WORLD_CAT_BY_ID.get(str(state.active_food_cat_id or ""))
     traits = cat_world_cat_traits(target_cat or CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
-    total_energy = round(int(item.get("catEnergy") or 0) * float(traits["foodEnergyGain"]))
-    total_mood = round(int(item.get("mood") or 0) * float(traits["foodEnergyGain"]))
+    target_cat_id = target_cat["id"] if target_cat else ""
+    favorite_multiplier = 1.18 if cat_world_item_favorite_cat_id(item_id) == target_cat_id else 1.0
+    total_energy = round(int(item.get("catEnergy") or 0) * float(traits["foodEnergyGain"]) * favorite_multiplier)
+    total_mood = round(int(item.get("mood") or 0) * float(traits["foodEnergyGain"]) * favorite_multiplier)
     remaining_energy = max(int((total_energy * remaining_seconds + duration_seconds - 1) // duration_seconds), 0)
     if remaining_energy <= 0:
         return {"active": False, "itemId": "", "label": "", "remainingSeconds": 0, "durationSeconds": duration_seconds}
@@ -11237,6 +11297,7 @@ def cat_world_active_food(state: CatWorldState) -> dict[str, Any]:
         "mood": total_mood,
         "catEnergy": total_energy,
         "remainingEnergy": remaining_energy,
+        "favoriteMatch": bool(favorite_multiplier > 1),
         "consumeCount": 1,
         "remainingSeconds": remaining_seconds,
         "durationSeconds": duration_seconds,

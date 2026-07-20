@@ -195,7 +195,7 @@ const activeToolItems = computed(() => {
       count: itemCount(item.id),
       damageInfo: damagedItems.value[item.id] || null,
       styleOptions: item.category === "decor" ? decorStyleOptions(item.id) : [],
-      favoriteLabel: item.category === "decor" ? decorFavoriteLabel(item) : "",
+      favoriteLabel: itemFavoriteLabel(item),
       actionLabel: ownedToolActionText(item),
     }));
 });
@@ -276,6 +276,7 @@ const catAgentDiaries = computed(() =>
       const log = cat.log || {};
       const dailyGoal = agent.dailyGoal || {};
       const activeFavoriteLabels = (log.favoriteActiveDecorIds || []).map(decorLabel);
+      const favoriteItemLabel = (cat.favoriteItemLabels || []).join("、") || "偏好待发现";
       const sleepStart = formatCatHour(traits.sleepStart ?? 23);
       const sleepEnd = formatCatHour(traits.sleepEnd ?? 7);
       const damagedItem = log.damagedItemId ? shopById.value[log.damagedItemId]?.label || log.damagedItemId : "";
@@ -290,6 +291,7 @@ const catAgentDiaries = computed(() =>
         goalMessage: dailyGoal.message || "",
         damageRiskLabel: dailyGoal.damageRiskLabel || "很低",
         decayLabel: `体力 ${signedHourlyValue(log.hourlyEnergyDecay)}/h · 心情 ${signedHourlyValue(log.hourlyMoodDecay)}/h`,
+        favoriteItemLabel,
         activeFavoriteLabel: activeFavoriteLabels.length ? activeFavoriteLabels.join("、") : "喜欢的家具还没摆出来",
         countsLabel: `食物 ${log.foodCount || 0} · 玩具 ${log.toyCount || 0} · 摸摸 ${agent.petCount || 0}`,
         damageLabel: damagedItem ? `今天弄坏过 ${damagedItem}` : "今天没有破坏记录",
@@ -441,7 +443,9 @@ function decorToneColor(tone) {
   return decorToneColors[tone] || decorToneColors.default;
 }
 
-function decorFavoriteLabel(item) {
+function itemFavoriteLabel(item) {
+  if (item?.favoriteCatLabel) return `${item.favoriteCatLabel}喜欢`;
+  if (item?.category !== "decor") return "";
   const matched = (payload.value.decorFavorites || []).find((favorite) => favorite.decorId === item.id);
   return matched?.catLabel ? `${matched.catLabel}喜欢` : "";
 }
@@ -646,16 +650,18 @@ async function play(item) {
       const remainingEnergy = Number(effect.remainingEnergy ?? active?.remainingEnergy ?? 0);
       const remainingSeconds = Number(effect.remainingSeconds ?? active?.remainingSeconds ?? 0);
       const targetName = effect.catLabel || active?.targetCatLabel || "体力最低的小猫";
+      const favoriteText = effect.favoriteMatch || active?.favoriteMatch ? "（正好是它喜欢的）" : "";
       const restText = effect.finished
         ? "已经吃完，食物从房间里消失了"
         : `剩余可补体力 ${remainingEnergy}，约 ${formatSeconds(remainingSeconds)} 后吃完`;
-      notice.value = `${item.label} 已摆进房间，优先给${targetName}，库存 -1，本次吃掉体力 +${energyGain}、心情 +${moodGain}，总计体力 +${totalEnergyGain}、心情 +${totalMoodGain}，${restText}。`;
-      showCatReaction(targetCat, `先吃了一口${item.label}，体力 +${energyGain}，心情 +${moodGain}。`);
+      notice.value = `${item.label} 已摆进房间${favoriteText}，优先给${targetName}，库存 -1，本次吃掉体力 +${energyGain}、心情 +${moodGain}，总计体力 +${totalEnergyGain}、心情 +${totalMoodGain}，${restText}。`;
+      showCatReaction(targetCat, `先吃了一口${item.label}${favoriteText}，体力 +${energyGain}，心情 +${moodGain}。`);
     } else {
       const effect = nextPayload.effect || {};
       const targetCat = cats.value.find((cat) => cat.id === effect.catId) || selectedCat.value;
-      notice.value = `${effect.catLabel || targetCat.label || "猫咪"} 和 ${item.label} 玩了一会儿，心情 +${effect.moodGain ?? item.mood ?? 0}，体力 ${effect.energyGain ?? 0}。`;
-      showCatReaction(targetCat, `玩了${item.label}，心情 +${effect.moodGain ?? item.mood ?? 0}。`);
+      const favoriteText = effect.favoriteMatch ? "最喜欢的" : "";
+      notice.value = `${effect.catLabel || targetCat.label || "猫咪"} 和 ${favoriteText}${item.label} 玩了一会儿，心情 +${effect.moodGain ?? item.mood ?? 0}，体力 ${effect.energyGain ?? 0}。`;
+      showCatReaction(targetCat, `玩了${favoriteText}${item.label}，心情 +${effect.moodGain ?? item.mood ?? 0}。`);
     }
   } catch (error) {
     notice.value = error.message || "互动失败，请稍后再试。";
@@ -1018,7 +1024,11 @@ async function selectCat(catId) {
               <dd>{{ cat.decayLabel }}</dd>
             </div>
             <div>
-              <dt>喜欢</dt>
+              <dt>偏好</dt>
+              <dd>{{ cat.favoriteItemLabel }}</dd>
+            </div>
+            <div>
+              <dt>家具加成</dt>
               <dd>{{ cat.activeFavoriteLabel }}</dd>
             </div>
             <div>
