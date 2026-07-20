@@ -18,11 +18,11 @@ const DECOR_SPECS = {
 };
 
 const CAT_COLORS = {
-  mimi: { body: 0xffc46b, shade: 0xd88a3d, stripe: 0x7a4a28 },
-  "british-shorthair": { body: 0xb9c2c8, shade: 0x7e8b95, stripe: 0x4d5962 },
-  ragdoll: { body: 0xf4e5cf, shade: 0xb88663, stripe: 0x79523f },
-  maine: { body: 0xae7c4f, shade: 0x754926, stripe: 0xf1c17f },
-  siamese: { body: 0xf1ddbd, shade: 0x5c433e, stripe: 0x382c2d },
+  mimi: { body: 0xffc46b, shade: 0xd88a3d, stripe: 0x7a4a28, belly: 0xffdf9f, nose: 0xf06f91 },
+  "british-shorthair": { body: 0xb9c2c8, shade: 0x7e8b95, stripe: 0x4d5962, belly: 0xdde4e8, nose: 0xf08aac },
+  ragdoll: { body: 0xf4e5cf, shade: 0xb88663, stripe: 0x79523f, belly: 0xfff4df, nose: 0xf38ca7 },
+  maine: { body: 0xae7c4f, shade: 0x754926, stripe: 0xf1c17f, belly: 0xd6a06b, nose: 0xf08a7c },
+  siamese: { body: 0xf1ddbd, shade: 0x5c433e, stripe: 0x382c2d, belly: 0xffefd2, nose: 0xf1a2b2 },
 };
 
 const TONE_PALETTES = {
@@ -309,14 +309,14 @@ class CatWorldScene extends Phaser.Scene {
     const cats = snapshot.cats.filter((cat) => ownedCatIds.has(cat.id));
     const visibleCats = cats.length ? cats : snapshot.cats.slice(0, 1);
     visibleCats.forEach((cat, index) => {
-      const x = 118 + (index % 4) * 126;
-      const y = FLOOR_BOTTOM - 58 - Math.floor(index / 4) * 46;
+      const x = 96 + (index % 5) * 118;
+      const y = FLOOR_BOTTOM - 52 - Math.floor(index / 5) * 46;
       const container = this.add.container(x, y);
-      container.setSize(70, 44);
+      container.setSize(80, 50);
       container.setData("kind", "cat");
       container.setData("id", cat.id);
       container.setDepth(y + 80);
-      container.setInteractive(new Phaser.Geom.Rectangle(-10, -18, 92, 72), Phaser.Geom.Rectangle.Contains);
+      container.setInteractive(new Phaser.Geom.Rectangle(-12, -16, 104, 74), Phaser.Geom.Rectangle.Contains);
       container.on("pointerup", () => {
         this.spawnCatBubble(container, cat);
         this.owner.handlers.onCatPet?.(cat);
@@ -331,43 +331,90 @@ class CatWorldScene extends Phaser.Scene {
     const colors = CAT_COLORS[cat.id] || CAT_COLORS.mimi;
     const graphics = makeLocalGraphics(this, container);
     graphics.fillStyle(0x203041, 0.18);
-    graphics.fillEllipse(31, 40, 70, 14);
-    drawPixelRect(graphics, 14, 8, 46, 25, colors.body, INK, 4);
-    drawPixelRect(graphics, 50, 2, 28, 26, colors.body, INK, 4);
-    graphics.fillStyle(colors.shade, 1);
-    graphics.fillRect(18, 13, 14, 6);
-    graphics.fillRect(36, 13, 12, 6);
+    graphics.fillRect(8, 44, 66, 8);
+
+    this.drawPixelBlock(graphics, 4, 23, 8, 8, colors.shade);
+    this.drawPixelBlock(graphics, -2, 17, 8, 8, colors.shade);
+    this.drawPixelBlock(graphics, -8, 11, 8, 8, colors.shade);
+    this.drawPixelBlock(graphics, 10, 18, 47, 24, colors.body);
+    this.drawPixelBlock(graphics, 18, 35, 9, 11, colors.shade);
+    this.drawPixelBlock(graphics, 43, 35, 9, 11, colors.shade);
+    this.drawPixelBlock(graphics, 22, 26, 26, 10, colors.belly);
+    this.drawPixelBlock(graphics, 53, 12, 27, 25, colors.body);
+    this.drawPixelBlock(graphics, 56, 3, 9, 13, colors.body);
+    this.drawPixelBlock(graphics, 68, 3, 9, 13, colors.body);
+
+    graphics.fillStyle(0xffbfd7, 1);
+    graphics.fillRect(58, 8, 4, 5);
+    graphics.fillRect(71, 8, 4, 5);
+    graphics.fillStyle(0x111827, 1);
+    graphics.fillRect(60, 22, 4, 4);
+    graphics.fillRect(72, 22, 4, 4);
+    graphics.fillStyle(colors.nose, 1);
+    graphics.fillRect(67, 28, 4, 3);
     graphics.fillStyle(colors.stripe, 1);
-    graphics.fillRect(57, 14, 5, 5);
-    graphics.fillRect(69, 14, 5, 5);
-    graphics.fillRect(64, 21, 5, 3);
-    graphics.lineStyle(5, INK, 1);
-    graphics.lineBetween(14, 17, 0, 7);
-    graphics.lineBetween(54, 2, 58, -11);
-    graphics.lineBetween(73, 2, 77, -11);
-    graphics.fillStyle(colors.body, 1);
-    graphics.fillTriangle(51, 3, 59, -13, 62, 3);
-    graphics.fillTriangle(67, 3, 77, -13, 78, 4);
-    graphics.fillStyle(selected ? 0xfff07d : 0xff8cad, 1);
-    graphics.fillRect(5, -17, selected ? 24 : 14, 12);
+    graphics.fillRect(18, 20, 5, 6);
+    graphics.fillRect(30, 18, 5, 6);
+    graphics.fillRect(42, 20, 5, 6);
+    graphics.fillRect(58, 16, 4, 4);
+    graphics.fillRect(70, 16, 4, 4);
+
+    graphics.lineStyle(2, INK, 1);
+    graphics.lineBetween(66, 30, 58, 29);
+    graphics.lineBetween(66, 33, 58, 35);
+    graphics.lineBetween(72, 30, 82, 28);
+    graphics.lineBetween(72, 33, 82, 35);
+
+    if (cat.id === "siamese") {
+      graphics.fillStyle(colors.shade, 1);
+      graphics.fillRect(56, 18, 21, 16);
+      graphics.fillRect(4, 23, 8, 8);
+    }
+
     graphics.lineStyle(3, INK, 1);
-    graphics.strokeRect(5, -17, selected ? 24 : 14, 12);
+    graphics.strokeRect(10, 18, 47, 24);
+    graphics.strokeRect(53, 12, 27, 25);
+    graphics.strokeRect(56, 3, 9, 13);
+    graphics.strokeRect(68, 3, 9, 13);
+    graphics.strokeRect(18, 35, 9, 11);
+    graphics.strokeRect(43, 35, 9, 11);
+    graphics.strokeRect(4, 23, 8, 8);
+    graphics.strokeRect(-2, 17, 8, 8);
+    graphics.strokeRect(-8, 11, 8, 8);
+
+    graphics.fillStyle(selected ? 0xfff07d : 0xff8cad, 1);
+    graphics.fillRect(22, 0, selected ? 26 : 16, 10);
+    graphics.lineStyle(3, INK, 1);
+    graphics.strokeRect(22, 0, selected ? 26 : 16, 10);
+    if (selected) {
+      graphics.fillStyle(0x2c2f3a, 1);
+      graphics.fillRect(28, 3, 3, 4);
+      graphics.fillRect(36, 3, 3, 4);
+      graphics.fillRect(44, 3, 3, 4);
+    }
     const label = this.add
-      .text(4, 49, cat.label || "猫咪", {
+      .text(4, 55, cat.label || "猫咪", {
         color: "#263047",
+        backgroundColor: "#fff8df",
         fontFamily: "Consolas, monospace",
         fontSize: "10px",
         fontStyle: "bold",
+        padding: { x: 3, y: 2 },
       })
       .setDepth(999);
     container.add(label);
+  }
+
+  drawPixelBlock(graphics, x, y, width, height, color) {
+    graphics.fillStyle(color, 1);
+    graphics.fillRect(x, y, width, height);
   }
 
   scheduleCatWalk(container, index) {
     const delay = Phaser.Math.Between(600, 1800) + index * 220;
     this.time.delayedCall(delay, () => {
       if (!container.active) return;
-      const nextX = Phaser.Math.Between(44, GAME_WIDTH - 104);
+      const nextX = Phaser.Math.Between(48, GAME_WIDTH - 112);
       const nextY = Phaser.Math.Between(FLOOR_TOP + 42, FLOOR_BOTTOM - 54);
       const duration = Phaser.Math.Between(2600, 5600);
       this.tweens.add({
