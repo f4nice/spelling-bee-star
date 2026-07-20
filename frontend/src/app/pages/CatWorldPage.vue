@@ -419,6 +419,10 @@ function recordCatAmbientEvent(cat, event = {}) {
       kind: event.kind,
       itemId: event.itemId,
     }),
+  }).then((nextPayload) => {
+    if (nextPayload?.energy && nextPayload?.state) {
+      replacePayload(nextPayload);
+    }
   }).catch(() => {
     ambientEventCooldowns.delete(key);
   });

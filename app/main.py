@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-027"
-DEFAULT_PAGE_VERSION = "v20260721.27"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-028"
+DEFAULT_PAGE_VERSION = "v20260721.28"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3676,10 +3676,20 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     if inventory.get(item_id, 0) <= 0 or item_id in damaged_items:
         return {"ok": True, "recorded": False}
+    usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
+    room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
+    if event_kind == "favorite-toy":
+        favorite_match = cat_world_item_favorite_cat_id(item_id) == cat_id
+    else:
+        favorite_match = item_id in cat_world_cat_favorite_decor_ids(cat_id) and item_id in room_layout
+    if not favorite_match:
+        return {"ok": True, "recorded": False}
     cat = CAT_WORLD_CAT_BY_ID.get(cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     traits = cat_world_cat_traits(cat)
     now = datetime.utcnow()
     log = get_or_create_cat_world_daily_log(db, state.phone, cat["id"], date.today(), now)
+    favorite_active_ids = cat_world_active_favorite_decor_ids(cat["id"], usable_inventory, room_layout)
+    apply_cat_world_hourly_decay(log, traits, usable_inventory, len(favorite_active_ids), now)
     agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
     ambient_event_at = agent_state.get("ambientEventAt") if isinstance(agent_state.get("ambientEventAt"), dict) else {}
     token = f"{event_kind}:{item_id}"
@@ -3688,15 +3698,49 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
         last_seen = datetime.fromisoformat(last_seen_raw.replace("Z", "+00:00")).replace(tzinfo=None)
     except ValueError:
         last_seen = None
-    if last_seen and now - last_seen < timedelta(minutes=8):
+    if last_seen and now - last_seen < timedelta(minutes=30):
+        return {"ok": True, "recorded": False}
+    try:
+        ambient_effect_count = max(int(agent_state.get("ambientEffectCount") or 0), 0)
+    except (TypeError, ValueError):
+        ambient_effect_count = 0
+    if ambient_effect_count >= 8:
         return {"ok": True, "recorded": False}
     label = item.get("label") or item_id
+    mood_key = str(agent_state.get("dailyMoodKey") or "")
+    adjusted_mood_score = clamp_cat_world_score(int(log.mood_score or 0) + int(agent_state.get("moodOffset") or 0))
+    adjusted_energy_score = clamp_cat_world_score(int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0))
+    behavior = cat_world_current_behavior(agent_state, traits, adjusted_mood_score, adjusted_energy_score, now)
     if event_kind == "favorite-toy":
-        event_label = "自主玩耍"
-        message = f"{cat['label']}自己跑去玩最喜欢的{label}。"
+        can_play = adjusted_energy_score >= int(traits.get("restThreshold") or 34) and not behavior.get("sleeping")
+        if can_play:
+            mood_gain = round(3 * float(traits["playMoodGain"]))
+            if adjusted_mood_score < 52:
+                mood_gain += 1
+            if mood_key in {"bright", "curious"}:
+                mood_gain += 1
+            mood_gain = max(2, min(mood_gain, 7))
+            energy_gain = -max(1, round(2 * float(traits["energyDrain"])))
+            event_label = "自主玩耍"
+            message = f"{cat['label']}自己跑去玩最喜欢的{label}，心情 +{mood_gain}，体力 {energy_gain}。"
+        else:
+            mood_gain = 1
+            energy_gain = 0
+            event_label = "轻轻看玩具"
+            message = f"{cat['label']}体力不太够，只是在最喜欢的{label}旁边看了一会儿，心情 +{mood_gain}。"
     else:
+        mood_gain = 2
+        if adjusted_mood_score < 52:
+            mood_gain += 1
+        if mood_key in {"quiet", "lazy"}:
+            mood_gain += 1
+        mood_gain = min(mood_gain, 5)
+        energy_gain = 0
         event_label = "偏好停留"
-        message = f"{cat['label']}自己跑到喜欢的{label}旁边待了一会儿。"
+        message = f"{cat['label']}自己跑到喜欢的{label}旁边待了一会儿，心情 +{mood_gain}。"
+    log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_gain)
+    if energy_gain:
+        log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) + energy_gain)
     agent_state = append_cat_world_agent_event(
         log,
         cat,
@@ -3708,13 +3752,27 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
     )
     ambient_event_at[token] = now.replace(microsecond=0).isoformat() + "Z"
     agent_state["ambientEventAt"] = ambient_event_at
+    agent_state["ambientEffectCount"] = ambient_effect_count + 1
     log.agent_state = encode_cat_world_agent_state(agent_state)
     db.add(log)
     db.commit()
+    db.refresh(state)
+    effect = {
+        "catId": cat["id"],
+        "catLabel": cat["label"],
+        "itemId": item_id,
+        "itemLabel": label,
+        "kind": event_kind,
+        "moodGain": mood_gain,
+        "energyGain": energy_gain,
+        "ambientEffectCount": ambient_effect_count + 1,
+    }
     return {
         "ok": True,
         "recorded": True,
+        "effect": effect,
         "event": {"kind": event_kind, "label": event_label, "message": message},
+        **serialize_cat_world_payload(db, state),
     }
 
 
@@ -10406,6 +10464,7 @@ CAT_WORLD_AGENT_STATE_CARRY_KEYS = {
     "activeFoodRemainingSeconds",
     "activeFoodStartedAt",
     "activeFoodToken",
+    "ambientEffectCount",
     "ambientEventAt",
     "favoriteDecorRewarded",
     "lastPetAt",
