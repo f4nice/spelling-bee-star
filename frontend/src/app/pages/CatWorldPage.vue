@@ -286,6 +286,9 @@ const catAgentDiaries = computed(() =>
       const sleepStart = formatCatHour(traits.sleepStart ?? 23);
       const sleepEnd = formatCatHour(traits.sleepEnd ?? 7);
       const damagedItem = log.damagedItemId ? shopById.value[log.damagedItemId]?.label || log.damagedItemId : "";
+      const hourlyHistory = Array.isArray(agent.hourlyHistory)
+        ? agent.hourlyHistory.filter((row) => row?.label).slice(-3).reverse()
+        : [];
       return {
         ...cat,
         attention: clampCatScore(agent.attention ?? 0),
@@ -308,6 +311,7 @@ const catAgentDiaries = computed(() =>
         activeFavoriteLabel: activeFavoriteLabels.length ? activeFavoriteLabels.join("、") : "喜欢的家具还没摆出来",
         countsLabel: `食物 ${log.foodCount || 0} · 玩具 ${log.toyCount || 0} · 摸摸 ${agent.petCount || 0}`,
         damageLabel: damagedItem ? `今天弄坏过 ${damagedItem}` : "今天没有破坏记录",
+        hourlyHistory,
       };
     }),
 );
@@ -1135,6 +1139,13 @@ async function selectCat(catId) {
               <dd>{{ cat.damageRiskLabel }}</dd>
             </div>
           </dl>
+          <div v-if="cat.hourlyHistory.length" class="cat-world-agent-hourly">
+            <b>小时记录</b>
+            <span v-for="row in cat.hourlyHistory" :key="`${cat.id}-${row.time}-${row.label}`">
+              {{ row.time }} · {{ row.label }} · 体力 {{ signedHourlyValue(row.energyDelta) }} / 心情 {{ signedHourlyValue(row.moodDelta) }}
+              <small>现在 {{ row.energyScore }}/{{ row.moodScore }}{{ row.hours > 1 ? ` · ${row.hours} 小时汇总` : "" }}</small>
+            </span>
+          </div>
           <small>{{ cat.damageLabel }}</small>
           <em v-if="cat.latestEvent">{{ cat.latestEvent.time }} · {{ cat.latestEvent.message }}</em>
         </button>

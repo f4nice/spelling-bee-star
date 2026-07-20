@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-032"
-DEFAULT_PAGE_VERSION = "v20260721.32"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-033"
+DEFAULT_PAGE_VERSION = "v20260721.33"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -10412,6 +10412,52 @@ def cat_world_trim_agent_events(events: Any) -> list[dict[str, str]]:
     return clean[-8:]
 
 
+def cat_world_trim_hourly_history(history: Any) -> list[dict[str, Any]]:
+    if not isinstance(history, list):
+        return []
+    clean: list[dict[str, Any]] = []
+    for row in history[-36:]:
+        if not isinstance(row, dict):
+            continue
+        label = str(row.get("label") or "").strip()
+        if not label:
+            continue
+        clean.append(
+            {
+                "time": str(row.get("time") or ""),
+                "label": label,
+                "reason": str(row.get("reason") or ""),
+                "energyDelta": int(row.get("energyDelta") or 0),
+                "moodDelta": int(row.get("moodDelta") or 0),
+                "energyScore": clamp_cat_world_score(int(row.get("energyScore") or 0)),
+                "moodScore": clamp_cat_world_score(int(row.get("moodScore") or 0)),
+                "hours": max(int(row.get("hours") or 1), 1),
+            }
+        )
+    return clean[-24:]
+
+
+def cat_world_hourly_history_entry(
+    hour_at: datetime,
+    hourly_change: dict[str, Any],
+    energy_delta: int,
+    mood_delta: int,
+    energy_score: int,
+    mood_score: int,
+    hours: int = 1,
+) -> dict[str, Any]:
+    return {
+        "time": cat_world_local_now(hour_at).strftime("%m-%d %H:00"),
+        "label": str(hourly_change.get("label") or "小时变化"),
+        "reason": str(hourly_change.get("reason") or ""),
+        "energyDelta": int(energy_delta),
+        "moodDelta": int(mood_delta),
+        "energyScore": clamp_cat_world_score(energy_score),
+        "moodScore": clamp_cat_world_score(mood_score),
+        "hours": max(int(hours or 1), 1),
+    }
+
+
 def parse_cat_world_agent_state(raw: str | None) -> dict[str, Any]:
     try:
         loaded = json.loads(raw or "{}")
@@ -10422,6 +10468,7 @@ def parse_cat_world_agent_state(raw: str | None) -> dict[str, Any]:
 
 def encode_cat_world_agent_state(state: dict[str, Any]) -> str:
     state["events"] = cat_world_trim_agent_events(state.get("events"))
+    state["hourlyHistory"] = cat_world_trim_hourly_history(state.get("hourlyHistory"))
     return json.dumps(state, ensure_ascii=False, sort_keys=True)
 
 
@@ -10555,6 +10602,7 @@ def cat_world_default_agent_state(
         "routine": traits.get("routine") or "观察房间里的学习节奏",
         "temperament": temperament,
         "mischiefChecked": False,
+        "hourlyHistory": [],
         "events": [
             {
                 "kind": "daily-mood",
@@ -10580,6 +10628,7 @@ CAT_WORLD_AGENT_STATE_CARRY_KEYS = {
     "ambientEffectCount",
     "ambientEventAt",
     "favoriteDecorRewarded",
+    "hourlyHistory",
     "lastPetAt",
     "mischiefChecked",
     "mischiefItemId",
@@ -11098,21 +11147,67 @@ def apply_cat_world_hourly_decay(
         log.hourly_mood_decay = int(hourly_change["hourlyMood"])
         log.hourly_energy_decay = int(hourly_change["hourlyEnergy"])
         return False
-    mood_delta = int(hourly_change["moodDelta"]) * elapsed_hours
-    energy_delta = int(hourly_change["energyDelta"]) * elapsed_hours
-    log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_delta)
-    log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) + energy_delta)
+    cat = CAT_WORLD_CAT_BY_ID.get(log.cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
+    history = cat_world_trim_hourly_history(agent_state.get("hourlyHistory"))
+    total_mood_delta = 0
+    total_energy_delta = 0
+    applied_hours = 0
+    detailed_hours = min(elapsed_hours, 24)
+    for index in range(detailed_hours):
+        hour_at = last_decay_at + timedelta(hours=index + 1)
+        hourly_change = cat_world_behavior_hourly_change(log, traits, inventory, favorite_count, hour_at)
+        mood_delta = int(hourly_change["moodDelta"])
+        energy_delta = int(hourly_change["energyDelta"])
+        log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_delta)
+        log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) + energy_delta)
+        total_mood_delta += mood_delta
+        total_energy_delta += energy_delta
+        applied_hours += 1
+        history.append(
+            cat_world_hourly_history_entry(
+                hour_at,
+                hourly_change,
+                energy_delta,
+                mood_delta,
+                int(log.energy_score or 0),
+                int(log.mood_score or 0),
+            )
+        )
+    if applied_hours < elapsed_hours:
+        remaining_hours = elapsed_hours - applied_hours
+        hour_at = last_decay_at + timedelta(hours=elapsed_hours)
+        hourly_change = cat_world_behavior_hourly_change(log, traits, inventory, favorite_count, hour_at)
+        mood_delta = int(hourly_change["moodDelta"]) * remaining_hours
+        energy_delta = int(hourly_change["energyDelta"]) * remaining_hours
+        log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_delta)
+        log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) + energy_delta)
+        total_mood_delta += mood_delta
+        total_energy_delta += energy_delta
+        history.append(
+            cat_world_hourly_history_entry(
+                hour_at,
+                hourly_change,
+                energy_delta,
+                mood_delta,
+                int(log.energy_score or 0),
+                int(log.mood_score or 0),
+                remaining_hours,
+            )
+        )
+    hourly_change = cat_world_behavior_hourly_change(log, traits, inventory, favorite_count, now)
     log.hourly_mood_decay = int(hourly_change["hourlyMood"])
     log.hourly_energy_decay = int(hourly_change["hourlyEnergy"])
-    log.last_decay_at = now
-    cat = CAT_WORLD_CAT_BY_ID.get(log.cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    log.last_decay_at = last_decay_at + timedelta(hours=elapsed_hours)
+    agent_state["hourlyHistory"] = cat_world_trim_hourly_history(history)
+    log.agent_state = encode_cat_world_agent_state(agent_state)
     append_cat_world_agent_event(
         log,
         cat,
         traits,
         "hourly-change",
         str(hourly_change["label"]),
-        f"{cat['label']}过了 {elapsed_hours} 小时，{hourly_change['reason']}，体力 {cat_world_signed_change(energy_delta)}，心情 {cat_world_signed_change(mood_delta)}。",
+        f"{cat['label']}过了 {elapsed_hours} 小时，{hourly_change['reason']}，体力 {cat_world_signed_change(total_energy_delta)}，心情 {cat_world_signed_change(total_mood_delta)}。",
         now,
     )
     return True

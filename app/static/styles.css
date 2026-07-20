@@ -12397,6 +12397,33 @@ select {
   background: rgba(217, 246, 255, 0.5);
 }
 
+.cat-world-agent-hourly {
+  display: grid;
+  gap: 5px;
+  border: 2px solid rgba(44, 47, 58, 0.45);
+  padding: 7px;
+  background: rgba(169, 232, 200, 0.28);
+}
+
+.cat-world-agent-hourly b,
+.cat-world-agent-hourly span,
+.cat-world-agent-hourly small {
+  color: #40516b;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.cat-world-agent-hourly b {
+  color: #007f67;
+  text-transform: uppercase;
+}
+
+.cat-world-agent-hourly span {
+  display: grid;
+  gap: 2px;
+}
+
 .cat-world-agent-card.active,
 .cat-world-agent-card:not(:disabled):hover {
   color: #fff;
@@ -12409,7 +12436,9 @@ select {
 }
 
 .cat-world-agent-card.active .cat-world-agent-facts div,
-.cat-world-agent-card:not(:disabled):hover .cat-world-agent-facts div {
+.cat-world-agent-card:not(:disabled):hover .cat-world-agent-facts div,
+.cat-world-agent-card.active .cat-world-agent-hourly,
+.cat-world-agent-card:not(:disabled):hover .cat-world-agent-hourly {
   background: rgba(255, 255, 255, 0.14);
 }
 
