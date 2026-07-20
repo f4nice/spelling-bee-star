@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-006"
-DEFAULT_PAGE_VERSION = "v20260721.6"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-007"
+DEFAULT_PAGE_VERSION = "v20260721.7"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3664,6 +3664,22 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
     damaged_items.pop(item_id, None)
     state.damaged_items = encode_cat_world_damaged_items(damaged_items)
     state.energy_spent = max(int(state.energy_spent or 0), 0) + repair_cost
+    repair_cat_id = str(damaged.get("catId") or state.selected_cat or CAT_WORLD_DEFAULT_CAT_ID)
+    repair_cat = CAT_WORLD_CAT_BY_ID.get(repair_cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    repair_traits = cat_world_cat_traits(repair_cat)
+    repair_log = get_or_create_cat_world_daily_log(db, state.phone, repair_cat["id"], date.today(), datetime.utcnow())
+    append_cat_world_agent_event(
+        repair_log,
+        repair_cat,
+        repair_traits,
+        "repair",
+        "维修完成",
+        f"{damaged.get('label') or item_id}已经维修好，花费 {repair_cost} 能量。",
+        datetime.utcnow(),
+    )
+    if repair_log.damaged_item_id == item_id:
+        repair_log.damaged_item_id = None
+    db.add(repair_log)
     db.add(state)
     db.commit()
     db.refresh(state)
@@ -10120,6 +10136,10 @@ def cat_world_local_now(now: datetime | None = None) -> datetime:
     return base_now + timedelta(hours=8)
 
 
+def cat_world_local_time_label(now: datetime | None = None) -> str:
+    return cat_world_local_now(now).strftime("%H:%M")
+
+
 def cat_world_is_sleep_hour(hour: int, sleep_start: int, sleep_end: int) -> bool:
     if sleep_start == sleep_end:
         return False
@@ -10133,6 +10153,36 @@ def cat_world_stable_ratio(seed: str) -> float:
     return int(digest[:12], 16) / float(0xFFFFFFFFFFFF)
 
 
+def cat_world_agent_event(kind: str, label: str, message: str, now: datetime | None = None) -> dict[str, str]:
+    return {
+        "kind": str(kind or "note"),
+        "time": cat_world_local_time_label(now),
+        "label": str(label or "状态记录"),
+        "message": str(message or ""),
+    }
+
+
+def cat_world_trim_agent_events(events: Any) -> list[dict[str, str]]:
+    if not isinstance(events, list):
+        return []
+    clean: list[dict[str, str]] = []
+    for event in events[-10:]:
+        if not isinstance(event, dict):
+            continue
+        message = str(event.get("message") or "").strip()
+        if not message:
+            continue
+        clean.append(
+            {
+                "kind": str(event.get("kind") or "note"),
+                "time": str(event.get("time") or ""),
+                "label": str(event.get("label") or "状态记录"),
+                "message": message,
+            }
+        )
+    return clean[-8:]
+
+
 def parse_cat_world_agent_state(raw: str | None) -> dict[str, Any]:
     try:
         loaded = json.loads(raw or "{}")
@@ -10142,6 +10192,7 @@ def parse_cat_world_agent_state(raw: str | None) -> dict[str, Any]:
 
 
 def encode_cat_world_agent_state(state: dict[str, Any]) -> str:
+    state["events"] = cat_world_trim_agent_events(state.get("events"))
     return json.dumps(state, ensure_ascii=False, sort_keys=True)
 
 
@@ -10183,16 +10234,44 @@ def cat_world_default_agent_state(log_date: date, cat: dict[str, Any], traits: d
         "routine": traits.get("routine") or "观察房间里的学习节奏",
         "temperament": temperament,
         "mischiefChecked": False,
+        "events": [
+            {
+                "kind": "daily-mood",
+                "time": "今日",
+                "label": daily_mood["label"],
+                "message": f"{cat['label']} {daily_mood['label']}，{traits.get('routine') or '正在观察房间里的学习节奏'}。",
+            }
+        ],
     }
 
 
 def ensure_cat_world_agent_state(log: CatWorldDailyLog, cat: dict[str, Any], traits: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     state = parse_cat_world_agent_state(log.agent_state)
     if state.get("date") == log.log_date.isoformat() and state.get("dailyMoodKey"):
+        state["events"] = cat_world_trim_agent_events(state.get("events"))
         return state, False
     state = cat_world_default_agent_state(log.log_date, cat, traits)
     log.agent_state = encode_cat_world_agent_state(state)
     return state, True
+
+
+def append_cat_world_agent_event(
+    log: CatWorldDailyLog,
+    cat: dict[str, Any],
+    traits: dict[str, Any],
+    kind: str,
+    label: str,
+    message: str,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
+    events = cat_world_trim_agent_events(agent_state.get("events"))
+    next_event = cat_world_agent_event(kind, label, message, now)
+    if not events or events[-1] != next_event:
+        events.append(next_event)
+    agent_state["events"] = cat_world_trim_agent_events(events)
+    log.agent_state = encode_cat_world_agent_state(agent_state)
+    return agent_state
 
 
 def cat_world_current_behavior(
@@ -10313,6 +10392,16 @@ def apply_cat_world_hourly_decay(
     log.hourly_mood_decay = mood_decay
     log.hourly_energy_decay = energy_decay
     log.last_decay_at = now
+    cat = CAT_WORLD_CAT_BY_ID.get(log.cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    append_cat_world_agent_event(
+        log,
+        cat,
+        traits,
+        "hourly-decay",
+        "自然消耗",
+        f"{cat['label']}过了 {elapsed_hours} 小时，体力 -{energy_decay * elapsed_hours}，心情 -{mood_decay * elapsed_hours}。",
+        now,
+    )
     return True
 
 
@@ -10456,9 +10545,20 @@ def cat_world_apply_agent_damage_events(
             agent_state["mischiefItemId"] = item_id
             agent_state["mischiefLabel"] = item.get("label") or item_id
             log.damaged_item_id = item_id
+            append_cat_world_agent_event(
+                log,
+                cat,
+                traits,
+                "damage",
+                "捣蛋损坏",
+                reason,
+                now,
+            )
             changed = True
             if not candidates:
                 agent_state["mischiefChecked"] = True
+        current_state = parse_cat_world_agent_state(log.agent_state)
+        agent_state["events"] = cat_world_trim_agent_events(current_state.get("events") or agent_state.get("events"))
         log.agent_state = encode_cat_world_agent_state(agent_state)
         db.add(log)
         changed = True
@@ -10511,11 +10611,29 @@ def cat_world_apply_daily_effect(
         energy_gain = round(int(item.get("catEnergy") or 0) * float(traits["foodEnergyGain"]))
         log.food_count = int(log.food_count or 0) + 1
         log.last_food_item = item["id"]
+        append_cat_world_agent_event(
+            log,
+            cat,
+            traits,
+            "food",
+            "吃到食物",
+            f"{cat['label']}吃了{item.get('label') or item['id']}，体力 +{energy_gain}，心情 +{mood_gain}。",
+            now,
+        )
     else:
         mood_gain = round(int(item.get("mood") or 0) * float(traits["playMoodGain"]))
         energy_gain = -max(1, round(4 * float(traits["energyDrain"])))
         log.toy_count = int(log.toy_count or 0) + 1
         log.last_play_item = item["id"]
+        append_cat_world_agent_event(
+            log,
+            cat,
+            traits,
+            "play",
+            "玩具互动",
+            f"{cat['label']}玩了{item.get('label') or item['id']}，心情 +{mood_gain}，体力 {energy_gain}。",
+            now,
+        )
     log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_gain)
     log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) + energy_gain)
     db.add(log)

@@ -214,6 +214,11 @@ const focusedCatDailyNote = computed(() => {
   const damaged = agent.mischiefLabel ? ` · 今天弄坏过 ${agent.mischiefLabel}` : "";
   return `每小时 体力 -${log.hourlyEnergyDecay || 0} / 心情 -${log.hourlyMoodDecay || 0} · 独立状态 ${agent.dailyMoodLabel || "稳定"} · 喜欢 ${favoriteDecorLabels.join("、") || "安静角落"}${damaged}`;
 });
+const focusedAgentEvents = computed(() => {
+  const events = focusedAgentState.value.events;
+  if (!Array.isArray(events)) return [];
+  return events.filter((event) => event?.message).slice(-4).reverse();
+});
 const gameSnapshot = computed(() => ({
   cats: cats.value,
   inventory: usableInventory.value,
@@ -655,6 +660,13 @@ async function selectCat(catId) {
           <strong>{{ focusedCat.label || "猫咪" }} · {{ focusedCat.personality || "学习陪伴型" }}</strong>
           <p>{{ focusedCatThought }}</p>
           <small>{{ focusedCatDailyNote }}</small>
+          <ul v-if="focusedAgentEvents.length" class="cat-world-agent-events">
+            <li v-for="event in focusedAgentEvents" :key="`${event.time}-${event.kind}-${event.message}`">
+              <b>{{ event.time }}</b>
+              <span>{{ event.label }}</span>
+              <em>{{ event.message }}</em>
+            </li>
+          </ul>
         </div>
 
         <div class="cat-world-room" aria-label="猫咪房间场景">

@@ -11189,7 +11189,7 @@ select {
   color: #65ffc8;
   font-size: 11px;
   font-weight: 900;
-  letter-spacing: 1.6px;
+  letter-spacing: 0;
 }
 
 .cat-world-ai-panel strong {
@@ -11203,6 +11203,44 @@ select {
   font-size: 12px;
   font-weight: 800;
   line-height: 1.55;
+}
+
+.cat-world-agent-events {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cat-world-agent-events li {
+  display: grid;
+  grid-template-columns: 40px 74px minmax(0, 1fr);
+  align-items: start;
+  gap: 6px;
+  border-top: 1px solid rgba(157, 232, 255, 0.22);
+  padding-top: 4px;
+  color: #d6fff0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.cat-world-agent-events b {
+  color: #9de8ff;
+  font-weight: 900;
+}
+
+.cat-world-agent-events span {
+  color: #fff3a4;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.cat-world-agent-events em {
+  min-width: 0;
+  color: #d6fff0;
+  font-style: normal;
+  overflow-wrap: anywhere;
 }
 
 .cat-world-room {
