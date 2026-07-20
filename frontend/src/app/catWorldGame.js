@@ -887,14 +887,18 @@ class CatWorldScene extends Phaser.Scene {
     const energy = catEnergyForSnapshot(this.owner.snapshot, cat);
     const mood = catMoodForSnapshot(this.owner.snapshot, cat);
     const restThreshold = Number(traits.restThreshold ?? 34);
+    const stamina = clamp(Number(agent.stamina || 50), 0, 100);
+    const activityBias = clamp(Number(agent.activityBias || 50), 0, 100);
+    const socialNeed = clamp(Number(agent.socialNeed || 50), 0, 100);
     let key = serverBehavior.key || "active";
     if (sleeping) key = "sleeping";
     else if (energy < restThreshold) key = "resting";
     else if (nightOwl && (hour >= 22 || hour < 5)) key = "night-watch";
     const moodFactor = mood < 38 ? 0.72 : mood < 56 ? 0.84 : 1;
     const energyFactor = energy < restThreshold + 8 ? 0.58 : energy < 58 ? 0.78 : 1;
-    const behaviorFactor = key === "slow" ? 0.72 : key === "exploring" ? 1.04 : key === "night-watch" ? 0.94 : 1;
-    const walkSpeed = clamp(catTraitNumber(cat, "movement", 1) * moodFactor * energyFactor * behaviorFactor, 0.34, 0.92);
+    const behaviorFactor = key === "slow" ? 0.72 : key === "exploring" ? 1.04 : key === "night-watch" ? 0.94 : key === "seeking-touch" ? 0.86 : 1;
+    const agentPace = clamp(0.86 + (activityBias - 50) / 180 + (stamina - 50) / 280, 0.72, 1.08);
+    const walkSpeed = clamp(catTraitNumber(cat, "movement", 1) * moodFactor * energyFactor * behaviorFactor * agentPace, 0.32, 0.92);
     const idleChance = sleeping
       ? 100
       : key === "resting"
@@ -908,6 +912,8 @@ class CatWorldScene extends Phaser.Scene {
               : key === "night-watch"
                 ? 18
                 : 24;
+    const socialIdleBonus = socialNeed >= 76 && mood < 68 ? 10 : 0;
+    const activeIdleBonus = activityBias >= 78 && energy > 58 ? -7 : 0;
     return {
       key,
       sleeping,
@@ -919,7 +925,7 @@ class CatWorldScene extends Phaser.Scene {
       mood,
       restThreshold,
       walkSpeed,
-      idleChance,
+      idleChance: clamp(idleChance + socialIdleBonus + activeIdleBonus, 12, 100),
       restless: nightOwl && (hour >= 22 || hour < 5),
     };
   }
@@ -1070,6 +1076,7 @@ class CatWorldScene extends Phaser.Scene {
     const goal = this.dailyGoalForCat(cat);
     if (behavior.energy < Number(behavior.restThreshold || 34) + 8) return "体力有点低，先坐一会儿。";
     if (behavior.mood < 38) return "今天心情不太好，想安静一下。";
+    if (behavior.key === "seeking-touch") return "今天想让你多陪一会儿。";
     if (goal.key === "mischief-watch") return `正在犹豫要不要碰${goal.targetLabel || "那个道具"}。`;
     if (goal.key === "favorite-decor") return `在想${goal.targetLabel || "喜欢的角落"}。`;
     if (behavior.key === "slow") return "今天想慢慢走。";

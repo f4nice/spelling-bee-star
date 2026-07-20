@@ -12327,7 +12327,7 @@ select {
 
 .cat-world-agent-meter-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
   gap: 6px;
 }
 
@@ -12366,6 +12366,18 @@ select {
 
 .cat-world-agent-meter.curious b {
   background: #fff07d;
+}
+
+.cat-world-agent-meter.stamina b {
+  background: #8ed7ff;
+}
+
+.cat-world-agent-meter.activity b {
+  background: #ffbe66;
+}
+
+.cat-world-agent-meter.social b {
+  background: #c9a7ff;
 }
 
 .cat-world-agent-meter.mischief b {

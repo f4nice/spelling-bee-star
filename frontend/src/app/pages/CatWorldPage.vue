@@ -289,6 +289,10 @@ const catAgentDiaries = computed(() =>
         attention: clampCatScore(agent.attention ?? 0),
         curiosity: clampCatScore(agent.curiosity ?? 0),
         mischief: clampCatScore(agent.mischief ?? 0),
+        stamina: clampCatScore(agent.stamina ?? 0),
+        activityBias: clampCatScore(agent.activityBias ?? 0),
+        socialNeed: clampCatScore(agent.socialNeed ?? 0),
+        dailyProfileLabel: [agent.staminaLabel, agent.activityLabel, agent.socialNeedLabel].filter(Boolean).join(" · "),
         sleepLabel: traits.nightOwl ? `夜猫子 · ${sleepStart}-${sleepEnd}` : `${sleepStart}-${sleepEnd}`,
         routineLabel: agent.routine || traits.routine || "观察房间里的学习节奏",
         goalLabel: dailyGoal.label || "自由散步",
@@ -1051,6 +1055,18 @@ async function selectCat(catId) {
               好奇
               <i><b :style="{ width: `${cat.curiosity}%` }"></b></i>
             </span>
+            <span class="cat-world-agent-meter stamina">
+              耐力
+              <i><b :style="{ width: `${cat.stamina}%` }"></b></i>
+            </span>
+            <span class="cat-world-agent-meter activity">
+              活跃
+              <i><b :style="{ width: `${cat.activityBias}%` }"></b></i>
+            </span>
+            <span class="cat-world-agent-meter social">
+              黏人
+              <i><b :style="{ width: `${cat.socialNeed}%` }"></b></i>
+            </span>
             <span class="cat-world-agent-meter mischief">
               捣蛋
               <i><b :style="{ width: `${cat.mischief}%` }"></b></i>
@@ -1064,6 +1080,10 @@ async function selectCat(catId) {
             <div>
               <dt>消耗</dt>
               <dd>{{ cat.decayLabel }}</dd>
+            </div>
+            <div>
+              <dt>今日参数</dt>
+              <dd>{{ cat.dailyProfileLabel || "状态稳定" }}</dd>
             </div>
             <div>
               <dt>减耗</dt>

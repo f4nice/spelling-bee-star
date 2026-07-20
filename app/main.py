@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-030"
-DEFAULT_PAGE_VERSION = "v20260721.30"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-031"
+DEFAULT_PAGE_VERSION = "v20260721.31"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -10425,6 +10425,71 @@ def cat_world_daily_agent_seed_key(log_date: date, cat_id: str, phone: str | Non
     return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
 
 
+def cat_world_agent_score(value: int | float) -> int:
+    return int(min(max(round(float(value)), 8), 96))
+
+
+def cat_world_agent_level_label(value: int, low: str, middle: str, high: str) -> str:
+    if value >= 72:
+        return high
+    if value <= 38:
+        return low
+    return middle
+
+
+def cat_world_apply_temperament_daily_bias(
+    temperament: str,
+    attention: int,
+    curiosity: int,
+    mischief: int,
+    stamina: int,
+    activity_bias: int,
+    social_need: int,
+) -> tuple[int, int, int, int, int, int]:
+    if temperament == "calm":
+        attention += 8
+        curiosity -= 4
+        mischief -= 18
+        stamina += 10
+        activity_bias -= 12
+        social_need -= 10
+    elif temperament == "gentle":
+        attention += 4
+        curiosity -= 2
+        mischief -= 18
+        stamina += 6
+        activity_bias -= 16
+        social_need += 8
+    elif temperament == "chatty":
+        attention -= 3
+        curiosity += 10
+        mischief += 12
+        stamina -= 7
+        activity_bias += 16
+        social_need += 16
+    elif temperament == "guardian":
+        attention += 6
+        curiosity += 4
+        mischief += 12
+        stamina += 4
+        activity_bias += 10
+        social_need -= 4
+    elif temperament == "clingy":
+        attention += 2
+        mischief -= 8
+        stamina += 2
+        activity_bias -= 4
+        social_need += 14
+    return (
+        cat_world_agent_score(attention),
+        cat_world_agent_score(curiosity),
+        cat_world_agent_score(mischief),
+        cat_world_agent_score(stamina),
+        cat_world_agent_score(activity_bias),
+        cat_world_agent_score(social_need),
+    )
+
+
 def cat_world_default_agent_state(
     log_date: date,
     cat: dict[str, Any],
@@ -10437,11 +10502,19 @@ def cat_world_default_agent_state(
     attention = int(35 + cat_world_stable_ratio(f"{seed}:attention") * 55)
     curiosity = int(35 + cat_world_stable_ratio(f"{seed}:curiosity") * 55)
     mischief = int(18 + cat_world_stable_ratio(f"{seed}:mischief") * 64)
+    stamina = int(32 + cat_world_stable_ratio(f"{seed}:stamina") * 58)
+    activity_bias = int(32 + cat_world_stable_ratio(f"{seed}:activity") * 58)
+    social_need = int(30 + cat_world_stable_ratio(f"{seed}:social") * 60)
     temperament = str(traits.get("temperament") or "balanced")
-    if temperament in {"calm", "gentle"}:
-        mischief = max(8, mischief - 18)
-    elif temperament in {"chatty", "guardian"}:
-        mischief = min(92, mischief + 12)
+    attention, curiosity, mischief, stamina, activity_bias, social_need = cat_world_apply_temperament_daily_bias(
+        temperament,
+        attention,
+        curiosity,
+        mischief,
+        stamina,
+        activity_bias,
+        social_need,
+    )
     return {
         "date": log_date.isoformat(),
         "seedKey": cat_world_daily_agent_seed_key(log_date, cat["id"], phone),
@@ -10452,6 +10525,12 @@ def cat_world_default_agent_state(
         "attention": attention,
         "curiosity": curiosity,
         "mischief": mischief,
+        "stamina": stamina,
+        "activityBias": activity_bias,
+        "socialNeed": social_need,
+        "staminaLabel": cat_world_agent_level_label(stamina, "今天容易累", "耐力稳定", "今天耐力很好"),
+        "activityLabel": cat_world_agent_level_label(activity_bias, "今天慢悠悠", "活动量稳定", "今天很爱动"),
+        "socialNeedLabel": cat_world_agent_level_label(social_need, "今天想独处", "陪伴需求稳定", "今天想黏人"),
         "routine": traits.get("routine") or "观察房间里的学习节奏",
         "temperament": temperament,
         "mischiefChecked": False,
@@ -10505,7 +10584,22 @@ def ensure_cat_world_agent_state(log: CatWorldDailyLog, cat: dict[str, Any], tra
     expected_seed_key = cat_world_daily_agent_seed_key(log.log_date, cat["id"], log.phone)
     if state.get("date") == log.log_date.isoformat() and state.get("dailyMoodKey") and state.get("seedKey") == expected_seed_key:
         state["events"] = cat_world_trim_agent_events(state.get("events"))
-        return state, False
+        changed = False
+        default_state = cat_world_default_agent_state(log.log_date, cat, traits, log.phone)
+        for key in (
+            "stamina",
+            "activityBias",
+            "socialNeed",
+            "staminaLabel",
+            "activityLabel",
+            "socialNeedLabel",
+        ):
+            if key not in state:
+                state[key] = default_state.get(key)
+                changed = True
+        if changed:
+            log.agent_state = encode_cat_world_agent_state(state)
+        return state, changed
     previous_state = state if state.get("date") == log.log_date.isoformat() else {}
     state = cat_world_default_agent_state(log.log_date, cat, traits, log.phone)
     if previous_state:
@@ -10542,6 +10636,8 @@ def cat_world_current_behavior(
 ) -> dict[str, Any]:
     local_now = cat_world_local_now(now)
     hour = local_now.hour
+    activity_bias = min(max(int(agent_state.get("activityBias") or 50), 0), 100)
+    social_need = min(max(int(agent_state.get("socialNeed") or 50), 0), 100)
     sleeping = (
         cat_world_is_sleep_hour(hour, int(traits.get("sleepStart") or 23), int(traits.get("sleepEnd") or 7))
         and not bool(traits.get("nightOwl"))
@@ -10555,13 +10651,16 @@ def cat_world_current_behavior(
     elif mood_score < 38:
         key = "sulking"
         label = "心情差，可能会捣蛋"
+    elif social_need >= 76 and mood_score < 68:
+        key = "seeking-touch"
+        label = "想要陪玩"
     elif bool(traits.get("nightOwl")) and (hour >= 22 or hour < 5):
         key = "night-watch"
         label = "夜间巡逻"
-    elif agent_state.get("dailyMoodKey") == "curious":
+    elif agent_state.get("dailyMoodKey") == "curious" or activity_bias >= 78:
         key = "exploring"
         label = "到处探索"
-    elif agent_state.get("dailyMoodKey") == "lazy":
+    elif agent_state.get("dailyMoodKey") == "lazy" or activity_bias <= 34:
         key = "slow"
         label = "慢慢散步"
     else:
@@ -10595,6 +10694,14 @@ def cat_world_behavior_hourly_change(
     agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
     mood_score = clamp_cat_world_score(int(log.mood_score or 0) + int(agent_state.get("moodOffset") or 0))
     energy_score = clamp_cat_world_score(int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0))
+    attention = min(max(int(agent_state.get("attention") or 50), 0), 100)
+    stamina = min(max(int(agent_state.get("stamina") or 50), 0), 100)
+    activity_bias = min(max(int(agent_state.get("activityBias") or 50), 0), 100)
+    social_need = min(max(int(agent_state.get("socialNeed") or 50), 0), 100)
+    daily_energy_bias = int(min(max(round((activity_bias - stamina) / 28), -3), 3))
+    daily_mood_bias = int(min(max(round((social_need - attention) / 34), -2), 2))
+    mood_decay = max(1, mood_decay + daily_mood_bias)
+    energy_decay = max(1, energy_decay + daily_energy_bias)
     behavior = cat_world_current_behavior(agent_state, traits, mood_score, energy_score, now)
     mood_key = str(agent_state.get("dailyMoodKey") or "")
 
@@ -10602,6 +10709,15 @@ def cat_world_behavior_hourly_change(
     energy_delta = -energy_decay
     label = "自然消耗"
     reason = "自由活动"
+    daily_notes = []
+    if daily_energy_bias > 0:
+        daily_notes.append("今天更爱动")
+    elif daily_energy_bias < 0:
+        daily_notes.append("今天耐力更稳")
+    if daily_mood_bias > 0:
+        daily_notes.append("今天更需要陪伴")
+    elif daily_mood_bias < 0:
+        daily_notes.append("今天比较专注")
 
     if behavior["key"] == "sleeping":
         energy_delta = max(1, round(3 / max(float(traits["energyDrain"]), 0.5)))
@@ -10631,6 +10747,11 @@ def cat_world_behavior_hourly_change(
         mood_delta -= 2
         label = "心情低落"
         reason = "心情差，消耗更明显"
+    elif behavior["key"] == "seeking-touch":
+        mood_delta -= 1
+        energy_delta = min(energy_delta + 1, -1)
+        label = "想要陪玩"
+        reason = "陪伴需求高，想等你摸摸或玩玩具"
 
     if mood_key == "bright" and mood_delta < 2:
         mood_delta += 1
@@ -10640,6 +10761,9 @@ def cat_world_behavior_hourly_change(
     if favorite_count > 0 and mood_delta < 0:
         mood_delta = min(0, mood_delta + min(favorite_count, 2))
 
+    if daily_notes:
+        reason = f"{reason}，{'、'.join(daily_notes)}"
+
     return {
         "moodDelta": int(mood_delta),
         "energyDelta": int(energy_delta),
@@ -10648,6 +10772,8 @@ def cat_world_behavior_hourly_change(
         "baseMoodDecay": int(mood_decay),
         "baseEnergyDecay": int(energy_decay),
         "relief": int(relief),
+        "dailyEnergyBias": int(daily_energy_bias),
+        "dailyMoodBias": int(daily_mood_bias),
         "label": label,
         "reason": reason,
         "behavior": behavior,
@@ -10708,6 +10834,7 @@ def cat_world_agent_daily_goal(
     seed = f"{cat_world_daily_agent_seed(log.log_date, cat['id'], log.phone)}:goal"
     mood_key = str(agent_state.get("dailyMoodKey") or "")
     temperament = str(traits.get("temperament") or "balanced")
+    social_need = min(max(int(agent_state.get("socialNeed") or 50), 0), 100)
     owned_toys = sorted(
         item_id
         for item_id, count in inventory.items()
@@ -10775,6 +10902,16 @@ def cat_world_agent_daily_goal(
             CAT_WORLD_SHOP_BY_ID[target_item_id].get("category") or "decor",
             target_item_id,
             86,
+        )
+
+    if social_need >= 76 and mood_score < 68:
+        return goal(
+            "seek-attention",
+            "想要陪伴",
+            f"{cat['label']}今天特别想被关注，摸摸或喜欢的玩具会让它更安心。",
+            "walk",
+            "",
+            72,
         )
 
     wants_toy = (
@@ -10872,6 +11009,8 @@ def cat_world_agent_payload(
         "adjustedEnergyScore": energy_score,
         "hourlyLabel": hourly_change.get("label") or "",
         "hourlyReason": hourly_change.get("reason") or "",
+        "hourlyEnergyBias": int(hourly_change.get("dailyEnergyBias") or 0),
+        "hourlyMoodBias": int(hourly_change.get("dailyMoodBias") or 0),
         "comfortRelief": comfort_relief,
         "comfortLabel": " · ".join(comfort_parts) if comfort_parts else "暂无道具减耗",
         "damagedItemId": log.damaged_item_id or agent_state.get("mischiefItemId") or "",
