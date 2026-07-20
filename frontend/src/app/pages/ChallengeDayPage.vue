@@ -86,9 +86,13 @@ const listSummaries = computed(() => {
     }
     const summary = summaryMap.get(key);
     summary.word_count += 1;
-    summary.correct += Number(item.correct_count || 0);
-    summary.wrong_attempts += Number(item.wrong_count || 0);
-    if (item.was_wrong || item.wrong_count) summary.wrong += 1;
+    const wrongCount = Number(item.wrong_count || 0);
+    summary.wrong_attempts += wrongCount;
+    if (item.was_wrong || wrongCount) {
+      summary.wrong += 1;
+    } else if (Number(item.correct_count || 0) > 0 || item.status === "correct") {
+      summary.correct += 1;
+    }
     if (item.corrected) summary.corrected += 1;
     if (item.was_wrong && !item.corrected) summary.pending += 1;
   });

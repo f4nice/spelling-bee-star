@@ -87,8 +87,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-002"
-DEFAULT_PAGE_VERSION = "v20260721.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-003"
+DEFAULT_PAGE_VERSION = "v20260721.3"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -7321,10 +7321,11 @@ def challenge_calendar_day_payload(db: Session, challenge_date: date) -> dict:
             }
             list_summary_map[list_key] = summary
         summary["word_count"] += 1
-        summary["correct"] += int(item.get("correct_count") or 0)
         wrong_count = int(item.get("wrong_count") or 0)
         if item.get("was_wrong") or wrong_count:
             summary["wrong"] += 1
+        elif int(item.get("correct_count") or 0) > 0 or item.get("status") == "correct":
+            summary["correct"] += 1
         summary["wrong_attempts"] += wrong_count
         if item.get("corrected"):
             summary["corrected"] += 1
