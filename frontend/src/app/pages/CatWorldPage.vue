@@ -102,6 +102,8 @@ const decorToneColors = {
 const energy = computed(() => payload.value.energy || {});
 const state = computed(() => payload.value.state || {});
 const inventory = computed(() => state.value.inventory || {});
+const usableInventory = computed(() => state.value.usableInventory || inventory.value);
+const damagedItems = computed(() => state.value.damagedItems || {});
 const roomStyles = computed(() => state.value.roomStyles || {});
 const roomLayout = computed(() => state.value.roomLayout || {});
 const styleOptions = computed(() => state.value.styleOptions || {});
@@ -131,6 +133,7 @@ const focusedDailyLog = computed(
     mood.value.dailyLog ||
     {},
 );
+const focusedAgentState = computed(() => focusedDailyLog.value.agentState || {});
 const rawActiveFood = computed(() => mood.value.activeFood || {});
 const activeFoodRemainingSeconds = computed(() => {
   const food = rawActiveFood.value || {};
@@ -143,10 +146,11 @@ const activeFoodRemainingSeconds = computed(() => {
 });
 const activeFood = computed(() => ({
   ...rawActiveFood.value,
-  active: Boolean(rawActiveFood.value?.active && activeFoodRemainingSeconds.value > 0),
+  active: Boolean(rawActiveFood.value?.active && activeFoodRemainingSeconds.value > 0 && Number(rawActiveFood.value?.remainingEnergy ?? 1) > 0),
   remainingSeconds: activeFoodRemainingSeconds.value,
   moodEffective: Number(rawActiveFood.value?.moodEffective || 0),
   catEnergyEffective: Number(rawActiveFood.value?.catEnergyEffective || 0),
+  remainingEnergy: Number(rawActiveFood.value?.remainingEnergy || 0),
 }));
 const activeFoodEnergyGain = computed(() => Number(activeFood.value.catEnergyEffective || 0));
 const activeFoodMoodGain = computed(() => Number(activeFood.value.moodEffective || 0));
@@ -185,12 +189,18 @@ const activeToolItems = computed(() => {
     .map((item) => ({
       ...item,
       count: itemCount(item.id),
+      damageInfo: damagedItems.value[item.id] || null,
       styleOptions: item.category === "decor" ? decorStyleOptions(item.id) : [],
       favoriteLabel: item.category === "decor" ? decorFavoriteLabel(item) : "",
       actionLabel: ownedToolActionText(item),
     }));
 });
 const focusedCatThought = computed(() => {
+  const agent = focusedAgentState.value || {};
+  const behavior = agent.currentBehavior || {};
+  if (agent.dailyMoodLabel || behavior.label) {
+    return `${agent.dailyMoodLabel || "今天状态稳定"}，${behavior.label || "自由活动"}。${agent.routine || "正在观察房间里的学习节奏"}。`;
+  }
   const thoughts = focusedCat.value.thoughts || [];
   if (!thoughts.length) {
     return "正在观察你的学习节奏。";
@@ -199,15 +209,19 @@ const focusedCatThought = computed(() => {
 });
 const focusedCatDailyNote = computed(() => {
   const log = focusedDailyLog.value || {};
+  const agent = focusedAgentState.value || {};
   const favoriteDecorLabels = focusedCat.value.favoriteDecorLabels || [];
-  return `每小时 体力 -${log.hourlyEnergyDecay || 0} / 心情 -${log.hourlyMoodDecay || 0} · 喜欢 ${favoriteDecorLabels.join("、") || "安静角落"}`;
+  const damaged = agent.mischiefLabel ? ` · 今天弄坏过 ${agent.mischiefLabel}` : "";
+  return `每小时 体力 -${log.hourlyEnergyDecay || 0} / 心情 -${log.hourlyMoodDecay || 0} · 独立状态 ${agent.dailyMoodLabel || "稳定"} · 喜欢 ${favoriteDecorLabels.join("、") || "安静角落"}${damaged}`;
 });
 const gameSnapshot = computed(() => ({
   cats: cats.value,
-  inventory: inventory.value,
+  inventory: usableInventory.value,
+  damagedItems: damagedItems.value,
   layout: roomLayout.value,
   mood: mood.value,
   activeFood: activeFood.value,
+  dailyLogs: dailyLogs.value,
   ownedCats: ownedCats.value,
   ownedFoodCount: ownedFoodCount.value,
   roomStyles: roomStyles.value,
@@ -282,7 +296,7 @@ function handleRoomToyClick(itemId) {
   const item = shopById.value[itemId];
   if (item && ["food", "toy"].includes(item.category)) {
     if (item.category === "food" && activeFood.value.active && activeFood.value.itemId === item.id) {
-      notice.value = `${item.label} 正在房间里，剩余 ${formatSeconds(activeFood.value.remainingSeconds)}，体力 +${activeFoodEnergyGain.value}，心情 +${activeFoodMoodGain.value}。`;
+      notice.value = `${item.label} 正在房间里，剩余能量 ${activeFood.value.remainingEnergy || activeFoodEnergyGain.value}，剩余 ${formatSeconds(activeFood.value.remainingSeconds)}，体力 +${activeFoodEnergyGain.value}，心情 +${activeFoodMoodGain.value}。`;
       petCat(focusedCat.value);
       return;
     }
@@ -296,6 +310,8 @@ function ownedToolCount(categoryKey) {
 }
 
 function ownedToolActionText(item) {
+  const damaged = damageInfo(item);
+  if (damaged) return `维修 ${damaged.repairCost || 0} 能量`;
   if (item.category === "decor") return selectedDecorId.value === item.id ? "已选中" : "选择拖动";
   if (item.category === "food") return `摆进房间 +${foodEnergyGainValue(item)}体力`;
   if (item.category === "toy") return "互动";
@@ -304,6 +320,8 @@ function ownedToolActionText(item) {
 }
 
 function ownedToolSubtext(item) {
+  const damaged = damageInfo(item);
+  if (damaged) return `损坏 · ${damaged.reason || "需要维修后才能使用"}`;
   if (item.category === "cat") return item.personality || "正在陪读";
   const suffix = item.favoriteLabel ? ` · ${item.favoriteLabel}` : "";
   return `拥有 ${item.count}${suffix}`;
@@ -336,8 +354,20 @@ function decorFavoriteLabel(item) {
   return matched?.catLabel ? `${matched.catLabel}喜欢` : "";
 }
 
+function damageInfo(item) {
+  return item?.id ? damagedItems.value[item.id] || null : null;
+}
+
+function isDamagedItem(item) {
+  return Boolean(damageInfo(item));
+}
+
 function handleOwnedToolClick(item) {
   if (!item?.id || busyItemId.value) return;
+  if (isDamagedItem(item)) {
+    repairItem(item);
+    return;
+  }
   if (item.category === "decor") {
     selectedDecorId.value = item.id;
     notice.value = `已选中 ${item.label}，在左侧房间里拖动它后点击保存布局。`;
@@ -420,6 +450,7 @@ function purchaseHint(item) {
     return `需要先购买${item.targetDecorLabel || "对应家具"}`;
   }
   if (isOneTimeOwned(item) && item.category !== "color") {
+    if (isDamagedItem(item)) return "已拥有但被弄坏了，去右侧背包维修";
     return "已拥有，不会重复扣分";
   }
   if (item.category === "color" && itemCount(item.id) > 0) {
@@ -439,6 +470,7 @@ function purchaseButtonText(item) {
   if (item.category === "color" && !targetDecorOwned(item)) return "先买家具";
   if (item.category === "color" && colorApplied(item)) return "已应用";
   if (item.category === "color" && itemCount(item.id) > 0) return "应用配色";
+  if (isDamagedItem(item)) return "去右侧维修";
   if (isOneTimeOwned(item)) return "已拥有";
   return canAfford(item) ? `扣 ${item.cost} 积分购买` : "能量不足";
 }
@@ -492,7 +524,7 @@ async function play(item) {
     if (item.category === "food") {
       const active = nextPayload.state?.mood?.activeFood;
       const effect = nextPayload.effect || {};
-      notice.value = `${item.label} 已摆进房间，库存 -1，体力 +${effect.energyGain ?? active?.catEnergyEffective ?? foodEnergyGainValue(item)}，心情 +${effect.moodGain ?? active?.moodEffective ?? foodMoodGainValue(item)}，${formatSeconds(active?.remainingSeconds || item.durationMinutes * 60)} 内有效。`;
+      notice.value = `${item.label} 已摆进房间，优先给${effect.catLabel || "体力最低的小猫"}补充，库存 -1，体力 +${effect.energyGain ?? active?.catEnergyEffective ?? foodEnergyGainValue(item)}，心情 +${effect.moodGain ?? active?.moodEffective ?? foodMoodGainValue(item)}，吃完后会消失。`;
       petCat(focusedCat.value);
     } else {
       const effect = nextPayload.effect || {};
@@ -501,6 +533,28 @@ async function play(item) {
     }
   } catch (error) {
     notice.value = error.message || "互动失败，请稍后再试。";
+  } finally {
+    busyItemId.value = "";
+  }
+}
+
+async function repairItem(item) {
+  if (!item?.id || busyItemId.value) return;
+  const damaged = damageInfo(item);
+  if (!damaged) return;
+  busyItemId.value = item.id;
+  notice.value = "";
+  try {
+    const nextPayload = await fetchJson(routeApiPaths.catWorldRepair(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ itemId: item.id }),
+    });
+    replacePayload(nextPayload);
+    const cost = nextPayload.repair?.cost ?? damaged.repairCost ?? 0;
+    notice.value = `${item.label} 已维修好，扣 ${cost} 能量，可以重新摆进活动室。`;
+  } catch (error) {
+    notice.value = error.message || "维修失败，请稍后再试。";
   } finally {
     busyItemId.value = "";
   }
@@ -667,7 +721,7 @@ async function selectCat(catId) {
         <div v-if="activeFood.active" class="cat-world-active-food">
           <span>当前食物</span>
           <strong>{{ activeFood.label }}</strong>
-          <small>体力 +{{ activeFoodEnergyGain }} · 心情 +{{ activeFoodMoodGain }} · 剩余 {{ formatSeconds(activeFood.remainingSeconds) }}</small>
+          <small>剩余能量 {{ activeFood.remainingEnergy || activeFoodEnergyGain }} · 体力 +{{ activeFoodEnergyGain }} · 心情 +{{ activeFoodMoodGain }} · {{ formatSeconds(activeFood.remainingSeconds) }}</small>
         </div>
 
         <div class="cat-world-tool-tabs" role="tablist" aria-label="已拥有道具分类">
@@ -687,7 +741,10 @@ async function selectCat(catId) {
           <article
             v-for="item in activeToolItems"
             :key="`${activeToolCategory}-${item.id}`"
-            :class="['cat-world-owned-item', { active: selectedDecorId === item.id || state.selectedCat === item.id }]"
+            :class="[
+              'cat-world-owned-item',
+              { active: selectedDecorId === item.id || state.selectedCat === item.id, damaged: item.damageInfo },
+            ]"
           >
             <button
               class="cat-world-owned-main"

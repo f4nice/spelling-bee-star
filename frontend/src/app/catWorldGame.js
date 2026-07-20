@@ -9,6 +9,7 @@ const INK = 0x2c2f3a;
 const CREAM = 0xfff8df;
 const CAT_INTERACTION_DEPTH = 980;
 const CAT_HITBOX = { x: -20, y: -42, width: 150, height: 126 };
+const ACTIVE_FOOD_SPOT = { x: GAME_WIDTH - 260, y: 408, width: 118, height: 46 };
 
 const DECOR_SPECS = {
   "sun-window": { label: "阳光窗台", width: 150, height: 88, defaultX: 146, defaultY: 34 },
@@ -64,6 +65,8 @@ function normalizeSnapshot(snapshot = {}) {
     layout: cloneLayout(snapshot.layout),
     mood: snapshot.mood || {},
     activeFood: snapshot.activeFood || snapshot.mood?.activeFood || {},
+    dailyLogs: snapshot.dailyLogs || {},
+    damagedItems: snapshot.damagedItems || {},
     ownedCats: Array.isArray(snapshot.ownedCats) ? snapshot.ownedCats : [],
     ownedFoodCount: Number(snapshot.ownedFoodCount || 0),
     roomStyles: snapshot.roomStyles || {},
@@ -89,6 +92,41 @@ function yToPercent(y) {
 
 function owned(inventory, itemId) {
   return Number(inventory?.[itemId] || 0) > 0;
+}
+
+function isDamaged(snapshot, itemId) {
+  return Boolean(snapshot?.damagedItems?.[itemId]);
+}
+
+function hashText(text) {
+  return String(text || "").split("").reduce((hash, char) => ((hash << 5) - hash + char.charCodeAt(0)) | 0, 0);
+}
+
+function seededRatio(seed) {
+  const value = Math.sin(seed) * 10000;
+  return value - Math.floor(value);
+}
+
+function isSleepHour(hour, start, end) {
+  if (start === end) return false;
+  if (start < end) return hour >= start && hour < end;
+  return hour >= start || hour < end;
+}
+
+function catEnergyForSnapshot(snapshot, cat) {
+  const log = snapshot?.dailyLogs?.[cat?.id];
+  const value = Number(log?.energyScore);
+  if (Number.isFinite(value)) return value;
+  if (cat?.id === snapshot?.selectedCatId) return Number(snapshot?.mood?.catEnergy ?? 50);
+  return 50;
+}
+
+function catMoodForSnapshot(snapshot, cat) {
+  const log = snapshot?.dailyLogs?.[cat?.id];
+  const value = Number(log?.moodScore);
+  if (Number.isFinite(value)) return value;
+  if (cat?.id === snapshot?.selectedCatId) return Number(snapshot?.mood?.score ?? 50);
+  return 50;
 }
 
 function catTraitNumber(cat, key, fallback = 1) {
@@ -206,6 +244,7 @@ class CatWorldScene extends Phaser.Scene {
   drawOwnedDecor(snapshot) {
     for (const [decorId, spec] of Object.entries(DECOR_SPECS)) {
       if (!owned(snapshot.inventory, decorId)) continue;
+      if (isDamaged(snapshot, decorId)) continue;
       const tone = snapshot.roomStyles?.[decorId] || "default";
       const position = this.positionForDecor(decorId, spec);
       const container = this.add.container(position.x, position.y);
@@ -236,9 +275,9 @@ class CatWorldScene extends Phaser.Scene {
     if (snapshot.activeFood?.active) {
       const foodLabel = snapshot.activeFood.label || "食物";
       const foodEnergy = Number(snapshot.activeFood.catEnergyEffective ?? snapshot.activeFood.catEnergy ?? 0);
-      const bowlX = GAME_WIDTH - 260;
+      const bowlX = ACTIVE_FOOD_SPOT.x;
       const bowl = this.add.graphics();
-      drawPixelRect(bowl, bowlX + 8, 408, 118, 46, 0xff8cad);
+      drawPixelRect(bowl, bowlX + 8, ACTIVE_FOOD_SPOT.y, ACTIVE_FOOD_SPOT.width, ACTIVE_FOOD_SPOT.height, 0xff8cad);
       bowl.fillStyle(0xfff07d, 1);
       bowl.fillRect(bowlX + 24, 416, 76, 10);
       bowl.fillStyle(0xfff8df, 1);
@@ -258,7 +297,7 @@ class CatWorldScene extends Phaser.Scene {
         .setDepth(726);
       this.addRoomHitZone(snapshot.activeFood.itemId || "active-food", bowlX, 374, 142, 86, 728);
     }
-    if (owned(snapshot.inventory, "rolling-ball")) {
+    if (owned(snapshot.inventory, "rolling-ball") && !isDamaged(snapshot, "rolling-ball")) {
       const active = lastPlayItem === "rolling-ball";
       const ballX = 312;
       const ballY = 392;
@@ -288,7 +327,7 @@ class CatWorldScene extends Phaser.Scene {
       this.drawRoomItemLabel("滚滚球", ballX + 22, ballY - 7, 706);
       this.addRoomHitZone("rolling-ball", ballX - 20, ballY - 14, 88, 88, 708);
     }
-    if (owned(snapshot.inventory, "scratch-board")) {
+    if (owned(snapshot.inventory, "scratch-board") && !isDamaged(snapshot, "scratch-board")) {
       const scratcher = this.add.graphics();
       drawPixelRect(scratcher, 96, 426, 136, 26, 0xe6b06f);
       scratcher.lineStyle(1, 0x7a573b, 0.45);
@@ -297,7 +336,7 @@ class CatWorldScene extends Phaser.Scene {
       this.drawRoomItemLabel("猫抓板", 164, 406, 468);
       this.addRoomHitZone("scratch-board", 90, 418, 150, 44, 466);
     }
-    if (owned(snapshot.inventory, "feather-wand")) {
+    if (owned(snapshot.inventory, "feather-wand") && !isDamaged(snapshot, "feather-wand")) {
       const wandX = GAME_WIDTH - 208;
       const wand = this.add.graphics();
       wand.lineStyle(6, 0x7b5834, 1);
@@ -388,10 +427,12 @@ class CatWorldScene extends Phaser.Scene {
     visibleCats.forEach((cat, index) => {
       const x = 150 + (index % 6) * 176;
       const y = FLOOR_BOTTOM - 68 - Math.floor(index / 5) * 56;
+      const behavior = this.catBehavior(cat, index);
       const container = this.add.container(x, y);
       container.setSize(100, 70);
       container.setData("kind", "cat");
       container.setData("id", cat.id);
+      container.setData("behavior", behavior);
       container.setDepth(CAT_INTERACTION_DEPTH + index);
       container.setInteractive(
         new Phaser.Geom.Rectangle(CAT_HITBOX.x, CAT_HITBOX.y, CAT_HITBOX.width, CAT_HITBOX.height),
@@ -407,19 +448,19 @@ class CatWorldScene extends Phaser.Scene {
         this.spawnCatBubble(container, cat);
         this.owner.handlers.onCatPet?.(cat);
       });
-      this.drawCatShape(container, cat, snapshot.selectedCatId === cat.id, snapshot);
+      this.drawCatShape(container, cat, snapshot.selectedCatId === cat.id, snapshot, behavior);
       this.catContainers.set(cat.id, container);
       this.scheduleCatWalk(container, index, cat);
     });
   }
 
-  drawCatShape(container, cat, selected, snapshot) {
+  drawCatShape(container, cat, selected, snapshot, behavior = {}) {
     const colors = CAT_COLORS[cat.id] || CAT_COLORS.mimi;
     const graphics = makeLocalGraphics(this, container);
     graphics.fillStyle(0x203041, 0.18);
     graphics.fillRect(7, 49, 82, 7);
     this.drawCatPixels(graphics, cat, colors);
-    this.drawStatusBars(graphics, snapshot?.mood?.catEnergy ?? 50, snapshot?.mood?.score ?? 50);
+    this.drawStatusBars(graphics, catEnergyForSnapshot(snapshot, cat), catMoodForSnapshot(snapshot, cat));
 
     graphics.fillStyle(selected ? 0xfff07d : 0xff8cad, 1);
     graphics.fillRect(42, -24, selected ? 18 : 10, 8);
@@ -431,7 +472,20 @@ class CatWorldScene extends Phaser.Scene {
       graphics.fillRect(52, -21, 2, 3);
       graphics.fillRect(58, -21, 2, 3);
     }
-    if (snapshot?.mood?.canWalk === false) {
+    if (behavior.sleeping) {
+      const sleepText = this.add
+        .text(78, -28, "Zzz", {
+          color: "#263047",
+          backgroundColor: "#fff8df",
+          fontFamily: "Consolas, monospace",
+          fontSize: "11px",
+          fontStyle: "bold",
+          padding: { x: 4, y: 2 },
+        })
+        .setOrigin(0.5);
+      container.add(sleepText);
+    }
+    if (behavior.key === "resting") {
       graphics.fillStyle(0xffffff, 1);
       graphics.fillRect(76, 2, 18, 10);
       graphics.fillStyle(INK, 1);
@@ -529,26 +583,89 @@ class CatWorldScene extends Phaser.Scene {
     pixelBlock(graphics, 48, 17, 4, 1, INK);
   }
 
+  catBehavior(cat = {}, index = 0) {
+    const log = this.owner.snapshot?.dailyLogs?.[cat.id] || {};
+    const agent = log.agentState || {};
+    const serverBehavior = agent.currentBehavior || {};
+    const traits = cat.traits || {};
+    const now = new Date();
+    const hour = now.getHours();
+    const daySeed = Math.floor(now.getTime() / 86400000) + Math.abs(hashText(cat.id || "cat")) + index * 31;
+    const dailyRoll = seededRatio(daySeed);
+    const moodLabels = ["今天很高兴", "今天想探索", "今天有点黏人", "今天想慢慢来", "今天不太高兴"];
+    const dailyLabel = agent.dailyMoodLabel || moodLabels[Math.floor(dailyRoll * moodLabels.length)] || moodLabels[0];
+    const sleepStart = Number(traits.sleepStart ?? 23);
+    const sleepEnd = Number(traits.sleepEnd ?? 7);
+    const nightOwl = Boolean(traits.nightOwl);
+    const sleeping = Boolean(serverBehavior.sleeping || (isSleepHour(hour, sleepStart, sleepEnd) && !nightOwl));
+    const energy = catEnergyForSnapshot(this.owner.snapshot, cat);
+    const restThreshold = Number(traits.restThreshold ?? 34);
+    let key = serverBehavior.key || "active";
+    if (sleeping) key = "sleeping";
+    else if (energy < restThreshold) key = "resting";
+    else if (nightOwl && (hour >= 22 || hour < 5)) key = "night-watch";
+    return {
+      key,
+      sleeping,
+      nightOwl,
+      dailyLabel,
+      routine: agent.routine || traits.routine || "观察房间里的学习节奏",
+      canWalk: !sleeping && energy >= restThreshold,
+      restless: nightOwl && (hour >= 22 || hour < 5),
+    };
+  }
+
+  turnCat(container, nextX) {
+    const nextScale = nextX < container.x ? -1 : 1;
+    const currentSign = container.scaleX < 0 ? -1 : 1;
+    if (currentSign === nextScale) return;
+    this.tweens.add({
+      targets: container,
+      scaleX: currentSign * 0.16,
+      duration: 120,
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        if (!container.active) return;
+        this.tweens.add({
+          targets: container,
+          scaleX: nextScale,
+          duration: 140,
+          ease: "Sine.easeInOut",
+        });
+      },
+    });
+  }
+
   scheduleCatWalk(container, index, cat = {}) {
-    const movement = clamp(catTraitNumber(cat, "movement", 1), 0.62, 1.2);
-    if (this.owner.snapshot?.mood?.canWalk === false) {
+    const movement = clamp(catTraitNumber(cat, "movement", 1), 0.58, 1.12);
+    const behavior = this.catBehavior(cat, index);
+    container.setData("behavior", behavior);
+    if (!behavior.canWalk) {
       this.tweens.add({
         targets: container,
         y: container.y - 3,
         yoyo: true,
         repeat: -1,
-        duration: Math.round((1650 + index * 180) / Math.max(movement, 0.82)),
+        duration: Math.round((2100 + index * 220) / Math.max(movement, 0.72)),
         ease: "Sine.easeInOut",
         onUpdate: () => container.setDepth(CAT_INTERACTION_DEPTH + index),
       });
+      if (behavior.sleeping) {
+        this.time.delayedCall(Phaser.Math.Between(1200, 2600), () => this.spawnRestBubble(container, cat, "睡觉中..."));
+      }
       return;
     }
-    const delay = Math.round((Phaser.Math.Between(2200, 4600) + index * 430) / Math.max(movement, 0.72));
+    const delay = Math.round((Phaser.Math.Between(2800, 6200) + index * 520) / Math.max(movement, 0.7));
     this.time.delayedCall(delay, () => {
       if (!container.active) return;
-      const nextX = Phaser.Math.Between(38, GAME_WIDTH - 132);
-      const nextY = Phaser.Math.Between(FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
-      const duration = Math.round(Phaser.Math.Between(9000, 15000) / movement);
+      const foodTarget = this.foodTargetForCat(cat);
+      const favoriteTarget = this.favoriteDecorTarget(cat);
+      const shouldVisitFood = Boolean(foodTarget && Phaser.Math.Between(1, 100) <= foodTarget.priority);
+      const shouldVisitFavorite = !shouldVisitFood && Boolean(favoriteTarget && Phaser.Math.Between(1, 100) <= 72);
+      const nextX = shouldVisitFood ? foodTarget.x : shouldVisitFavorite ? favoriteTarget.x : Phaser.Math.Between(38, GAME_WIDTH - 132);
+      const nextY = shouldVisitFood ? foodTarget.y : shouldVisitFavorite ? favoriteTarget.y : Phaser.Math.Between(FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
+      const duration = Math.round(Phaser.Math.Between(15000, 24000) / movement);
+      this.turnCat(container, nextX);
       this.tweens.add({
         targets: container,
         x: nextX,
@@ -556,9 +673,140 @@ class CatWorldScene extends Phaser.Scene {
         duration,
         ease: "Sine.easeInOut",
         onUpdate: () => container.setDepth(CAT_INTERACTION_DEPTH + index),
-        onComplete: () => this.scheduleCatWalk(container, index, cat),
+        onComplete: () => {
+          if (shouldVisitFood) {
+            this.spawnFoodPlayBubble(container, cat, foodTarget);
+          } else if (shouldVisitFavorite) {
+            this.spawnDecorPlayBubble(container, cat, favoriteTarget);
+          }
+          this.scheduleCatWalk(container, index, cat);
+        },
       });
     });
+  }
+
+  favoriteDecorTarget(cat = {}) {
+    const favoriteDecorIds = Array.isArray(cat.favoriteDecorIds) ? cat.favoriteDecorIds : [];
+    const ownedFavorites = favoriteDecorIds.filter(
+      (decorId) => owned(this.owner.snapshot.inventory, decorId) && DECOR_SPECS[decorId] && !isDamaged(this.owner.snapshot, decorId),
+    );
+    if (!ownedFavorites.length) return null;
+    const decorId = ownedFavorites[Phaser.Math.Between(0, ownedFavorites.length - 1)];
+    const spec = DECOR_SPECS[decorId];
+    const position = this.positionForDecor(decorId, spec);
+    const nearX = position.x + spec.width / 2 - 45 + Phaser.Math.Between(-38, 38);
+    const nearY = Math.max(FLOOR_TOP + 52, position.y + spec.height + 18) + Phaser.Math.Between(-16, 18);
+    return {
+      decorId,
+      label: spec.label,
+      x: clamp(nearX, 38, GAME_WIDTH - 132),
+      y: clamp(nearY, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+    };
+  }
+
+  foodTargetForCat(cat = {}) {
+    const activeFood = this.owner.snapshot.activeFood || {};
+    if (!activeFood.active || Number(activeFood.remainingEnergy || 0) <= 0) return null;
+    const ownedCats = new Set(this.owner.snapshot.ownedCats || []);
+    const visibleCats = (this.owner.snapshot.cats || []).filter((candidate) => ownedCats.has(candidate.id));
+    const energy = catEnergyForSnapshot(this.owner.snapshot, cat);
+    const lowestEnergy = visibleCats.length
+      ? Math.min(...visibleCats.map((candidate) => catEnergyForSnapshot(this.owner.snapshot, candidate)))
+      : energy;
+    const priority = energy <= lowestEnergy + 4 ? 92 : energy < 42 ? 78 : energy < 66 ? 48 : 18;
+    return {
+      label: activeFood.label || "食物",
+      priority,
+      x: clamp(ACTIVE_FOOD_SPOT.x + 58 + Phaser.Math.Between(-28, 28), 38, GAME_WIDTH - 132),
+      y: clamp(ACTIVE_FOOD_SPOT.y + 52 + Phaser.Math.Between(-14, 20), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+    };
+  }
+
+  spawnRestBubble(container, cat, message) {
+    if (!container.active) return;
+    const bubble = this.add
+      .text(container.x + 34, container.y - 25, `${cat?.label || "猫咪"} ${message}`, {
+        color: "#263047",
+        backgroundColor: "#fff8df",
+        fontFamily: "Consolas, monospace",
+        fontSize: "12px",
+        fontStyle: "bold",
+        padding: { x: 8, y: 5 },
+      })
+      .setOrigin(0.5)
+      .setDepth(CAT_INTERACTION_DEPTH + 130);
+    this.tweens.add({
+      targets: bubble,
+      y: bubble.y - 18,
+      alpha: 0,
+      duration: 1500,
+      ease: "Cubic.easeOut",
+      onComplete: () => bubble.destroy(),
+    });
+  }
+
+  spawnFoodPlayBubble(container, cat, target) {
+    const message = `${cat?.label || "猫咪"} 先去吃${target.label}。`;
+    const bubble = this.add
+      .text(container.x + 36, container.y - 28, message, {
+        color: "#263047",
+        backgroundColor: "#fff8df",
+        fontFamily: "Consolas, monospace",
+        fontSize: "12px",
+        fontStyle: "bold",
+        padding: { x: 8, y: 5 },
+      })
+      .setOrigin(0.5)
+      .setDepth(CAT_INTERACTION_DEPTH + 140);
+    this.tweens.add({
+      targets: container,
+      y: container.y - 7,
+      yoyo: true,
+      repeat: 2,
+      duration: 240,
+      ease: "Sine.easeInOut",
+    });
+    this.tweens.add({
+      targets: bubble,
+      y: bubble.y - 22,
+      alpha: 0,
+      duration: 1800,
+      ease: "Cubic.easeOut",
+      onComplete: () => bubble.destroy(),
+    });
+    this.owner.handlers.onCatThought?.(cat, message);
+  }
+
+  spawnDecorPlayBubble(container, cat, target) {
+    const message = `${cat?.label || "猫咪"} 跑到${target.label}旁边玩。`;
+    const bubble = this.add
+      .text(container.x + 36, container.y - 28, message, {
+        color: "#263047",
+        backgroundColor: "#fff8df",
+        fontFamily: "Consolas, monospace",
+        fontSize: "12px",
+        fontStyle: "bold",
+        padding: { x: 8, y: 5 },
+      })
+      .setOrigin(0.5)
+      .setDepth(CAT_INTERACTION_DEPTH + 140);
+    this.tweens.add({
+      targets: container,
+      y: container.y - 8,
+      yoyo: true,
+      repeat: 1,
+      duration: 260,
+      ease: "Sine.easeInOut",
+    });
+    this.tweens.add({
+      targets: bubble,
+      y: bubble.y - 22,
+      alpha: 0,
+      duration: 1800,
+      ease: "Cubic.easeOut",
+      onComplete: () => bubble.destroy(),
+    });
+    this.owner.handlers.onCatThought?.(cat, message);
   }
 
   spawnCatBubble(container, cat) {

@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-005"
-DEFAULT_PAGE_VERSION = "v20260721.5"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-006"
+DEFAULT_PAGE_VERSION = "v20260721.6"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -476,6 +476,11 @@ CAT_WORLD_CATS = [
             "playMoodGain": 1.1,
             "foodEnergyGain": 1.0,
             "restThreshold": 30,
+            "sleepStart": 23,
+            "sleepEnd": 7,
+            "nightOwl": False,
+            "routine": "贴着书桌和地毯慢慢巡逻",
+            "temperament": "clingy",
             "label": "慢热黏人，消耗低，摸摸后心情涨得快。",
         },
         "thoughts": [
@@ -499,6 +504,11 @@ CAT_WORLD_CATS = [
             "playMoodGain": 0.9,
             "foodEnergyGain": 0.95,
             "restThreshold": 26,
+            "sleepStart": 22,
+            "sleepEnd": 8,
+            "nightOwl": False,
+            "routine": "检查书架和窗台有没有摆整齐",
+            "temperament": "calm",
             "label": "安静省电，走得慢，适合长时间陪读。",
         },
         "thoughts": [
@@ -522,6 +532,11 @@ CAT_WORLD_CATS = [
             "playMoodGain": 1.35,
             "foodEnergyGain": 1.06,
             "restThreshold": 42,
+            "sleepStart": 1,
+            "sleepEnd": 7,
+            "nightOwl": True,
+            "routine": "夜里也会去逗逗滚滚球",
+            "temperament": "chatty",
             "label": "爱跑爱说话，能量掉得快，但互动心情涨得最多。",
         },
         "thoughts": [
@@ -545,6 +560,11 @@ CAT_WORLD_CATS = [
             "playMoodGain": 0.82,
             "foodEnergyGain": 1.18,
             "restThreshold": 24,
+            "sleepStart": 22,
+            "sleepEnd": 9,
+            "nightOwl": False,
+            "routine": "在云朵地毯边趴着陪读",
+            "temperament": "gentle",
             "label": "最省体力，喜欢慢慢走，吃东西恢复更明显。",
         },
         "thoughts": [
@@ -568,6 +588,11 @@ CAT_WORLD_CATS = [
             "playMoodGain": 1.12,
             "foodEnergyGain": 1.08,
             "restThreshold": 46,
+            "sleepStart": 0,
+            "sleepEnd": 6,
+            "nightOwl": True,
+            "routine": "绕房间边界巡逻，守着入口",
+            "temperament": "guardian",
             "label": "体型大、巡逻多，能量消耗最高，心情比较稳。",
         },
         "thoughts": [
@@ -3579,6 +3604,10 @@ async def vue_cat_world_play_api(request: Request, db: Session = Depends(get_db)
         raise HTTPException(status_code=400, detail="请选择已经拥有的食物或玩具。")
     state = get_or_create_cat_world_state(db, phone)
     inventory = parse_cat_world_inventory(state.inventory)
+    damaged_items = parse_cat_world_damaged_items(state.damaged_items)
+    if item_id in damaged_items:
+        repair_cost = damaged_items[item_id].get("repairCost") or 0
+        raise HTTPException(status_code=400, detail=f"这个道具被弄坏了，先花 {repair_cost} 能量维修。")
     if inventory.get(item_id, 0) <= 0:
         raise HTTPException(status_code=400, detail="还没有这个道具，先用能量值买一个。")
     if item["category"] == "food":
@@ -3591,12 +3620,13 @@ async def vue_cat_world_play_api(request: Request, db: Session = Depends(get_db)
     else:
         state.last_play_item = item_id
         state.last_played_at = datetime.utcnow()
-    room_layout = parse_cat_world_room_layout(state.room_layout, inventory)
+    usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
+    room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
     effect = cat_world_apply_daily_effect(
         db,
         state,
         item,
-        inventory,
+        usable_inventory,
         room_layout,
         "food" if item["category"] == "food" else "toy",
     )
@@ -3604,6 +3634,40 @@ async def vue_cat_world_play_api(request: Request, db: Session = Depends(get_db)
     db.commit()
     db.refresh(state)
     return {"ok": True, "effect": effect, **serialize_cat_world_payload(db, state)}
+
+
+@app.post("/api/vue/cat-world/repair")
+async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="维修数据不是有效 JSON。") from exc
+    item_id = str((payload or {}).get("itemId") or "").strip()
+    state = get_or_create_cat_world_state(db, phone)
+    inventory = parse_cat_world_inventory(state.inventory)
+    damaged_items = parse_cat_world_damaged_items(state.damaged_items)
+    damaged = damaged_items.get(item_id)
+    if not damaged:
+        raise HTTPException(status_code=400, detail="这个道具不需要维修。")
+    if inventory.get(item_id, 0) <= 0:
+        damaged_items.pop(item_id, None)
+        state.damaged_items = encode_cat_world_damaged_items(damaged_items)
+        db.add(state)
+        db.commit()
+        return {"ok": True, **serialize_cat_world_payload(db, state)}
+    growth = learning_growth_summary(db)
+    available_energy = max(int(growth.get("points") or 0) - max(int(state.energy_spent or 0), 0), 0)
+    repair_cost = max(int(damaged.get("repairCost") or 0), 1)
+    if available_energy < repair_cost:
+        raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点再维修。")
+    damaged_items.pop(item_id, None)
+    state.damaged_items = encode_cat_world_damaged_items(damaged_items)
+    state.energy_spent = max(int(state.energy_spent or 0), 0) + repair_cost
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return {"ok": True, "repair": {"itemId": item_id, "cost": repair_cost}, **serialize_cat_world_payload(db, state)}
 
 
 @app.post("/api/vue/cat-world/decor-style")
@@ -9740,6 +9804,61 @@ def parse_cat_world_inventory(raw: str | None) -> dict[str, int]:
     return inventory
 
 
+def parse_cat_world_damaged_items(raw: str | None) -> dict[str, dict[str, Any]]:
+    try:
+        loaded = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(loaded, dict):
+        return {}
+    damaged: dict[str, dict[str, Any]] = {}
+    for item_id, value in loaded.items():
+        item_key = str(item_id)
+        item = CAT_WORLD_SHOP_BY_ID.get(item_key)
+        if not item or item.get("category") not in {"decor", "toy"}:
+            continue
+        source = value if isinstance(value, dict) else {}
+        repair_cost = source.get("repairCost")
+        try:
+            repair_cost = max(int(repair_cost or round(int(item.get("cost") or 0) * 0.35)), 10)
+        except (TypeError, ValueError):
+            repair_cost = max(round(int(item.get("cost") or 0) * 0.35), 10)
+        cat_id = str(source.get("catId") or "")
+        cat = CAT_WORLD_CAT_BY_ID.get(cat_id)
+        damaged[item_key] = {
+            "itemId": item_key,
+            "label": item.get("label") or item_key,
+            "category": item.get("category") or "",
+            "catId": cat_id if cat else "",
+            "catLabel": cat.get("label") if cat else "",
+            "repairCost": repair_cost,
+            "reason": str(source.get("reason") or "猫咪捣蛋弄坏了它。"),
+            "damagedAt": str(source.get("damagedAt") or ""),
+        }
+    return damaged
+
+
+def encode_cat_world_damaged_items(damaged_items: dict[str, dict[str, Any]]) -> str:
+    clean: dict[str, dict[str, Any]] = {}
+    for item_id, value in damaged_items.items():
+        item_key = str(item_id)
+        item = CAT_WORLD_SHOP_BY_ID.get(item_key)
+        if not item or item.get("category") not in {"decor", "toy"}:
+            continue
+        source = value if isinstance(value, dict) else {}
+        try:
+            repair_cost = max(int(source.get("repairCost") or round(int(item.get("cost") or 0) * 0.35)), 10)
+        except (TypeError, ValueError):
+            repair_cost = max(round(int(item.get("cost") or 0) * 0.35), 10)
+        clean[item_key] = {
+            "catId": str(source.get("catId") or ""),
+            "repairCost": repair_cost,
+            "reason": str(source.get("reason") or "猫咪捣蛋弄坏了它。"),
+            "damagedAt": str(source.get("damagedAt") or ""),
+        }
+    return json.dumps(clean, ensure_ascii=False, sort_keys=True)
+
+
 def parse_cat_world_cats(raw: str | None) -> list[str]:
     try:
         loaded = json.loads(raw or "[]")
@@ -9920,6 +10039,11 @@ def cat_world_cat_traits(cat: dict[str, Any] | None) -> dict[str, Any]:
         "playMoodGain": 1.0,
         "foodEnergyGain": 1.0,
         "restThreshold": 34,
+        "sleepStart": 23,
+        "sleepEnd": 7,
+        "nightOwl": False,
+        "routine": "观察房间里的学习节奏",
+        "temperament": "balanced",
         "label": "均衡型猫咪，心情和体力消耗都比较稳定。",
     }
     traits = {**defaults, **raw_traits}
@@ -9932,7 +10056,15 @@ def cat_world_cat_traits(cat: dict[str, Any] | None) -> dict[str, Any]:
         traits["restThreshold"] = int(min(max(int(traits["restThreshold"]), 18), 60))
     except (TypeError, ValueError):
         traits["restThreshold"] = defaults["restThreshold"]
+    for key in ("sleepStart", "sleepEnd"):
+        try:
+            traits[key] = int(min(max(int(traits[key]), 0), 23))
+        except (TypeError, ValueError):
+            traits[key] = defaults[key]
+    traits["nightOwl"] = bool(traits.get("nightOwl"))
     traits["activity"] = str(traits["activity"] or defaults["activity"])
+    traits["routine"] = str(traits["routine"] or defaults["routine"])
+    traits["temperament"] = str(traits["temperament"] or defaults["temperament"])
     traits["label"] = str(traits["label"] or defaults["label"])
     return traits
 
@@ -9981,6 +10113,149 @@ def cat_world_decay_rates(
 
 def clamp_cat_world_score(value: int | float, minimum: int = 5, maximum: int = 100) -> int:
     return int(min(max(round(float(value)), minimum), maximum))
+
+
+def cat_world_local_now(now: datetime | None = None) -> datetime:
+    base_now = now or datetime.utcnow()
+    return base_now + timedelta(hours=8)
+
+
+def cat_world_is_sleep_hour(hour: int, sleep_start: int, sleep_end: int) -> bool:
+    if sleep_start == sleep_end:
+        return False
+    if sleep_start < sleep_end:
+        return sleep_start <= hour < sleep_end
+    return hour >= sleep_start or hour < sleep_end
+
+
+def cat_world_stable_ratio(seed: str) -> float:
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    return int(digest[:12], 16) / float(0xFFFFFFFFFFFF)
+
+
+def parse_cat_world_agent_state(raw: str | None) -> dict[str, Any]:
+    try:
+        loaded = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def encode_cat_world_agent_state(state: dict[str, Any]) -> str:
+    return json.dumps(state, ensure_ascii=False, sort_keys=True)
+
+
+CAT_WORLD_DAILY_MOODS = [
+    {"key": "bright", "label": "今天很高兴", "moodOffset": 8, "energyOffset": 4},
+    {"key": "curious", "label": "今天想探索", "moodOffset": 4, "energyOffset": 7},
+    {"key": "clingy", "label": "今天有点黏人", "moodOffset": 5, "energyOffset": -1},
+    {"key": "lazy", "label": "今天想慢慢来", "moodOffset": 0, "energyOffset": -6},
+    {"key": "quiet", "label": "今天想独处", "moodOffset": -4, "energyOffset": 0},
+    {"key": "grumpy", "label": "今天不太高兴", "moodOffset": -10, "energyOffset": -3},
+]
+
+
+def cat_world_daily_agent_seed(log_date: date, cat_id: str) -> str:
+    return f"{log_date.isoformat()}:{cat_id}:agent"
+
+
+def cat_world_default_agent_state(log_date: date, cat: dict[str, Any], traits: dict[str, Any]) -> dict[str, Any]:
+    seed = cat_world_daily_agent_seed(log_date, cat["id"])
+    mood_index = min(int(cat_world_stable_ratio(f"{seed}:mood") * len(CAT_WORLD_DAILY_MOODS)), len(CAT_WORLD_DAILY_MOODS) - 1)
+    daily_mood = CAT_WORLD_DAILY_MOODS[mood_index]
+    attention = int(35 + cat_world_stable_ratio(f"{seed}:attention") * 55)
+    curiosity = int(35 + cat_world_stable_ratio(f"{seed}:curiosity") * 55)
+    mischief = int(18 + cat_world_stable_ratio(f"{seed}:mischief") * 64)
+    temperament = str(traits.get("temperament") or "balanced")
+    if temperament in {"calm", "gentle"}:
+        mischief = max(8, mischief - 18)
+    elif temperament in {"chatty", "guardian"}:
+        mischief = min(92, mischief + 12)
+    return {
+        "date": log_date.isoformat(),
+        "dailyMoodKey": daily_mood["key"],
+        "dailyMoodLabel": daily_mood["label"],
+        "moodOffset": daily_mood["moodOffset"],
+        "energyOffset": daily_mood["energyOffset"],
+        "attention": attention,
+        "curiosity": curiosity,
+        "mischief": mischief,
+        "routine": traits.get("routine") or "观察房间里的学习节奏",
+        "temperament": temperament,
+        "mischiefChecked": False,
+    }
+
+
+def ensure_cat_world_agent_state(log: CatWorldDailyLog, cat: dict[str, Any], traits: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    state = parse_cat_world_agent_state(log.agent_state)
+    if state.get("date") == log.log_date.isoformat() and state.get("dailyMoodKey"):
+        return state, False
+    state = cat_world_default_agent_state(log.log_date, cat, traits)
+    log.agent_state = encode_cat_world_agent_state(state)
+    return state, True
+
+
+def cat_world_current_behavior(
+    agent_state: dict[str, Any],
+    traits: dict[str, Any],
+    mood_score: int,
+    energy_score: int,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    local_now = cat_world_local_now(now)
+    hour = local_now.hour
+    sleeping = (
+        cat_world_is_sleep_hour(hour, int(traits.get("sleepStart") or 23), int(traits.get("sleepEnd") or 7))
+        and not bool(traits.get("nightOwl"))
+    )
+    if sleeping:
+        key = "sleeping"
+        label = "晚上睡觉中"
+    elif energy_score < int(traits.get("restThreshold") or 34):
+        key = "resting"
+        label = "体力低，原地休息"
+    elif mood_score < 38:
+        key = "sulking"
+        label = "心情差，可能会捣蛋"
+    elif bool(traits.get("nightOwl")) and (hour >= 22 or hour < 5):
+        key = "night-watch"
+        label = "夜间巡逻"
+    elif agent_state.get("dailyMoodKey") == "curious":
+        key = "exploring"
+        label = "到处探索"
+    elif agent_state.get("dailyMoodKey") == "lazy":
+        key = "slow"
+        label = "慢慢散步"
+    else:
+        key = "active"
+        label = "自由活动"
+    return {
+        "key": key,
+        "label": label,
+        "hour": hour,
+        "sleeping": sleeping,
+        "nightOwl": bool(traits.get("nightOwl")),
+    }
+
+
+def cat_world_agent_payload(
+    log: CatWorldDailyLog,
+    cat: dict[str, Any],
+    traits: dict[str, Any],
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    agent_state, changed = ensure_cat_world_agent_state(log, cat, traits)
+    if changed:
+        log.agent_state = encode_cat_world_agent_state(agent_state)
+    mood_score = clamp_cat_world_score(int(log.mood_score or 0) + int(agent_state.get("moodOffset") or 0))
+    energy_score = clamp_cat_world_score(int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0))
+    return {
+        **agent_state,
+        "currentBehavior": cat_world_current_behavior(agent_state, traits, mood_score, energy_score, now),
+        "adjustedMoodScore": mood_score,
+        "adjustedEnergyScore": energy_score,
+        "damagedItemId": log.damaged_item_id or agent_state.get("mischiefItemId") or "",
+    }
 
 
 def get_or_create_cat_world_daily_log(
@@ -10045,18 +10320,25 @@ def cat_world_daily_log_payload(
     log: CatWorldDailyLog,
     favorite_active_ids: list[str],
 ) -> dict[str, Any]:
+    cat = CAT_WORLD_CAT_BY_ID.get(log.cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    traits = cat_world_cat_traits(cat)
+    agent_state = cat_world_agent_payload(log, cat, traits)
     return {
         "date": log.log_date.isoformat(),
         "catId": log.cat_id,
         "favoriteDecorIds": cat_world_cat_favorite_decor_ids(log.cat_id),
         "favoriteActiveDecorIds": favorite_active_ids,
-        "moodScore": int(log.mood_score or 0),
-        "energyScore": int(log.energy_score or 0),
+        "moodScore": int(agent_state.get("adjustedMoodScore") or log.mood_score or 0),
+        "baseMoodScore": int(log.mood_score or 0),
+        "energyScore": int(agent_state.get("adjustedEnergyScore") or log.energy_score or 0),
+        "baseEnergyScore": int(log.energy_score or 0),
         "hourlyMoodDecay": int(log.hourly_mood_decay or 0),
         "hourlyEnergyDecay": int(log.hourly_energy_decay or 0),
         "foodCount": int(log.food_count or 0),
         "toyCount": int(log.toy_count or 0),
         "decorBonus": int(log.decor_bonus or 0),
+        "agentState": agent_state,
+        "damagedItemId": log.damaged_item_id or "",
         "lastFoodItem": log.last_food_item or "",
         "lastPlayItem": log.last_play_item or "",
         "lastDecayAt": log.last_decay_at.isoformat() if log.last_decay_at else "",
@@ -10082,6 +10364,105 @@ def cat_world_decor_favorite_payload() -> list[dict[str, str]]:
         }
         for decor_id, cat_id in CAT_WORLD_DECOR_FAVORITE_CAT.items()
     ]
+
+
+def cat_world_usable_inventory(inventory: dict[str, int], damaged_items: dict[str, dict[str, Any]]) -> dict[str, int]:
+    damaged_ids = set(damaged_items)
+    return {item_id: count for item_id, count in inventory.items() if item_id not in damaged_ids}
+
+
+def cat_world_damage_probability(agent_state: dict[str, Any], traits: dict[str, Any], mood_score: int) -> float:
+    if mood_score >= 58:
+        base = 0.015
+    elif mood_score >= 44:
+        base = 0.055
+    elif mood_score >= 32:
+        base = 0.12
+    else:
+        base = 0.22
+    temperament = str(traits.get("temperament") or "balanced")
+    temperament_multiplier = {
+        "calm": 0.35,
+        "gentle": 0.3,
+        "clingy": 0.65,
+        "chatty": 1.35,
+        "guardian": 1.15,
+    }.get(temperament, 1.0)
+    if agent_state.get("dailyMoodKey") == "grumpy":
+        base += 0.055
+    if agent_state.get("dailyMoodKey") == "curious":
+        base += 0.025
+    mischief = min(max(int(agent_state.get("mischief") or 35), 0), 100) / 100
+    return min(base * temperament_multiplier * (0.65 + mischief), 0.38)
+
+
+def cat_world_apply_agent_damage_events(
+    db: Session,
+    state: CatWorldState,
+    inventory: dict[str, int],
+    owned_cats: list[str],
+    damaged_items: dict[str, dict[str, Any]],
+    shop_by_id: dict[str, dict[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], bool]:
+    candidates = [
+        item_id
+        for item_id, count in inventory.items()
+        if count > 0
+        and item_id not in damaged_items
+        and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") in {"decor", "toy"}
+    ]
+    if not candidates:
+        return damaged_items, False
+    now = datetime.utcnow()
+    today = date.today()
+    changed = False
+    for cat_id in owned_cats:
+        cat = CAT_WORLD_CAT_BY_ID.get(cat_id)
+        if not cat:
+            continue
+        traits = cat_world_cat_traits(cat)
+        favorite_active_ids = cat_world_active_favorite_decor_ids(
+            cat_id,
+            cat_world_usable_inventory(inventory, damaged_items),
+            parse_cat_world_room_layout(state.room_layout, inventory),
+        )
+        log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, today, now)
+        apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now)
+        agent_state, agent_changed = ensure_cat_world_agent_state(log, cat, traits)
+        if agent_state.get("mischiefChecked"):
+            if agent_changed:
+                db.add(log)
+                changed = True
+            continue
+        agent_state["mischiefChecked"] = True
+        probability = cat_world_damage_probability(agent_state, traits, int(log.mood_score or 0))
+        seed = f"{today.isoformat()}:{cat_id}:damage"
+        if cat_world_stable_ratio(seed) <= probability:
+            candidate_index = min(int(cat_world_stable_ratio(f"{seed}:item") * len(candidates)), len(candidates) - 1)
+            item_id = candidates.pop(candidate_index)
+            item = shop_by_id.get(item_id) or CAT_WORLD_SHOP_BY_ID[item_id]
+            repair_cost = max(round(int(item.get("cost") or 0) * 0.35), 10)
+            reason = f"{cat['label']}心情差，弄坏了{item.get('label') or item_id}。"
+            damaged_items[item_id] = {
+                "itemId": item_id,
+                "label": item.get("label") or item_id,
+                "category": item.get("category") or "",
+                "catId": cat_id,
+                "catLabel": cat["label"],
+                "repairCost": repair_cost,
+                "reason": reason,
+                "damagedAt": now.replace(microsecond=0).isoformat() + "Z",
+            }
+            agent_state["mischiefItemId"] = item_id
+            agent_state["mischiefLabel"] = item.get("label") or item_id
+            log.damaged_item_id = item_id
+            changed = True
+            if not candidates:
+                agent_state["mischiefChecked"] = True
+        log.agent_state = encode_cat_world_agent_state(agent_state)
+        db.add(log)
+        changed = True
+    return damaged_items, changed
 
 
 def cat_world_apply_daily_decay(
@@ -10118,7 +10499,7 @@ def cat_world_apply_daily_effect(
     room_layout: dict[str, dict[str, float]],
     effect_type: str,
 ) -> dict[str, int]:
-    cat_id = state.selected_cat if state.selected_cat in CAT_WORLD_CAT_BY_ID else CAT_WORLD_DEFAULT_CAT_ID
+    cat_id = cat_world_effect_target_cat_id(db, state, inventory, room_layout, effect_type)
     cat = CAT_WORLD_CAT_BY_ID.get(cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     traits = cat_world_cat_traits(cat)
     now = datetime.utcnow()
@@ -10138,7 +10519,40 @@ def cat_world_apply_daily_effect(
     log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_gain)
     log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) + energy_gain)
     db.add(log)
-    return {"moodGain": mood_gain, "energyGain": energy_gain}
+    return {
+        "moodGain": mood_gain,
+        "energyGain": energy_gain,
+        "catId": cat["id"],
+        "catLabel": cat["label"],
+    }
+
+
+def cat_world_effect_target_cat_id(
+    db: Session,
+    state: CatWorldState,
+    inventory: dict[str, int],
+    room_layout: dict[str, dict[str, float]],
+    effect_type: str,
+) -> str:
+    selected_cat_id = state.selected_cat if state.selected_cat in CAT_WORLD_CAT_BY_ID else CAT_WORLD_DEFAULT_CAT_ID
+    if effect_type != "food":
+        return selected_cat_id
+    now = datetime.utcnow()
+    lowest_cat_id = selected_cat_id
+    lowest_energy = 101
+    for cat_id in parse_cat_world_cats(state.cats):
+        cat = CAT_WORLD_CAT_BY_ID.get(cat_id)
+        if not cat:
+            continue
+        favorite_active_ids = cat_world_active_favorite_decor_ids(cat_id, inventory, room_layout)
+        log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now)
+        apply_cat_world_hourly_decay(log, cat_world_cat_traits(cat), inventory, len(favorite_active_ids), now)
+        db.add(log)
+        energy_score = int(log.energy_score or 0)
+        if energy_score < lowest_energy:
+            lowest_energy = energy_score
+            lowest_cat_id = cat_id
+    return lowest_cat_id
 
 
 def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
@@ -10171,6 +10585,12 @@ def cat_world_active_food(state: CatWorldState) -> dict[str, Any]:
     remaining_seconds = max(duration_seconds - elapsed_seconds, 0)
     if remaining_seconds <= 0:
         return {"active": False, "itemId": "", "label": "", "remainingSeconds": 0, "durationSeconds": duration_seconds}
+    remaining_energy = max(
+        int((int(item.get("catEnergy") or 0) * remaining_seconds + duration_seconds - 1) // duration_seconds),
+        0,
+    )
+    if remaining_energy <= 0:
+        return {"active": False, "itemId": "", "label": "", "remainingSeconds": 0, "durationSeconds": duration_seconds}
     expires_at = state.active_food_at + timedelta(seconds=duration_seconds)
     return {
         "active": True,
@@ -10179,6 +10599,7 @@ def cat_world_active_food(state: CatWorldState) -> dict[str, Any]:
         "englishName": item.get("englishName") or "",
         "mood": int(item.get("mood") or 0),
         "catEnergy": int(item.get("catEnergy") or 0),
+        "remainingEnergy": remaining_energy,
         "consumeCount": 1,
         "remainingSeconds": remaining_seconds,
         "durationSeconds": duration_seconds,
@@ -10301,16 +10722,34 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     spent_energy = max(int(state.energy_spent or 0), 0)
     available_energy = max(earned_energy - spent_energy, 0)
     inventory = parse_cat_world_inventory(state.inventory)
+    damaged_items = parse_cat_world_damaged_items(state.damaged_items)
+    shop = cat_world_effective_shop(db)
+    shop_by_id = {item["id"]: item for item in shop}
     owned_cats = parse_cat_world_cats(state.cats)
+    damaged_items, damaged_changed = cat_world_apply_agent_damage_events(
+        db,
+        state,
+        inventory,
+        owned_cats,
+        damaged_items,
+        shop_by_id,
+    )
+    if damaged_changed:
+        state.damaged_items = encode_cat_world_damaged_items(damaged_items)
+        db.add(state)
+        db.commit()
+        db.refresh(state)
+        inventory = parse_cat_world_inventory(state.inventory)
+        damaged_items = parse_cat_world_damaged_items(state.damaged_items)
+    usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
     room_styles = parse_cat_world_room_styles(state.room_styles, inventory)
-    room_layout = parse_cat_world_room_layout(state.room_layout, inventory)
+    room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
     if state.selected_cat not in owned_cats:
         state.selected_cat = owned_cats[0]
         db.add(state)
         db.commit()
         db.refresh(state)
-    daily_logs = cat_world_apply_daily_decay(db, state, inventory, owned_cats, room_layout)
-    shop = cat_world_effective_shop(db)
+    daily_logs = cat_world_apply_daily_decay(db, state, usable_inventory, owned_cats, room_layout)
     style_options = {
         decor_id: cat_world_owned_style_options(inventory, decor_id)
         for decor_id, count in inventory.items()
@@ -10325,13 +10764,15 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         },
         "state": {
             "inventory": inventory,
+            "usableInventory": usable_inventory,
+            "damagedItems": damaged_items,
             "ownedCats": owned_cats,
             "roomStyles": room_styles,
             "roomLayout": room_layout,
             "styleOptions": style_options,
             "selectedCat": state.selected_cat,
             "dailyLogs": daily_logs,
-            "mood": cat_world_mood(state, inventory, owned_cats, available_energy, room_layout, daily_logs),
+            "mood": cat_world_mood(state, usable_inventory, owned_cats, available_energy, room_layout, daily_logs),
         },
         "cats": [cat_world_cat_payload(cat) for cat in CAT_WORLD_CATS],
         "decorFavorites": cat_world_decor_favorite_payload(),
@@ -10528,6 +10969,11 @@ def ensure_schema_columns() -> None:
         if "cat_world_states" in table_names
         else set()
     )
+    cat_world_daily_log_columns = (
+        {column["name"] for column in inspector.get_columns("cat_world_daily_logs")}
+        if "cat_world_daily_logs" in table_names
+        else set()
+    )
 
     with engine.begin() as connection:
         for column in missing_boolean_columns:
@@ -10565,6 +11011,12 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_food_item VARCHAR(80) NULL"))
         if "cat_world_states" in table_names and "active_food_at" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_food_at DATETIME NULL"))
+        if "cat_world_states" in table_names and "damaged_items" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN damaged_items TEXT NULL"))
+        if "cat_world_daily_logs" in table_names and "agent_state" not in cat_world_daily_log_columns:
+            connection.execute(text("ALTER TABLE cat_world_daily_logs ADD COLUMN agent_state TEXT NULL"))
+        if "cat_world_daily_logs" in table_names and "damaged_item_id" not in cat_world_daily_log_columns:
+            connection.execute(text("ALTER TABLE cat_world_daily_logs ADD COLUMN damaged_item_id VARCHAR(80) NULL"))
         if "wrong_words" in table_names and "wrong_date" not in wrong_columns:
             if dialect == "mysql":
                 connection.execute(text("ALTER TABLE wrong_words ADD COLUMN wrong_date DATE NULL"))

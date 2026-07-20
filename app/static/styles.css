@@ -12438,6 +12438,10 @@ select {
 .cat-world-tool-tabs button.active,
 .cat-world-tool-tabs button:not(:disabled):hover,
 .cat-world-owned-item:not(:disabled):hover,
+.cat-world-cat-chip.active,
+.cat-world-cat-chip:not(:disabled):hover,
+.cat-world-tabs button.active,
+.cat-world-tabs button:not(:disabled):hover,
 .audio-manager-accent-switch button.active {
   color: #fff;
 }
@@ -12467,6 +12471,10 @@ select {
 .cat-world-tool-tabs button.active :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
 .cat-world-tool-tabs button:not(:disabled):hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
 .cat-world-owned-item:not(:disabled):hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.cat-world-cat-chip.active :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.cat-world-cat-chip:not(:disabled):hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.cat-world-tabs button.active :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
+.cat-world-tabs button:not(:disabled):hover :where(span, strong, small, em, b, i, p, h1, h2, h3, h4),
 .audio-manager-accent-switch button.active :where(span, strong, small, em, b, i, p, h1, h2, h3, h4) {
   color: #fff;
 }
@@ -12475,6 +12483,10 @@ select {
 .challenge-day-list-card:hover :where(.challenge-day-list-count, .challenge-day-list-metrics em),
 .cat-world-tool-tabs button.active span,
 .cat-world-tool-tabs button:not(:disabled):hover span,
+.cat-world-cat-chip.active span,
+.cat-world-cat-chip:not(:disabled):hover span,
+.cat-world-tabs button.active span,
+.cat-world-tabs button:not(:disabled):hover span,
 .cat-world-owned-item:not(:disabled):hover em {
   color: #fff;
   background: rgba(255, 255, 255, 0.18);
@@ -12548,7 +12560,10 @@ select {
 .cat-world-owned-main {
   appearance: none;
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 2px;
+  column-gap: 12px;
   width: 100%;
   border: 0;
   padding: 9px;
@@ -12559,9 +12574,33 @@ select {
   cursor: pointer;
 }
 
+.cat-world-owned-main > span,
+.cat-world-owned-main > strong,
+.cat-world-owned-main > small {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.cat-world-owned-main > em {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  align-self: center;
+  justify-self: end;
+  white-space: nowrap;
+}
+
 .cat-world-owned-main:disabled {
   opacity: 0.62;
   cursor: wait;
+}
+
+.cat-world-owned-item.damaged {
+  background: #ffe1ed;
+}
+
+.cat-world-owned-item.damaged .cat-world-owned-main > span,
+.cat-world-owned-item.damaged .cat-world-owned-main > small {
+  color: #9b2755;
 }
 
 .cat-world-color-swatches {
