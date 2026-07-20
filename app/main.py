@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-012"
-DEFAULT_PAGE_VERSION = "v20260721.12"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-013"
+DEFAULT_PAGE_VERSION = "v20260721.13"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -11244,6 +11244,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
     room_styles = parse_cat_world_room_styles(state.room_styles, inventory)
     room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
+    visual_room_layout = parse_cat_world_room_layout(state.room_layout, inventory)
     active_food_effect = cat_world_apply_active_food_progress(db, state, usable_inventory, room_layout)
     if active_food_effect.get("changed"):
         db.refresh(state)
@@ -11252,6 +11253,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
         room_styles = parse_cat_world_room_styles(state.room_styles, inventory)
         room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
+        visual_room_layout = parse_cat_world_room_layout(state.room_layout, inventory)
     if state.selected_cat not in owned_cats:
         state.selected_cat = owned_cats[0]
         db.add(state)
@@ -11276,7 +11278,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "damagedItems": damaged_items,
             "ownedCats": owned_cats,
             "roomStyles": room_styles,
-            "roomLayout": room_layout,
+            "roomLayout": visual_room_layout,
             "styleOptions": style_options,
             "selectedCat": state.selected_cat,
             "dailyLogs": daily_logs,

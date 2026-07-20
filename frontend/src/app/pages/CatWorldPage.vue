@@ -364,6 +364,11 @@ function normalizeLayoutDraft(layout) {
 }
 
 function handleDecorClick(decorId) {
+  const item = shopById.value[decorId];
+  if (item && damageInfo(item)) {
+    repairItem(item);
+    return;
+  }
   selectedDecorId.value = decorId;
   cycleDecorStyle(decorId);
 }
@@ -371,6 +376,10 @@ function handleDecorClick(decorId) {
 function handleRoomToyClick(itemId) {
   const item = shopById.value[itemId];
   if (item && ["food", "toy"].includes(item.category)) {
+    if (damageInfo(item)) {
+      repairItem(item);
+      return;
+    }
     if (item.category === "food" && activeFood.value.active && activeFood.value.itemId === item.id) {
       notice.value = `${item.label} 正在房间里，优先给${activeFood.value.targetCatLabel || "体力最低的小猫"}慢慢吃，剩余可补体力 ${activeFood.value.remainingEnergy || 0}，还剩 ${formatSeconds(activeFood.value.remainingSeconds)}。`;
       const targetCat = cats.value.find((cat) => cat.id === activeFood.value.targetCatId) || focusedCat.value;

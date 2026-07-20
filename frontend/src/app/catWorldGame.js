@@ -249,18 +249,21 @@ class CatWorldScene extends Phaser.Scene {
   drawOwnedDecor(snapshot) {
     for (const [decorId, spec] of Object.entries(DECOR_SPECS)) {
       if (!owned(snapshot.inventory, decorId)) continue;
-      if (isDamaged(snapshot, decorId)) continue;
+      const damaged = isDamaged(snapshot, decorId);
       const tone = snapshot.roomStyles?.[decorId] || "default";
       const position = this.positionForDecor(decorId, spec);
       const container = this.add.container(position.x, position.y);
       container.setSize(spec.width, spec.height);
       container.setData("kind", "decor");
       container.setData("id", decorId);
+      container.setData("damaged", damaged);
       container.setData("width", spec.width);
       container.setData("height", spec.height);
       container.setDepth(position.y + 20);
       container.setInteractive(new Phaser.Geom.Rectangle(0, 0, spec.width, spec.height), Phaser.Geom.Rectangle.Contains);
-      this.input.setDraggable(container);
+      if (!damaged) {
+        this.input.setDraggable(container);
+      }
       container.on("pointerdown", (_pointer, _localX, _localY, event) => {
         this.stopPointerEvent(event);
       });
@@ -271,6 +274,10 @@ class CatWorldScene extends Phaser.Scene {
         }
       });
       this.drawDecorShape(container, decorId, spec, palette(tone));
+      if (damaged) {
+        container.setAlpha(0.74);
+        this.drawDamagedOverlay(container, spec.width, spec.height);
+      }
       this.decorContainers.set(decorId, container);
     }
   }
@@ -303,11 +310,13 @@ class CatWorldScene extends Phaser.Scene {
         .setDepth(726);
       this.addRoomHitZone(snapshot.activeFood.itemId || "active-food", bowlX, 374, 142, 86, 728);
     }
-    if (owned(snapshot.inventory, "rolling-ball") && !isDamaged(snapshot, "rolling-ball")) {
+    if (owned(snapshot.inventory, "rolling-ball")) {
+      const damaged = isDamaged(snapshot, "rolling-ball");
       const active = lastPlayItem === "rolling-ball";
       const ballX = 312;
       const ballY = 392;
       const ball = this.add.graphics();
+      ball.setAlpha(damaged ? 0.56 : 1);
       ball.fillStyle(0x2c2f3a, 0.22);
       ball.fillEllipse(ballX + 22, ballY + 44, 60, 12);
       ball.fillStyle(0xfff07d, 1);
@@ -320,7 +329,7 @@ class CatWorldScene extends Phaser.Scene {
       ball.fillStyle(0x87d9ff, 1);
       ball.fillCircle(ballX + 22, ballY + 22, 7);
       ball.setDepth(690);
-      if (active) {
+      if (active && !damaged) {
         this.tweens.add({
           targets: ball,
           x: 26,
@@ -330,21 +339,27 @@ class CatWorldScene extends Phaser.Scene {
           ease: "Sine.easeInOut",
         });
       }
-      this.drawRoomItemLabel("滚滚球", ballX + 22, ballY - 7, 706);
+      this.drawRoomItemLabel(damaged ? "滚滚球 损坏" : "滚滚球", ballX + 22, ballY - 7, 706);
+      if (damaged) this.drawDamagedMark(ballX - 10, ballY - 8, 72, 64, 709);
       this.addRoomHitZone("rolling-ball", ballX - 20, ballY - 14, 88, 88, 708);
     }
-    if (owned(snapshot.inventory, "scratch-board") && !isDamaged(snapshot, "scratch-board")) {
+    if (owned(snapshot.inventory, "scratch-board")) {
+      const damaged = isDamaged(snapshot, "scratch-board");
       const scratcher = this.add.graphics();
+      scratcher.setAlpha(damaged ? 0.56 : 1);
       drawPixelRect(scratcher, 96, 426, 136, 26, 0xe6b06f);
       scratcher.lineStyle(1, 0x7a573b, 0.45);
       for (let x = 108; x < 218; x += 12) scratcher.lineBetween(x, 431, x + 8, 445);
       scratcher.setDepth(464);
-      this.drawRoomItemLabel("猫抓板", 164, 406, 468);
+      this.drawRoomItemLabel(damaged ? "猫抓板 损坏" : "猫抓板", 164, 406, 468);
+      if (damaged) this.drawDamagedMark(92, 416, 146, 48, 470);
       this.addRoomHitZone("scratch-board", 90, 418, 150, 44, 466);
     }
-    if (owned(snapshot.inventory, "feather-wand") && !isDamaged(snapshot, "feather-wand")) {
+    if (owned(snapshot.inventory, "feather-wand")) {
+      const damaged = isDamaged(snapshot, "feather-wand");
       const wandX = GAME_WIDTH - 208;
       const wand = this.add.graphics();
+      wand.setAlpha(damaged ? 0.56 : 1);
       wand.lineStyle(6, 0x7b5834, 1);
       wand.lineBetween(wandX + 28, 320, wandX + 142, 280);
       wand.fillStyle(0xff8cad, 1);
@@ -352,9 +367,40 @@ class CatWorldScene extends Phaser.Scene {
       wand.fillStyle(0xa9e8c8, 1);
       wand.fillTriangle(wandX + 112, 262, wandX + 143, 272, wandX + 125, 298);
       wand.setDepth(330);
-      this.drawRoomItemLabel("逗猫棒", wandX + 88, 236, 334);
+      this.drawRoomItemLabel(damaged ? "逗猫棒 损坏" : "逗猫棒", wandX + 88, 236, 334);
+      if (damaged) this.drawDamagedMark(wandX, 250, 172, 70, 336);
       this.addRoomHitZone("feather-wand", wandX, 250, 172, 70, 332);
     }
+  }
+
+  drawDamagedOverlay(container, width, height) {
+    const graphics = makeLocalGraphics(this, container);
+    graphics.lineStyle(5, 0xdb2777, 0.95);
+    graphics.lineBetween(10, 10, width - 14, height - 12);
+    graphics.lineBetween(width - 22, 12, width - 38, 31);
+    graphics.lineBetween(width - 44, 30, width - 35, 48);
+    graphics.lineStyle(3, 0x2c2f3a, 0.85);
+    graphics.strokeRect(5, 5, width - 10, height - 10);
+    const label = this.add
+      .text(width / 2, -16, "损坏 · 点击维修", {
+        color: "#fff8df",
+        backgroundColor: "#db2777",
+        fontFamily: "Consolas, monospace",
+        fontSize: "11px",
+        fontStyle: "bold",
+        padding: { x: 5, y: 2 },
+      })
+      .setOrigin(0.5);
+    container.add(label);
+  }
+
+  drawDamagedMark(x, y, width, height, depth) {
+    const mark = this.add.graphics();
+    mark.lineStyle(5, 0xdb2777, 0.95);
+    mark.lineBetween(x + 6, y + 6, x + width - 6, y + height - 7);
+    mark.lineBetween(x + width - 12, y + 8, x + width - 26, y + 24);
+    mark.lineBetween(x + width - 30, y + 24, x + width - 18, y + 40);
+    mark.setDepth(depth);
   }
 
   drawRoomItemLabel(label, x, y, depth) {
@@ -625,6 +671,7 @@ class CatWorldScene extends Phaser.Scene {
     const nextScale = nextX < container.x ? -1 : 1;
     const currentSign = container.scaleX < 0 ? -1 : 1;
     if (currentSign === nextScale) return;
+    this.spawnTurnPuff(container);
     this.tweens.add({
       targets: container,
       scaleX: currentSign * 0.16,
@@ -639,6 +686,25 @@ class CatWorldScene extends Phaser.Scene {
           ease: "Sine.easeInOut",
         });
       },
+    });
+  }
+
+  spawnTurnPuff(container) {
+    if (!container.active) return;
+    const puff = this.add.graphics();
+    puff.fillStyle(0xfff8df, 0.92);
+    puff.fillRect(container.x + 26, container.y + 44, 9, 9);
+    puff.fillRect(container.x + 42, container.y + 49, 7, 7);
+    puff.lineStyle(2, 0x2c2f3a, 0.42);
+    puff.strokeRect(container.x + 26, container.y + 44, 9, 9);
+    puff.setDepth(CAT_INTERACTION_DEPTH + 110);
+    this.tweens.add({
+      targets: puff,
+      y: puff.y - 10,
+      alpha: 0,
+      duration: 520,
+      ease: "Cubic.easeOut",
+      onComplete: () => puff.destroy(),
     });
   }
 
