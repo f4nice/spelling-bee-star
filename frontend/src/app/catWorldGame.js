@@ -274,6 +274,7 @@ class CatWorldScene extends Phaser.Scene {
     const lastPlayItem = snapshot.mood?.lastPlayItem || "";
     if (snapshot.activeFood?.active) {
       const foodLabel = snapshot.activeFood.label || "食物";
+      const targetLabel = snapshot.activeFood.targetCatLabel || "";
       const foodEnergy = Number(snapshot.activeFood.catEnergyEffective ?? snapshot.activeFood.catEnergy ?? 0);
       const bowlX = ACTIVE_FOOD_SPOT.x;
       const bowl = this.add.graphics();
@@ -284,7 +285,7 @@ class CatWorldScene extends Phaser.Scene {
       bowl.fillRect(bowlX + 42, 432, 40, 8);
       bowl.setDepth(720);
       this.add
-        .text(bowlX + 68, 380, `${foodLabel}\n+${foodEnergy} 体力`, {
+        .text(bowlX + 68, 380, `${foodLabel}\n${targetLabel ? `给${targetLabel} ` : ""}+${foodEnergy} 体力`, {
           color: "#263047",
           backgroundColor: "#fff8df",
           fontFamily: "Consolas, monospace",
@@ -707,6 +708,15 @@ class CatWorldScene extends Phaser.Scene {
   foodTargetForCat(cat = {}) {
     const activeFood = this.owner.snapshot.activeFood || {};
     if (!activeFood.active || Number(activeFood.remainingEnergy || 0) <= 0) return null;
+    const targetCatId = activeFood.targetCatId || "";
+    if (targetCatId) {
+      return {
+        label: activeFood.label || "食物",
+        priority: cat.id === targetCatId ? 96 : 12,
+        x: clamp(ACTIVE_FOOD_SPOT.x + 58 + Phaser.Math.Between(-28, 28), 38, GAME_WIDTH - 132),
+        y: clamp(ACTIVE_FOOD_SPOT.y + 52 + Phaser.Math.Between(-14, 20), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+      };
+    }
     const ownedCats = new Set(this.owner.snapshot.ownedCats || []);
     const visibleCats = (this.owner.snapshot.cats || []).filter((candidate) => ownedCats.has(candidate.id));
     const energy = catEnergyForSnapshot(this.owner.snapshot, cat);

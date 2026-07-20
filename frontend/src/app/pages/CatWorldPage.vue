@@ -26,6 +26,7 @@ const savingRoomLayout = ref(false);
 const activeToolCategory = ref("decor");
 const clockNow = ref(Date.now());
 const energyModalOpen = ref(false);
+const petBusyCatId = ref("");
 
 const catReactionTexts = [
   "收到摸摸指令，开心值上升",
@@ -68,6 +69,7 @@ onMounted(async () => {
     },
     onLayoutChange: handleGameLayoutChange,
     onToyClick: handleRoomToyClick,
+    onCatThought: (cat, message) => showCatReaction(cat, message),
   });
   updateCatWorldGame();
 });
@@ -151,6 +153,8 @@ const activeFood = computed(() => ({
   moodEffective: Number(rawActiveFood.value?.moodEffective || 0),
   catEnergyEffective: Number(rawActiveFood.value?.catEnergyEffective || 0),
   remainingEnergy: Number(rawActiveFood.value?.remainingEnergy || 0),
+  targetCatId: rawActiveFood.value?.targetCatId || "",
+  targetCatLabel: rawActiveFood.value?.targetCatLabel || "",
 }));
 const activeFoodEnergyGain = computed(() => Number(activeFood.value.catEnergyEffective || 0));
 const activeFoodMoodGain = computed(() => Number(activeFood.value.moodEffective || 0));
@@ -328,7 +332,8 @@ function handleRoomToyClick(itemId) {
   if (item && ["food", "toy"].includes(item.category)) {
     if (item.category === "food" && activeFood.value.active && activeFood.value.itemId === item.id) {
       notice.value = `${item.label} 正在房间里，剩余能量 ${activeFood.value.remainingEnergy || activeFoodEnergyGain.value}，剩余 ${formatSeconds(activeFood.value.remainingSeconds)}，体力 +${activeFoodEnergyGain.value}，心情 +${activeFoodMoodGain.value}。`;
-      petCat(focusedCat.value);
+      const targetCat = cats.value.find((cat) => cat.id === activeFood.value.targetCatId) || focusedCat.value;
+      showCatReaction(targetCat, `${item.label}还在房间里，先给${activeFood.value.targetCatLabel || targetCat.label || "体力最低的小猫"}补充。`);
       return;
     }
     play(item);
@@ -506,16 +511,38 @@ function purchaseButtonText(item) {
   return canAfford(item) ? `扣 ${item.cost} 积分购买` : "能量不足";
 }
 
-function petCat(cat = selectedCat.value) {
+function showCatReaction(cat = selectedCat.value, message = "") {
   const catLabel = cat?.label || "猫咪";
   const nextIndex = catPetSequence.value % catReactionTexts.length;
   focusedCatId.value = cat?.id || "";
-  catReaction.value = `${catLabel}: ${catReactionTexts[nextIndex]}`;
+  catReaction.value = `${catLabel}: ${message || catReactionTexts[nextIndex]}`;
   catPetSequence.value += 1;
   window.clearTimeout(catReactionTimer);
   catReactionTimer = window.setTimeout(() => {
     catReaction.value = "";
   }, 2200);
+}
+
+async function petCat(cat = selectedCat.value, options = {}) {
+  if (!cat?.id) return;
+  showCatReaction(cat, options.message || "");
+  if (options.sync === false || petBusyCatId.value === cat.id) return;
+  petBusyCatId.value = cat.id;
+  try {
+    const nextPayload = await fetchJson(routeApiPaths.catWorldPet(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ catId: cat.id }),
+    });
+    replacePayload(nextPayload);
+    if (nextPayload.effect?.message) {
+      showCatReaction(cat, nextPayload.effect.message);
+    }
+  } catch (error) {
+    notice.value = error.message || "猫咪互动失败，请稍后再试。";
+  } finally {
+    petBusyCatId.value = "";
+  }
 }
 
 async function purchase(item) {
@@ -555,12 +582,16 @@ async function play(item) {
     if (item.category === "food") {
       const active = nextPayload.state?.mood?.activeFood;
       const effect = nextPayload.effect || {};
-      notice.value = `${item.label} 已摆进房间，优先给${effect.catLabel || "体力最低的小猫"}补充，库存 -1，体力 +${effect.energyGain ?? active?.catEnergyEffective ?? foodEnergyGainValue(item)}，心情 +${effect.moodGain ?? active?.moodEffective ?? foodMoodGainValue(item)}，吃完后会消失。`;
-      petCat(focusedCat.value);
+      const targetCat = cats.value.find((cat) => cat.id === effect.catId) || focusedCat.value;
+      const energyGain = effect.energyGain ?? active?.catEnergyEffective ?? foodEnergyGainValue(item);
+      const moodGain = effect.moodGain ?? active?.moodEffective ?? foodMoodGainValue(item);
+      notice.value = `${item.label} 已摆进房间，优先给${effect.catLabel || active?.targetCatLabel || "体力最低的小猫"}补充，库存 -1，体力 +${energyGain}，心情 +${moodGain}，吃完后会消失。`;
+      showCatReaction(targetCat, `吃到${item.label}，体力 +${energyGain}，心情 +${moodGain}。`);
     } else {
       const effect = nextPayload.effect || {};
-      notice.value = `${selectedCat.value.label || "猫咪"} 和 ${item.label} 玩了一会儿，心情 +${effect.moodGain ?? item.mood ?? 0}，体力 ${effect.energyGain ?? 0}。`;
-      petCat(focusedCat.value);
+      const targetCat = cats.value.find((cat) => cat.id === effect.catId) || selectedCat.value;
+      notice.value = `${effect.catLabel || targetCat.label || "猫咪"} 和 ${item.label} 玩了一会儿，心情 +${effect.moodGain ?? item.mood ?? 0}，体力 ${effect.energyGain ?? 0}。`;
+      showCatReaction(targetCat, `玩了${item.label}，心情 +${effect.moodGain ?? item.mood ?? 0}。`);
     }
   } catch (error) {
     notice.value = error.message || "互动失败，请稍后再试。";
@@ -759,7 +790,7 @@ async function selectCat(catId) {
         <div v-if="activeFood.active" class="cat-world-active-food">
           <span>当前食物</span>
           <strong>{{ activeFood.label }}</strong>
-          <small>剩余能量 {{ activeFood.remainingEnergy || activeFoodEnergyGain }} · 体力 +{{ activeFoodEnergyGain }} · 心情 +{{ activeFoodMoodGain }} · {{ formatSeconds(activeFood.remainingSeconds) }}</small>
+          <small>优先给 {{ activeFood.targetCatLabel || "体力最低的小猫" }} · 剩余能量 {{ activeFood.remainingEnergy || activeFoodEnergyGain }} · 体力 +{{ activeFoodEnergyGain }} · 心情 +{{ activeFoodMoodGain }} · {{ formatSeconds(activeFood.remainingSeconds) }}</small>
         </div>
 
         <div class="cat-world-tool-tabs" role="tablist" aria-label="已拥有道具分类">

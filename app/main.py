@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-008"
-DEFAULT_PAGE_VERSION = "v20260721.8"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-009"
+DEFAULT_PAGE_VERSION = "v20260721.9"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3630,6 +3630,8 @@ async def vue_cat_world_play_api(request: Request, db: Session = Depends(get_db)
         room_layout,
         "food" if item["category"] == "food" else "toy",
     )
+    if item["category"] == "food":
+        state.active_food_cat_id = effect.get("catId") or ""
     db.add(state)
     db.commit()
     db.refresh(state)
@@ -3773,6 +3775,29 @@ async def vue_cat_world_select_cat_api(request: Request, db: Session = Depends(g
     db.commit()
     db.refresh(state)
     return {"ok": True, **serialize_cat_world_payload(db, state)}
+
+
+@app.post("/api/vue/cat-world/pet")
+async def vue_cat_world_pet_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="猫咪互动数据不是有效 JSON。") from exc
+    cat_id = str((payload or {}).get("catId") or "").strip()
+    state = get_or_create_cat_world_state(db, phone)
+    owned_cats = parse_cat_world_cats(state.cats)
+    if cat_id not in owned_cats:
+        raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
+    inventory = parse_cat_world_inventory(state.inventory)
+    damaged_items = parse_cat_world_damaged_items(state.damaged_items)
+    usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
+    room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
+    effect = cat_world_apply_pet_effect(db, state, cat_id, usable_inventory, room_layout)
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return {"ok": True, "effect": effect, **serialize_cat_world_payload(db, state)}
 
 
 @app.get("/api/vue/admin")
@@ -10645,6 +10670,62 @@ def cat_world_apply_daily_effect(
     }
 
 
+def cat_world_apply_pet_effect(
+    db: Session,
+    state: CatWorldState,
+    cat_id: str,
+    inventory: dict[str, int],
+    room_layout: dict[str, dict[str, float]],
+) -> dict[str, Any]:
+    cat = CAT_WORLD_CAT_BY_ID.get(cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    traits = cat_world_cat_traits(cat)
+    now = datetime.utcnow()
+    favorite_active_ids = cat_world_active_favorite_decor_ids(cat["id"], inventory, room_layout)
+    log = get_or_create_cat_world_daily_log(db, state.phone, cat["id"], date.today(), now)
+    apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now)
+    agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
+    temperament = str(traits.get("temperament") or "balanced")
+    mood_gain = {
+        "clingy": 4,
+        "gentle": 3,
+        "chatty": 3,
+        "calm": 2,
+        "guardian": 2,
+    }.get(temperament, 2)
+    if agent_state.get("dailyMoodKey") in {"quiet", "grumpy"}:
+        mood_gain = max(1, mood_gain - 1)
+    log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_gain)
+    pet_count = min(int(agent_state.get("petCount") or 0) + 1, 999)
+    if agent_state.get("dailyMoodKey") == "grumpy":
+        message = f"{cat['label']}今天不太高兴，但还是接受了摸摸，心情 +{mood_gain}。"
+    elif temperament == "chatty":
+        message = f"{cat['label']}被摸摸后开始喵喵汇报学习进度，心情 +{mood_gain}。"
+    elif temperament == "guardian":
+        message = f"{cat['label']}巡视回来蹭了蹭你，心情 +{mood_gain}。"
+    else:
+        message = f"{cat['label']}收到摸摸，心情 +{mood_gain}。"
+    agent_state = append_cat_world_agent_event(
+        log,
+        cat,
+        traits,
+        "pet",
+        "摸摸互动",
+        message,
+        now,
+    )
+    agent_state["petCount"] = pet_count
+    agent_state["lastPetAt"] = now.replace(microsecond=0).isoformat() + "Z"
+    log.agent_state = encode_cat_world_agent_state(agent_state)
+    db.add(log)
+    return {
+        "catId": cat["id"],
+        "catLabel": cat["label"],
+        "moodGain": mood_gain,
+        "petCount": pet_count,
+        "message": message,
+    }
+
+
 def cat_world_effect_target_cat_id(
     db: Session,
     state: CatWorldState,
@@ -10710,11 +10791,14 @@ def cat_world_active_food(state: CatWorldState) -> dict[str, Any]:
     if remaining_energy <= 0:
         return {"active": False, "itemId": "", "label": "", "remainingSeconds": 0, "durationSeconds": duration_seconds}
     expires_at = state.active_food_at + timedelta(seconds=duration_seconds)
+    target_cat = CAT_WORLD_CAT_BY_ID.get(str(state.active_food_cat_id or ""))
     return {
         "active": True,
         "itemId": item_id,
         "label": item["label"],
         "englishName": item.get("englishName") or "",
+        "targetCatId": target_cat["id"] if target_cat else "",
+        "targetCatLabel": target_cat["label"] if target_cat else "",
         "mood": int(item.get("mood") or 0),
         "catEnergy": int(item.get("catEnergy") or 0),
         "remainingEnergy": remaining_energy,
@@ -11127,6 +11211,8 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN room_layout TEXT NULL"))
         if "cat_world_states" in table_names and "active_food_item" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_food_item VARCHAR(80) NULL"))
+        if "cat_world_states" in table_names and "active_food_cat_id" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_food_cat_id VARCHAR(80) NULL"))
         if "cat_world_states" in table_names and "active_food_at" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_food_at DATETIME NULL"))
         if "cat_world_states" in table_names and "damaged_items" not in cat_world_state_columns:

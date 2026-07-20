@@ -202,6 +202,7 @@ class CatWorldState(Base):
     last_play_item: Mapped[str | None] = mapped_column(String(80))
     last_played_at: Mapped[datetime | None] = mapped_column(DateTime)
     active_food_item: Mapped[str | None] = mapped_column(String(80))
+    active_food_cat_id: Mapped[str | None] = mapped_column(String(80))
     active_food_at: Mapped[datetime | None] = mapped_column(DateTime)
     damaged_items: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

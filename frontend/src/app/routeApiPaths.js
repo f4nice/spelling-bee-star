@@ -8,6 +8,7 @@ export const routeApiPaths = {
   catWorldDecorStyle: () => "/api/vue/cat-world/decor-style",
   catWorldRoomLayout: () => "/api/vue/cat-world/room-layout",
   catWorldSelectCat: () => "/api/vue/cat-world/select-cat",
+  catWorldPet: () => "/api/vue/cat-world/pet",
   admin: () => "/api/vue/admin",
   adminCatWorldPricing: () => "/api/vue/admin/cat-world/pricing",
   adminCatWorldReset: () => "/api/vue/admin/cat-world/reset",
