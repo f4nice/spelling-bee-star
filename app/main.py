@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-035"
-DEFAULT_PAGE_VERSION = "v20260721.35"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-036"
+DEFAULT_PAGE_VERSION = "v20260721.36"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3840,25 +3840,45 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
     state.damaged_items = encode_cat_world_damaged_items(damaged_items)
     state.energy_spent = max(int(state.energy_spent or 0), 0) + repair_cost
     repair_cat_id = str(damaged.get("catId") or state.selected_cat or CAT_WORLD_DEFAULT_CAT_ID)
+    repair_label = str(damaged.get("label") or CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("label") or item_id)
     repair_cat = CAT_WORLD_CAT_BY_ID.get(repair_cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     repair_traits = cat_world_cat_traits(repair_cat)
-    repair_log = get_or_create_cat_world_daily_log(db, state.phone, repair_cat["id"], date.today(), datetime.utcnow())
-    append_cat_world_agent_event(
+    now = datetime.utcnow()
+    repair_log = get_or_create_cat_world_daily_log(db, state.phone, repair_cat["id"], date.today(), now)
+    repair_agent_state = append_cat_world_agent_event(
         repair_log,
         repair_cat,
         repair_traits,
         "repair",
         "维修完成",
-        f"{damaged.get('label') or item_id}已经维修好，花费 {repair_cost} 能量。",
-        datetime.utcnow(),
+        f"{repair_label}已经维修好，花费 {repair_cost} 能量。",
+        now,
     )
+    repair_agent_state["mischiefRepairedItemId"] = item_id
+    repair_agent_state["mischiefRepairedLabel"] = repair_label
+    repair_agent_state["mischiefRepairCost"] = repair_cost
+    repair_agent_state["mischiefRepairedAt"] = now.replace(microsecond=0).isoformat() + "Z"
+    if repair_agent_state.get("mischiefItemId") == item_id or repair_log.damaged_item_id == item_id:
+        repair_agent_state.pop("mischiefItemId", None)
+        repair_agent_state.pop("mischiefLabel", None)
+    repair_log.agent_state = encode_cat_world_agent_state(repair_agent_state)
     if repair_log.damaged_item_id == item_id:
         repair_log.damaged_item_id = None
     db.add(repair_log)
     db.add(state)
     db.commit()
     db.refresh(state)
-    return {"ok": True, "repair": {"itemId": item_id, "cost": repair_cost}, **serialize_cat_world_payload(db, state)}
+    return {
+        "ok": True,
+        "repair": {
+            "itemId": item_id,
+            "label": repair_label,
+            "cost": repair_cost,
+            "catId": repair_cat["id"],
+            "catLabel": repair_cat["label"],
+        },
+        **serialize_cat_world_payload(db, state),
+    }
 
 
 @app.post("/api/vue/cat-world/decor-style")
@@ -10650,6 +10670,10 @@ CAT_WORLD_AGENT_STATE_CARRY_KEYS = {
     "mischiefChecked",
     "mischiefItemId",
     "mischiefLabel",
+    "mischiefRepairedAt",
+    "mischiefRepairedItemId",
+    "mischiefRepairedLabel",
+    "mischiefRepairCost",
     "petCount",
     "routinePeriodEvents",
 }
