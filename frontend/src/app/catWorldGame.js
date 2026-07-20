@@ -232,6 +232,7 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   drawInventoryItems(snapshot) {
+    const lastPlayItem = snapshot.mood?.lastPlayItem || "";
     if (snapshot.activeFood?.active) {
       const foodLabel = snapshot.activeFood.label || "食物";
       const foodEnergy = Number(snapshot.activeFood.catEnergyEffective ?? snapshot.activeFood.catEnergy ?? 0);
@@ -257,12 +258,43 @@ class CatWorldScene extends Phaser.Scene {
         .setDepth(726);
       this.addRoomHitZone(snapshot.activeFood.itemId || "active-food", bowlX, 374, 142, 86, 728);
     }
+    if (owned(snapshot.inventory, "rolling-ball")) {
+      const active = lastPlayItem === "rolling-ball";
+      const ballX = 312;
+      const ballY = 392;
+      const ball = this.add.graphics();
+      ball.fillStyle(0x2c2f3a, 0.22);
+      ball.fillEllipse(ballX + 22, ballY + 44, 60, 12);
+      ball.fillStyle(0xfff07d, 1);
+      ball.fillCircle(ballX + 22, ballY + 22, 22);
+      ball.lineStyle(5, INK, 1);
+      ball.strokeCircle(ballX + 22, ballY + 22, 22);
+      ball.lineStyle(3, 0xff8cad, 1);
+      ball.lineBetween(ballX + 4, ballY + 22, ballX + 40, ballY + 22);
+      ball.lineBetween(ballX + 22, ballY + 4, ballX + 22, ballY + 40);
+      ball.fillStyle(0x87d9ff, 1);
+      ball.fillCircle(ballX + 22, ballY + 22, 7);
+      ball.setDepth(690);
+      if (active) {
+        this.tweens.add({
+          targets: ball,
+          x: 26,
+          yoyo: true,
+          repeat: 5,
+          duration: 260,
+          ease: "Sine.easeInOut",
+        });
+      }
+      this.drawRoomItemLabel("滚滚球", ballX + 22, ballY - 7, 706);
+      this.addRoomHitZone("rolling-ball", ballX - 20, ballY - 14, 88, 88, 708);
+    }
     if (owned(snapshot.inventory, "scratch-board")) {
       const scratcher = this.add.graphics();
       drawPixelRect(scratcher, 96, 426, 136, 26, 0xe6b06f);
       scratcher.lineStyle(1, 0x7a573b, 0.45);
       for (let x = 108; x < 218; x += 12) scratcher.lineBetween(x, 431, x + 8, 445);
       scratcher.setDepth(464);
+      this.drawRoomItemLabel("猫抓板", 164, 406, 468);
       this.addRoomHitZone("scratch-board", 90, 418, 150, 44, 466);
     }
     if (owned(snapshot.inventory, "feather-wand")) {
@@ -275,8 +307,23 @@ class CatWorldScene extends Phaser.Scene {
       wand.fillStyle(0xa9e8c8, 1);
       wand.fillTriangle(wandX + 112, 262, wandX + 143, 272, wandX + 125, 298);
       wand.setDepth(330);
+      this.drawRoomItemLabel("逗猫棒", wandX + 88, 236, 334);
       this.addRoomHitZone("feather-wand", wandX, 250, 172, 70, 332);
     }
+  }
+
+  drawRoomItemLabel(label, x, y, depth) {
+    this.add
+      .text(x, y, label, {
+        color: "#263047",
+        backgroundColor: "#fff8df",
+        fontFamily: "Consolas, monospace",
+        fontSize: "10px",
+        fontStyle: "bold",
+        padding: { x: 4, y: 2 },
+      })
+      .setOrigin(0.5)
+      .setDepth(depth);
   }
 
   drawDecorShape(container, decorId, spec, colors) {
