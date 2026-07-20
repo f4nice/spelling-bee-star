@@ -218,7 +218,9 @@ const focusedCatDailyNote = computed(() => {
   const agent = focusedAgentState.value || {};
   const favoriteDecorLabels = focusedCat.value.favoriteDecorLabels || [];
   const damaged = agent.mischiefLabel ? ` · 今天弄坏过 ${agent.mischiefLabel}` : "";
-  return `每小时 体力 ${signedHourlyValue(log.hourlyEnergyDecay)} / 心情 ${signedHourlyValue(log.hourlyMoodDecay)} · 独立状态 ${agent.dailyMoodLabel || "稳定"} · 喜欢 ${favoriteDecorLabels.join("、") || "安静角落"}${damaged}`;
+  const comfort = agent.comfortLabel || "暂无道具减耗";
+  const reason = agent.hourlyReason || "自由活动";
+  return `每小时 体力 ${signedHourlyValue(log.hourlyEnergyDecay)} / 心情 ${signedHourlyValue(log.hourlyMoodDecay)} · ${reason} · ${comfort} · 独立状态 ${agent.dailyMoodLabel || "稳定"} · 喜欢 ${favoriteDecorLabels.join("、") || "安静角落"}${damaged}`;
 });
 const focusedAgentEvents = computed(() => {
   const events = focusedAgentState.value.events;
@@ -293,6 +295,7 @@ const catAgentDiaries = computed(() =>
         goalMessage: dailyGoal.message || "",
         damageRiskLabel: dailyGoal.damageRiskLabel || "很低",
         decayLabel: `体力 ${signedHourlyValue(log.hourlyEnergyDecay)}/h · 心情 ${signedHourlyValue(log.hourlyMoodDecay)}/h`,
+        comfortLabel: agent.comfortLabel || "暂无道具减耗",
         favoriteItemLabel,
         activeFavoriteLabel: activeFavoriteLabels.length ? activeFavoriteLabels.join("、") : "喜欢的家具还没摆出来",
         countsLabel: `食物 ${log.foodCount || 0} · 玩具 ${log.toyCount || 0} · 摸摸 ${agent.petCount || 0}`,
@@ -1043,6 +1046,10 @@ async function selectCat(catId) {
             <div>
               <dt>消耗</dt>
               <dd>{{ cat.decayLabel }}</dd>
+            </div>
+            <div>
+              <dt>减耗</dt>
+              <dd>{{ cat.comfortLabel }}</dd>
             </div>
             <div>
               <dt>偏好</dt>

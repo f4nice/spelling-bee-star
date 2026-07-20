@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-023"
-DEFAULT_PAGE_VERSION = "v20260721.23"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-024"
+DEFAULT_PAGE_VERSION = "v20260721.24"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -10732,9 +10732,19 @@ def cat_world_agent_payload(
     agent_state, changed = ensure_cat_world_agent_state(log, cat, traits)
     if changed:
         log.agent_state = encode_cat_world_agent_state(agent_state)
+    inventory = inventory or {}
+    room_layout = room_layout or {}
+    favorite_active_ids = favorite_active_ids or []
     mood_score = clamp_cat_world_score(int(log.mood_score or 0) + int(agent_state.get("moodOffset") or 0))
     energy_score = clamp_cat_world_score(int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0))
     behavior = cat_world_current_behavior(agent_state, traits, mood_score, energy_score, now)
+    hourly_change = cat_world_behavior_hourly_change(log, traits, inventory, len(favorite_active_ids), now or datetime.utcnow())
+    comfort_relief = int(hourly_change.get("relief") or 0)
+    comfort_parts = []
+    if comfort_relief > 0:
+        comfort_parts.append(f"道具减耗 {comfort_relief}/h")
+    if favorite_active_ids:
+        comfort_parts.append(f"喜欢家具 {len(favorite_active_ids)} 件")
     daily_goal = cat_world_agent_daily_goal(
         log,
         cat,
@@ -10743,9 +10753,9 @@ def cat_world_agent_payload(
         behavior,
         mood_score,
         energy_score,
-        inventory or {},
-        room_layout or {},
-        favorite_active_ids or [],
+        inventory,
+        room_layout,
+        favorite_active_ids,
     )
     public_agent_state = {key: value for key, value in agent_state.items() if key != "seedKey"}
     return {
@@ -10754,6 +10764,10 @@ def cat_world_agent_payload(
         "dailyGoal": daily_goal,
         "adjustedMoodScore": mood_score,
         "adjustedEnergyScore": energy_score,
+        "hourlyLabel": hourly_change.get("label") or "",
+        "hourlyReason": hourly_change.get("reason") or "",
+        "comfortRelief": comfort_relief,
+        "comfortLabel": " · ".join(comfort_parts) if comfort_parts else "暂无道具减耗",
         "damagedItemId": log.damaged_item_id or agent_state.get("mischiefItemId") or "",
     }
 
