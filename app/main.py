@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-033"
-DEFAULT_PAGE_VERSION = "v20260721.33"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-034"
+DEFAULT_PAGE_VERSION = "v20260721.34"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -609,6 +609,11 @@ CAT_WORLD_DECOR_LABELS = {
     for item in CAT_WORLD_SHOP
     if item["category"] == "decor"
 }
+CAT_WORLD_LAYOUT_ITEM_LABELS = {
+    item["id"]: item["label"]
+    for item in CAT_WORLD_SHOP
+    if item["category"] in {"decor", "toy"}
+}
 CAT_WORLD_DECOR_FAVORITE_CAT = {
     "book-shelf": CAT_WORLD_DEFAULT_CAT_ID,
     "cloud-rug": "ragdoll",
@@ -639,6 +644,15 @@ CAT_WORLD_DECOR_DEFAULT_LAYOUT = {
     "study-desk": {"x": 43, "y": 62},
     "reading-lamp": {"x": 62, "y": 47},
     "word-gallery": {"x": 31, "y": 31},
+}
+CAT_WORLD_TOY_DEFAULT_LAYOUT = {
+    "rolling-ball": {"x": 24, "y": 70},
+    "scratch-board": {"x": 7, "y": 75},
+    "feather-wand": {"x": 83, "y": 45},
+}
+CAT_WORLD_ROOM_DEFAULT_LAYOUT = {
+    **CAT_WORLD_DECOR_DEFAULT_LAYOUT,
+    **CAT_WORLD_TOY_DEFAULT_LAYOUT,
 }
 CAT_WORLD_PRICING_PLANS = [
     {
@@ -3897,19 +3911,19 @@ async def vue_cat_world_room_layout_api(request: Request, db: Session = Depends(
     state = get_or_create_cat_world_state(db, phone)
     inventory = parse_cat_world_inventory(state.inventory)
     current_layout = parse_cat_world_room_layout(state.room_layout, inventory)
-    owned_decor_ids = {
+    owned_layout_item_ids = {
         item_id
         for item_id, count in inventory.items()
-        if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") == "decor"
+        if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") in {"decor", "toy"}
     }
     saved_layout = {**current_layout}
-    for decor_id, position in incoming.items():
-        decor_key = str(decor_id)
-        if decor_key not in owned_decor_ids:
+    for item_id, position in incoming.items():
+        item_key = str(item_id)
+        if item_key not in owned_layout_item_ids:
             continue
         normalized = normalize_cat_world_room_position(position)
         if normalized:
-            saved_layout[decor_key] = normalized
+            saved_layout[item_key] = normalized
     state.room_layout = encode_cat_world_room_layout(saved_layout)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
@@ -10199,32 +10213,32 @@ def parse_cat_world_room_layout(raw: str | None, inventory: dict[str, int] | Non
     if not isinstance(loaded, dict):
         loaded = {}
     inventory = inventory or {}
-    owned_decor_ids = [
+    owned_layout_item_ids = [
         item_id
         for item_id, count in inventory.items()
-        if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") == "decor"
+        if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") in {"decor", "toy"}
     ]
     layout: dict[str, dict[str, float]] = {}
-    for decor_id in owned_decor_ids:
-        default_position = CAT_WORLD_DECOR_DEFAULT_LAYOUT.get(decor_id, {"x": 8, "y": 58})
-        layout[decor_id] = {
+    for item_id in owned_layout_item_ids:
+        default_position = CAT_WORLD_ROOM_DEFAULT_LAYOUT.get(item_id, {"x": 8, "y": 58})
+        layout[item_id] = {
             "x": float(default_position["x"]),
             "y": float(default_position["y"]),
         }
-        custom_position = normalize_cat_world_room_position(loaded.get(decor_id))
+        custom_position = normalize_cat_world_room_position(loaded.get(item_id))
         if custom_position:
-            layout[decor_id] = custom_position
+            layout[item_id] = custom_position
     return layout
 
 
 def encode_cat_world_room_layout(layout: dict[str, Any]) -> str:
     clean: dict[str, dict[str, float]] = {}
-    for decor_id, position in layout.items():
-        if decor_id not in CAT_WORLD_DECOR_LABELS:
+    for item_id, position in layout.items():
+        if item_id not in CAT_WORLD_LAYOUT_ITEM_LABELS:
             continue
         normalized = normalize_cat_world_room_position(position)
         if normalized:
-            clean[decor_id] = normalized
+            clean[item_id] = normalized
     return json.dumps(clean, ensure_ascii=False, sort_keys=True)
 
 

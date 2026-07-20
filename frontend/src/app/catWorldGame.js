@@ -11,9 +11,9 @@ const CAT_INTERACTION_DEPTH = 980;
 const CAT_HITBOX = { x: -58, y: -74, width: 232, height: 184 };
 const ACTIVE_FOOD_SPOT = { x: GAME_WIDTH - 260, y: 408, width: 118, height: 46 };
 const ROOM_TOY_TARGETS = {
-  "rolling-ball": { label: "滚滚球", x: 334, y: 414 },
-  "scratch-board": { label: "猫抓板", x: 164, y: 418 },
-  "feather-wand": { label: "逗猫棒", x: GAME_WIDTH - 120, y: 320 },
+  "rolling-ball": { label: "滚滚球", width: 72, height: 64, defaultX: 312, defaultY: 392, focusX: 42, focusY: 34 },
+  "scratch-board": { label: "猫抓板", width: 150, height: 48, defaultX: 90, defaultY: 418, focusX: 74, focusY: 22 },
+  "feather-wand": { label: "逗猫棒", width: 172, height: 70, defaultX: GAME_WIDTH - 208, defaultY: 250, focusX: 88, focusY: 52 },
 };
 
 const DECOR_SPECS = {
@@ -194,7 +194,7 @@ class CatWorldScene extends Phaser.Scene {
 
   create() {
     this.input.on("dragstart", (_pointer, gameObject) => {
-      if (gameObject.getData("kind") !== "decor") return;
+      if (!gameObject.getData("layoutItem")) return;
       this.children.bringToTop(gameObject);
       gameObject.setData("dragOriginX", gameObject.x);
       gameObject.setData("dragOriginY", gameObject.y);
@@ -204,7 +204,7 @@ class CatWorldScene extends Phaser.Scene {
     });
 
     this.input.on("drag", (_pointer, gameObject, dragX, dragY) => {
-      if (gameObject.getData("kind") !== "decor") return;
+      if (!gameObject.getData("layoutItem")) return;
       const width = gameObject.getData("width") || 80;
       const height = gameObject.getData("height") || 60;
       const nextX = clamp(dragX, ROOM_BORDER, GAME_WIDTH - width - ROOM_BORDER);
@@ -224,7 +224,7 @@ class CatWorldScene extends Phaser.Scene {
     });
 
     this.input.on("dragend", (_pointer, gameObject) => {
-      if (gameObject.getData("kind") !== "decor") return;
+      if (!gameObject.getData("layoutItem")) return;
       gameObject.setAlpha(1);
       if (gameObject.getData("dragMoved")) {
         this.owner.handlers.onLayoutChange?.(this.owner.getLayout(), gameObject.getData("id"));
@@ -277,6 +277,7 @@ class CatWorldScene extends Phaser.Scene {
       const container = this.add.container(position.x, position.y);
       container.setSize(spec.width, spec.height);
       container.setData("kind", "decor");
+      container.setData("layoutItem", true);
       container.setData("id", decorId);
       container.setData("damaged", damaged);
       container.setData("width", spec.width);
@@ -333,65 +334,96 @@ class CatWorldScene extends Phaser.Scene {
       this.addRoomHitZone(snapshot.activeFood.itemId || "active-food", bowlX, 374, 142, 86, 728);
     }
     if (owned(snapshot.inventory, "rolling-ball")) {
-      const damaged = isDamaged(snapshot, "rolling-ball");
-      const active = lastPlayItem === "rolling-ball";
-      const ballX = 312;
-      const ballY = 392;
-      const ball = this.add.graphics();
-      ball.setAlpha(damaged ? 0.56 : 1);
-      ball.fillStyle(0x2c2f3a, 0.22);
-      ball.fillEllipse(ballX + 22, ballY + 44, 60, 12);
-      ball.fillStyle(0xfff07d, 1);
-      ball.fillCircle(ballX + 22, ballY + 22, 22);
-      ball.lineStyle(5, INK, 1);
-      ball.strokeCircle(ballX + 22, ballY + 22, 22);
-      ball.lineStyle(3, 0xff8cad, 1);
-      ball.lineBetween(ballX + 4, ballY + 22, ballX + 40, ballY + 22);
-      ball.lineBetween(ballX + 22, ballY + 4, ballX + 22, ballY + 40);
-      ball.fillStyle(0x87d9ff, 1);
-      ball.fillCircle(ballX + 22, ballY + 22, 7);
-      ball.setDepth(690);
-      if (active && !damaged) {
-        this.tweens.add({
-          targets: ball,
-          x: 26,
-          yoyo: true,
-          repeat: 5,
-          duration: 260,
-          ease: "Sine.easeInOut",
-        });
-      }
-      this.drawRoomItemLabel(damaged ? "滚滚球 损坏" : "滚滚球", ballX + 22, ballY - 7, 706);
-      if (damaged) this.drawDamagedMark(ballX - 10, ballY - 8, 72, 64, 709);
-      this.addRoomHitZone("rolling-ball", ballX - 20, ballY - 14, 88, 88, 708);
+      this.drawOwnedToy(snapshot, "rolling-ball", lastPlayItem === "rolling-ball");
     }
     if (owned(snapshot.inventory, "scratch-board")) {
-      const damaged = isDamaged(snapshot, "scratch-board");
-      const scratcher = this.add.graphics();
-      scratcher.setAlpha(damaged ? 0.56 : 1);
-      drawPixelRect(scratcher, 96, 426, 136, 26, 0xe6b06f);
-      scratcher.lineStyle(1, 0x7a573b, 0.45);
-      for (let x = 108; x < 218; x += 12) scratcher.lineBetween(x, 431, x + 8, 445);
-      scratcher.setDepth(464);
-      this.drawRoomItemLabel(damaged ? "猫抓板 损坏" : "猫抓板", 164, 406, 468);
-      if (damaged) this.drawDamagedMark(92, 416, 146, 48, 470);
-      this.addRoomHitZone("scratch-board", 90, 418, 150, 44, 466);
+      this.drawOwnedToy(snapshot, "scratch-board", lastPlayItem === "scratch-board");
     }
     if (owned(snapshot.inventory, "feather-wand")) {
-      const damaged = isDamaged(snapshot, "feather-wand");
-      const wandX = GAME_WIDTH - 208;
-      const wand = this.add.graphics();
-      wand.setAlpha(damaged ? 0.56 : 1);
-      wand.lineStyle(6, 0x7b5834, 1);
-      wand.lineBetween(wandX + 28, 320, wandX + 142, 280);
-      wand.fillStyle(0xff8cad, 1);
-      wand.fillTriangle(wandX + 136, 263, wandX + 163, 274, wandX + 142, 304);
-      wand.fillStyle(0xa9e8c8, 1);
-      wand.fillTriangle(wandX + 112, 262, wandX + 143, 272, wandX + 125, 298);
-      wand.setDepth(330);
-      this.drawRoomItemLabel(damaged ? "逗猫棒 损坏" : "逗猫棒", wandX + 88, 236, 334);
-      if (damaged) this.drawDamagedMark(wandX, 250, 172, 70, 336);
-      this.addRoomHitZone("feather-wand", wandX, 250, 172, 70, 332);
+      this.drawOwnedToy(snapshot, "feather-wand", lastPlayItem === "feather-wand");
+    }
+  }
+
+  drawOwnedToy(snapshot, itemId, active = false) {
+    const spec = ROOM_TOY_TARGETS[itemId];
+    if (!spec) return;
+    const damaged = isDamaged(snapshot, itemId);
+    const position = this.positionForToy(itemId, spec);
+    const container = this.add.container(position.x, position.y);
+    container.setSize(spec.width, spec.height);
+    container.setData("kind", "toy");
+    container.setData("layoutItem", true);
+    container.setData("id", itemId);
+    container.setData("damaged", damaged);
+    container.setData("width", spec.width);
+    container.setData("height", spec.height);
+    container.setDepth(position.y + 95);
+    container.setInteractive(new Phaser.Geom.Rectangle(0, 0, spec.width, spec.height), Phaser.Geom.Rectangle.Contains);
+    if (!damaged) {
+      this.input.setDraggable(container);
+    }
+    container.on("pointerdown", (_pointer, _localX, _localY, event) => {
+      this.stopPointerEvent(event);
+    });
+    container.on("pointerup", (_pointer, _localX, _localY, event) => {
+      this.stopPointerEvent(event);
+      if (!container.getData("dragMoved")) {
+        this.owner.handlers.onToyClick?.(itemId);
+      }
+    });
+    this.drawToyShape(container, itemId, spec, damaged, active);
+  }
+
+  drawToyShape(container, itemId, spec, damaged, active = false) {
+    const graphics = makeLocalGraphics(this, container);
+    graphics.setAlpha(damaged ? 0.56 : 1);
+    if (itemId === "rolling-ball") {
+      graphics.fillStyle(0x2c2f3a, 0.22);
+      graphics.fillEllipse(42, 54, 60, 12);
+      graphics.fillStyle(0xfff07d, 1);
+      graphics.fillCircle(42, 32, 22);
+      graphics.lineStyle(5, INK, 1);
+      graphics.strokeCircle(42, 32, 22);
+      graphics.lineStyle(3, 0xff8cad, 1);
+      graphics.lineBetween(24, 32, 60, 32);
+      graphics.lineBetween(42, 14, 42, 50);
+      graphics.fillStyle(0x87d9ff, 1);
+      graphics.fillCircle(42, 32, 7);
+    } else if (itemId === "scratch-board") {
+      drawPixelRect(graphics, 6, 18, 136, 26, 0xe6b06f);
+      graphics.lineStyle(1, 0x7a573b, 0.45);
+      for (let x = 18; x < 128; x += 12) graphics.lineBetween(x, 23, x + 8, 37);
+    } else if (itemId === "feather-wand") {
+      graphics.lineStyle(6, 0x7b5834, 1);
+      graphics.lineBetween(28, 60, 142, 20);
+      graphics.fillStyle(0xff8cad, 1);
+      graphics.fillTriangle(136, 3, 163, 14, 142, 44);
+      graphics.fillStyle(0xa9e8c8, 1);
+      graphics.fillTriangle(112, 2, 143, 12, 125, 38);
+    }
+    const label = this.add
+      .text(spec.width / 2, -8, damaged ? `${spec.label} 损坏` : spec.label, {
+        color: "#263047",
+        backgroundColor: "#fff8df",
+        fontFamily: "Consolas, monospace",
+        fontSize: "11px",
+        fontStyle: "bold",
+        padding: { x: 4, y: 2 },
+      })
+      .setOrigin(0.5);
+    container.add(label);
+    if (active && !damaged) {
+      this.tweens.add({
+        targets: container,
+        y: container.y - 5,
+        yoyo: true,
+        repeat: 4,
+        duration: 260,
+        ease: "Sine.easeInOut",
+      });
+    }
+    if (damaged) {
+      this.drawDamagedOverlay(container, spec.width, spec.height);
     }
   }
 
@@ -585,7 +617,7 @@ class CatWorldScene extends Phaser.Scene {
     if (!targetItemId || isDamaged(this.owner.snapshot, targetItemId)) return null;
     const seed = `${cat.id || "cat"}:${targetItemId}:${goal.key || "goal"}:${index}`;
     if (goal.targetType === "toy" && owned(this.owner.snapshot.inventory, targetItemId) && ROOM_TOY_TARGETS[targetItemId]) {
-      const target = ROOM_TOY_TARGETS[targetItemId];
+      const target = this.toyFocusPoint(targetItemId);
       return {
         x: clamp(target.x + seededOffset(`${seed}:x`, 38), 38, GAME_WIDTH - 132),
         y: clamp(target.y + seededOffset(`${seed}:y`, 20), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
@@ -1091,7 +1123,7 @@ class CatWorldScene extends Phaser.Scene {
     if (!targetItemId || isDamaged(this.owner.snapshot, targetItemId)) return null;
     const isMischiefWatch = goal.key === "mischief-watch";
     if (goal.targetType === "toy" && owned(this.owner.snapshot.inventory, targetItemId) && ROOM_TOY_TARGETS[targetItemId]) {
-      const target = ROOM_TOY_TARGETS[targetItemId];
+      const target = this.toyFocusPoint(targetItemId);
       return {
         itemId: targetItemId,
         label: goal.targetLabel || target.label,
@@ -1138,7 +1170,7 @@ class CatWorldScene extends Phaser.Scene {
     );
     if (!ownedFavorites.length) return null;
     const itemId = ownedFavorites[Phaser.Math.Between(0, ownedFavorites.length - 1)];
-    const target = ROOM_TOY_TARGETS[itemId];
+    const target = this.toyFocusPoint(itemId);
     const agent = this.owner.snapshot?.dailyLogs?.[cat.id]?.agentState || {};
     const energy = catEnergyForSnapshot(this.owner.snapshot, cat);
     const mood = catMoodForSnapshot(this.owner.snapshot, cat);
@@ -1471,6 +1503,30 @@ class CatWorldScene extends Phaser.Scene {
     return {
       x: percentToX(position.x, spec.width),
       y: percentToY(position.y, spec.height),
+    };
+  }
+
+  positionForToy(itemId, spec) {
+    const position = this.owner.layout[itemId];
+    if (!position) {
+      return { x: spec.defaultX, y: spec.defaultY };
+    }
+    return {
+      x: percentToX(position.x, spec.width),
+      y: percentToY(position.y, spec.height),
+    };
+  }
+
+  toyFocusPoint(itemId) {
+    const spec = ROOM_TOY_TARGETS[itemId];
+    if (!spec) {
+      return { label: "玩具", x: GAME_WIDTH / 2, y: FLOOR_TOP + 120 };
+    }
+    const position = this.positionForToy(itemId, spec);
+    return {
+      label: spec.label,
+      x: position.x + Number(spec.focusX || spec.width / 2),
+      y: position.y + Number(spec.focusY || spec.height / 2),
     };
   }
 }

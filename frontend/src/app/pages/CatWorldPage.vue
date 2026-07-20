@@ -317,7 +317,7 @@ const catAgentDiaries = computed(() =>
 );
 const gameSnapshot = computed(() => ({
   cats: cats.value,
-  inventory: usableInventory.value,
+  inventory: inventory.value,
   damagedItems: damagedItems.value,
   layout: roomLayout.value,
   mood: mood.value,
@@ -357,8 +357,8 @@ function updateCatWorldGame() {
   catWorldGame.value?.update(gameSnapshot.value);
 }
 
-function handleGameLayoutChange(nextLayout, decorId) {
-  selectedDecorId.value = decorId || selectedDecorId.value;
+function handleGameLayoutChange(nextLayout, itemId) {
+  selectedDecorId.value = itemId || selectedDecorId.value;
   layoutDraft.value = normalizeLayoutDraft(nextLayout);
   layoutDirty.value = true;
 }
@@ -475,7 +475,7 @@ function ownedToolActionText(item) {
   if (damaged) return `维修 ${damaged.repairCost || 0} 能量`;
   if (item.category === "decor") return selectedDecorId.value === item.id ? "已选中" : "选择拖动";
   if (item.category === "food") return `摆进房间 +${foodEnergyGainValue(item)}体力`;
-  if (item.category === "toy") return "互动";
+  if (item.category === "toy") return "房间可拖动";
   if (item.category === "cat") return state.value.selectedCat === item.id ? "正在陪读" : "切换主猫";
   return "使用";
 }
@@ -536,7 +536,12 @@ function handleOwnedToolClick(item) {
     notice.value = `已选中 ${item.label}，在左侧房间里拖动它后点击保存布局。`;
     return;
   }
-  if (item.category === "food" || item.category === "toy") {
+  if (item.category === "toy") {
+    selectedDecorId.value = item.id;
+    notice.value = `${item.label} 可以直接在左侧房间里拖动保存；点击房间里的它会和猫咪互动。`;
+    return;
+  }
+  if (item.category === "food") {
     play(item);
     return;
   }
@@ -878,7 +883,7 @@ async function selectCat(catId) {
         <div class="cat-world-room" aria-label="猫咪房间场景">
           <div ref="gameMountRef" class="cat-world-game-stage"></div>
           <div v-if="selectedDecorId || layoutDirty" class="cat-world-layout-toolbar">
-            <span>{{ layoutDirty ? "布局有改动" : "拖动家具后可保存布局" }}</span>
+            <span>{{ layoutDirty ? "布局有改动" : "拖动道具后可保存布局" }}</span>
             <button
               type="button"
               :disabled="!layoutDirty || savingRoomLayout"
