@@ -526,7 +526,19 @@ async function saveRoomLayout() {
     });
     replacePayload(nextPayload);
     layoutDirty.value = false;
-    notice.value = "房间布局已保存。";
+    const rewards = Array.isArray(nextPayload.layoutRewards) ? nextPayload.layoutRewards : [];
+    if (rewards.length) {
+      const firstReward = rewards[0];
+      const rewardText = rewards
+        .slice(0, 3)
+        .map((reward) => `${reward.catLabel || "猫咪"}喜欢${reward.decorLabel || "这件家具"}，心情 +${reward.moodGain || 0}`)
+        .join("；");
+      notice.value = `房间布局已保存。${rewardText}${rewards.length > 3 ? "……" : ""}。`;
+      const rewardCat = cats.value.find((cat) => cat.id === firstReward.catId) || focusedCat.value;
+      showCatReaction(rewardCat, `喜欢${firstReward.decorLabel || "这个布置"}，心情 +${firstReward.moodGain || 0}。`);
+    } else {
+      notice.value = "房间布局已保存。";
+    }
   } catch (error) {
     notice.value = error.message || "布局保存失败，请稍后再试。";
   } finally {

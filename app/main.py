@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-026"
-DEFAULT_PAGE_VERSION = "v20260721.26"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-027"
+DEFAULT_PAGE_VERSION = "v20260721.27"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3832,10 +3832,20 @@ async def vue_cat_world_room_layout_api(request: Request, db: Session = Depends(
         if normalized:
             saved_layout[decor_key] = normalized
     state.room_layout = encode_cat_world_room_layout(saved_layout)
+    damaged_items = parse_cat_world_damaged_items(state.damaged_items)
+    usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
+    usable_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
+    rewards = cat_world_apply_favorite_decor_rewards(
+        db,
+        state,
+        usable_inventory,
+        usable_layout,
+        parse_cat_world_cats(state.cats),
+    )
     db.add(state)
     db.commit()
     db.refresh(state)
-    return {"ok": True, **serialize_cat_world_payload(db, state)}
+    return {"ok": True, "layoutRewards": rewards, **serialize_cat_world_payload(db, state)}
 
 
 @app.post("/api/vue/cat-world/select-cat")
@@ -10397,6 +10407,7 @@ CAT_WORLD_AGENT_STATE_CARRY_KEYS = {
     "activeFoodStartedAt",
     "activeFoodToken",
     "ambientEventAt",
+    "favoriteDecorRewarded",
     "lastPetAt",
     "mischiefChecked",
     "mischiefItemId",
@@ -11043,6 +11054,64 @@ def cat_world_apply_agent_damage_events(
         db.add(log)
         changed = True
     return damaged_items, changed
+
+
+def cat_world_apply_favorite_decor_rewards(
+    db: Session,
+    state: CatWorldState,
+    inventory: dict[str, int],
+    room_layout: dict[str, dict[str, float]],
+    owned_cats: list[str],
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    now = now or datetime.utcnow()
+    rewards: list[dict[str, Any]] = []
+    for cat_id in owned_cats:
+        cat = CAT_WORLD_CAT_BY_ID.get(cat_id)
+        if not cat:
+            continue
+        favorite_decor_ids = cat_world_active_favorite_decor_ids(cat_id, inventory, room_layout)
+        if not favorite_decor_ids:
+            continue
+        traits = cat_world_cat_traits(cat)
+        log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now)
+        apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_decor_ids), now)
+        agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
+        rewarded = agent_state.get("favoriteDecorRewarded")
+        if not isinstance(rewarded, list):
+            rewarded = []
+        rewarded_set = {str(item) for item in rewarded}
+        for decor_id in favorite_decor_ids:
+            token = f"{log.log_date.isoformat()}:{decor_id}"
+            if token in rewarded_set:
+                continue
+            item = CAT_WORLD_SHOP_BY_ID.get(decor_id, {})
+            label = item.get("label") or decor_id
+            bonus = 5 if str(traits.get("temperament") or "") in {"clingy", "gentle"} else 4
+            log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + bonus)
+            rewarded_set.add(token)
+            rewards.append(
+                {
+                    "catId": cat_id,
+                    "catLabel": cat["label"],
+                    "decorId": decor_id,
+                    "decorLabel": label,
+                    "moodGain": bonus,
+                }
+            )
+            agent_state = append_cat_world_agent_event(
+                log,
+                cat,
+                traits,
+                "favorite-decor-layout",
+                "喜欢家具",
+                f"你把{label}摆进房间，{cat['label']}很喜欢，心情 +{bonus}。",
+                now,
+            )
+        agent_state["favoriteDecorRewarded"] = sorted(rewarded_set)
+        log.agent_state = encode_cat_world_agent_state(agent_state)
+        db.add(log)
+    return rewards
 
 
 def cat_world_apply_daily_decay(
