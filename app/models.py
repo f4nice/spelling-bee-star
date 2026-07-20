@@ -201,6 +201,8 @@ class CatWorldState(Base):
     selected_cat: Mapped[str] = mapped_column(String(80), default="mimi", server_default="mimi", nullable=False)
     last_play_item: Mapped[str | None] = mapped_column(String(80))
     last_played_at: Mapped[datetime | None] = mapped_column(DateTime)
+    active_food_item: Mapped[str | None] = mapped_column(String(80))
+    active_food_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

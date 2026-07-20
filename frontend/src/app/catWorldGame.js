@@ -18,23 +18,6 @@ const DECOR_SPECS = {
 };
 
 const CAT_PIXEL_SIZE = 2;
-const CAT_PIXEL_ROWS = [
-  "....................OO....OO....",
-  "...................OBBO..OBBO...",
-  "..................OBPPBOOBPPBO..",
-  ".................OBBBBBBBBBBBBO..",
-  "....OOO..........OBBEEBBBEEBBBO..",
-  "...OBBBOO........OBBBBBNBBBBBBO..",
-  "..OBBBBBBOOOOOOOOOBBBMMMMMBBBO...",
-  ".OBBBBBBBBBBBBBBBBBBMMMMMBBBO....",
-  "OBBBBBBSBBBBBSBBBBBBMMMMBBBO.....",
-  "OBBBBBBBBBBBBBBBBBBBBBBBBBBO.....",
-  ".OBBBBBBBBBBBBBBBBBBBBBBBBBO.....",
-  "..OBBBBBOOBBBBBBBBBOOBBBBBO......",
-  "...OBBBO..OBBBBBBBO..OBBBO.......",
-  "....OBBO...OOBBOO....OBBO........",
-  ".....OO......OO.......OO.........",
-];
 
 const CAT_COLORS = {
   mimi: { body: 0xffc46b, shade: 0xd88a3d, stripe: 0x7a4a28, belly: 0xffdf9f, nose: 0xf06f91 },
@@ -78,6 +61,7 @@ function normalizeSnapshot(snapshot = {}) {
     inventory: snapshot.inventory || {},
     layout: cloneLayout(snapshot.layout),
     mood: snapshot.mood || {},
+    activeFood: snapshot.activeFood || snapshot.mood?.activeFood || {},
     ownedCats: Array.isArray(snapshot.ownedCats) ? snapshot.ownedCats : [],
     ownedFoodCount: Number(snapshot.ownedFoodCount || 0),
     roomStyles: snapshot.roomStyles || {},
@@ -114,6 +98,12 @@ function drawPixelRect(graphics, x, y, width, height, fill, stroke = INK, lineWi
   graphics.fillRect(x, y, width, height);
   graphics.lineStyle(lineWidth, stroke, 1);
   graphics.strokeRect(x, y, width, height);
+}
+
+function pixelBlock(graphics, x, y, width, height, fill) {
+  const size = CAT_PIXEL_SIZE;
+  graphics.fillStyle(fill, 1);
+  graphics.fillRect(x * size, y * size, width * size, height * size);
 }
 
 function makeLocalGraphics(scene, container) {
@@ -235,13 +225,27 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   drawInventoryItems(snapshot) {
-    if (snapshot.ownedFoodCount > 0) {
+    if (snapshot.activeFood?.active) {
+      const foodLabel = snapshot.activeFood.label || "食物";
       const bowl = this.add.graphics();
       drawPixelRect(bowl, 786, 418, 72, 34, 0xff8cad);
       bowl.fillStyle(0xfff07d, 1);
       bowl.fillRect(798, 423, 48, 8);
+      bowl.fillStyle(0xfff8df, 1);
+      bowl.fillRect(810, 434, 24, 6);
       bowl.setDepth(456);
-      this.addRoomHitZone("food-bowl", 778, 408, 92, 58);
+      this.add
+        .text(822, 408, foodLabel, {
+          color: "#263047",
+          backgroundColor: "#fff8df",
+          fontFamily: "Consolas, monospace",
+          fontSize: "10px",
+          fontStyle: "bold",
+          padding: { x: 4, y: 2 },
+        })
+        .setOrigin(0.5)
+        .setDepth(460);
+      this.addRoomHitZone(snapshot.activeFood.itemId || "active-food", 778, 408, 92, 58, 461);
     }
     if (owned(snapshot.inventory, "scratch-board")) {
       const scratcher = this.add.graphics();
@@ -249,7 +253,7 @@ class CatWorldScene extends Phaser.Scene {
       scratcher.lineStyle(1, 0x7a573b, 0.45);
       for (let x = 108; x < 218; x += 12) scratcher.lineBetween(x, 431, x + 8, 445);
       scratcher.setDepth(464);
-      this.addRoomHitZone("scratch-board", 90, 418, 150, 44);
+      this.addRoomHitZone("scratch-board", 90, 418, 150, 44, 466);
     }
     if (owned(snapshot.inventory, "feather-wand")) {
       const wand = this.add.graphics();
@@ -260,7 +264,7 @@ class CatWorldScene extends Phaser.Scene {
       wand.fillStyle(0xa9e8c8, 1);
       wand.fillTriangle(864, 262, 895, 272, 877, 298);
       wand.setDepth(330);
-      this.addRoomHitZone("feather-wand", 752, 250, 172, 70);
+      this.addRoomHitZone("feather-wand", 752, 250, 172, 70, 332);
     }
   }
 
@@ -324,14 +328,14 @@ class CatWorldScene extends Phaser.Scene {
     const cats = snapshot.cats.filter((cat) => ownedCatIds.has(cat.id));
     const visibleCats = cats.length ? cats : snapshot.cats.slice(0, 1);
     visibleCats.forEach((cat, index) => {
-      const x = 130 + (index % 6) * 116;
-      const y = FLOOR_BOTTOM - 44 - Math.floor(index / 6) * 42;
+      const x = 98 + (index % 5) * 160;
+      const y = FLOOR_BOTTOM - 68 - Math.floor(index / 5) * 56;
       const container = this.add.container(x, y);
-      container.setSize(76, 48);
+      container.setSize(100, 70);
       container.setData("kind", "cat");
       container.setData("id", cat.id);
-      container.setDepth(y + 80);
-      container.setInteractive(new Phaser.Geom.Rectangle(0, 0, 78, 40), Phaser.Geom.Rectangle.Contains);
+      container.setDepth(y + 100);
+      container.setInteractive(new Phaser.Geom.Rectangle(0, -24, 102, 88), Phaser.Geom.Rectangle.Contains);
       container.on("pointerdown", (_pointer, _localX, _localY, event) => {
         this.stopPointerEvent(event);
       });
@@ -340,35 +344,62 @@ class CatWorldScene extends Phaser.Scene {
         this.spawnCatBubble(container, cat);
         this.owner.handlers.onCatPet?.(cat);
       });
-      this.drawCatShape(container, cat, snapshot.selectedCatId === cat.id);
+      this.drawCatShape(container, cat, snapshot.selectedCatId === cat.id, snapshot);
       this.catContainers.set(cat.id, container);
       this.scheduleCatWalk(container, index);
     });
   }
 
-  drawCatShape(container, cat, selected) {
+  drawCatShape(container, cat, selected, snapshot) {
     const colors = CAT_COLORS[cat.id] || CAT_COLORS.mimi;
     const graphics = makeLocalGraphics(this, container);
     graphics.fillStyle(0x203041, 0.18);
-    graphics.fillRect(4, 32, 72, 6);
+    graphics.fillRect(7, 49, 82, 7);
     this.drawCatPixels(graphics, cat, colors);
+    this.drawStatusBars(graphics, snapshot?.mood?.catEnergy ?? 50, snapshot?.mood?.score ?? 50);
 
     graphics.fillStyle(selected ? 0xfff07d : 0xff8cad, 1);
-    graphics.fillRect(34, -8, selected ? 18 : 10, 8);
+    graphics.fillRect(42, -24, selected ? 18 : 10, 8);
     graphics.lineStyle(2, INK, 1);
-    graphics.strokeRect(34, -8, selected ? 18 : 10, 8);
+    graphics.strokeRect(42, -24, selected ? 18 : 10, 8);
     if (selected) {
       graphics.fillStyle(0x2c2f3a, 1);
-      graphics.fillRect(38, -5, 2, 3);
-      graphics.fillRect(44, -5, 2, 3);
-      graphics.fillRect(50, -5, 2, 3);
+      graphics.fillRect(46, -21, 2, 3);
+      graphics.fillRect(52, -21, 2, 3);
+      graphics.fillRect(58, -21, 2, 3);
+    }
+    if (snapshot?.mood?.canWalk === false) {
+      graphics.fillStyle(0xffffff, 1);
+      graphics.fillRect(76, 2, 18, 10);
+      graphics.fillStyle(INK, 1);
+      graphics.fillRect(79, 5, 4, 2);
+      graphics.fillRect(84, 3, 4, 2);
+      graphics.fillRect(89, 5, 4, 2);
     }
   }
 
-  addRoomHitZone(itemId, x, y, width, height) {
+  drawStatusBars(graphics, catEnergy, moodScore) {
+    this.drawTinyBar(graphics, 4, -17, 72, 5, catEnergy, 0xff4f6d);
+    this.drawTinyBar(graphics, 4, -10, 72, 5, moodScore, 0x54b7ff);
+  }
+
+  drawTinyBar(graphics, x, y, width, height, value, color) {
+    const ratio = clamp(value, 0, 100) / 100;
+    graphics.fillStyle(0xfff8df, 1);
+    graphics.fillRect(x, y, width, height);
+    graphics.fillStyle(0x2c2f3a, 1);
+    graphics.fillRect(x - 1, y - 1, width + 2, 1);
+    graphics.fillRect(x - 1, y + height, width + 2, 1);
+    graphics.fillRect(x - 1, y - 1, 1, height + 2);
+    graphics.fillRect(x + width, y - 1, 1, height + 2);
+    graphics.fillStyle(color, 1);
+    graphics.fillRect(x + 1, y + 1, Math.max(Math.round((width - 2) * ratio), 1), height - 2);
+  }
+
+  addRoomHitZone(itemId, x, y, width, height, depth = 420) {
     const zone = this.add.zone(x, y, width, height);
     zone.setOrigin(0, 0);
-    zone.setDepth(1200);
+    zone.setDepth(depth);
     zone.setData("kind", "room-item");
     zone.setData("id", itemId);
     zone.setInteractive(new Phaser.Geom.Rectangle(0, 0, width, height), Phaser.Geom.Rectangle.Contains);
@@ -386,36 +417,73 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   drawCatPixels(graphics, cat, colors) {
-    CAT_PIXEL_ROWS.forEach((row, rowIndex) => {
-      [...row].forEach((token, columnIndex) => {
-        const color = this.colorForCatPixel(token, rowIndex, columnIndex, cat, colors);
-        if (color === null) return;
-        graphics.fillStyle(color, 1);
-        graphics.fillRect(columnIndex * CAT_PIXEL_SIZE, rowIndex * CAT_PIXEL_SIZE, CAT_PIXEL_SIZE, CAT_PIXEL_SIZE);
-      });
-    });
-  }
+    const body = colors.body;
+    const shade = colors.shade;
+    const stripe = colors.stripe;
+    const belly = colors.belly;
+    const nose = colors.nose;
+    pixelBlock(graphics, 4, 15, 8, 5, INK);
+    pixelBlock(graphics, 2, 12, 6, 5, INK);
+    pixelBlock(graphics, 3, 9, 5, 4, INK);
+    pixelBlock(graphics, 6, 8, 7, 3, INK);
+    pixelBlock(graphics, 5, 15, 6, 3, body);
+    pixelBlock(graphics, 3, 13, 4, 3, body);
+    pixelBlock(graphics, 4, 10, 3, 2, body);
+    pixelBlock(graphics, 7, 9, 5, 1, body);
 
-  colorForCatPixel(token, rowIndex, columnIndex, cat, colors) {
-    if (token === ".") return null;
-    if (token === "O") return INK;
-    if (token === "P") return 0xffbfd7;
-    if (token === "E") return 0x111827;
-    if (token === "N") return colors.nose;
-    if (token === "S") return colors.stripe;
-    if (token === "M") return colors.belly;
-    if (cat.id === "siamese" && columnIndex >= 18 && columnIndex <= 29 && rowIndex >= 3 && rowIndex <= 7) {
-      return colors.shade;
-    }
-    return token === "B" ? colors.body : null;
+    pixelBlock(graphics, 11, 11, 25, 14, INK);
+    pixelBlock(graphics, 13, 9, 20, 4, INK);
+    pixelBlock(graphics, 15, 25, 15, 3, INK);
+    pixelBlock(graphics, 12, 13, 23, 10, body);
+    pixelBlock(graphics, 15, 20, 16, 4, belly);
+    pixelBlock(graphics, 15, 13, 3, 4, shade);
+    pixelBlock(graphics, 22, 12, 3, 4, shade);
+    pixelBlock(graphics, 29, 13, 3, 4, shade);
+    pixelBlock(graphics, 13, 24, 5, 6, INK);
+    pixelBlock(graphics, 14, 24, 3, 5, body);
+    pixelBlock(graphics, 28, 24, 5, 6, INK);
+    pixelBlock(graphics, 29, 24, 3, 5, body);
+    pixelBlock(graphics, 13, 29, 6, 2, INK);
+    pixelBlock(graphics, 28, 29, 6, 2, INK);
+
+    pixelBlock(graphics, 34, 7, 14, 15, INK);
+    pixelBlock(graphics, 35, 8, 12, 13, body);
+    pixelBlock(graphics, 35, 3, 6, 6, INK);
+    pixelBlock(graphics, 37, 5, 3, 4, body);
+    pixelBlock(graphics, 37, 6, 2, 2, 0xffbfd7);
+    pixelBlock(graphics, 43, 3, 6, 6, INK);
+    pixelBlock(graphics, 44, 5, 3, 4, body);
+    pixelBlock(graphics, 45, 6, 2, 2, 0xffbfd7);
+    pixelBlock(graphics, 38, 12, 2, 2, 0x111827);
+    pixelBlock(graphics, 44, 12, 2, 2, 0x111827);
+    pixelBlock(graphics, 41, 15, 2, 2, nose);
+    pixelBlock(graphics, 39, 17, 5, 1, stripe);
+    pixelBlock(graphics, 35, 16, 3, 2, 0xffbfd7);
+    pixelBlock(graphics, 45, 16, 3, 2, 0xffbfd7);
+    pixelBlock(graphics, 32, 14, 4, 1, INK);
+    pixelBlock(graphics, 47, 14, 4, 1, INK);
+    pixelBlock(graphics, 31, 17, 4, 1, INK);
+    pixelBlock(graphics, 48, 17, 4, 1, INK);
   }
 
   scheduleCatWalk(container, index) {
+    if (this.owner.snapshot?.mood?.canWalk === false) {
+      this.tweens.add({
+        targets: container,
+        y: container.y - 3,
+        yoyo: true,
+        repeat: -1,
+        duration: 900 + index * 120,
+        ease: "Sine.easeInOut",
+        onUpdate: () => container.setDepth(container.y + 80),
+      });
+      return;
+    }
     const delay = Phaser.Math.Between(600, 1800) + index * 220;
     this.time.delayedCall(delay, () => {
       if (!container.active) return;
-      const nextX = Phaser.Math.Between(56, GAME_WIDTH - 116);
-      const nextY = Phaser.Math.Between(FLOOR_TOP + 48, FLOOR_BOTTOM - 46);
+      const nextX = Phaser.Math.Between(38, GAME_WIDTH - 132);
+      const nextY = Phaser.Math.Between(FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
       const duration = Phaser.Math.Between(2600, 5600);
       this.tweens.add({
         targets: container,
@@ -423,7 +491,7 @@ class CatWorldScene extends Phaser.Scene {
         y: nextY,
         duration,
         ease: "Sine.easeInOut",
-        onUpdate: () => container.setDepth(container.y + 80),
+        onUpdate: () => container.setDepth(container.y + 100),
         onComplete: () => this.scheduleCatWalk(container, index),
       });
     });

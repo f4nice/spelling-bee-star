@@ -87,8 +87,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260720-010"
-DEFAULT_PAGE_VERSION = "v20260720.10"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260720-011"
+DEFAULT_PAGE_VERSION = "v20260720.11"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -227,6 +227,8 @@ CAT_WORLD_SHOP = [
         "englishName": "Salmon Bowl",
         "cost": 60,
         "mood": 6,
+        "catEnergy": 28,
+        "durationMinutes": 30,
         "description": "给猫咪补充一顿香香的学习奖励餐。",
     },
     {
@@ -236,6 +238,8 @@ CAT_WORLD_SHOP = [
         "englishName": "Tuna Can",
         "cost": 90,
         "mood": 8,
+        "catEnergy": 36,
+        "durationMinutes": 45,
         "description": "适合完成一轮挑战后打开的小奖励。",
     },
     {
@@ -245,6 +249,8 @@ CAT_WORLD_SHOP = [
         "englishName": "Goat Milk Pudding",
         "cost": 120,
         "mood": 10,
+        "catEnergy": 45,
+        "durationMinutes": 60,
         "description": "柔软、甜一点，心情会明显变好。",
     },
     {
@@ -3510,14 +3516,22 @@ async def vue_cat_world_play_api(request: Request, db: Session = Depends(get_db)
         raise HTTPException(status_code=400, detail="互动数据不是有效 JSON。") from exc
     item_id = str((payload or {}).get("itemId") or "").strip()
     item = CAT_WORLD_SHOP_BY_ID.get(item_id)
-    if not item or item["category"] != "toy":
-        raise HTTPException(status_code=400, detail="请选择已经拥有的玩具来逗猫。")
+    if not item or item["category"] not in {"toy", "food"}:
+        raise HTTPException(status_code=400, detail="请选择已经拥有的食物或玩具。")
     state = get_or_create_cat_world_state(db, phone)
     inventory = parse_cat_world_inventory(state.inventory)
     if inventory.get(item_id, 0) <= 0:
-        raise HTTPException(status_code=400, detail="还没有这个玩具，先用能量值买一个。")
-    state.last_play_item = item_id
-    state.last_played_at = datetime.utcnow()
+        raise HTTPException(status_code=400, detail="还没有这个道具，先用能量值买一个。")
+    if item["category"] == "food":
+        inventory[item_id] = max(inventory.get(item_id, 0) - 1, 0)
+        if inventory[item_id] <= 0:
+            inventory.pop(item_id, None)
+        state.inventory = encode_cat_world_inventory(inventory)
+        state.active_food_item = item_id
+        state.active_food_at = datetime.utcnow()
+    else:
+        state.last_play_item = item_id
+        state.last_played_at = datetime.utcnow()
     db.add(state)
     db.commit()
     db.refresh(state)
@@ -9643,20 +9657,37 @@ def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
     return state
 
 
+def cat_world_active_food(state: CatWorldState) -> dict[str, Any]:
+    item_id = str(state.active_food_item or "").strip()
+    item = CAT_WORLD_SHOP_BY_ID.get(item_id)
+    if not item or item.get("category") != "food" or not state.active_food_at:
+        return {"active": False, "itemId": "", "label": "", "remainingSeconds": 0, "durationSeconds": 0}
+    duration_seconds = max(int(item.get("durationMinutes") or 30), 1) * 60
+    elapsed_seconds = max(int((datetime.utcnow() - state.active_food_at).total_seconds()), 0)
+    remaining_seconds = max(duration_seconds - elapsed_seconds, 0)
+    if remaining_seconds <= 0:
+        return {"active": False, "itemId": "", "label": "", "remainingSeconds": 0, "durationSeconds": duration_seconds}
+    return {
+        "active": True,
+        "itemId": item_id,
+        "label": item["label"],
+        "englishName": item.get("englishName") or "",
+        "mood": int(item.get("mood") or 0),
+        "catEnergy": int(item.get("catEnergy") or 0),
+        "remainingSeconds": remaining_seconds,
+        "durationSeconds": duration_seconds,
+        "expiresAt": (state.active_food_at + timedelta(seconds=duration_seconds)).isoformat(),
+    }
+
+
 def cat_world_mood(
     state: CatWorldState,
     inventory: dict[str, int],
     owned_cats: list[str],
     available_energy: int,
 ) -> dict[str, Any]:
-    food_bonus = min(
-        18,
-        sum(
-            int(CAT_WORLD_SHOP_BY_ID[item_id].get("mood") or 0) * count
-            for item_id, count in inventory.items()
-            if CAT_WORLD_SHOP_BY_ID[item_id]["category"] == "food"
-        ),
-    )
+    active_food = cat_world_active_food(state)
+    food_bonus = int(active_food.get("mood") or 0) if active_food.get("active") else 0
     toy_bonus = min(
         18,
         sum(
@@ -9678,6 +9709,16 @@ def cat_world_mood(
     recent_play = bool(state.last_played_at and datetime.utcnow() - state.last_played_at <= timedelta(hours=24))
     play_bonus = 12 if recent_play else 0
     score = max(35, min(100, 48 + food_bonus + toy_bonus + decor_bonus + cat_bonus + energy_bonus + play_bonus))
+    cat_energy = max(
+        5,
+        min(
+            100,
+            18
+            + min(max(available_energy, 0) // 160, 36)
+            + (int(active_food.get("catEnergy") or 0) if active_food.get("active") else 0)
+            + (8 if recent_play else 0),
+        ),
+    )
     if score >= 88:
         label = "开心到打呼噜"
     elif score >= 72:
@@ -9689,6 +9730,10 @@ def cat_world_mood(
     return {
         "score": score,
         "label": label,
+        "catEnergy": cat_energy,
+        "catEnergyLabel": "体力充足" if cat_energy >= 58 else ("原地休息" if cat_energy < 34 else "慢慢走动"),
+        "canWalk": cat_energy >= 34,
+        "activeFood": active_food,
         "recentPlay": recent_play,
         "lastPlayItem": state.last_play_item or "",
         "lastPlayedAt": state.last_played_at.isoformat() if state.last_played_at else "",
@@ -9958,6 +10003,10 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN room_styles TEXT NULL"))
         if "cat_world_states" in table_names and "room_layout" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN room_layout TEXT NULL"))
+        if "cat_world_states" in table_names and "active_food_item" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_food_item VARCHAR(80) NULL"))
+        if "cat_world_states" in table_names and "active_food_at" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_food_at DATETIME NULL"))
         if "wrong_words" in table_names and "wrong_date" not in wrong_columns:
             if dialect == "mysql":
                 connection.execute(text("ALTER TABLE wrong_words ADD COLUMN wrong_date DATE NULL"))

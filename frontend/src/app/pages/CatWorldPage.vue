@@ -23,6 +23,8 @@ const layoutDraft = ref({});
 const selectedDecorId = ref("");
 const layoutDirty = ref(false);
 const savingRoomLayout = ref(false);
+const activeToolCategory = ref("decor");
+const clockNow = ref(Date.now());
 
 const catReactionTexts = [
   "收到摸摸指令，开心值上升",
@@ -31,6 +33,7 @@ const catReactionTexts = [
   "想法缓存刷新，准备继续陪你学",
 ];
 let catReactionTimer = 0;
+let activeFoodClockTimer = 0;
 let gameMountActive = false;
 
 watch(
@@ -43,11 +46,15 @@ watch(
 onBeforeUnmount(() => {
   gameMountActive = false;
   window.clearTimeout(catReactionTimer);
+  window.clearInterval(activeFoodClockTimer);
   catWorldGame.value?.destroy();
   catWorldGame.value = null;
 });
 
 onMounted(async () => {
+  activeFoodClockTimer = window.setInterval(() => {
+    clockNow.value = Date.now();
+  }, 10000);
   if (!gameMountRef.value) return;
   gameMountActive = true;
   const { CatWorldGame } = await import("../catWorldGame.js");
@@ -70,6 +77,13 @@ const categories = [
   { key: "decor", label: "装修" },
   { key: "color", label: "配色" },
   { key: "cat", label: "名猫" },
+];
+
+const toolCategories = [
+  { key: "decor", label: "装饰" },
+  { key: "food", label: "食物" },
+  { key: "toy", label: "玩具" },
+  { key: "cat", label: "猫咪" },
 ];
 
 const energy = computed(() => payload.value.energy || {});
@@ -95,6 +109,23 @@ const focusedCat = computed(
     {},
 );
 const mood = computed(() => state.value.mood || {});
+const rawActiveFood = computed(() => mood.value.activeFood || {});
+const activeFoodRemainingSeconds = computed(() => {
+  const food = rawActiveFood.value || {};
+  if (!food.active) return 0;
+  const expiresAt = Date.parse(food.expiresAt || "");
+  if (Number.isFinite(expiresAt)) {
+    return Math.max(Math.ceil((expiresAt - clockNow.value) / 1000), 0);
+  }
+  return Math.max(Number(food.remainingSeconds || 0), 0);
+});
+const activeFood = computed(() => ({
+  ...rawActiveFood.value,
+  active: Boolean(rawActiveFood.value?.active && activeFoodRemainingSeconds.value > 0),
+  remainingSeconds: activeFoodRemainingSeconds.value,
+}));
+const catEnergyScore = computed(() => Number(mood.value.catEnergy ?? 50));
+const moodScore = computed(() => Number(mood.value.score ?? 50));
 const selectedItems = computed(() => shop.value.filter((item) => item.category === activeCategory.value));
 const ownedDecor = computed(() =>
   Object.entries(inventory.value)
@@ -112,6 +143,25 @@ const ownedFoodCount = computed(() =>
     .reduce((sum, [, count]) => sum + Number(count || 0), 0),
 );
 const lastPlayLabel = computed(() => shopById.value[mood.value.lastPlayItem]?.label || "");
+const activeToolItems = computed(() => {
+  if (activeToolCategory.value === "cat") {
+    return cats.value
+      .filter((cat) => ownsCat(cat.id))
+      .map((cat) => ({
+        ...cat,
+        category: "cat",
+        count: 1,
+        actionLabel: state.value.selectedCat === cat.id ? "正在陪读" : "切换主猫",
+      }));
+  }
+  return shop.value
+    .filter((item) => item.category === activeToolCategory.value && itemCount(item.id) > 0)
+    .map((item) => ({
+      ...item,
+      count: itemCount(item.id),
+      actionLabel: ownedToolActionText(item),
+    }));
+});
 const focusedCatThought = computed(() => {
   const thoughts = focusedCat.value.thoughts || [];
   if (!thoughts.length) {
@@ -124,6 +174,7 @@ const gameSnapshot = computed(() => ({
   inventory: inventory.value,
   layout: roomLayout.value,
   mood: mood.value,
+  activeFood: activeFood.value,
   ownedCats: ownedCats.value,
   ownedFoodCount: ownedFoodCount.value,
   roomStyles: roomStyles.value,
@@ -189,10 +240,52 @@ function handleDecorClick(decorId) {
 }
 
 function handleRoomToyClick(itemId) {
-  const toy = ownedToys.value.find((item) => item.id === itemId);
-  if (toy) {
-    play(toy);
+  const item = shopById.value[itemId];
+  if (item && ["food", "toy"].includes(item.category)) {
+    if (item.category === "food" && activeFood.value.active && activeFood.value.itemId === item.id) {
+      notice.value = `${item.label} 正在房间里，剩余 ${formatSeconds(activeFood.value.remainingSeconds)}。`;
+      petCat(focusedCat.value);
+      return;
+    }
+    play(item);
   }
+}
+
+function ownedToolCount(categoryKey) {
+  if (categoryKey === "cat") return ownedCats.value.length;
+  return shop.value.filter((item) => item.category === categoryKey && itemCount(item.id) > 0).length;
+}
+
+function ownedToolActionText(item) {
+  if (item.category === "decor") return selectedDecorId.value === item.id ? "已选中" : "选择拖动";
+  if (item.category === "food") return "摆进房间";
+  if (item.category === "toy") return "互动";
+  if (item.category === "cat") return state.value.selectedCat === item.id ? "正在陪读" : "切换主猫";
+  return "使用";
+}
+
+function handleOwnedToolClick(item) {
+  if (!item?.id || busyItemId.value) return;
+  if (item.category === "decor") {
+    selectedDecorId.value = item.id;
+    notice.value = `已选中 ${item.label}，在左侧房间里拖动它后点击保存布局。`;
+    return;
+  }
+  if (item.category === "food" || item.category === "toy") {
+    play(item);
+    return;
+  }
+  if (item.category === "cat") {
+    selectCat(item.id);
+  }
+}
+
+function formatSeconds(seconds) {
+  const total = Math.max(Number(seconds || 0), 0);
+  const minutes = Math.floor(total / 60);
+  const rest = Math.floor(total % 60);
+  if (minutes <= 0) return `${rest} 秒`;
+  return `${minutes} 分 ${String(rest).padStart(2, "0")} 秒`;
 }
 
 async function saveRoomLayout() {
@@ -321,7 +414,14 @@ async function play(item) {
       body: JSON.stringify({ itemId: item.id }),
     });
     replacePayload(nextPayload);
-    notice.value = `${selectedCat.value.label || "猫咪"} 和 ${item.label} 玩了一会儿。`;
+    if (item.category === "food") {
+      const active = nextPayload.state?.mood?.activeFood;
+      notice.value = `${item.label} 已摆进房间，${formatSeconds(active?.remainingSeconds || item.durationMinutes * 60)} 内有效。`;
+      petCat(focusedCat.value);
+    } else {
+      notice.value = `${selectedCat.value.label || "猫咪"} 和 ${item.label} 玩了一会儿。`;
+      petCat(focusedCat.value);
+    }
   } catch (error) {
     notice.value = error.message || "互动失败，请稍后再试。";
   } finally {
@@ -392,9 +492,10 @@ async function selectCat(catId) {
             <p class="section-kicker">Room</p>
             <h2>像素猫活动室</h2>
           </div>
-          <div class="cat-world-mood">
-            <span>{{ mood.label || "安静陪读" }}</span>
-            <strong>{{ mood.score || 50 }}</strong>
+          <div class="cat-world-mood cat-world-dual-status">
+            <span>{{ mood.catEnergyLabel || "体力稳定" }}</span>
+            <strong>{{ catEnergyScore }}</strong>
+            <small>{{ mood.label || "安静陪读" }} · {{ moodScore }}</small>
           </div>
         </div>
 
@@ -438,31 +539,78 @@ async function selectCat(catId) {
           <span>已拥有装饰 {{ ownedDecor.length }}</span>
           <span>食物 {{ ownedFoodCount }}</span>
           <span>猫咪 {{ ownedCats.length }}</span>
+          <span v-if="activeFood.active">食物剩余 {{ formatSeconds(activeFood.remainingSeconds) }}</span>
           <span v-if="lastPlayLabel">刚刚玩过 {{ lastPlayLabel }}</span>
-        </div>
-
-        <div v-if="ownedToys.length" class="cat-world-play-row" aria-label="猫咪玩具">
-          <button
-            v-for="toy in ownedToys"
-            :key="toy.id"
-            class="secondary-button"
-            type="button"
-            :disabled="busyItemId === toy.id"
-            @click="play(toy)"
-          >
-            {{ busyItemId === toy.id ? "互动中..." : `用${toy.label}逗猫` }}
-          </button>
         </div>
       </section>
 
-      <aside class="cat-world-ledger panel">
-        <p class="section-kicker">Energy</p>
-        <h2>学习产能</h2>
-        <div class="cat-world-energy-list">
-          <div v-for="source in energy.sources || []" :key="source.key" class="cat-world-energy-row">
-            <span>{{ source.label }}</span>
-            <strong>{{ source.energy }}</strong>
-            <small>{{ source.value }}{{ source.unit }} x {{ source.energyPerUnit }}</small>
+      <aside class="cat-world-owned-panel panel">
+        <div class="cat-world-owned-head">
+          <div>
+            <p class="section-kicker">Bag</p>
+            <h2>已拥有道具</h2>
+          </div>
+          <span>{{ activeToolItems.length }} 个</span>
+        </div>
+
+        <div class="cat-world-status-bars" aria-label="猫咪状态">
+          <div class="cat-world-status-bar energy">
+            <span>能量</span>
+            <strong>{{ catEnergyScore }}</strong>
+            <i :style="{ width: `${catEnergyScore}%` }"></i>
+          </div>
+          <div class="cat-world-status-bar mood">
+            <span>心情</span>
+            <strong>{{ moodScore }}</strong>
+            <i :style="{ width: `${moodScore}%` }"></i>
+          </div>
+        </div>
+
+        <div v-if="activeFood.active" class="cat-world-active-food">
+          <span>当前食物</span>
+          <strong>{{ activeFood.label }}</strong>
+          <small>剩余 {{ formatSeconds(activeFood.remainingSeconds) }}</small>
+        </div>
+
+        <div class="cat-world-tool-tabs" role="tablist" aria-label="已拥有道具分类">
+          <button
+            v-for="category in toolCategories"
+            :key="category.key"
+            type="button"
+            :class="{ active: activeToolCategory === category.key }"
+            @click="activeToolCategory = category.key"
+          >
+            {{ category.label }}
+            <span>{{ ownedToolCount(category.key) }}</span>
+          </button>
+        </div>
+
+        <div class="cat-world-owned-list">
+          <button
+            v-for="item in activeToolItems"
+            :key="`${activeToolCategory}-${item.id}`"
+            type="button"
+            :class="['cat-world-owned-item', { active: selectedDecorId === item.id || state.selectedCat === item.id }]"
+            :disabled="busyItemId === item.id"
+            @click="handleOwnedToolClick(item)"
+          >
+            <span>{{ item.englishName || item.rarity || item.category }}</span>
+            <strong>{{ item.label }}</strong>
+            <small>{{ item.category === 'cat' ? item.personality : `拥有 ${item.count}` }}</small>
+            <em>{{ busyItemId === item.id ? "处理中..." : item.actionLabel }}</em>
+          </button>
+          <p v-if="!activeToolItems.length" class="cat-world-owned-empty">这个分类还没有道具，可以在下方商店购买。</p>
+        </div>
+
+        <div class="cat-world-ledger cat-world-ledger-compact">
+          <p class="section-kicker">Energy</p>
+          <h2>学习产能</h2>
+          <div class="cat-world-energy-list">
+            <div v-for="source in energy.sources || []" :key="source.key" class="cat-world-energy-row">
+              <span>{{ source.label }}</span>
+              <strong>{{ source.energy }}</strong>
+              <small>{{ source.value }}{{ source.unit }} x {{ source.energyPerUnit }}</small>
+            </div>
           </div>
         </div>
       </aside>
