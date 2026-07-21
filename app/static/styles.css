@@ -13464,6 +13464,7 @@ select {
 }
 
 .cat-world-owned-item {
+  position: relative;
   padding: 0;
   overflow: hidden;
 }
@@ -13492,6 +13493,13 @@ select {
   min-width: 0;
 }
 
+.cat-world-owned-item.has-color-swatches .cat-world-owned-main > span {
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .cat-world-owned-main > em {
   grid-column: 2;
   grid-row: 1 / span 3;
@@ -13515,27 +13523,39 @@ select {
 }
 
 .cat-world-color-swatches {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 2;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  border-top: 2px solid rgba(44, 47, 58, 0.18);
-  padding: 7px 9px 9px;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: 50%;
+  overflow-x: auto;
+  padding: 0 2px 2px 0;
+  scrollbar-width: none;
+}
+
+.cat-world-color-swatches::-webkit-scrollbar {
+  display: none;
 }
 
 .cat-world-color-swatch {
-  width: 22px;
-  height: 22px;
-  border: 3px solid #2c2f3a;
+  flex: 0 0 auto;
+  width: 19px;
+  height: 19px;
+  border: 2px solid #2c2f3a;
   border-radius: 50%;
   padding: 0;
   background: var(--swatch-color);
-  box-shadow: 2px 2px 0 #2c2f3a;
+  box-shadow: 1px 1px 0 #2c2f3a;
   cursor: pointer;
 }
 
 .cat-world-color-swatch.active {
-  outline: 3px solid #fff8df;
-  outline-offset: -6px;
+  outline: 2px solid #fff8df;
+  outline-offset: -5px;
 }
 
 .cat-world-color-swatch:disabled {

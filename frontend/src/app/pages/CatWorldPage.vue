@@ -1141,7 +1141,11 @@ async function selectCat(catId) {
             :key="`${activeToolCategory}-${item.id}`"
             :class="[
               'cat-world-owned-item',
-              { active: selectedDecorId === item.id || state.selectedCat === item.id, damaged: item.damageInfo },
+              {
+                active: selectedDecorId === item.id || state.selectedCat === item.id,
+                damaged: item.damageInfo,
+                'has-color-swatches': item.category === 'decor' && item.styleOptions?.length,
+              },
             ]"
           >
             <button
