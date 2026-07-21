@@ -9169,6 +9169,13 @@ button.calendar-day:disabled {
 }
 
 @media (max-width: 760px) {
+  .cat-world-modal-backdrop {
+    width: 100vw;
+    max-width: 100vw;
+    padding: 10px;
+    overflow: hidden;
+  }
+
   .ai-image-form-grid,
   .ai-image-candidate-grid {
     grid-template-columns: 1fr;
@@ -12922,6 +12929,41 @@ select {
   color: #fff;
 }
 
+.cat-world-lost-alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 4px solid #2c2f3a;
+  padding: 10px 14px;
+  color: #6f1730;
+  background: #ffe0e8;
+  box-shadow: 5px 5px 0 #2c2f3a;
+}
+
+.cat-world-lost-alert strong,
+.cat-world-lost-alert span,
+.cat-world-lost-alert button {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.cat-world-lost-alert button {
+  border: 3px solid #2c2f3a;
+  border-radius: 4px;
+  padding: 7px 10px;
+  color: #263047;
+  background: #fff07d;
+  box-shadow: 3px 3px 0 #2c2f3a;
+  cursor: pointer;
+}
+
+.cat-world-lost-alert button:hover,
+.cat-world-lost-alert button:focus-visible {
+  color: #fff;
+  background: #236b55;
+}
+
 .cat-world-profile-modal {
   display: grid;
   width: min(980px, calc(100vw - 32px));
@@ -13157,6 +13199,73 @@ select {
 
 .cat-world-agent-meter.mischief b {
   background: #ff8cad;
+}
+
+.cat-world-agent-meter.clean b {
+  background: #58c99f;
+}
+
+.cat-world-care-alert,
+.cat-world-bath-action {
+  display: grid;
+  gap: 5px;
+  border: 3px solid #2c2f3a;
+  padding: 9px;
+  background: #e5fff2;
+}
+
+.cat-world-care-alert.critical {
+  color: #7f1d1d;
+  background: #ffe0e8;
+}
+
+.cat-world-care-alert strong,
+.cat-world-bath-action strong {
+  font-size: 12px;
+}
+
+.cat-world-care-alert span,
+.cat-world-care-alert em,
+.cat-world-bath-action span,
+.cat-world-bath-action small {
+  color: #40516b;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.cat-world-bath-action {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  background: #fff0f6;
+}
+
+.cat-world-bath-action > div {
+  display: grid;
+  gap: 3px;
+}
+
+.cat-world-bath-action button {
+  border: 3px solid #2c2f3a;
+  border-radius: 4px;
+  padding: 8px 10px;
+  color: #263047;
+  background: #fff07d;
+  box-shadow: 3px 3px 0 #2c2f3a;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.cat-world-bath-action button:hover:not(:disabled),
+.cat-world-bath-action button:focus-visible:not(:disabled) {
+  color: #fff;
+  background: #236b55;
+}
+
+.cat-world-bath-action button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .cat-world-agent-facts {
@@ -13494,11 +13603,18 @@ select {
   }
 
   .cat-world-profile-modal {
-    width: calc(100vw - 20px);
+    width: 100%;
+    max-width: 100%;
     max-height: calc(100vh - 20px);
+    box-shadow: 4px 4px 0 #2c2f3a;
   }
 
   .cat-world-agent-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .cat-world-lost-alert,
+  .cat-world-bath-action {
     grid-template-columns: 1fr;
   }
 }

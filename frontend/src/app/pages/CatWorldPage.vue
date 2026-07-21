@@ -7,7 +7,7 @@ import {
   foodMoodGainForCat,
   foodTypeLabel,
 } from "../catWorldFoodRules.js";
-import { litterMoodPenalty } from "../catWorldHygieneRules.js";
+import { bathStatusLabel, litterMoodPenalty, neglectCountdownLabel } from "../catWorldHygieneRules.js";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
 
@@ -147,18 +147,20 @@ const roomLayout = computed(() => state.value.roomLayout || {});
 const styleOptions = computed(() => state.value.styleOptions || {});
 const dailyLogs = computed(() => state.value.dailyLogs || {});
 const catBonds = computed(() => state.value.catBonds || {});
+const lostCats = computed(() => state.value.lostCats || {});
+const lostCatRows = computed(() => Object.values(lostCats.value));
 const hygiene = computed(() => state.value.hygiene || {});
 const hygieneMoodPenalty = computed(() => Number(hygiene.value.moodDecayBonus ?? litterMoodPenalty(hygiene.value.count)));
-const ownedCats = computed(() => state.value.ownedCats || ["mimi"]);
+const ownedCats = computed(() => state.value.ownedCats || []);
 const cats = computed(() => payload.value.cats || []);
 const shop = computed(() => payload.value.shop || []);
 const gameSettings = computed(() => payload.value.gameSettings || {});
 const shopById = computed(() => Object.fromEntries(shop.value.map((item) => [item.id, item])));
-const selectedCat = computed(() => cats.value.find((cat) => cat.id === state.value.selectedCat) || cats.value[0] || {});
+const selectedCat = computed(() => cats.value.find((cat) => cat.id === state.value.selectedCat && ownedCats.value.includes(cat.id)) || {});
 const roomCats = computed(() => {
   const owned = new Set(ownedCats.value);
   const visibleCats = cats.value.filter((cat) => owned.has(cat.id));
-  return visibleCats.length ? visibleCats : [selectedCat.value].filter((cat) => cat?.id);
+  return visibleCats;
 });
 const focusedCat = computed(
   () =>
@@ -211,8 +213,8 @@ const activeCare = computed(() => ({
   active: Boolean(rawActiveCare.value?.active && activeCareRemainingSeconds.value > 0),
   remainingSeconds: activeCareRemainingSeconds.value,
 }));
-const catEnergyScore = computed(() => Number(mood.value.catEnergy ?? 50));
-const moodScore = computed(() => Number(mood.value.score ?? 50));
+const catEnergyScore = computed(() => Number(mood.value.catEnergy ?? 0));
+const moodScore = computed(() => Number(mood.value.score ?? 0));
 const selectedItems = computed(() => shop.value.filter((item) => item.category === activeCategory.value));
 const ownedDecor = computed(() =>
   Object.entries(inventory.value)
@@ -251,6 +253,7 @@ const activeToolItems = computed(() => {
     }));
 });
 const focusedCatThought = computed(() => {
+  if (!focusedCat.value?.id) return "活动室里暂时没有猫咪，可以去商店重新领养一只。";
   const agent = focusedAgentState.value || {};
   const behavior = agent.currentBehavior || {};
   if (agent.voiceLine || agent.dailyWish) {
@@ -270,6 +273,7 @@ const focusedCatThought = computed(() => {
   return thoughts[catPetSequence.value % thoughts.length];
 });
 const focusedCatDailyNote = computed(() => {
+  if (!focusedCat.value?.id) return "猫咪离家后会从已拥有列表移除；重新领养会恢复基础体力和心情。";
   const log = focusedDailyLog.value || {};
   const agent = focusedAgentState.value || {};
   const favoriteDecorLabels = focusedCat.value.favoriteDecorLabels || [];
@@ -328,14 +332,17 @@ const catAgentCards = computed(() =>
     const behavior = agent.currentBehavior || {};
     const bond = catBonds.value[cat.id] || {};
     const careNeed = agent.careNeed || {};
+    const lostInfo = lostCats.value[cat.id] || null;
     const agentEvents = Array.isArray(agent.events) ? agent.events.filter((event) => event?.message) : [];
     const latestEvent = agentEvents.length ? agentEvents[agentEvents.length - 1] : null;
     return {
       ...cat,
       owned,
+      escaped: Boolean(lostInfo),
+      lostInfo,
       log,
       agent,
-      behaviorLabel: behavior.label || (owned ? "自由活动" : "未解锁"),
+      behaviorLabel: behavior.label || (owned ? "自由活动" : lostInfo ? "已经离家" : "未解锁"),
       moodScore: clampCatScore(log.moodScore ?? agent.adjustedMoodScore ?? 0),
       energyScore: clampCatScore(log.energyScore ?? agent.adjustedEnergyScore ?? 0),
       bondScore: clampCatScore(bond.score ?? 18),
@@ -346,7 +353,7 @@ const catAgentCards = computed(() =>
       needMessage: careNeed.message || "",
       needStatus: careNeed.status || "calm",
       needPriority: clampCatScore(careNeed.priority ?? 0),
-      dailyMoodLabel: agent.dailyMoodLabel || (owned ? "今天状态稳定" : "等待解锁"),
+      dailyMoodLabel: agent.dailyMoodLabel || (owned ? "今天状态稳定" : lostInfo ? "已经离家" : "等待解锁"),
       latestEvent,
     };
   }),
@@ -369,6 +376,8 @@ const catAgentDiaries = computed(() =>
       const hourlyHistory = Array.isArray(agent.hourlyHistory)
         ? agent.hourlyHistory.filter((row) => row?.label).slice(-3).reverse()
         : [];
+      const hygieneInfo = log.hygiene || agent.hygiene || {};
+      const neglect = log.neglect || agent.neglect || {};
       return {
         ...cat,
         attention: clampCatScore(agent.attention ?? 0),
@@ -377,6 +386,19 @@ const catAgentDiaries = computed(() =>
         stamina: clampCatScore(agent.stamina ?? 0),
         activityBias: clampCatScore(agent.activityBias ?? 0),
         socialNeed: clampCatScore(agent.socialNeed ?? 0),
+        cleanliness: clampCatScore(agent.cleanliness ?? hygieneInfo.cleanliness ?? 0),
+        cleanlinessLabel: agent.cleanlinessLabel || hygieneInfo.cleanlinessLabel || "普通讲究",
+        bathIntervalDays: Number(agent.bathIntervalDays || hygieneInfo.bathIntervalDays || 4),
+        hygiene: hygieneInfo,
+        hygieneStatusLabel: hygieneInfo.statusLabel || "干净清爽",
+        bathScheduleLabel: bathStatusLabel(hygieneInfo),
+        needsBath: Boolean(hygieneInfo.needsBath),
+        bathKitCount: itemCount("cat-bath-kit"),
+        neglect,
+        neglectStatusLabel: neglect.statusLabel || "照护安全",
+        neglectCountdownLabel: neglectCountdownLabel(neglect),
+        neglectWarning: Boolean(neglect.isWarning),
+        neglectCritical: Boolean(neglect.isCritical),
         dailyProfileLabel: [agent.staminaLabel, agent.activityLabel, agent.socialNeedLabel].filter(Boolean).join(" · "),
         personaLabel: agent.personaLabel || cat.personality || "学习陪伴型",
         dailyWish: agent.dailyWish || dailyGoal.message || "",
@@ -640,6 +662,7 @@ function ownedToolSubtext(item) {
   if (item.category === "consumable") {
     if (item.useType === "litter-clean") return `拥有 ${item.count} · 点击猫屎时消耗`;
     if (item.useType === "litter-prevent") return `拥有 ${item.count} · 拉屎时自动消耗`;
+    if (item.useType === "cat-bath") return `拥有 ${item.count} · 给当前档案猫咪洗澡`;
     return `拥有 ${item.count} · 使用一次消耗 1 个`;
   }
   return `拥有 ${item.count}${suffix}`;
@@ -836,6 +859,9 @@ function canPurchase(item) {
 
 function purchaseHint(item) {
   if (!item?.id) return "";
+  if (item.category === "cat" && lostCats.value[item.id]) {
+    return `${lostCats.value[item.id].escapeLabel || "长期缺少照护"}后离家 · 重新领养会恢复基础状态`;
+  }
   if (item.category === "color" && !targetDecorOwned(item)) {
     return `需要先购买${item.targetDecorLabel || "对应家具"}`;
   }
@@ -858,6 +884,8 @@ function purchaseHint(item) {
       ? "自动抵消一堆猫屎"
       : item.useType === "litter-clean"
         ? "可清理一堆猫屎"
+        : item.useType === "cat-bath"
+          ? `给当前猫洗澡、解除炸毛并增加心情 +${item.mood || 0}`
         : item.useType === "room-care"
           ? `所有猫心情 +${item.mood || 0}`
           : `当前猫心情 +${item.mood || 0}`;
@@ -870,6 +898,7 @@ function purchaseButtonText(item) {
   if (busyItemId.value === item.id) return "处理中...";
   if (item.category === "cat" && ownsCat(item.id) && state.value.selectedCat !== item.id) return "设为主猫";
   if (item.category === "cat" && ownsCat(item.id)) return "已选择";
+  if (item.category === "cat" && lostCats.value[item.id]) return canAfford(item) ? `扣 ${item.cost} 能量重新领养` : "能量不足";
   if (item.category === "color" && !targetDecorOwned(item)) return "先买家具";
   if (item.category === "color" && colorApplied(item)) return "已应用";
   if (item.category === "color" && itemCount(item.id) > 0) return "应用配色";
@@ -925,6 +954,7 @@ async function purchase(item) {
     await selectCat(item.id);
     return;
   }
+  const wasLost = Boolean(lostCats.value[item.id]);
   busyItemId.value = item.id;
   notice.value = "";
   try {
@@ -934,7 +964,9 @@ async function purchase(item) {
       body: JSON.stringify({ itemId: item.id }),
     });
     replacePayload(nextPayload);
-    notice.value = `${item.label} 已加入猫咪世界。`;
+    notice.value = wasLost
+      ? `${item.label} 已重新回到活动室，体力和心情恢复到安全状态。`
+      : `${item.label} 已加入猫咪世界。`;
   } catch (error) {
     notice.value = error.message || "购买失败，请稍后再试。";
   } finally {
@@ -1130,6 +1162,11 @@ async function selectCat(catId) {
     </section>
 
     <p v-if="notice" class="cat-world-notice" aria-live="polite">{{ notice }}</p>
+    <div v-if="lostCatRows.length" class="cat-world-lost-alert" role="status">
+      <strong>{{ lostCatRows.map((cat) => cat.catLabel).join("、") }}已经离开活动室</strong>
+      <span>{{ lostCatRows[0].escapeLabel }}；需要在猫咪商店重新领养。</span>
+      <button type="button" @click="activeCategory = 'cat'">查看猫咪商店</button>
+    </div>
 
     <section class="cat-world-layout">
       <section class="cat-world-room-panel panel">
@@ -1158,7 +1195,7 @@ async function selectCat(catId) {
 
         <div class="cat-world-ai-panel" aria-live="polite">
           <span>CAT-OS</span>
-          <strong>{{ focusedCat.label || "猫咪" }} · {{ focusedCat.personality || "学习陪伴型" }}</strong>
+          <strong>{{ focusedCat.label || "暂无猫咪" }} · {{ focusedCat.personality || "等待重新领养" }}</strong>
           <p>{{ focusedCatThought }}</p>
           <div v-if="focusedAgentProfileTags.length" class="cat-world-agent-profile-tags">
             <span v-for="tag in focusedAgentProfileTags" :key="tag">{{ tag }}</span>
@@ -1333,7 +1370,7 @@ async function selectCat(catId) {
                 <CatIcon :size="20" :stroke-width="2.5" aria-hidden="true" />
               </span>
               <strong>{{ cat.label }}</strong>
-              <small>{{ cat.dailyMoodLabel }}</small>
+              <small>{{ cat.neglectCritical ? cat.neglectStatusLabel : cat.needsBath ? cat.hygieneStatusLabel : cat.dailyMoodLabel }}</small>
             </button>
           </div>
         </section>
@@ -1391,6 +1428,27 @@ async function selectCat(catId) {
           <span class="cat-world-agent-meter activity">活跃<i><b :style="{ width: `${activeCatDiary.activityBias}%` }"></b></i></span>
           <span class="cat-world-agent-meter social">黏人<i><b :style="{ width: `${activeCatDiary.socialNeed}%` }"></b></i></span>
           <span class="cat-world-agent-meter mischief">捣蛋<i><b :style="{ width: `${activeCatDiary.mischief}%` }"></b></i></span>
+          <span class="cat-world-agent-meter clean">爱干净<i><b :style="{ width: `${activeCatDiary.cleanliness}%` }"></b></i></span>
+        </div>
+        <div :class="['cat-world-care-alert', { critical: activeCatDiary.neglectCritical }]">
+          <strong>照护安全：{{ activeCatDiary.neglectStatusLabel }}</strong>
+          <span>{{ activeCatDiary.neglectCountdownLabel }}</span>
+          <em>{{ activeCatDiary.neglect.message }}</em>
+        </div>
+        <div v-if="activeCatDiary.needsBath" class="cat-world-bath-action">
+          <div>
+            <strong>毛发状态：{{ activeCatDiary.hygieneStatusLabel }}</strong>
+            <span>{{ activeCatDiary.bathScheduleLabel }}</span>
+          </div>
+          <button
+            v-if="activeCatDiary.bathKitCount"
+            type="button"
+            :disabled="busyItemId === 'cat-bath-kit'"
+            @click="useConsumable(shopById['cat-bath-kit'])"
+          >
+            {{ busyItemId === 'cat-bath-kit' ? "洗澡中..." : `使用泡泡浴套装 (${activeCatDiary.bathKitCount})` }}
+          </button>
+          <small v-else>背包里没有泡泡浴套装，请到消耗品商店购买。</small>
         </div>
         <dl class="cat-world-agent-facts">
           <div><dt>作息</dt><dd>{{ activeCatDiary.sleepLabel }}</dd></div>
@@ -1401,6 +1459,9 @@ async function selectCat(catId) {
           <div><dt>相处方式</dt><dd>{{ activeCatDiary.socialStyleLabel }}</dd></div>
           <div><dt>玩耍倾向</dt><dd>{{ activeCatDiary.playStyleLabel }}</dd></div>
           <div><dt>照顾偏好</dt><dd>{{ activeCatDiary.carePreferenceLabel || "保持房间稳定整洁" }}</dd></div>
+          <div><dt>卫生性格</dt><dd>{{ activeCatDiary.cleanlinessLabel }} · {{ activeCatDiary.cleanliness }}/100</dd></div>
+          <div><dt>洗澡周期</dt><dd>每 {{ activeCatDiary.bathIntervalDays }} 天 · {{ activeCatDiary.bathScheduleLabel }}</dd></div>
+          <div><dt>离家风险</dt><dd>{{ activeCatDiary.neglectCountdownLabel }}</dd></div>
           <div><dt>当前需求</dt><dd>{{ activeCatDiary.needLabel }} · {{ activeCatDiary.needActionLabel }}</dd></div>
           <div><dt>减耗</dt><dd>{{ activeCatDiary.comfortLabel }}</dd></div>
           <div><dt>偏好</dt><dd>{{ activeCatDiary.favoriteItemLabel }}</dd></div>
@@ -1456,6 +1517,7 @@ async function selectCat(catId) {
               <span>一次性</span>
               <span v-if="item.useType === 'litter-prevent'">自动使用</span>
               <span v-else-if="item.useType === 'litter-clean'">点击猫屎使用</span>
+              <span v-else-if="item.useType === 'cat-bath'">当前档案猫咪使用</span>
               <span v-else>点击背包使用</span>
             </div>
             <p>{{ item.description }}</p>
@@ -1466,6 +1528,7 @@ async function selectCat(catId) {
             <span v-if="item.category === 'cat' && ownsCat(item.id)">
               {{ state.selectedCat === item.id ? "正在陪读" : "已拥有" }}
             </span>
+            <span v-else-if="item.category === 'cat' && lostCats[item.id]">已离家 · 可重新领养</span>
             <span v-else-if="item.category === 'color' && itemCount(item.id)">
               {{ colorApplied(item) ? "已应用" : "已解锁" }}
             </span>
@@ -1502,9 +1565,9 @@ async function selectCat(catId) {
           :disabled="!cat.owned || busyItemId === cat.id"
           @click="selectCat(cat.id)"
         >
-          <span>{{ cat.owned ? cat.rarity || cat.englishName : "未解锁" }}</span>
+          <span>{{ cat.owned ? cat.rarity || cat.englishName : cat.escaped ? "已离家" : "未解锁" }}</span>
           <strong>{{ cat.label }}</strong>
-          <small>{{ cat.owned ? cat.personality || cat.englishName : cat.description }}</small>
+          <small>{{ cat.owned ? cat.personality || cat.englishName : cat.escaped ? `${cat.lostInfo.escapeLabel}，请去商店重新领养` : cat.description }}</small>
           <div v-if="cat.owned" class="cat-world-cat-agent-status">
             <p>
               <b>{{ cat.dailyMoodLabel }}</b>

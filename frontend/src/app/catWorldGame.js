@@ -192,6 +192,16 @@ function catCareNeedForSnapshot(snapshot, cat) {
   return catAgentForSnapshot(snapshot, cat).careNeed || {};
 }
 
+function catHygieneForSnapshot(snapshot, cat) {
+  const log = snapshot?.dailyLogs?.[cat?.id] || {};
+  return log.hygiene || log.agentState?.hygiene || {};
+}
+
+function catNeglectForSnapshot(snapshot, cat) {
+  const log = snapshot?.dailyLogs?.[cat?.id] || {};
+  return log.neglect || log.agentState?.neglect || {};
+}
+
 function catTraitNumber(cat, key, fallback = 1) {
   const value = Number(cat?.traits?.[key]);
   return Number.isFinite(value) ? value : fallback;
@@ -1372,6 +1382,8 @@ class CatWorldScene extends Phaser.Scene {
     graphics.fillStyle(0x203041, 0.18);
     graphics.fillRect(7, 49, 82, 7);
     this.drawCatPixels(graphics, cat, colors);
+    const hygiene = catHygieneForSnapshot(snapshot, cat);
+    if (hygiene.needsBath || hygiene.furState === "frazzled") this.drawFrazzledFur(graphics, colors);
     this.drawStatusBars(graphics, energyScore, moodScore);
     this.drawCatMoodCue(graphics, behavior, energyScore, moodScore);
 
@@ -1461,6 +1473,15 @@ class CatWorldScene extends Phaser.Scene {
     const careNeed = agent.careNeed || {};
     const targetLabel = shortCatText(goal.targetLabel || "", 5);
     const needTargetLabel = shortCatText(careNeed.targetLabel || "", 5);
+    if (careNeed.key === "survival-food") {
+      return { text: "快喂我", color: "#fff8df", background: "#b91c1c" };
+    }
+    if (careNeed.key === "survival-mood") {
+      return { text: "别丢下我", color: "#fff8df", background: "#b91c1c" };
+    }
+    if (careNeed.key === "bath") {
+      return { text: "要洗澡", color: "#fff8df", background: "#db2777" };
+    }
     if (behavior.sleeping || goal.key === "sleep") {
       return { text: "睡觉", color: "#263047", background: "#fff8df" };
     }
@@ -1638,6 +1659,20 @@ class CatWorldScene extends Phaser.Scene {
     pixelBlock(graphics, 47, 14, 4, 1, INK);
     pixelBlock(graphics, 31, 17, 4, 1, INK);
     pixelBlock(graphics, 48, 17, 4, 1, INK);
+  }
+
+  drawFrazzledFur(graphics, colors) {
+    const fur = colors?.shade || 0x6b7280;
+    graphics.fillStyle(INK, 1);
+    graphics.fillTriangle(12, 11, 17, 4, 20, 12);
+    graphics.fillTriangle(23, 10, 27, 2, 30, 11);
+    graphics.fillTriangle(33, 11, 36, 4, 39, 12);
+    graphics.fillTriangle(43, 8, 48, 0, 49, 10);
+    graphics.fillStyle(fur, 1);
+    graphics.fillTriangle(14, 11, 17, 7, 18, 12);
+    graphics.fillTriangle(25, 10, 27, 5, 28, 11);
+    graphics.fillTriangle(35, 11, 36, 7, 37, 12);
+    graphics.fillTriangle(45, 8, 47, 4, 47, 10);
   }
 
   catBehavior(cat = {}, index = 0) {
@@ -2442,6 +2477,8 @@ class CatWorldScene extends Phaser.Scene {
     const careNeed = agent.careNeed || {};
     const activeFood = this.owner.snapshot.activeFood || {};
     const temperament = String(agent.temperament || cat.traits?.temperament || "balanced");
+    const hygiene = catHygieneForSnapshot(this.owner.snapshot, cat);
+    const neglect = catNeglectForSnapshot(this.owner.snapshot, cat);
     const lines = [
       ...(cat?.thoughts?.length ? cat.thoughts : [
         "我想听一个新单词。",
@@ -2456,6 +2493,9 @@ class CatWorldScene extends Phaser.Scene {
     if (agent.careTip) lines.unshift(agent.careTip);
     if (agent.dailyMoodLabel) lines.unshift(`${agent.dailyMoodLabel}，${behavior.routine || "想按自己的节奏活动"}。`);
     if (goal.message) lines.unshift(goal.message);
+    if (neglect.isCritical) lines.unshift(`${neglect.statusLabel || "需要紧急照护"}，${neglect.message || "请马上照顾我。"}`);
+    else if (neglect.isWarning) lines.unshift(neglect.message || "我现在需要照顾。 ");
+    if (hygiene.needsBath) lines.unshift(`已经 ${hygiene.daysSinceBath || 0} 天没洗澡，毛都炸起来了。`);
     if (agent.mischiefLabel) {
       lines.unshift(`我刚刚碰坏了${agent.mischiefLabel}，可能需要维修。`);
     } else if (agent.mischiefRepairedLabel) {
