@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     ai_image_provider: str = "dashscope"
     openai_api_key: str = ""
     openai_image_model: str = "gpt-image-1"
+    openai_text_model: str = "gpt-4o-mini"
     dashscope_api_key: str = ""
     dashscope_image_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
     dashscope_task_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/tasks"

@@ -109,6 +109,23 @@ class DailyQuote(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+class EssayEntry(Base):
+    __tablename__ = "essay_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str] = mapped_column(Text().with_variant(mysql.LONGTEXT, "mysql"), nullable=False)
+    optimized_body: Mapped[str | None] = mapped_column(Text().with_variant(mysql.LONGTEXT, "mysql"))
+    cover_url: Mapped[str | None] = mapped_column(String(1000))
+    word_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    optimized_word_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    ai_model: Mapped[str | None] = mapped_column(String(120))
+    cover_model: Mapped[str | None] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class ChallengeProgress(Base):
     __tablename__ = "challenge_progress"
     __table_args__ = (UniqueConstraint("word_list_id", name="uq_challenge_progress_word_list"),)

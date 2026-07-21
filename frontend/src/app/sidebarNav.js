@@ -1,6 +1,7 @@
 export const sidebarNavItems = [
   { label: "首页", path: "/", routes: ["home"] },
   { label: "我的单词表", path: "/lists", routes: ["lists", "listDetail"] },
+  { label: "我的作文集", path: "/essays", routes: ["essays"] },
   { label: "英文小报", path: "/newspaper", routePrefix: "newspaper" },
   { label: "好词好句", path: "/booklearner", routes: ["booklearner", "booklearnerQuotes", "booklearnerUpload", "booklearnerDetail"] },
   { label: "SPB-个人赛冠军词库", path: "/spb", routes: ["spb"], collection: "individual" },

@@ -1339,14 +1339,23 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 10px 16px;
   margin: 10px 0 0;
   border-top: 1px solid var(--line);
   padding: 18px 8px 0;
+  text-align: center;
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
+}
+
+.app-footer-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 14px;
 }
 
 .app-footer a {
@@ -1362,7 +1371,7 @@ body {
 .app-footer-version {
   display: inline-flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 6px 14px;
 }
 
@@ -7011,6 +7020,284 @@ button.calendar-day {
   color: #fff;
 }
 
+.book-vocabulary-create-button {
+  width: 100%;
+  min-height: 44px;
+}
+
+.essays-page {
+  display: grid;
+  gap: 18px;
+}
+
+.essays-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 251, 249, 0.98));
+  box-shadow: var(--shadow-sm);
+}
+
+.essays-page-head h1 {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-size: 30px;
+  line-height: 1.15;
+}
+
+.essays-layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.essays-list-panel,
+.essays-editor-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.essays-list-panel {
+  position: sticky;
+  top: 82px;
+}
+
+.essays-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.essays-list-head strong {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.essays-list-head span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.essays-list {
+  display: grid;
+  gap: 10px;
+  max-height: calc(100vh - 210px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.essay-list-item {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 9px 10px;
+  align-items: center;
+  border: 1px solid rgba(18, 35, 47, 0.1);
+  border-radius: var(--radius-lg);
+  padding: 9px;
+  color: inherit;
+  background: #fff;
+  text-align: left;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.essay-list-item:hover,
+.essay-list-item.active {
+  border-color: rgba(29, 127, 91, 0.42);
+  box-shadow: 0 14px 30px rgba(29, 127, 91, 0.1);
+}
+
+.essay-list-item img,
+.essay-list-item > span {
+  grid-row: span 2;
+  width: 58px;
+  height: 72px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #e9f8f1;
+}
+
+.essay-list-item > span {
+  display: grid;
+  place-items: center;
+  color: var(--accent-dark);
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.essay-list-item strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.essay-list-item small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.essay-editor-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.essay-title-field {
+  display: grid;
+  gap: 7px;
+}
+
+.essay-title-field span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.essay-title-field input,
+.essay-body-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  box-shadow: inset 0 1px 0 rgba(18, 35, 47, 0.02);
+}
+
+.essay-title-field input {
+  min-height: 46px;
+  padding: 0 13px;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.essay-body-input {
+  min-height: 260px;
+  resize: vertical;
+  padding: 14px;
+  line-height: 1.58;
+}
+
+.essay-count-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 9px 12px;
+  color: var(--accent-dark);
+  background: #e9f8f1;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.essay-count-pill strong {
+  color: var(--ink);
+}
+
+.essay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.essay-notice {
+  margin: 0;
+}
+
+.essay-workspace {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.essay-cover-panel {
+  overflow: hidden;
+  border: 1px solid rgba(18, 35, 47, 0.1);
+  border-radius: var(--radius-lg);
+  background: #edf7f2;
+  box-shadow: var(--shadow-sm);
+}
+
+.essay-cover-panel img,
+.essay-cover-fallback {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+}
+
+.essay-cover-fallback {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: var(--accent-dark);
+  background:
+    linear-gradient(135deg, rgba(29, 127, 91, 0.12), rgba(255, 255, 255, 0.62)),
+    #e9f8f1;
+}
+
+.essay-cover-fallback span {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.essay-cover-fallback strong {
+  color: var(--ink);
+  font-size: 54px;
+  line-height: 1;
+}
+
+.essay-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.essay-text-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(18, 35, 47, 0.1);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.essay-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.essay-section-title strong {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.essay-text-panel p {
+  min-height: 180px;
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.68;
+  white-space: pre-wrap;
+}
+
 .science-discovery-panel {
   display: grid;
   gap: 18px;
@@ -7930,6 +8217,24 @@ button.calendar-day {
 
   .book-vocabulary-list {
     max-height: none;
+  }
+
+  .essays-layout,
+  .essay-workspace,
+  .essay-comparison {
+    grid-template-columns: 1fr;
+  }
+
+  .essays-list-panel {
+    position: static;
+  }
+
+  .essays-list {
+    max-height: none;
+  }
+
+  .essay-cover-panel {
+    max-width: 260px;
   }
 
   .science-discovery-head,
@@ -10621,12 +10926,28 @@ select {
   }
 
   .app-footer {
-    align-items: flex-start;
+    align-items: center;
+  }
+
+  .app-footer-meta,
+  .app-footer-version {
+    justify-content: center;
+  }
+
+  .essays-page-head,
+  .essay-editor-head {
+    align-items: stretch;
+    grid-template-columns: 1fr;
     flex-direction: column;
   }
 
-  .app-footer-version {
-    justify-content: flex-start;
+  .essay-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .essay-actions button {
+    width: 100%;
   }
 
   .home-hero {

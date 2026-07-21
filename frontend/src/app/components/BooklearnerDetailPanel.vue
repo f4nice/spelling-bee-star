@@ -101,14 +101,6 @@ function returnToQuotes() {
             <span v-if="stats.words">原文词数 {{ stats.words }}</span>
             <span v-if="stats.sentences">句子 {{ stats.sentences }}</span>
           </div>
-          <button
-            type="button"
-            class="wide-button book-detail-create-button"
-            :disabled="!canCreateList"
-            @click="createBookWordList"
-          >
-            生成单词表
-          </button>
           <p v-if="book.notice" class="notice">{{ book.notice }}</p>
         </div>
       </div>
@@ -163,6 +155,14 @@ function returnToQuotes() {
           返回
         </button>
       </div>
+      <button
+        type="button"
+        class="wide-button book-detail-create-button book-vocabulary-create-button"
+        :disabled="!canCreateList"
+        @click="createBookWordList"
+      >
+        生成单词表
+      </button>
       <div class="book-vocabulary-list">
         <article v-for="item in vocabulary" :key="item.word" class="book-vocabulary-card">
           <strong>{{ item.word }}</strong>

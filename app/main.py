@@ -41,6 +41,7 @@ from app.models import (
     ChallengeSpellingAttempt,
     AdminUserSetting,
     DailyQuote,
+    EssayEntry,
     LearningGrowthMetric,
     Word,
     WordList,
@@ -85,6 +86,7 @@ MEDIA_DIR = BASE_DIR.parent / "uploads"
 IMAGE_DIR = MEDIA_DIR / "images"
 AUDIO_DIR = MEDIA_DIR / "audio"
 BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
+ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
@@ -101,6 +103,8 @@ SCIENCE_IMAGE_VERSION = "20260629-no-text-1"
 SCIENCE_DISCOVERY_DATA_VERSION = "20260629-source-mode-1"
 SCIENCE_PUBLIC_CONTENT_VERSION = "v6"
 SCIENCE_PUBLIC_CONTENT_TTL = timedelta(days=3650)
+ESSAY_TITLE_MAX_CHARS = 120
+ESSAY_BODY_MAX_CHARS = 30000
 SCIENCE_SOURCE_MODE_DEFAULT = "science"
 SCIENCE_SOURCE_MODE_PUBLIC_BOOKS = "public-books"
 SCIENCE_SOURCE_MODES = [
@@ -2207,6 +2211,17 @@ def store_book_cover_image(title: str, content: bytes) -> str:
     return f"/media/book-covers/{target.name}"
 
 
+def store_essay_cover_image(title: str, content: bytes) -> str:
+    if len(content) < 1000:
+        raise ValueError("作文封面图片太小，请重新生成。")
+    ESSAY_COVER_DIR.mkdir(parents=True, exist_ok=True)
+    suffix = public_asset_extension(content)
+    safe_stem = public_asset_slug(Path(title or "essay").stem)
+    target = ESSAY_COVER_DIR / f"{safe_stem}-{uuid4().hex[:8]}{suffix}"
+    target.write_bytes(content)
+    return f"/media/essay-covers/{target.name}"
+
+
 IMAGE_SYNC_LOCK = Lock()
 CACHE_REFRESHING: set[str] = set()
 CACHE_REFRESH_LOCK = Lock()
@@ -2215,6 +2230,7 @@ MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 BOOK_COVER_DIR.mkdir(parents=True, exist_ok=True)
+ESSAY_COVER_DIR.mkdir(parents=True, exist_ok=True)
 PUBLIC_ASSET_DIR.mkdir(parents=True, exist_ok=True)
 SCIENCE_DISCOVERY_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -2978,6 +2994,7 @@ def startup() -> None:
     IMAGE_DIR.mkdir(parents=True, exist_ok=True)
     AUDIO_DIR.mkdir(parents=True, exist_ok=True)
     BOOK_COVER_DIR.mkdir(parents=True, exist_ok=True)
+    ESSAY_COVER_DIR.mkdir(parents=True, exist_ok=True)
     SCIENCE_DISCOVERY_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     ensure_version_matrix_file()
     with SessionLocal() as db:
@@ -3046,6 +3063,11 @@ def newspaper_article_page(
     except (ValueError, IndexError):
         raise HTTPException(status_code=404, detail="Article not found")
     return vue_shell(request, db, f"newspaper/{section_key}/{article_index}")
+
+
+@app.get("/essays", response_class=HTMLResponse)
+def essays_page(request: Request, db: Session = Depends(get_db)):
+    return vue_shell(request, db, "essays")
 
 
 @app.get("/lists", response_class=HTMLResponse)
@@ -4183,6 +4205,260 @@ def vue_shell_api(request: Request, db: Session = Depends(get_db)):
         "wrong_word_count": pending_wrong_word_count(db),
         "learning_growth": learning_growth_summary(db),
     })
+
+
+def essay_word_count(text_value: str | None) -> int:
+    text_value = str(text_value or "")
+    tokens = re.findall(r"[A-Za-z]+(?:[-'][A-Za-z]+)*|\d+(?:\.\d+)?|[\u4e00-\u9fff]", text_value)
+    return len(tokens)
+
+
+def clean_essay_title(value: str | None) -> str:
+    return " ".join(str(value or "").split())[:ESSAY_TITLE_MAX_CHARS]
+
+
+def clean_essay_body(value: str | None) -> str:
+    return str(value or "").replace("\r\n", "\n").replace("\r", "\n").strip()[:ESSAY_BODY_MAX_CHARS]
+
+
+def serialize_essay(essay: EssayEntry) -> dict[str, Any]:
+    return {
+        "id": essay.id,
+        "title": essay.title,
+        "body": essay.body,
+        "optimizedBody": essay.optimized_body or "",
+        "coverUrl": essay.cover_url or "",
+        "wordCount": int(essay.word_count or 0),
+        "optimizedWordCount": int(essay.optimized_word_count or 0),
+        "aiModel": essay.ai_model or "",
+        "coverModel": essay.cover_model or "",
+        "createdAt": essay.created_at.isoformat() if essay.created_at else "",
+        "updatedAt": essay.updated_at.isoformat() if essay.updated_at else "",
+    }
+
+
+def essays_for_phone(db: Session, phone: str) -> list[EssayEntry]:
+    return db.scalars(
+        select(EssayEntry)
+        .where(EssayEntry.phone == phone)
+        .order_by(EssayEntry.updated_at.desc(), EssayEntry.id.desc())
+    ).all()
+
+
+def essays_payload(db: Session, request: Request) -> dict[str, Any]:
+    user = current_admin_user(request, db)
+    essays = essays_for_phone(db, user.phone)
+    return {
+        "essays": [serialize_essay(essay) for essay in essays],
+        "limits": {
+            "titleMaxChars": ESSAY_TITLE_MAX_CHARS,
+            "bodyMaxChars": ESSAY_BODY_MAX_CHARS,
+        },
+    }
+
+
+def get_owned_essay(db: Session, request: Request, essay_id: int) -> EssayEntry:
+    user = current_admin_user(request, db)
+    essay = db.scalar(select(EssayEntry).where(EssayEntry.id == essay_id, EssayEntry.phone == user.phone))
+    if not essay:
+        raise HTTPException(status_code=404, detail="没有找到这篇作文。")
+    return essay
+
+
+async def optimize_essay_with_openai(*, title: str, body: str) -> tuple[str, str]:
+    api_key = settings.openai_api_key.strip()
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured on the server.")
+    model = (settings.openai_text_model or "gpt-4o-mini").strip()
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a supportive English writing coach for a student. "
+                    "Improve grammar, clarity, story flow, vocabulary, and sentence variety while preserving the student's meaning, events, and voice. "
+                    "Return only the polished composition, with no heading, explanation, markdown, or score."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Title: {title}\n\nStudent composition:\n{body}",
+            },
+        ],
+        "temperature": 0.35,
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=90) as client:
+        response = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+        response.raise_for_status()
+    data = response.json()
+    text_value = str(((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+    if not text_value:
+        raise RuntimeError("AI 没有返回优化后的作文。")
+    return text_value, model
+
+
+async def generate_essay_cover_image(*, title: str, body: str, optimized_body: str | None = None) -> tuple[str, str]:
+    selected_model = "wan2.7-image-pro"
+    story_source = optimized_body or body
+    prompt = " ".join(
+        part
+        for part in [
+            "Create a polished cover image for a student's story collection.",
+            f"Story title: {title}.",
+            f"Story content summary: {story_source[:1600]}.",
+            "Use a vivid cinematic scene that reflects the story's main mood, setting, and characters.",
+            "Children's literature cover quality, warm and imaginative, realistic photo-illustration style.",
+            "No readable text, no letters, no Chinese characters, no logos, no watermark, no UI elements.",
+        ]
+        if part
+    )
+    content = await generate_dashscope_prompt_image(
+        api_key=settings.dashscope_api_key,
+        endpoint=settings.dashscope_image_endpoint,
+        task_endpoint=settings.dashscope_task_endpoint,
+        poll_seconds=settings.dashscope_image_poll_seconds,
+        timeout_seconds=settings.dashscope_image_timeout_seconds,
+        model=selected_model,
+        prompt=prompt,
+    )
+    return store_essay_cover_image(title, content), selected_model
+
+
+def apply_essay_payload(essay: EssayEntry, payload: dict[str, Any]) -> None:
+    title = clean_essay_title(payload.get("title"))
+    body = clean_essay_body(payload.get("body"))
+    if not title:
+        raise HTTPException(status_code=400, detail="请输入作文标题。")
+    if not body:
+        raise HTTPException(status_code=400, detail="请输入作文正文。")
+    essay.title = title
+    essay.body = body
+    essay.word_count = essay_word_count(body)
+
+
+@app.get("/api/vue/essays")
+def vue_essays_api(request: Request, db: Session = Depends(get_db)):
+    return essays_payload(db, request)
+
+
+@app.post("/api/vue/essays")
+async def vue_create_essay_api(request: Request, db: Session = Depends(get_db)):
+    user = current_admin_user(request, db)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="作文数据不是有效 JSON。") from exc
+
+    essay = EssayEntry(phone=user.phone, title="", body="")
+    apply_essay_payload(essay, payload or {})
+    db.add(essay)
+    db.commit()
+    db.refresh(essay)
+    response = essays_payload(db, request)
+    response["essay"] = serialize_essay(essay)
+    return response
+
+
+@app.post("/api/vue/essays/{essay_id}")
+async def vue_update_essay_api(essay_id: int, request: Request, db: Session = Depends(get_db)):
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="作文数据不是有效 JSON。") from exc
+
+    essay = get_owned_essay(db, request, essay_id)
+    apply_essay_payload(essay, payload or {})
+    db.add(essay)
+    db.commit()
+    db.refresh(essay)
+    response = essays_payload(db, request)
+    response["essay"] = serialize_essay(essay)
+    return response
+
+
+@app.post("/api/vue/essays/{essay_id}/optimize")
+async def vue_optimize_essay_api(essay_id: int, request: Request, db: Session = Depends(get_db)):
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="作文数据不是有效 JSON。") from exc
+
+    essay = get_owned_essay(db, request, essay_id)
+    apply_essay_payload(essay, payload or {})
+    try:
+        optimized_body, model = await optimize_essay_with_openai(title=essay.title, body=essay.body)
+    except RuntimeError as exc:
+        detail = str(exc)
+        if "not configured" in detail:
+            raise HTTPException(status_code=400, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=f"AI 优化失败: {detail}") from exc
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text[:400] if exc.response is not None else str(exc)
+        if is_ai_quota_error(detail):
+            raise HTTPException(status_code=402, detail="额度已经用完") from exc
+        raise HTTPException(status_code=502, detail=f"AI 优化失败: {detail}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AI 优化失败: {exc}") from exc
+
+    essay.optimized_body = optimized_body
+    essay.optimized_word_count = essay_word_count(optimized_body)
+    essay.ai_model = model
+    db.add(essay)
+    db.commit()
+    db.refresh(essay)
+    response = essays_payload(db, request)
+    response["essay"] = serialize_essay(essay)
+    return response
+
+
+@app.post("/api/vue/essays/{essay_id}/cover")
+async def vue_generate_essay_cover_api(essay_id: int, request: Request, db: Session = Depends(get_db)):
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="作文数据不是有效 JSON。") from exc
+
+    essay = get_owned_essay(db, request, essay_id)
+    apply_essay_payload(essay, payload or {})
+    try:
+        cover_url, model = await generate_essay_cover_image(
+            title=essay.title,
+            body=essay.body,
+            optimized_body=essay.optimized_body,
+        )
+    except RuntimeError as exc:
+        detail = str(exc)
+        if "not configured" in detail:
+            raise HTTPException(status_code=400, detail=detail) from exc
+        if is_ai_quota_error(detail):
+            raise HTTPException(status_code=402, detail="额度已经用完") from exc
+        raise HTTPException(status_code=502, detail=f"作文封面生成失败: {detail}") from exc
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text[:400] if exc.response is not None else str(exc)
+        if is_ai_quota_error(detail):
+            raise HTTPException(status_code=402, detail="额度已经用完") from exc
+        raise HTTPException(status_code=502, detail=f"作文封面生成失败: {detail}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"作文封面生成失败: {exc}") from exc
+
+    essay.cover_url = cover_url
+    essay.cover_model = model
+    db.add(essay)
+    db.commit()
+    db.refresh(essay)
+    response = essays_payload(db, request)
+    response["essay"] = serialize_essay(essay)
+    return response
+
+
+@app.post("/api/vue/essays/{essay_id}/delete")
+def vue_delete_essay_api(essay_id: int, request: Request, db: Session = Depends(get_db)):
+    essay = get_owned_essay(db, request, essay_id)
+    db.delete(essay)
+    db.commit()
+    return essays_payload(db, request)
 
 
 @app.get("/api/vue/lists")
