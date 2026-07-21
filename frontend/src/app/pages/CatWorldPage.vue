@@ -38,6 +38,7 @@ const catReactionTexts = [
   "尾巴雷达晃了晃，发现新单词",
   "想法缓存刷新，准备继续陪你学",
 ];
+const CAT_REACTION_DURATION_MS = 4000;
 let catReactionTimer = 0;
 let activeFoodClockTimer = 0;
 let gameMountActive = false;
@@ -793,7 +794,7 @@ function showCatReaction(cat = selectedCat.value, message = "", options = {}) {
   catReactionTimer = window.setTimeout(() => {
     catReaction.value = "";
     catReactionAnchored.value = false;
-  }, 2200);
+  }, CAT_REACTION_DURATION_MS);
 }
 
 async function petCat(cat = selectedCat.value, options = {}) {

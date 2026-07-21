@@ -4321,7 +4321,7 @@ a:focus-visible {
   font-weight: 900;
   text-align: center;
   transform: translateX(-50%);
-  animation: cat-world-reaction-pop 2.2s ease both;
+  animation: cat-world-reaction-pop 4s ease both;
 }
 
 .cat-world-reaction::after {
@@ -13162,7 +13162,7 @@ select {
 
 @keyframes cat-world-reaction-pop {
   0%,
-  82% {
+  55% {
     opacity: 1;
     transform: translateX(-50%) translateY(0) scale(1);
   }

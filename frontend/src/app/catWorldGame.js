@@ -9,6 +9,8 @@ const INK = 0x2c2f3a;
 const CREAM = 0xfff8df;
 const CAT_INTERACTION_DEPTH = 980;
 const CAT_HITBOX = { x: -58, y: -74, width: 232, height: 184 };
+const CAT_BUBBLE_HOLD_MS = 2200;
+const CAT_BUBBLE_FADE_MS = 1800;
 const ACTIVE_FOOD_SPOT = { x: GAME_WIDTH - 260, y: 408, width: 118, height: 46 };
 const ATTENTION_SPOT = { x: GAME_WIDTH / 2 - 46, y: FLOOR_BOTTOM - 78 };
 const ROOM_TOY_TARGETS = {
@@ -1788,10 +1790,11 @@ class CatWorldScene extends Phaser.Scene {
     this.catBubbles.set(cat.id, bubble);
     this.tweens.add({
       targets: bubble,
-      y: bubble.y - 22,
+      y: bubble.y - 12,
       alpha: 0,
-      duration: 2200,
-      ease: "Cubic.easeOut",
+      delay: CAT_BUBBLE_HOLD_MS,
+      duration: CAT_BUBBLE_FADE_MS,
+      ease: "Sine.easeInOut",
       onComplete: () => {
         if (this.catBubbles.get(cat.id) === bubble) this.catBubbles.delete(cat.id);
         bubble.destroy();
