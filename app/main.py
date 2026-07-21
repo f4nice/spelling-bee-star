@@ -92,8 +92,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-059"
-DEFAULT_PAGE_VERSION = "v20260721.59"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-060"
+DEFAULT_PAGE_VERSION = "v20260721.60"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -233,8 +233,46 @@ CAT_WORLD_MAX_MOVEMENT_SPEED = 2.0
 CAT_WORLD_MOVEMENT_SPEED_STEP = 0.05
 CAT_WORLD_SHOP = [
     {
+        "id": "daily-kibble",
+        "category": "food",
+        "foodType": "basic",
+        "label": "日常猫粮",
+        "englishName": "Daily Kibble",
+        "cost": 30,
+        "mood": 1,
+        "catEnergy": 10,
+        "durationMinutes": 15,
+        "description": "便宜耐放的基础口粮，所有猫都能吃，恢复量较少。",
+    },
+    {
+        "id": "chicken-broth",
+        "category": "food",
+        "foodType": "basic",
+        "label": "鸡肉汤饭",
+        "englishName": "Chicken Broth Rice",
+        "cost": 45,
+        "mood": 2,
+        "catEnergy": 14,
+        "durationMinutes": 20,
+        "description": "温热清淡的基础餐，适合平时少量补充体力。",
+    },
+    {
+        "id": "egg-yolk-bites",
+        "category": "food",
+        "foodType": "basic",
+        "label": "蛋黄小酥粒",
+        "englishName": "Egg Yolk Bites",
+        "cost": 55,
+        "mood": 3,
+        "catEnergy": 18,
+        "durationMinutes": 25,
+        "description": "一小份酥粒基础餐，恢复不高，但比日常猫粮更香。",
+    },
+    {
         "id": "salmon-bowl",
         "category": "food",
+        "foodType": "specialty",
+        "favoriteEnergyMultiplier": 1.45,
         "label": "三文鱼能量碗",
         "englishName": "Salmon Bowl",
         "cost": 60,
@@ -246,6 +284,8 @@ CAT_WORLD_SHOP = [
     {
         "id": "tuna-can",
         "category": "food",
+        "foodType": "specialty",
+        "favoriteEnergyMultiplier": 1.45,
         "label": "金枪鱼罐头",
         "englishName": "Tuna Can",
         "cost": 90,
@@ -257,6 +297,8 @@ CAT_WORLD_SHOP = [
     {
         "id": "goat-milk",
         "category": "food",
+        "foodType": "specialty",
+        "favoriteEnergyMultiplier": 1.45,
         "label": "羊奶布丁",
         "englishName": "Goat Milk Pudding",
         "cost": 120,
@@ -264,6 +306,32 @@ CAT_WORLD_SHOP = [
         "catEnergy": 45,
         "durationMinutes": 60,
         "description": "柔软、甜一点，心情会明显变好。",
+    },
+    {
+        "id": "silver-cod-stew",
+        "category": "food",
+        "foodType": "specialty",
+        "favoriteEnergyMultiplier": 1.45,
+        "label": "银鳕鱼南瓜煲",
+        "englishName": "Silver Cod Stew",
+        "cost": 105,
+        "mood": 7,
+        "catEnergy": 34,
+        "durationMinutes": 40,
+        "description": "细腻安静的特色餐，英短银渐层吃后恢复得更快。",
+    },
+    {
+        "id": "chicken-star-bites",
+        "category": "food",
+        "foodType": "specialty",
+        "favoriteEnergyMultiplier": 1.45,
+        "label": "鸡肉星星冻干",
+        "englishName": "Chicken Star Bites",
+        "cost": 115,
+        "mood": 8,
+        "catEnergy": 38,
+        "durationMinutes": 45,
+        "description": "脆脆的高能特色餐，爱活动的暹罗猫吃后恢复得更快。",
     },
     {
         "id": "rolling-ball",
@@ -291,6 +359,15 @@ CAT_WORLD_SHOP = [
         "cost": 160,
         "mood": 14,
         "description": "学习获得能量后，可以买来逗她玩。",
+    },
+    {
+        "id": "yarn-basket",
+        "category": "toy",
+        "label": "彩色毛线篮",
+        "englishName": "Yarn Basket",
+        "cost": 130,
+        "mood": 11,
+        "description": "一篮不会滚远的彩色毛线球，适合慢慢拨着玩。",
     },
     {
         "id": "cloud-rug",
@@ -345,6 +422,15 @@ CAT_WORLD_SHOP = [
         "cost": 240,
         "mood": 7,
         "description": "把今天记住的词挂在墙上，房间会更像学习基地。",
+    },
+    {
+        "id": "window-hammock",
+        "category": "decor",
+        "label": "窗边吊床",
+        "englishName": "Window Hammock",
+        "cost": 280,
+        "mood": 9,
+        "description": "一张悬在窗边的软吊床，适合安静休息和观察房间。",
     },
     {
         "id": "rug-candy",
@@ -433,6 +519,28 @@ CAT_WORLD_SHOP = [
         "description": "给单词挂画换成柔和的蜜桃色。",
         "targetDecor": "word-gallery",
         "tone": "peach",
+    },
+    {
+        "id": "hammock-lavender",
+        "category": "color",
+        "label": "吊床薰衣草",
+        "englishName": "Lavender Hammock",
+        "cost": 100,
+        "mood": 2,
+        "description": "给窗边吊床换成柔和的薰衣草色。",
+        "targetDecor": "window-hammock",
+        "tone": "lavender",
+    },
+    {
+        "id": "hammock-mint",
+        "category": "color",
+        "label": "吊床薄荷绿",
+        "englishName": "Mint Hammock",
+        "cost": 100,
+        "mood": 2,
+        "description": "给窗边吊床换成清新的薄荷绿色。",
+        "targetDecor": "window-hammock",
+        "tone": "mint",
     },
     {
         "id": "british-shorthair",
@@ -632,16 +740,20 @@ CAT_WORLD_DECOR_FAVORITE_CAT = {
     "study-desk": "siamese",
     "reading-lamp": "maine-coon",
     "word-gallery": CAT_WORLD_DEFAULT_CAT_ID,
+    "window-hammock": "british-shorthair",
 }
 CAT_WORLD_TOY_FAVORITE_CAT = {
     "rolling-ball": "siamese",
     "feather-wand": "maine-coon",
     "scratch-board": "british-shorthair",
+    "yarn-basket": CAT_WORLD_DEFAULT_CAT_ID,
 }
 CAT_WORLD_FOOD_FAVORITE_CAT = {
     "salmon-bowl": CAT_WORLD_DEFAULT_CAT_ID,
     "tuna-can": "maine-coon",
     "goat-milk": "ragdoll",
+    "silver-cod-stew": "british-shorthair",
+    "chicken-star-bites": "siamese",
 }
 CAT_WORLD_ITEM_FAVORITE_CAT = {
     **CAT_WORLD_DECOR_FAVORITE_CAT,
@@ -655,11 +767,13 @@ CAT_WORLD_DECOR_DEFAULT_LAYOUT = {
     "study-desk": {"x": 43, "y": 62},
     "reading-lamp": {"x": 62, "y": 47},
     "word-gallery": {"x": 31, "y": 31},
+    "window-hammock": {"x": 8, "y": 49},
 }
 CAT_WORLD_TOY_DEFAULT_LAYOUT = {
     "rolling-ball": {"x": 24, "y": 70},
     "scratch-board": {"x": 7, "y": 75},
     "feather-wand": {"x": 83, "y": 45},
+    "yarn-basket": {"x": 55, "y": 78},
 }
 CAT_WORLD_ROOM_DEFAULT_LAYOUT = {
     **CAT_WORLD_DECOR_DEFAULT_LAYOUT,
@@ -669,8 +783,8 @@ CAT_WORLD_PRICING_PLANS = [
     {
         "category": "food",
         "label": "猫粮",
-        "range": "60-120",
-        "strategy": "低价可重复购买，用来做每天学习后的即时奖励。",
+        "range": "30-120",
+        "strategy": "基础口粮低价低恢复；特色餐对指定猫提供更高体力加成。",
     },
     {
         "category": "toy",
@@ -10985,6 +11099,16 @@ def cat_world_item_favorite_cat_id(item_id: str) -> str:
     return favorite_cat_id if favorite_cat_id in CAT_WORLD_CAT_BY_ID else ""
 
 
+def cat_world_food_favorite_multiplier(item: dict[str, Any], cat_id: str) -> float:
+    if item.get("category") != "food" or cat_world_item_favorite_cat_id(item.get("id") or "") != str(cat_id or ""):
+        return 1.0
+    try:
+        multiplier = float(item.get("favoriteEnergyMultiplier") or 1.18)
+    except (TypeError, ValueError):
+        multiplier = 1.18
+    return min(max(multiplier, 1.0), 2.0)
+
+
 def cat_world_cat_favorite_item_ids(cat_id: str, categories: set[str] | None = None) -> list[str]:
     clean_cat_id = str(cat_id or "")
     favorite_ids = []
@@ -12732,7 +12856,7 @@ def cat_world_food_progress_targets(
     duration_seconds = max(int(item.get("durationMinutes") or 30), 1) * 60
     elapsed_seconds = max(int((now - active_food_at).total_seconds()), 0)
     ratio = min(max(elapsed_seconds / duration_seconds, 0.0), 1.0)
-    favorite_multiplier = 1.18 if cat_world_item_favorite_cat_id(item.get("id") or "") == str(cat_id or "") else 1.0
+    favorite_multiplier = cat_world_food_favorite_multiplier(item, cat_id)
     food_multiplier = float(traits["foodEnergyGain"]) * favorite_multiplier
     total_energy = max(round(int(item.get("catEnergy") or 0) * food_multiplier), 0)
     total_mood = max(round(int(item.get("mood") or 0) * food_multiplier), 0)
@@ -13245,7 +13369,7 @@ def cat_world_active_food(state: CatWorldState) -> dict[str, Any]:
     target_cat = CAT_WORLD_CAT_BY_ID.get(str(state.active_food_cat_id or ""))
     traits = cat_world_cat_traits(target_cat or CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     target_cat_id = target_cat["id"] if target_cat else ""
-    favorite_multiplier = 1.18 if cat_world_item_favorite_cat_id(item_id) == target_cat_id else 1.0
+    favorite_multiplier = cat_world_food_favorite_multiplier(item, target_cat_id)
     total_energy = round(int(item.get("catEnergy") or 0) * float(traits["foodEnergyGain"]) * favorite_multiplier)
     total_mood = round(int(item.get("mood") or 0) * float(traits["foodEnergyGain"]) * favorite_multiplier)
     remaining_energy = max(int((total_energy * remaining_seconds + duration_seconds - 1) // duration_seconds), 0)

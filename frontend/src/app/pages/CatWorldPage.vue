@@ -1,6 +1,12 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Cat as CatIcon, X as XIcon } from "lucide-vue-next";
+import {
+  foodEnergyGainForCat,
+  foodFavoriteBonusPercent,
+  foodMoodGainForCat,
+  foodTypeLabel,
+} from "../catWorldFoodRules.js";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
 
@@ -610,19 +616,24 @@ function ownedToolSubtext(item) {
   if (damaged) return `损坏 · ${damaged.reason || "需要维修后才能使用"}`;
   if (item.category === "cat") return item.personality || "正在陪读";
   const suffix = item.favoriteLabel ? ` · ${item.favoriteLabel}` : "";
+  if (item.category === "food") return `拥有 ${item.count} · ${foodTypeLabel(item)}${suffix}`;
   return `拥有 ${item.count}${suffix}`;
 }
 
-function catFoodTraitMultiplier() {
-  return Number(selectedCat.value?.traits?.foodEnergyGain || 1);
+function foodFavoriteCat(item) {
+  return cats.value.find((cat) => cat.id === item?.favoriteCatId) || null;
 }
 
-function foodEnergyGainValue(item) {
-  return Math.round(Number(item?.catEnergy || 0) * catFoodTraitMultiplier());
+function foodEnergyGainValue(item, cat = selectedCat.value) {
+  return foodEnergyGainForCat(item, cat);
 }
 
-function foodMoodGainValue(item) {
-  return Math.round(Number(item?.mood || 0) * catFoodTraitMultiplier());
+function foodMoodGainValue(item, cat = selectedCat.value) {
+  return foodMoodGainForCat(item, cat);
+}
+
+function foodSpecialtyGainValue(item) {
+  return foodEnergyGainValue(item, foodFavoriteCat(item) || selectedCat.value);
 }
 
 function decorStyleOptions(decorId) {
@@ -798,7 +809,10 @@ function purchaseHint(item) {
   }
   const remaining = Math.max(Number(energy.value.available || 0) - Number(item.cost || 0), 0);
   if (item.category === "food") {
-    return `扣 ${item.cost} 能量 · 摆放后体力 +${foodEnergyGainValue(item)}、心情 +${foodMoodGainValue(item)} · 剩余 ${remaining}`;
+    if (item.foodType === "specialty" && item.favoriteCatLabel) {
+      return `扣 ${item.cost} 能量 · ${item.favoriteCatLabel}食用约体力 +${foodSpecialtyGainValue(item)}，食品基础值 +${item.catEnergy} · 剩余 ${remaining}`;
+    }
+    return `扣 ${item.cost} 能量 · 基础体力 +${item.catEnergy}、心情 +${item.mood} · 剩余 ${remaining}`;
   }
   return `将扣 ${item.cost} 积分 · 购买后剩余 ${remaining}`;
 }
@@ -1327,6 +1341,13 @@ async function selectCat(catId) {
           <div>
             <span>{{ item.englishName }}</span>
             <h3>{{ item.label }}</h3>
+            <div v-if="item.category === 'food'" class="cat-world-food-tags">
+              <span :class="{ specialty: item.foodType === 'specialty' }">{{ foodTypeLabel(item) }}</span>
+              <span v-if="item.foodType === 'specialty' && item.favoriteCatLabel" class="favorite">
+                {{ item.favoriteCatLabel }}专属 +{{ foodFavoriteBonusPercent(item) }}%
+              </span>
+              <span>基础体力 +{{ item.catEnergy }}</span>
+            </div>
             <p>{{ item.description }}</p>
           </div>
           <div class="cat-world-shop-meta">

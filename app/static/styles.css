@@ -13144,6 +13144,32 @@ select {
   font-size: 16px;
 }
 
+.cat-world-food-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0 0 8px;
+}
+
+.cat-world-food-tags span {
+  border: 2px solid #2c2f3a;
+  padding: 3px 6px;
+  color: #263047;
+  background: #d9f6ff;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.cat-world-food-tags span.specialty {
+  color: #6f3b00;
+  background: #fff07d;
+}
+
+.cat-world-food-tags span.favorite {
+  color: #7c294d;
+  background: #ffe1ed;
+}
+
 .cat-world-shop-card span,
 .cat-world-shop-card p,
 .cat-world-cat-chip span {

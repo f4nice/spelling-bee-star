@@ -25,6 +25,7 @@ const ROOM_TOY_TARGETS = {
   "rolling-ball": { label: "滚滚球", width: 72, height: 64, defaultX: 312, defaultY: 392, focusX: 42, focusY: 34 },
   "scratch-board": { label: "猫抓板", width: 150, height: 48, defaultX: 90, defaultY: 418, focusX: 74, focusY: 22 },
   "feather-wand": { label: "逗猫棒", width: 172, height: 70, defaultX: GAME_WIDTH - 208, defaultY: 250, focusX: 88, focusY: 52 },
+  "yarn-basket": { label: "彩色毛线篮", width: 112, height: 72, defaultX: 670, defaultY: 432, focusX: 58, focusY: 36 },
 };
 
 const DECOR_SPECS = {
@@ -34,6 +35,7 @@ const DECOR_SPECS = {
   "study-desk": { label: "英文书桌", width: 200, height: 96, defaultX: 496, defaultY: 348 },
   "reading-lamp": { label: "阅读台灯", width: 72, height: 118, defaultX: 712, defaultY: 314 },
   "word-gallery": { label: "单词挂画", width: 120, height: 82, defaultX: 360, defaultY: 140 },
+  "window-hammock": { label: "窗边吊床", width: 168, height: 90, defaultX: 102, defaultY: 294 },
 };
 
 const CAT_PIXEL_SIZE = 2;
@@ -409,14 +411,10 @@ class CatWorldScene extends Phaser.Scene {
         this.addRoomHitZone(snapshot.activeFood.itemId || "active-food", bowlX, 374, 142, 86, 728);
       }
     }
-    if (owned(snapshot.inventory, "rolling-ball")) {
-      this.drawOwnedToy(snapshot, "rolling-ball", lastPlayItem === "rolling-ball");
-    }
-    if (owned(snapshot.inventory, "scratch-board")) {
-      this.drawOwnedToy(snapshot, "scratch-board", lastPlayItem === "scratch-board");
-    }
-    if (owned(snapshot.inventory, "feather-wand")) {
-      this.drawOwnedToy(snapshot, "feather-wand", lastPlayItem === "feather-wand");
+    for (const itemId of Object.keys(ROOM_TOY_TARGETS)) {
+      if (owned(snapshot.inventory, itemId)) {
+        this.drawOwnedToy(snapshot, itemId, lastPlayItem === itemId);
+      }
     }
   }
 
@@ -493,6 +491,22 @@ class CatWorldScene extends Phaser.Scene {
       graphics.fillTriangle(136, 3, 163, 14, 142, 44);
       graphics.fillStyle(0xa9e8c8, 1);
       graphics.fillTriangle(112, 2, 143, 12, 125, 38);
+    } else if (itemId === "yarn-basket") {
+      graphics.fillStyle(0x2c2f3a, 0.22);
+      graphics.fillEllipse(56, 62, 96, 12);
+      drawPixelRect(graphics, 12, 28, 88, 32, 0xd99a58);
+      graphics.lineStyle(3, 0x7a573b, 0.75);
+      for (let x = 22; x < 96; x += 16) graphics.lineBetween(x, 32, x + 8, 56);
+      graphics.fillStyle(0xff8cad, 1);
+      graphics.fillCircle(35, 25, 17);
+      graphics.fillStyle(0x87d9ff, 1);
+      graphics.fillCircle(62, 21, 18);
+      graphics.fillStyle(0xfff07d, 1);
+      graphics.fillCircle(84, 28, 15);
+      graphics.lineStyle(2, INK, 0.8);
+      graphics.strokeCircle(35, 25, 17);
+      graphics.strokeCircle(62, 21, 18);
+      graphics.strokeCircle(84, 28, 15);
     }
     const activeLabel = itemId === "feather-wand" && this.owner.wandMode ? `${spec.label} · 跟随中` : spec.label;
     const label = this.add
@@ -617,6 +631,20 @@ class CatWorldScene extends Phaser.Scene {
         })
         .setOrigin(0.5);
       container.add(text);
+    } else if (decorId === "window-hammock") {
+      drawPixelRect(graphics, 10, 8, 14, 72, colors.alt);
+      drawPixelRect(graphics, spec.width - 24, 8, 14, 72, colors.alt);
+      graphics.lineStyle(5, INK, 1);
+      graphics.lineBetween(17, 18, 42, 49);
+      graphics.lineBetween(spec.width - 17, 18, spec.width - 42, 49);
+      graphics.fillStyle(colors.main, 1);
+      graphics.fillTriangle(36, 42, spec.width - 36, 42, spec.width / 2, 78);
+      graphics.lineStyle(4, INK, 1);
+      graphics.lineBetween(36, 42, spec.width - 36, 42);
+      graphics.lineBetween(36, 42, spec.width / 2, 78);
+      graphics.lineBetween(spec.width - 36, 42, spec.width / 2, 78);
+      graphics.fillStyle(colors.accent, 1);
+      graphics.fillRect(spec.width / 2 - 18, 49, 36, 12);
     }
   }
 
