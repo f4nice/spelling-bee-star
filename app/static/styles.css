@@ -12388,6 +12388,10 @@ select {
   background: #78cdf1;
 }
 
+.cat-world-agent-meter.trust b {
+  background: #caa7ff;
+}
+
 .cat-world-agent-meter.focus b {
   background: #a9e8c8;
 }

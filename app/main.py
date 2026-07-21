@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-039"
-DEFAULT_PAGE_VERSION = "v20260721.39"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-040"
+DEFAULT_PAGE_VERSION = "v20260721.40"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3816,6 +3816,8 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
     log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_gain)
     if energy_gain:
         log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) + energy_gain)
+    bond_gain = 1 + (1 if favorite_match and event_kind in {"favorite-toy", "favorite-decor", "rest-spot"} else 0)
+    bond = cat_world_apply_cat_bond(state, cat["id"], bond_gain, event_kind, label, now)
     agent_state = append_cat_world_agent_event(
         log,
         cat,
@@ -3830,6 +3832,7 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
     agent_state["ambientEffectCount"] = ambient_effect_count + 1
     log.agent_state = encode_cat_world_agent_state(agent_state)
     db.add(log)
+    db.add(state)
     db.commit()
     db.refresh(state)
     effect = {
@@ -3840,6 +3843,7 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
         "kind": event_kind,
         "moodGain": mood_gain,
         "energyGain": energy_gain,
+        "bond": bond,
         "ambientEffectCount": ambient_effect_count + 1,
     }
     return {
@@ -3904,6 +3908,7 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
     repair_log.agent_state = encode_cat_world_agent_state(repair_agent_state)
     if repair_log.damaged_item_id == item_id:
         repair_log.damaged_item_id = None
+    bond = cat_world_apply_cat_bond(state, repair_cat["id"], 4, "repair", repair_label, now)
     db.add(repair_log)
     db.add(state)
     db.commit()
@@ -3916,6 +3921,7 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
             "cost": repair_cost,
             "catId": repair_cat["id"],
             "catLabel": repair_cat["label"],
+            "bond": bond,
         },
         **serialize_cat_world_payload(db, state),
     }
@@ -10177,6 +10183,169 @@ def encode_cat_world_cats(cats: list[str]) -> str:
     return json.dumps(clean, ensure_ascii=False)
 
 
+def cat_world_clamp_bond_score(value: int | float) -> int:
+    return int(min(max(round(float(value or 0)), 0), 100))
+
+
+def cat_world_bond_level_label(score: int) -> str:
+    if score >= 86:
+        return "完全信任"
+    if score >= 66:
+        return "很亲近"
+    if score >= 42:
+        return "熟悉你"
+    return "刚开始熟悉"
+
+
+def cat_world_default_bond(cat_id: str) -> dict[str, Any]:
+    return {
+        "catId": cat_id,
+        "score": 18,
+        "totalGain": 0,
+        "lastSource": "",
+        "lastLabel": "",
+        "lastGain": 0,
+        "updatedAt": "",
+        "sources": {},
+    }
+
+
+def parse_cat_world_bonds(raw: str | None) -> dict[str, dict[str, Any]]:
+    try:
+        loaded = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        loaded = {}
+    if not isinstance(loaded, dict):
+        loaded = {}
+    bonds: dict[str, dict[str, Any]] = {}
+    for cat_id, source in loaded.items():
+        cat_key = str(cat_id)
+        if cat_key not in CAT_WORLD_CAT_BY_ID or not isinstance(source, dict):
+            continue
+        row = cat_world_default_bond(cat_key)
+        source_counts = source.get("sources")
+        clean_sources: dict[str, int] = {}
+        if isinstance(source_counts, dict):
+            for key, count in source_counts.items():
+                try:
+                    clean_sources[str(key)] = max(int(count or 0), 0)
+                except (TypeError, ValueError):
+                    continue
+        try:
+            total_gain = max(int(source.get("totalGain") or 0), 0)
+        except (TypeError, ValueError):
+            total_gain = 0
+        try:
+            last_gain = max(int(source.get("lastGain") or 0), 0)
+        except (TypeError, ValueError):
+            last_gain = 0
+        row.update(
+            {
+                "score": cat_world_clamp_bond_score(source.get("score", row["score"])),
+                "totalGain": total_gain,
+                "lastSource": str(source.get("lastSource") or ""),
+                "lastLabel": str(source.get("lastLabel") or ""),
+                "lastGain": last_gain,
+                "updatedAt": str(source.get("updatedAt") or ""),
+                "sources": clean_sources,
+            }
+        )
+        bonds[cat_key] = row
+    return bonds
+
+
+def encode_cat_world_bonds(bonds: dict[str, dict[str, Any]]) -> str:
+    clean: dict[str, dict[str, Any]] = {}
+    for cat_id, source in bonds.items():
+        cat_key = str(cat_id)
+        if cat_key not in CAT_WORLD_CAT_BY_ID or not isinstance(source, dict):
+            continue
+        score = cat_world_clamp_bond_score(source.get("score", 18))
+        try:
+            total_gain = max(int(source.get("totalGain") or 0), 0)
+        except (TypeError, ValueError):
+            total_gain = 0
+        source_counts = source.get("sources")
+        clean_sources: dict[str, int] = {}
+        if isinstance(source_counts, dict):
+            for key, count in source_counts.items():
+                try:
+                    normalized_count = max(int(count or 0), 0)
+                except (TypeError, ValueError):
+                    continue
+                if normalized_count:
+                    clean_sources[str(key)] = normalized_count
+        if total_gain <= 0 and score <= 18 and not clean_sources:
+            continue
+        try:
+            last_gain = max(int(source.get("lastGain") or 0), 0)
+        except (TypeError, ValueError):
+            last_gain = 0
+        clean[cat_key] = {
+            "score": score,
+            "totalGain": total_gain,
+            "lastSource": str(source.get("lastSource") or ""),
+            "lastLabel": str(source.get("lastLabel") or ""),
+            "lastGain": last_gain,
+            "updatedAt": str(source.get("updatedAt") or ""),
+            "sources": clean_sources,
+        }
+    return json.dumps(clean, ensure_ascii=False, sort_keys=True)
+
+
+def cat_world_bond_payload(raw_bonds: dict[str, dict[str, Any]], cat_ids: list[str] | None = None) -> dict[str, dict[str, Any]]:
+    cat_ids = cat_ids or [cat["id"] for cat in CAT_WORLD_CATS]
+    payload: dict[str, dict[str, Any]] = {}
+    for cat_id in cat_ids:
+        if cat_id not in CAT_WORLD_CAT_BY_ID:
+            continue
+        row = {**cat_world_default_bond(cat_id), **raw_bonds.get(cat_id, {})}
+        score = cat_world_clamp_bond_score(row.get("score", 18))
+        last_gain = max(int(row.get("lastGain") or 0), 0)
+        last_label = str(row.get("lastLabel") or "")
+        payload[cat_id] = {
+            **row,
+            "score": score,
+            "levelLabel": cat_world_bond_level_label(score),
+            "detailLabel": f"最近 {last_label} +{last_gain}" if last_label and last_gain else "还没有照顾记录",
+        }
+    return payload
+
+
+def cat_world_apply_cat_bond(
+    state: CatWorldState,
+    cat_id: str,
+    amount: int,
+    source: str,
+    label: str,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    if cat_id not in CAT_WORLD_CAT_BY_ID:
+        cat_id = CAT_WORLD_DEFAULT_CAT_ID
+    gain = max(int(amount or 0), 0)
+    bonds = parse_cat_world_bonds(state.cat_bonds)
+    row = {**cat_world_default_bond(cat_id), **bonds.get(cat_id, {})}
+    old_score = cat_world_clamp_bond_score(row.get("score", 18))
+    next_score = cat_world_clamp_bond_score(old_score + gain)
+    source_key = str(source or "care")
+    source_counts = row.get("sources") if isinstance(row.get("sources"), dict) else {}
+    source_counts[source_key] = max(int(source_counts.get(source_key) or 0), 0) + gain
+    row.update(
+        {
+            "score": next_score,
+            "totalGain": max(int(row.get("totalGain") or 0), 0) + gain,
+            "lastSource": source_key,
+            "lastLabel": str(label or "照顾"),
+            "lastGain": max(next_score - old_score, 0),
+            "updatedAt": (now or datetime.utcnow()).replace(microsecond=0).isoformat() + "Z",
+            "sources": source_counts,
+        }
+    )
+    bonds[cat_id] = row
+    state.cat_bonds = encode_cat_world_bonds(bonds)
+    return cat_world_bond_payload(bonds, [cat_id])[cat_id]
+
+
 def cat_world_shop_settings_map(db: Session) -> dict[str, int]:
     settings_rows = db.scalars(select(CatWorldShopSetting)).all()
     costs: dict[str, int] = {}
@@ -11711,6 +11880,7 @@ def cat_world_apply_favorite_decor_rewards(
             label = item.get("label") or decor_id
             bonus = 5 if str(traits.get("temperament") or "") in {"clingy", "gentle"} else 4
             log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + bonus)
+            cat_world_apply_cat_bond(state, cat_id, 2, "favorite-decor", label, now)
             rewarded_set.add(token)
             rewards.append(
                 {
@@ -12172,6 +12342,8 @@ def cat_world_apply_active_food_nibble(
     agent_state["activeFoodRemainingSeconds"] = int(time_progress.get("remainingSeconds") or 0)
     agent_state["activeFoodManualBites"] = manual_bites + 1
     agent_state["activeFoodNibbleAt"] = now.replace(microsecond=0).isoformat() + "Z"
+    bond_gain = 2 if cat_world_item_favorite_cat_id(item_id) == cat["id"] else 1
+    bond = cat_world_apply_cat_bond(state, cat["id"], bond_gain, "food-nibble", item.get("label") or item_id, now)
     finished = next_remaining_energy <= 0
     if finished:
         log.agent_state = encode_cat_world_agent_state(agent_state)
@@ -12210,6 +12382,7 @@ def cat_world_apply_active_food_nibble(
         "remainingMood": next_remaining_mood,
         "remainingSeconds": int(time_progress.get("remainingSeconds") or 0),
         "manualBites": manual_bites + 1,
+        "bond": bond,
         "message": message,
     }
 
@@ -12245,6 +12418,14 @@ def cat_world_apply_daily_effect(
             f"{item.get('label') or item['id']}摆进房间，优先给体力低的{cat['label']}慢慢吃。",
             now,
         )
+        cat_world_apply_cat_bond(
+            state,
+            cat["id"],
+            4 if cat_world_item_favorite_cat_id(item["id"]) == cat["id"] else 3,
+            "food",
+            item.get("label") or item["id"],
+            now,
+        )
         db.add(log)
         db.add(state)
         db.flush()
@@ -12261,6 +12442,14 @@ def cat_world_apply_daily_effect(
     energy_gain = -max(1, round(4 * float(traits["energyDrain"])))
     log.toy_count = int(log.toy_count or 0) + 1
     log.last_play_item = item["id"]
+    bond = cat_world_apply_cat_bond(
+        state,
+        cat["id"],
+        6 if favorite_match else 4,
+        "toy",
+        item.get("label") or item["id"],
+        now,
+    )
     append_cat_world_agent_event(
         log,
         cat,
@@ -12279,6 +12468,7 @@ def cat_world_apply_daily_effect(
         "catId": cat["id"],
         "catLabel": cat["label"],
         "favoriteMatch": favorite_match,
+        "bond": bond,
     }
 
 
@@ -12327,6 +12517,14 @@ def cat_world_apply_pet_effect(
     )
     agent_state["petCount"] = pet_count
     agent_state["lastPetAt"] = now.replace(microsecond=0).isoformat() + "Z"
+    bond = cat_world_apply_cat_bond(
+        state,
+        cat["id"],
+        5 if temperament == "clingy" else 4,
+        "pet",
+        "摸摸",
+        now,
+    )
     log.agent_state = encode_cat_world_agent_state(agent_state)
     db.add(log)
     return {
@@ -12334,6 +12532,7 @@ def cat_world_apply_pet_effect(
         "catLabel": cat["label"],
         "moodGain": mood_gain,
         "petCount": pet_count,
+        "bond": bond,
         "message": message,
     }
 
@@ -12383,6 +12582,7 @@ def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
         cats=encode_cat_world_cats([CAT_WORLD_DEFAULT_CAT_ID]),
         room_styles=encode_cat_world_room_styles({}),
         room_layout=encode_cat_world_room_layout({}),
+        cat_bonds=encode_cat_world_bonds({}),
         selected_cat=CAT_WORLD_DEFAULT_CAT_ID,
     )
     db.add(state)
@@ -12572,6 +12772,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     available_energy = max(earned_energy - spent_energy, 0)
     inventory = parse_cat_world_inventory(state.inventory)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
+    cat_bonds = parse_cat_world_bonds(state.cat_bonds)
     shop = cat_world_effective_shop(db)
     shop_by_id = {item["id"]: item for item in shop}
     owned_cats = parse_cat_world_cats(state.cats)
@@ -12599,6 +12800,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         db.refresh(state)
         inventory = parse_cat_world_inventory(state.inventory)
         damaged_items = parse_cat_world_damaged_items(state.damaged_items)
+        cat_bonds = parse_cat_world_bonds(state.cat_bonds)
         usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
         room_styles = parse_cat_world_room_styles(state.room_styles, inventory)
         room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
@@ -12626,6 +12828,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "usableInventory": usable_inventory,
             "damagedItems": damaged_items,
             "ownedCats": owned_cats,
+            "catBonds": cat_world_bond_payload(cat_bonds, owned_cats),
             "roomStyles": room_styles,
             "roomLayout": visual_room_layout,
             "styleOptions": style_options,
@@ -12866,6 +13069,8 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN room_styles TEXT NULL"))
         if "cat_world_states" in table_names and "room_layout" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN room_layout TEXT NULL"))
+        if "cat_world_states" in table_names and "cat_bonds" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN cat_bonds TEXT NULL"))
         if "cat_world_states" in table_names and "active_food_item" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_food_item VARCHAR(80) NULL"))
         if "cat_world_states" in table_names and "active_food_cat_id" not in cat_world_state_columns:

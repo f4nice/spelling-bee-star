@@ -114,6 +114,7 @@ const roomStyles = computed(() => state.value.roomStyles || {});
 const roomLayout = computed(() => state.value.roomLayout || {});
 const styleOptions = computed(() => state.value.styleOptions || {});
 const dailyLogs = computed(() => state.value.dailyLogs || {});
+const catBonds = computed(() => state.value.catBonds || {});
 const ownedCats = computed(() => state.value.ownedCats || ["mimi"]);
 const cats = computed(() => payload.value.cats || []);
 const shop = computed(() => payload.value.shop || []);
@@ -140,6 +141,7 @@ const focusedDailyLog = computed(
     {},
 );
 const focusedAgentState = computed(() => focusedDailyLog.value.agentState || {});
+const focusedBond = computed(() => catBonds.value[focusedCat.value.id] || {});
 const rawActiveFood = computed(() => mood.value.activeFood || {});
 const activeFoodRemainingSeconds = computed(() => {
   const food = rawActiveFood.value || {};
@@ -235,7 +237,8 @@ const focusedCatDailyNote = computed(() => {
       : "";
   const comfort = agent.comfortLabel || "暂无道具减耗";
   const reason = agent.hourlyReason || "自由活动";
-  return `每小时 体力 ${signedHourlyValue(log.hourlyEnergyDecay)} / 心情 ${signedHourlyValue(log.hourlyMoodDecay)} · ${reason} · ${comfort} · 独立状态 ${agent.dailyMoodLabel || "稳定"} · 喜欢 ${favoriteDecorLabels.join("、") || "安静角落"}${damaged}`;
+  const bondText = focusedBond.value.levelLabel ? ` · 信任 ${focusedBond.value.levelLabel} ${focusedBond.value.score || 18}` : "";
+  return `每小时 体力 ${signedHourlyValue(log.hourlyEnergyDecay)} / 心情 ${signedHourlyValue(log.hourlyMoodDecay)} · ${reason} · ${comfort} · 独立状态 ${agent.dailyMoodLabel || "稳定"} · 喜欢 ${favoriteDecorLabels.join("、") || "安静角落"}${bondText}${damaged}`;
 });
 const focusedAgentEvents = computed(() => {
   const events = focusedAgentState.value.events;
@@ -278,6 +281,7 @@ const catAgentCards = computed(() =>
     const log = dailyLogs.value[cat.id] || {};
     const agent = log.agentState || {};
     const behavior = agent.currentBehavior || {};
+    const bond = catBonds.value[cat.id] || {};
     const agentEvents = Array.isArray(agent.events) ? agent.events.filter((event) => event?.message) : [];
     const latestEvent = agentEvents.length ? agentEvents[agentEvents.length - 1] : null;
     return {
@@ -288,6 +292,9 @@ const catAgentCards = computed(() =>
       behaviorLabel: behavior.label || (owned ? "自由活动" : "未解锁"),
       moodScore: clampCatScore(log.moodScore ?? agent.adjustedMoodScore ?? 0),
       energyScore: clampCatScore(log.energyScore ?? agent.adjustedEnergyScore ?? 0),
+      bondScore: clampCatScore(bond.score ?? 18),
+      bondLabel: bond.levelLabel || "刚开始熟悉",
+      bondDetailLabel: bond.detailLabel || "还没有照顾记录",
       dailyMoodLabel: agent.dailyMoodLabel || (owned ? "今天状态稳定" : "等待解锁"),
       latestEvent,
     };
@@ -339,6 +346,8 @@ const catAgentDiaries = computed(() =>
         favoriteItemLabel,
         activeFavoriteLabel: activeFavoriteLabels.length ? activeFavoriteLabels.join("、") : "喜欢的家具还没摆出来",
         countsLabel: `食物 ${log.foodCount || 0} · 玩具 ${log.toyCount || 0} · 摸摸 ${agent.petCount || 0}`,
+        bondLabel: `${cat.bondLabel} · ${cat.bondScore}/100`,
+        bondDetailLabel: cat.bondDetailLabel,
         damageLabel: damagedItem
           ? `今天弄坏过 ${damagedItem}`
           : repairedItem
@@ -1133,6 +1142,10 @@ async function selectCat(catId) {
               心情
               <i><b :style="{ width: `${cat.moodScore}%` }"></b></i>
             </span>
+            <span class="cat-world-agent-meter trust">
+              信任
+              <i><b :style="{ width: `${cat.bondScore}%` }"></b></i>
+            </span>
             <span class="cat-world-agent-meter focus">
               专注
               <i><b :style="{ width: `${cat.attention}%` }"></b></i>
@@ -1166,6 +1179,10 @@ async function selectCat(catId) {
             <div>
               <dt>消耗</dt>
               <dd>{{ cat.decayLabel }}</dd>
+            </div>
+            <div>
+              <dt>亲密</dt>
+              <dd>{{ cat.bondLabel }} · {{ cat.bondDetailLabel }}</dd>
             </div>
             <div>
               <dt>今日参数</dt>

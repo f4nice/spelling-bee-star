@@ -198,6 +198,7 @@ class CatWorldState(Base):
     cats: Mapped[str | None] = mapped_column(Text)
     room_styles: Mapped[str | None] = mapped_column(Text)
     room_layout: Mapped[str | None] = mapped_column(Text)
+    cat_bonds: Mapped[str | None] = mapped_column(Text)
     selected_cat: Mapped[str] = mapped_column(String(80), default="mimi", server_default="mimi", nullable=False)
     last_play_item: Mapped[str | None] = mapped_column(String(80))
     last_played_at: Mapped[datetime | None] = mapped_column(DateTime)
