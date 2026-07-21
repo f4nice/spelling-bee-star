@@ -11899,6 +11899,8 @@ select {
 
 .cat-world-owned-list {
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
   flex: 1 1 220px;
   gap: 8px;
   min-height: 120px;
