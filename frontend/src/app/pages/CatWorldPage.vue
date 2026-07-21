@@ -7,6 +7,7 @@ import {
   foodMoodGainForCat,
   foodTypeLabel,
 } from "../catWorldFoodRules.js";
+import { litterMoodPenalty } from "../catWorldHygieneRules.js";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
 
@@ -86,6 +87,7 @@ onMounted(async () => {
     },
     onLayoutChange: handleGameLayoutChange,
     onToyClick: handleRoomToyClick,
+    onLitterClick: cleanLitter,
     onItemInteractionEnd: (interaction) => {
       if (interaction?.message) notice.value = interaction.message;
     },
@@ -100,6 +102,7 @@ onMounted(async () => {
 
 const categories = [
   { key: "food", label: "猫粮" },
+  { key: "consumable", label: "消耗品" },
   { key: "toy", label: "玩具" },
   { key: "decor", label: "装修" },
   { key: "color", label: "配色" },
@@ -110,6 +113,7 @@ const toolCategories = [
   { key: "decor", label: "装饰" },
   { key: "food", label: "食物" },
   { key: "toy", label: "玩具" },
+  { key: "consumable", label: "消耗品" },
   { key: "cat", label: "猫咪" },
 ];
 
@@ -143,6 +147,8 @@ const roomLayout = computed(() => state.value.roomLayout || {});
 const styleOptions = computed(() => state.value.styleOptions || {});
 const dailyLogs = computed(() => state.value.dailyLogs || {});
 const catBonds = computed(() => state.value.catBonds || {});
+const hygiene = computed(() => state.value.hygiene || {});
+const hygieneMoodPenalty = computed(() => Number(hygiene.value.moodDecayBonus ?? litterMoodPenalty(hygiene.value.count)));
 const ownedCats = computed(() => state.value.ownedCats || ["mimi"]);
 const cats = computed(() => payload.value.cats || []);
 const shop = computed(() => payload.value.shop || []);
@@ -193,6 +199,18 @@ const activeFood = computed(() => ({
 }));
 const activeFoodEnergyGain = computed(() => Number(activeFood.value.catEnergyEffective || 0));
 const activeFoodMoodGain = computed(() => Number(activeFood.value.moodEffective || 0));
+const rawActiveCare = computed(() => state.value.activeCare || {});
+const activeCareRemainingSeconds = computed(() => {
+  if (!rawActiveCare.value?.active) return 0;
+  const expiresAt = parseUtcTimestamp(rawActiveCare.value.expiresAt);
+  if (Number.isFinite(expiresAt)) return Math.max(Math.ceil((expiresAt - clockNow.value) / 1000), 0);
+  return Math.max(Number(rawActiveCare.value.remainingSeconds || 0), 0);
+});
+const activeCare = computed(() => ({
+  ...rawActiveCare.value,
+  active: Boolean(rawActiveCare.value?.active && activeCareRemainingSeconds.value > 0),
+  remainingSeconds: activeCareRemainingSeconds.value,
+}));
 const catEnergyScore = computed(() => Number(mood.value.catEnergy ?? 50));
 const moodScore = computed(() => Number(mood.value.score ?? 50));
 const selectedItems = computed(() => shop.value.filter((item) => item.category === activeCategory.value));
@@ -407,6 +425,8 @@ const gameSnapshot = computed(() => ({
   layout: roomLayout.value,
   mood: mood.value,
   activeFood: activeFood.value,
+  activeCare: activeCare.value,
+  hygiene: hygiene.value,
   dailyLogs: dailyLogs.value,
   ownedCats: ownedCats.value,
   ownedFoodCount: ownedFoodCount.value,
@@ -617,6 +637,11 @@ function ownedToolSubtext(item) {
   if (item.category === "cat") return item.personality || "正在陪读";
   const suffix = item.favoriteLabel ? ` · ${item.favoriteLabel}` : "";
   if (item.category === "food") return `拥有 ${item.count} · ${foodTypeLabel(item)}${suffix}`;
+  if (item.category === "consumable") {
+    if (item.useType === "litter-clean") return `拥有 ${item.count} · 点击猫屎时消耗`;
+    if (item.useType === "litter-prevent") return `拥有 ${item.count} · 拉屎时自动消耗`;
+    return `拥有 ${item.count} · 使用一次消耗 1 个`;
+  }
   return `拥有 ${item.count}${suffix}`;
 }
 
@@ -683,6 +708,20 @@ function handleOwnedToolClick(item) {
   }
   if (item.category === "food") {
     play(item);
+    return;
+  }
+  if (item.category === "consumable") {
+    if (item.useType === "litter-clean") {
+      notice.value = hygiene.value.count
+        ? "请直接点击活动室里冒烟的猫屎，每堆会消耗一把铲子。"
+        : "铲子已经放进背包；有猫屎时直接点击猫屎清理。";
+      return;
+    }
+    if (item.useType === "litter-prevent") {
+      notice.value = `还有 ${item.count} 包猫砂，猫咪下次拉屎时会自动消耗一包并处理干净。`;
+      return;
+    }
+    useConsumable(item);
     return;
   }
   if (item.category === "cat") {
@@ -814,6 +853,16 @@ function purchaseHint(item) {
     }
     return `扣 ${item.cost} 能量 · 基础体力 +${item.catEnergy}、心情 +${item.mood} · 剩余 ${remaining}`;
   }
+  if (item.category === "consumable") {
+    const effect = item.useType === "litter-prevent"
+      ? "自动抵消一堆猫屎"
+      : item.useType === "litter-clean"
+        ? "可清理一堆猫屎"
+        : item.useType === "room-care"
+          ? `所有猫心情 +${item.mood || 0}`
+          : `当前猫心情 +${item.mood || 0}`;
+    return `扣 ${item.cost} 能量 · ${effect} · 剩余 ${remaining}`;
+  }
   return `将扣 ${item.cost} 积分 · 购买后剩余 ${remaining}`;
 }
 
@@ -934,6 +983,46 @@ async function play(item) {
     }
   } catch (error) {
     notice.value = error.message || "互动失败，请稍后再试。";
+  } finally {
+    busyItemId.value = "";
+  }
+}
+
+async function cleanLitter() {
+  if (roomEditMode.value || busyItemId.value) return;
+  busyItemId.value = "litter-clean";
+  notice.value = "";
+  try {
+    const nextPayload = await fetchJson(routeApiPaths.catWorldCleanLitter(), { method: "POST" });
+    replacePayload(nextPayload);
+    const effect = nextPayload.effect || {};
+    notice.value = `${effect.message || "猫屎已经清理好了。"} 剩余 ${effect.remainingLitter || 0} 堆，铲子 ${effect.scoopRemaining || 0} 把。`;
+  } catch (error) {
+    notice.value = error.message || "清理失败，请先检查铲子库存。";
+  } finally {
+    busyItemId.value = "";
+  }
+}
+
+async function useConsumable(item) {
+  if (!item?.id || busyItemId.value || roomEditMode.value) return;
+  busyItemId.value = item.id;
+  notice.value = "";
+  const targetCatId = openCatDiaryId.value || focusedCat.value.id || state.value.selectedCat;
+  try {
+    const nextPayload = await fetchJson(routeApiPaths.catWorldUseConsumable(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ itemId: item.id, catId: targetCatId }),
+    });
+    replacePayload(nextPayload);
+    const effect = nextPayload.effect || {};
+    notice.value = `${effect.message || `${item.label}已经使用。`} 剩余 ${effect.remaining || 0} 个。`;
+    const targetCat = cats.value.find((cat) => cat.id === effect.catId) || focusedCat.value;
+    const targetEffect = Array.isArray(effect.effects) ? effect.effects.find((row) => row.catId === targetCat.id) : null;
+    if (targetEffect?.message) showCatReaction(targetCat, targetEffect.message);
+  } catch (error) {
+    notice.value = error.message || "消耗品使用失败，请稍后再试。";
   } finally {
     busyItemId.value = "";
   }
@@ -1118,7 +1207,9 @@ async function selectCat(catId) {
           <span>已拥有装饰 {{ ownedDecor.length }}</span>
           <span>食物 {{ ownedFoodCount }}</span>
           <span>猫咪 {{ ownedCats.length }}</span>
+          <span :class="{ alert: hygiene.count > 0 }">卫生 {{ hygiene.count || 0 }} 堆猫屎</span>
           <span v-if="activeFood.active">食物剩余 {{ formatSeconds(activeFood.remainingSeconds) }}</span>
+          <span v-if="activeCare.active">猫草剩余 {{ formatSeconds(activeCare.remainingSeconds) }}</span>
           <span v-if="lastPlayLabel">刚刚玩过 {{ lastPlayLabel }}</span>
         </div>
       </section>
@@ -1149,6 +1240,19 @@ async function selectCat(catId) {
           <span>当前食物</span>
           <strong>{{ activeFood.label }}</strong>
           <small>优先给 {{ activeFood.targetCatLabel || "体力最低的小猫" }} · 剩余可补体力 {{ activeFood.remainingEnergy || 0 }} · 总计体力 +{{ activeFoodEnergyGain }} · 总计心情 +{{ activeFoodMoodGain }} · {{ formatSeconds(activeFood.remainingSeconds) }}</small>
+        </div>
+
+        <div :class="['cat-world-hygiene-status', { alert: hygiene.count > 0 }]">
+          <span>房间卫生</span>
+          <strong>{{ hygiene.count ? `${hygiene.count} 堆猫屎` : "干净" }}</strong>
+          <small v-if="hygiene.count">每只猫每小时心情额外 -{{ hygieneMoodPenalty }} · 点击房间里的猫屎清理</small>
+          <small v-else>猫砂 {{ hygiene.catLitterCount || 0 }} 包 · 铲子 {{ hygiene.scoopCount || 0 }} 把</small>
+        </div>
+
+        <div v-if="activeCare.active" class="cat-world-active-food cat-world-active-care">
+          <span>放置中的消耗品</span>
+          <strong>{{ activeCare.label }}</strong>
+          <small>{{ activeCare.targetCatLabel || "猫咪" }}会慢慢靠近 · {{ formatSeconds(activeCare.remainingSeconds) }} 后消失</small>
         </div>
 
         <div class="cat-world-tool-tabs" role="tablist" aria-label="已拥有道具分类">
@@ -1347,6 +1451,12 @@ async function selectCat(catId) {
                 {{ item.favoriteCatLabel }}专属 +{{ foodFavoriteBonusPercent(item) }}%
               </span>
               <span>基础体力 +{{ item.catEnergy }}</span>
+            </div>
+            <div v-else-if="item.category === 'consumable'" class="cat-world-food-tags cat-world-consumable-tags">
+              <span>一次性</span>
+              <span v-if="item.useType === 'litter-prevent'">自动使用</span>
+              <span v-else-if="item.useType === 'litter-clean'">点击猫屎使用</span>
+              <span v-else>点击背包使用</span>
             </div>
             <p>{{ item.description }}</p>
           </div>

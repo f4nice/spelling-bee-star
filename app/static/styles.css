@@ -11920,6 +11920,48 @@ select {
   font-size: 15px;
 }
 
+.cat-world-active-care {
+  background: #e7f8dd;
+}
+
+.cat-world-active-care strong {
+  color: #236b55;
+}
+
+.cat-world-hygiene-status {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 8px;
+  border: 3px solid #2c2f3a;
+  border-radius: 4px;
+  padding: 8px 9px;
+  color: #263047;
+  background: #e7f8dd;
+  box-shadow: 3px 3px 0 #2c2f3a;
+}
+
+.cat-world-hygiene-status span,
+.cat-world-hygiene-status strong,
+.cat-world-hygiene-status small {
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.cat-world-hygiene-status small {
+  grid-column: 1 / -1;
+  color: #40516b;
+}
+
+.cat-world-hygiene-status.alert {
+  background: #ffe1df;
+}
+
+.cat-world-hygiene-status.alert strong,
+.cat-world-room-status span.alert {
+  color: #a22c2c;
+}
+
 .cat-world-tool-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -13231,6 +13273,11 @@ select {
 .cat-world-food-tags span.favorite {
   color: #7c294d;
   background: #ffe1ed;
+}
+
+.cat-world-consumable-tags span:first-child {
+  color: #fff;
+  background: #236b55;
 }
 
 .cat-world-shop-card span,

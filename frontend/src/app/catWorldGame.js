@@ -20,6 +20,13 @@ const CAT_INTERACTION_DEPTH = 980;
 const CAT_HITBOX = { x: -58, y: -74, width: 232, height: 184 };
 const FEATHER_WAND_CURSOR = 'url("/static/cursors/feather-wand-cursor.svg") 4 28, crosshair';
 const ACTIVE_FOOD_SPOT = { x: GAME_WIDTH - 260, y: 408, width: 118, height: 46 };
+const ACTIVE_CARE_SPOT = { x: 590, y: 426, width: 68, height: 70 };
+const LITTER_SPOTS = [
+  { x: 1110, y: 456 },
+  { x: 930, y: 468 },
+  { x: 744, y: 448 },
+  { x: 426, y: 466 },
+];
 const ATTENTION_SPOT = { x: GAME_WIDTH / 2 - 46, y: FLOOR_BOTTOM - 78 };
 const ROOM_TOY_TARGETS = {
   "rolling-ball": { label: "滚滚球", width: 72, height: 64, defaultX: 312, defaultY: 392, focusX: 42, focusY: 34 },
@@ -36,6 +43,10 @@ const DECOR_SPECS = {
   "reading-lamp": { label: "阅读台灯", width: 72, height: 118, defaultX: 712, defaultY: 314 },
   "word-gallery": { label: "单词挂画", width: 120, height: 82, defaultX: 360, defaultY: 140 },
   "window-hammock": { label: "窗边吊床", width: 168, height: 90, defaultX: 102, defaultY: 294 },
+  "felt-cat-bed": { label: "毛毡猫窝", width: 154, height: 76, defaultX: 864, defaultY: 422 },
+  "moon-cushion": { label: "月亮软垫", width: 134, height: 64, defaultX: 390, defaultY: 446 },
+  "cat-climbing-tree": { label: "原木猫爬架", width: 132, height: 184, defaultX: 1090, defaultY: 292 },
+  "mini-fountain": { label: "循环饮水机", width: 100, height: 82, defaultX: 694, defaultY: 432 },
 };
 
 const CAT_PIXEL_SIZE = 2;
@@ -91,6 +102,8 @@ function normalizeSnapshot(snapshot = {}) {
     layout: cloneLayout(snapshot.layout),
     mood: snapshot.mood || {},
     activeFood: snapshot.activeFood || snapshot.mood?.activeFood || {},
+    activeCare: snapshot.activeCare || {},
+    hygiene: snapshot.hygiene || {},
     dailyLogs: snapshot.dailyLogs || {},
     damagedItems: snapshot.damagedItems || {},
     ownedCats: Array.isArray(snapshot.ownedCats) ? snapshot.ownedCats : [],
@@ -416,6 +429,97 @@ class CatWorldScene extends Phaser.Scene {
         this.drawOwnedToy(snapshot, itemId, lastPlayItem === itemId);
       }
     }
+    if (snapshot.activeCare?.active) {
+      this.drawActiveCare(snapshot);
+    }
+    this.drawLitter(snapshot);
+  }
+
+  drawActiveCare(snapshot) {
+    const care = snapshot.activeCare || {};
+    const container = this.add.container(ACTIVE_CARE_SPOT.x, ACTIVE_CARE_SPOT.y);
+    container.setDepth(ACTIVE_CARE_SPOT.y + 120);
+    const graphics = makeLocalGraphics(this, container);
+    graphics.fillStyle(0x2c2f3a, 0.2);
+    graphics.fillEllipse(34, 62, 62, 12);
+    drawPixelRect(graphics, 10, 34, 50, 28, 0xd98558);
+    graphics.fillStyle(0x2f9e64, 1);
+    for (let x = 16; x <= 54; x += 8) {
+      graphics.fillTriangle(x, 36, x + 5, 5 + (x % 3) * 5, x + 10, 36);
+    }
+    graphics.lineStyle(3, INK, 1);
+    graphics.strokeRect(10, 34, 50, 28);
+    const label = this.add.text(34, -8, `${care.label || "猫草"}\n${care.targetCatLabel ? `${care.targetCatLabel}喜欢` : "闻一闻"}`, {
+      color: "#263047",
+      backgroundColor: "#fff8df",
+      fontFamily: "Consolas, monospace",
+      fontSize: "10px",
+      fontStyle: "bold",
+      padding: { x: 4, y: 2 },
+      align: "center",
+    }).setOrigin(0.5);
+    container.add(label);
+    this.tweens.add({
+      targets: container,
+      y: ACTIVE_CARE_SPOT.y - 3,
+      yoyo: true,
+      repeat: -1,
+      duration: 900,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  drawLitter(snapshot) {
+    const count = Math.min(Math.max(Number(snapshot.hygiene?.count || 0), 0), LITTER_SPOTS.length);
+    for (let index = 0; index < count; index += 1) {
+      const spot = LITTER_SPOTS[index];
+      const container = this.add.container(spot.x, spot.y);
+      container.setSize(86, 76);
+      container.setDepth(spot.y + 180);
+      container.setData("kind", "litter");
+      container.setData("id", `litter-${index}`);
+      const graphics = makeLocalGraphics(this, container);
+      graphics.fillStyle(0x2c2f3a, 0.22);
+      graphics.fillEllipse(40, 58, 70, 14);
+      drawPixelRect(graphics, 17, 39, 50, 19, 0x7a4a28);
+      drawPixelRect(graphics, 25, 24, 34, 21, 0x8f5b32);
+      drawPixelRect(graphics, 32, 12, 20, 18, 0xa36b3d);
+      const hasScoop = Number(snapshot.hygiene?.scoopCount || 0) > 0;
+      const label = this.add.text(42, 2, hasScoop ? "猫屎 · 点击铲" : "猫屎 · 需要铲子", {
+        color: "#263047",
+        backgroundColor: "#fff4a8",
+        fontFamily: "Consolas, monospace",
+        fontSize: "10px",
+        fontStyle: "bold",
+        padding: { x: 4, y: 2 },
+      }).setOrigin(0.5, 1);
+      container.add(label);
+      for (let smokeIndex = 0; smokeIndex < 3; smokeIndex += 1) {
+        const smoke = this.add.rectangle(30 + smokeIndex * 10, 8 - smokeIndex * 4, 6, 10, 0xe8edf0, 0.8);
+        container.add(smoke);
+        this.tweens.add({
+          targets: smoke,
+          y: smoke.y - 28,
+          alpha: 0,
+          duration: 1300 + smokeIndex * 180,
+          delay: smokeIndex * 280,
+          repeat: -1,
+          repeatDelay: 220,
+          ease: "Sine.easeOut",
+        });
+      }
+      if (!snapshot.editMode) {
+        container.setInteractive(new Phaser.Geom.Rectangle(0, 0, 86, 76), Phaser.Geom.Rectangle.Contains);
+        if (container.input) container.input.cursor = "pointer";
+        container.on("pointerdown", (_pointer, _localX, _localY, event) => this.stopPointerEvent(event));
+        container.on("pointerup", (_pointer, _localX, _localY, event) => {
+          this.stopPointerEvent(event);
+          this.owner.handlers.onLitterClick?.(index);
+        });
+      } else {
+        container.setAlpha(0.72);
+      }
+    }
   }
 
   drawOwnedToy(snapshot, itemId, active = false) {
@@ -645,6 +749,39 @@ class CatWorldScene extends Phaser.Scene {
       graphics.lineBetween(spec.width - 36, 42, spec.width / 2, 78);
       graphics.fillStyle(colors.accent, 1);
       graphics.fillRect(spec.width / 2 - 18, 49, 36, 12);
+    } else if (decorId === "felt-cat-bed") {
+      graphics.fillStyle(0x2c2f3a, 0.2);
+      graphics.fillEllipse(spec.width / 2, spec.height - 5, spec.width - 10, 14);
+      drawPixelRect(graphics, 4, 18, spec.width - 8, spec.height - 24, colors.main);
+      drawPixelRect(graphics, 24, 29, spec.width - 48, spec.height - 37, colors.alt, INK, 3);
+      graphics.fillStyle(colors.accent, 1);
+      graphics.fillRect(spec.width / 2 - 22, 11, 44, 13);
+    } else if (decorId === "moon-cushion") {
+      graphics.fillStyle(0x2c2f3a, 0.2);
+      graphics.fillEllipse(spec.width / 2, spec.height - 5, spec.width - 8, 12);
+      graphics.fillStyle(colors.main, 1);
+      graphics.fillEllipse(spec.width / 2, spec.height / 2, spec.width - 10, spec.height - 14);
+      graphics.fillStyle(colors.alt, 1);
+      graphics.fillCircle(spec.width / 2 + 20, spec.height / 2 - 8, 25);
+      graphics.lineStyle(4, INK, 1);
+      graphics.strokeEllipse(spec.width / 2, spec.height / 2, spec.width - 10, spec.height - 14);
+    } else if (decorId === "cat-climbing-tree") {
+      drawPixelRect(graphics, 10, spec.height - 24, spec.width - 20, 20, 0x9b6a3b);
+      drawPixelRect(graphics, 54, 43, 24, spec.height - 66, 0xc28a52);
+      drawPixelRect(graphics, 12, 62, 68, 17, colors.main);
+      drawPixelRect(graphics, 65, 19, 58, 17, colors.accent);
+      drawPixelRect(graphics, 9, 96, 56, 44, colors.alt);
+      graphics.fillStyle(colors.main, 1);
+      graphics.fillCircle(37, 113, 13);
+    } else if (decorId === "mini-fountain") {
+      graphics.fillStyle(0x2c2f3a, 0.2);
+      graphics.fillEllipse(50, 72, 88, 14);
+      drawPixelRect(graphics, 7, 42, 86, 29, colors.alt);
+      graphics.fillStyle(colors.accent, 1);
+      graphics.fillEllipse(50, 47, 68, 22);
+      drawPixelRect(graphics, 43, 16, 14, 31, colors.main);
+      graphics.fillStyle(0x87d9ff, 0.8);
+      graphics.fillCircle(50, 16, 12);
     }
   }
 
@@ -1040,6 +1177,7 @@ class CatWorldScene extends Phaser.Scene {
 
   restoreActiveItemInteractions() {
     const entries = new Map(this.roomCatEntries().map((entry) => [entry.cat.id, entry]));
+    const activeCare = this.owner.snapshot.activeCare || {};
     if (this.owner.wandMode) {
       for (const catId of [...this.owner.wandCatIds]) {
         const entry = entries.get(catId);
@@ -1065,10 +1203,37 @@ class CatWorldScene extends Phaser.Scene {
         this.startLampFavoriteAction(entry, action.itemId, action);
       } else if (action.kind === "desk") {
         this.startDeskFavoriteAction(entry, action.itemId, action);
+      } else if (action.kind === "care" && activeCare.active && activeCare.targetCatId === catId) {
+        this.startActiveCareAction(entry, action);
       } else {
         this.owner.catItemActions.delete(catId);
       }
     }
+    if (activeCare.active && activeCare.targetCatId) {
+      const entry = entries.get(activeCare.targetCatId);
+      if (entry?.behavior.canWalk && !this.owner.catItemActions.has(activeCare.targetCatId)) {
+        const expiresAt = Date.parse(activeCare.expiresAt || "");
+        const action = {
+          kind: "care",
+          itemId: activeCare.itemId || "active-care",
+          expiresAt: Number.isFinite(expiresAt) ? expiresAt : Date.now() + 12000,
+        };
+        this.owner.catItemActions.set(activeCare.targetCatId, action);
+        this.startActiveCareAction(entry, action);
+      }
+    }
+  }
+
+  startActiveCareAction(entry, action) {
+    const target = {
+      x: clamp(ACTIVE_CARE_SPOT.x - 54 + entry.index * 18, 38, GAME_WIDTH - 132),
+      y: clamp(ACTIVE_CARE_SPOT.y + 40, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+    };
+    this.moveCatForInteraction(entry, target, action.itemId, () => {
+      if (this.owner.catItemActions.get(entry.cat.id) !== action) return;
+      this.spawnCatBubble(entry.container, entry.cat, "猫草闻起来很新鲜，我来慢慢尝一尝。");
+      this.holdCatInteraction(entry, action.itemId, Math.min(Math.max(action.expiresAt - Date.now(), 1000), 6000));
+    });
   }
 
   savedCatPosition(cat = {}) {

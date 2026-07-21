@@ -92,8 +92,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-062"
-DEFAULT_PAGE_VERSION = "v20260722.62"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-063"
+DEFAULT_PAGE_VERSION = "v20260722.63"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -231,6 +231,12 @@ CAT_WORLD_DEFAULT_MOVEMENT_SPEED = 1.0
 CAT_WORLD_MIN_MOVEMENT_SPEED = 0.4
 CAT_WORLD_MAX_MOVEMENT_SPEED = 2.0
 CAT_WORLD_MOVEMENT_SPEED_STEP = 0.05
+CAT_WORLD_LITTER_ITEM_ID = "tofu-cat-litter"
+CAT_WORLD_LITTER_SCOOP_ITEM_ID = "litter-scoop"
+CAT_WORLD_CAT_GRASS_ITEM_ID = "cat-grass-pot"
+CAT_WORLD_LITTER_MAX = 4
+CAT_WORLD_LITTER_MOOD_PENALTY_PER_PILE = 2
+CAT_WORLD_LITTER_MOOD_PENALTY_MAX = 8
 CAT_WORLD_SHOP = [
     {
         "id": "daily-kibble",
@@ -334,6 +340,71 @@ CAT_WORLD_SHOP = [
         "description": "脆脆的高能特色餐，爱活动的暹罗猫吃后恢复得更快。",
     },
     {
+        "id": CAT_WORLD_LITTER_SCOOP_ITEM_ID,
+        "category": "consumable",
+        "useType": "litter-clean",
+        "label": "一次性铲屎铲",
+        "englishName": "Litter Scoop",
+        "cost": 35,
+        "mood": 0,
+        "description": "点击活动室里的猫屎时自动消耗 1 把，每把清理一堆。",
+    },
+    {
+        "id": CAT_WORLD_LITTER_ITEM_ID,
+        "category": "consumable",
+        "useType": "litter-prevent",
+        "label": "豆腐猫砂包",
+        "englishName": "Tofu Cat Litter",
+        "cost": 55,
+        "mood": 0,
+        "description": "猫咪拉屎时自动消耗 1 包，猫屎会留在猫砂里并自动处理。",
+    },
+    {
+        "id": "grooming-brush",
+        "category": "consumable",
+        "useType": "cat-care",
+        "label": "一次性顺毛梳",
+        "englishName": "Grooming Brush",
+        "cost": 80,
+        "mood": 14,
+        "bond": 4,
+        "description": "给当前猫咪认真梳一次毛，立即增加心情和亲密度。",
+    },
+    {
+        "id": "care-wipes",
+        "category": "consumable",
+        "useType": "cat-care",
+        "label": "眼耳护理湿巾",
+        "englishName": "Care Wipes",
+        "cost": 60,
+        "mood": 8,
+        "catEnergy": 2,
+        "bond": 2,
+        "description": "给当前猫咪做一次清洁护理，恢复少量体力并增加心情。",
+    },
+    {
+        "id": "room-deodorizer",
+        "category": "consumable",
+        "useType": "room-care",
+        "label": "房间除味喷雾",
+        "englishName": "Room Deodorizer",
+        "cost": 90,
+        "mood": 5,
+        "description": "一次为房间除味，让所有已拥有猫咪的心情都增加一点。",
+    },
+    {
+        "id": CAT_WORLD_CAT_GRASS_ITEM_ID,
+        "category": "consumable",
+        "useType": "room-place",
+        "label": "猫草小盆",
+        "englishName": "Cat Grass Pot",
+        "cost": 120,
+        "mood": 12,
+        "durationMinutes": 20,
+        "bond": 3,
+        "description": "放进活动室 20 分钟，当前猫咪会慢慢靠近闻一闻并增加心情。",
+    },
+    {
         "id": "rolling-ball",
         "category": "toy",
         "label": "滚滚球",
@@ -431,6 +502,42 @@ CAT_WORLD_SHOP = [
         "cost": 280,
         "mood": 9,
         "description": "一张悬在窗边的软吊床，适合安静休息和观察房间。",
+    },
+    {
+        "id": "felt-cat-bed",
+        "category": "decor",
+        "label": "毛毡猫窝",
+        "englishName": "Felt Cat Bed",
+        "cost": 240,
+        "mood": 8,
+        "description": "柔软包围的小猫窝，体力低的猫会更愿意靠近休息。",
+    },
+    {
+        "id": "moon-cushion",
+        "category": "decor",
+        "label": "月亮软垫",
+        "englishName": "Moon Cushion",
+        "cost": 210,
+        "mood": 7,
+        "description": "放在地板上的月亮形软垫，适合安静趴着陪读。",
+    },
+    {
+        "id": "cat-climbing-tree",
+        "category": "decor",
+        "label": "原木猫爬架",
+        "englishName": "Cat Climbing Tree",
+        "cost": 360,
+        "mood": 12,
+        "description": "高高的抓柱、平台和小窝，活泼的猫会在附近巡逻。",
+    },
+    {
+        "id": "mini-fountain",
+        "category": "decor",
+        "label": "循环饮水机",
+        "englishName": "Mini Fountain",
+        "cost": 300,
+        "mood": 9,
+        "description": "持续冒出清水的小饮水机，让房间听起来更安静。",
     },
     {
         "id": "rug-candy",
@@ -741,6 +848,10 @@ CAT_WORLD_DECOR_FAVORITE_CAT = {
     "reading-lamp": "maine-coon",
     "word-gallery": CAT_WORLD_DEFAULT_CAT_ID,
     "window-hammock": "british-shorthair",
+    "felt-cat-bed": "ragdoll",
+    "moon-cushion": CAT_WORLD_DEFAULT_CAT_ID,
+    "cat-climbing-tree": "maine-coon",
+    "mini-fountain": "siamese",
 }
 CAT_WORLD_TOY_FAVORITE_CAT = {
     "rolling-ball": "siamese",
@@ -768,6 +879,10 @@ CAT_WORLD_DECOR_DEFAULT_LAYOUT = {
     "reading-lamp": {"x": 62, "y": 47},
     "word-gallery": {"x": 31, "y": 31},
     "window-hammock": {"x": 8, "y": 49},
+    "felt-cat-bed": {"x": 70, "y": 75},
+    "moon-cushion": {"x": 31, "y": 80},
+    "cat-climbing-tree": {"x": 86, "y": 48},
+    "mini-fountain": {"x": 54, "y": 76},
 }
 CAT_WORLD_TOY_DEFAULT_LAYOUT = {
     "rolling-ball": {"x": 24, "y": 70},
@@ -787,6 +902,12 @@ CAT_WORLD_PRICING_PLANS = [
         "strategy": "基础口粮低价低恢复；特色餐对指定猫提供更高体力加成。",
     },
     {
+        "category": "consumable",
+        "label": "消耗品",
+        "range": "35-120",
+        "strategy": "可重复购买；猫砂自动预防，铲子负责清理，护理用品使用一次消耗一个。",
+    },
+    {
         "category": "toy",
         "label": "玩具",
         "range": "80-160",
@@ -795,8 +916,8 @@ CAT_WORLD_PRICING_PLANS = [
     {
         "category": "decor",
         "label": "装修",
-        "range": "180-320",
-        "strategy": "中高价长期布置，书桌、书架、窗台会直接出现在房间。",
+        "range": "180-360",
+        "strategy": "中高价长期布置，书桌、猫窝、猫爬架和窗台会直接出现在房间。",
     },
     {
         "category": "color",
@@ -3829,6 +3950,133 @@ async def vue_cat_world_food_nibble_api(request: Request, db: Session = Depends(
     return {"ok": True, "effect": effect, **serialize_cat_world_payload(db, state)}
 
 
+@app.post("/api/vue/cat-world/litter/clean")
+async def vue_cat_world_clean_litter_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    state = get_or_create_cat_world_state(db, phone)
+    inventory = parse_cat_world_inventory(state.inventory)
+    owned_cats = parse_cat_world_cats(state.cats)
+    hygiene = cat_world_refresh_litter(state, inventory, owned_cats)
+    if hygiene.get("changed"):
+        db.add(state)
+        db.commit()
+        db.refresh(state)
+        inventory = parse_cat_world_inventory(state.inventory)
+    if int(state.litter_count or 0) <= 0:
+        raise HTTPException(status_code=400, detail="活动室里现在没有需要清理的猫屎。")
+    scoop_count = max(int(inventory.get(CAT_WORLD_LITTER_SCOOP_ITEM_ID, 0) or 0), 0)
+    if scoop_count <= 0:
+        raise HTTPException(status_code=400, detail="需要先在消耗品商店购买一次性铲屎铲。")
+    if scoop_count == 1:
+        inventory.pop(CAT_WORLD_LITTER_SCOOP_ITEM_ID, None)
+    else:
+        inventory[CAT_WORLD_LITTER_SCOOP_ITEM_ID] = scoop_count - 1
+    state.inventory = encode_cat_world_inventory(inventory)
+    state.litter_count = max(int(state.litter_count or 0) - 1, 0)
+    if state.litter_count <= 0:
+        state.litter_updated_at = datetime.utcnow()
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return {
+        "ok": True,
+        "effect": {
+            "cleaned": True,
+            "remainingLitter": int(state.litter_count or 0),
+            "scoopRemaining": max(int(inventory.get(CAT_WORLD_LITTER_SCOOP_ITEM_ID, 0) or 0), 0),
+            "message": "猫屎清理好了，房间空气清爽了一点。",
+        },
+        **serialize_cat_world_payload(db, state),
+    }
+
+
+@app.post("/api/vue/cat-world/consumable/use")
+async def vue_cat_world_use_consumable_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="消耗品数据不是有效 JSON。") from exc
+    payload = payload if isinstance(payload, dict) else {}
+    item_id = str(payload.get("itemId") or "").strip()
+    item = CAT_WORLD_SHOP_BY_ID.get(item_id)
+    if not item or item.get("category") != "consumable":
+        raise HTTPException(status_code=400, detail="请选择已经拥有的消耗品。")
+    use_type = str(item.get("useType") or "")
+    if use_type == "litter-clean":
+        raise HTTPException(status_code=400, detail="请直接点击活动室里的猫屎来使用铲子。")
+    if use_type == "litter-prevent":
+        raise HTTPException(status_code=400, detail="猫砂会在猫咪拉屎时自动消耗，不需要手动使用。")
+    state = get_or_create_cat_world_state(db, phone)
+    inventory = parse_cat_world_inventory(state.inventory)
+    if inventory.get(item_id, 0) <= 0:
+        raise HTTPException(status_code=400, detail="这个消耗品已经用完了，请先购买。")
+    inventory[item_id] = max(inventory.get(item_id, 0) - 1, 0)
+    if inventory[item_id] <= 0:
+        inventory.pop(item_id, None)
+    state.inventory = encode_cat_world_inventory(inventory)
+    usable_inventory = cat_world_usable_inventory(inventory, parse_cat_world_damaged_items(state.damaged_items))
+    room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
+    owned_cats = parse_cat_world_cats(state.cats)
+    now = datetime.utcnow()
+    target_cat_id = str(payload.get("catId") or state.selected_cat or CAT_WORLD_DEFAULT_CAT_ID)
+    if target_cat_id not in owned_cats:
+        target_cat_id = state.selected_cat if state.selected_cat in owned_cats else owned_cats[0]
+    target_ids = owned_cats if use_type == "room-care" else [target_cat_id]
+    effects = []
+    for cat_id in target_ids:
+        cat = CAT_WORLD_CAT_BY_ID.get(cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+        traits = cat_world_cat_traits(cat)
+        favorite_ids = cat_world_active_favorite_decor_ids(cat_id, usable_inventory, room_layout)
+        log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now)
+        apply_cat_world_hourly_decay(log, traits, usable_inventory, len(favorite_ids), now, int(state.litter_count or 0))
+        mood_gain = max(int(item.get("mood") or 0), 0)
+        energy_gain = max(int(item.get("catEnergy") or 0), 0)
+        log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_gain)
+        if energy_gain:
+            log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) + energy_gain)
+        message = f"{cat['label']}使用了{item.get('label') or item_id}，心情 +{mood_gain}"
+        if energy_gain:
+            message += f"，体力 +{energy_gain}"
+        message += "。"
+        append_cat_world_agent_event(log, cat, traits, "care-item", "护理用品", message, now)
+        bond_gain = max(int(item.get("bond") or 0), 0)
+        bond = cat_world_apply_cat_bond(state, cat_id, bond_gain, "care-item", item.get("label") or item_id, now) if bond_gain else {}
+        db.add(log)
+        effects.append({
+            "catId": cat_id,
+            "catLabel": cat["label"],
+            "moodGain": mood_gain,
+            "energyGain": energy_gain,
+            "bond": bond,
+            "message": message,
+        })
+    if use_type == "room-place":
+        state.active_care_item = item_id
+        state.active_care_cat_id = target_cat_id
+        state.active_care_at = now
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return {
+        "ok": True,
+        "effect": {
+            "itemId": item_id,
+            "itemLabel": item.get("label") or item_id,
+            "useType": use_type,
+            "remaining": max(int(inventory.get(item_id, 0) or 0), 0),
+            "catId": target_cat_id,
+            "effects": effects,
+            "message": (
+                f"{item.get('label') or item_id}已放进活动室，猫咪会慢慢靠近，{int(item.get('durationMinutes') or 20)} 分钟后消失。"
+                if use_type == "room-place"
+                else "；".join(effect["message"] for effect in effects)
+            ),
+        },
+        **serialize_cat_world_payload(db, state),
+    }
+
+
 @app.post("/api/vue/cat-world/agent-event")
 async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(get_db)):
     phone = require_cat_world_phone(request)
@@ -3886,7 +4134,7 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
     now = datetime.utcnow()
     log = get_or_create_cat_world_daily_log(db, state.phone, cat["id"], date.today(), now)
     favorite_active_ids = cat_world_active_favorite_decor_ids(cat["id"], usable_inventory, room_layout)
-    apply_cat_world_hourly_decay(log, traits, usable_inventory, len(favorite_active_ids), now)
+    apply_cat_world_hourly_decay(log, traits, usable_inventory, len(favorite_active_ids), now, int(state.litter_count or 0))
     agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
     ambient_event_at = agent_state.get("ambientEventAt") if isinstance(agent_state.get("ambientEventAt"), dict) else {}
     token = f"{event_kind}:{item_id}"
@@ -11778,12 +12026,21 @@ def cat_world_signed_change(value: int | float) -> str:
     return str(numeric)
 
 
+def cat_world_litter_mood_penalty(litter_count: int | float) -> int:
+    try:
+        count = max(int(litter_count or 0), 0)
+    except (TypeError, ValueError):
+        count = 0
+    return min(count * CAT_WORLD_LITTER_MOOD_PENALTY_PER_PILE, CAT_WORLD_LITTER_MOOD_PENALTY_MAX)
+
+
 def cat_world_behavior_hourly_change(
     log: CatWorldDailyLog,
     traits: dict[str, Any],
     inventory: dict[str, int],
     favorite_count: int,
     now: datetime,
+    litter_count: int = 0,
 ) -> dict[str, Any]:
     mood_decay, energy_decay, relief = cat_world_decay_rates(traits, inventory, favorite_count)
     cat = CAT_WORLD_CAT_BY_ID.get(log.cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
@@ -11857,6 +12114,11 @@ def cat_world_behavior_hourly_change(
     if favorite_count > 0 and mood_delta < 0:
         mood_delta = min(0, mood_delta + min(favorite_count, 2))
 
+    litter_penalty = cat_world_litter_mood_penalty(litter_count)
+    if litter_penalty:
+        mood_delta -= litter_penalty
+        reason = f"{reason}，房间有 {max(int(litter_count or 0), 0)} 堆猫屎"
+
     if daily_notes:
         reason = f"{reason}，{'、'.join(daily_notes)}"
 
@@ -11870,6 +12132,7 @@ def cat_world_behavior_hourly_change(
         "relief": int(relief),
         "dailyEnergyBias": int(daily_energy_bias),
         "dailyMoodBias": int(daily_mood_bias),
+        "litterPenalty": int(litter_penalty),
         "label": label,
         "reason": reason,
         "behavior": behavior,
@@ -12427,10 +12690,11 @@ def apply_cat_world_hourly_decay(
     inventory: dict[str, int],
     favorite_count: int,
     now: datetime,
+    litter_count: int = 0,
 ) -> bool:
     last_decay_at = log.last_decay_at or datetime.combine(log.log_date, datetime.min.time())
     elapsed_hours = int(max((now - last_decay_at).total_seconds(), 0) // 3600)
-    hourly_change = cat_world_behavior_hourly_change(log, traits, inventory, favorite_count, now)
+    hourly_change = cat_world_behavior_hourly_change(log, traits, inventory, favorite_count, now, litter_count)
     log.favorite_decor_ids = ",".join(cat_world_cat_favorite_decor_ids(log.cat_id))
     favorite_bonus = favorite_count * 8
     relief_bonus = int(hourly_change["relief"])
@@ -12448,7 +12712,7 @@ def apply_cat_world_hourly_decay(
     detailed_hours = min(elapsed_hours, 24)
     for index in range(detailed_hours):
         hour_at = last_decay_at + timedelta(hours=index + 1)
-        hourly_change = cat_world_behavior_hourly_change(log, traits, inventory, favorite_count, hour_at)
+        hourly_change = cat_world_behavior_hourly_change(log, traits, inventory, favorite_count, hour_at, litter_count)
         mood_delta = int(hourly_change["moodDelta"])
         energy_delta = int(hourly_change["energyDelta"])
         log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_delta)
@@ -12469,7 +12733,7 @@ def apply_cat_world_hourly_decay(
     if applied_hours < elapsed_hours:
         remaining_hours = elapsed_hours - applied_hours
         hour_at = last_decay_at + timedelta(hours=elapsed_hours)
-        hourly_change = cat_world_behavior_hourly_change(log, traits, inventory, favorite_count, hour_at)
+        hourly_change = cat_world_behavior_hourly_change(log, traits, inventory, favorite_count, hour_at, litter_count)
         mood_delta = int(hourly_change["moodDelta"]) * remaining_hours
         energy_delta = int(hourly_change["energyDelta"]) * remaining_hours
         log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_delta)
@@ -12487,7 +12751,7 @@ def apply_cat_world_hourly_decay(
                 remaining_hours,
             )
         )
-    hourly_change = cat_world_behavior_hourly_change(log, traits, inventory, favorite_count, now)
+    hourly_change = cat_world_behavior_hourly_change(log, traits, inventory, favorite_count, now, litter_count)
     log.hourly_mood_decay = int(hourly_change["hourlyMood"])
     log.hourly_energy_decay = int(hourly_change["hourlyEnergy"])
     log.last_decay_at = last_decay_at + timedelta(hours=elapsed_hours)
@@ -12636,7 +12900,7 @@ def cat_world_apply_agent_damage_events(
             parse_cat_world_room_layout(state.room_layout, usable_inventory),
         )
         log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, today, now)
-        apply_cat_world_hourly_decay(log, traits, usable_inventory, len(favorite_active_ids), now)
+        apply_cat_world_hourly_decay(log, traits, usable_inventory, len(favorite_active_ids), now, int(state.litter_count or 0))
         agent_state, agent_changed = ensure_cat_world_agent_state(log, cat, traits)
         if agent_state.get("mischiefChecked"):
             if agent_changed:
@@ -12726,7 +12990,7 @@ def cat_world_apply_favorite_decor_rewards(
             continue
         traits = cat_world_cat_traits(cat)
         log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now)
-        apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_decor_ids), now)
+        apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_decor_ids), now, int(state.litter_count or 0))
         agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
         rewarded = agent_state.get("favoriteDecorRewarded")
         if not isinstance(rewarded, list):
@@ -12908,6 +13172,61 @@ def cat_world_apply_agent_routine_event(
     return True
 
 
+def cat_world_litter_interval_seconds(owned_cat_count: int) -> int:
+    count = max(int(owned_cat_count or 1), 1)
+    return max(round((8 * 60 * 60) / count), 2 * 60 * 60)
+
+
+def cat_world_refresh_litter(
+    state: CatWorldState,
+    inventory: dict[str, int],
+    owned_cats: list[str],
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    now = now or datetime.utcnow()
+    interval_seconds = cat_world_litter_interval_seconds(len(owned_cats))
+    changed = False
+    if not state.litter_updated_at:
+        state.litter_updated_at = now - timedelta(seconds=interval_seconds)
+        changed = True
+    elapsed_seconds = max(int((now - state.litter_updated_at).total_seconds()), 0)
+    due_count = min(elapsed_seconds // interval_seconds, CAT_WORLD_LITTER_MAX)
+    auto_used = 0
+    added_count = 0
+    if due_count > 0:
+        available_litter = max(int(inventory.get(CAT_WORLD_LITTER_ITEM_ID, 0) or 0), 0)
+        auto_used = min(int(due_count), available_litter)
+        if auto_used:
+            remaining = available_litter - auto_used
+            if remaining:
+                inventory[CAT_WORLD_LITTER_ITEM_ID] = remaining
+            else:
+                inventory.pop(CAT_WORLD_LITTER_ITEM_ID, None)
+            state.inventory = encode_cat_world_inventory(inventory)
+        unprotected_count = int(due_count) - auto_used
+        current_count = min(max(int(state.litter_count or 0), 0), CAT_WORLD_LITTER_MAX)
+        next_count = min(current_count + unprotected_count, CAT_WORLD_LITTER_MAX)
+        added_count = max(next_count - current_count, 0)
+        state.litter_count = next_count
+        state.litter_updated_at = now
+        changed = True
+    count = min(max(int(state.litter_count or 0), 0), CAT_WORLD_LITTER_MAX)
+    next_at = (state.litter_updated_at or now) + timedelta(seconds=interval_seconds)
+    return {
+        "count": count,
+        "hasLitter": count > 0,
+        "maxCount": CAT_WORLD_LITTER_MAX,
+        "moodDecayBonus": cat_world_litter_mood_penalty(count),
+        "intervalSeconds": interval_seconds,
+        "nextAt": next_at.replace(microsecond=0).isoformat() + "Z",
+        "scoopCount": max(int(inventory.get(CAT_WORLD_LITTER_SCOOP_ITEM_ID, 0) or 0), 0),
+        "catLitterCount": max(int(inventory.get(CAT_WORLD_LITTER_ITEM_ID, 0) or 0), 0),
+        "autoUsed": auto_used,
+        "addedCount": added_count,
+        "changed": changed,
+    }
+
+
 def cat_world_apply_daily_decay(
     db: Session,
     state: CatWorldState,
@@ -12926,13 +13245,54 @@ def cat_world_apply_daily_decay(
         traits = cat_world_cat_traits(cat)
         favorite_active_ids = cat_world_active_favorite_decor_ids(cat_id, inventory, room_layout)
         log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, today, now)
-        changed = apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now) or changed
+        changed = apply_cat_world_hourly_decay(
+            log,
+            traits,
+            inventory,
+            len(favorite_active_ids),
+            now,
+            int(state.litter_count or 0),
+        ) or changed
         changed = cat_world_apply_agent_routine_event(log, cat, traits, inventory, favorite_active_ids, now) or changed
         db.add(log)
         payload[cat_id] = cat_world_daily_log_payload(log, favorite_active_ids, inventory, room_layout)
     if changed or payload:
         db.commit()
     return payload
+
+
+def cat_world_active_care_payload(
+    state: CatWorldState,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    item_id = str(state.active_care_item or "").strip()
+    item = CAT_WORLD_SHOP_BY_ID.get(item_id)
+    if not item or item.get("category") != "consumable" or item.get("useType") != "room-place" or not state.active_care_at:
+        return {"active": False, "changed": False, "itemId": "", "remainingSeconds": 0}
+    now = now or datetime.utcnow()
+    duration_seconds = max(int(item.get("durationMinutes") or 20), 1) * 60
+    elapsed_seconds = max(int((now - state.active_care_at).total_seconds()), 0)
+    remaining_seconds = max(duration_seconds - elapsed_seconds, 0)
+    if remaining_seconds <= 0:
+        state.active_care_item = None
+        state.active_care_cat_id = None
+        state.active_care_at = None
+        return {"active": False, "changed": True, "itemId": "", "remainingSeconds": 0}
+    target_cat = CAT_WORLD_CAT_BY_ID.get(str(state.active_care_cat_id or ""))
+    expires_at = state.active_care_at + timedelta(seconds=duration_seconds)
+    return {
+        "active": True,
+        "changed": False,
+        "itemId": item_id,
+        "label": item.get("label") or item_id,
+        "englishName": item.get("englishName") or "",
+        "targetCatId": target_cat.get("id") if target_cat else "",
+        "targetCatLabel": target_cat.get("label") if target_cat else "",
+        "remainingSeconds": remaining_seconds,
+        "durationSeconds": duration_seconds,
+        "startedAt": state.active_care_at.replace(microsecond=0).isoformat() + "Z",
+        "expiresAt": expires_at.replace(microsecond=0).isoformat() + "Z",
+    }
 
 
 def cat_world_active_food_token(state: CatWorldState, item_id: str, cat_id: str) -> str:
@@ -12997,7 +13357,14 @@ def cat_world_apply_active_food_progress(
     traits = cat_world_cat_traits(cat)
     favorite_active_ids = cat_world_active_favorite_decor_ids(target_cat_id, inventory, room_layout)
     log = get_or_create_cat_world_daily_log(db, state.phone, target_cat_id, date.today(), now)
-    changed = apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now) or changed
+    changed = apply_cat_world_hourly_decay(
+        log,
+        traits,
+        inventory,
+        len(favorite_active_ids),
+        now,
+        int(state.litter_count or 0),
+    ) or changed
     agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
     token = cat_world_active_food_token(state, item_id, target_cat_id)
     if agent_state.get("activeFoodToken") != token:
@@ -13125,7 +13492,7 @@ def cat_world_apply_active_food_nibble(
     traits = cat_world_cat_traits(cat)
     favorite_active_ids = cat_world_active_favorite_decor_ids(cat["id"], inventory, room_layout)
     log = get_or_create_cat_world_daily_log(db, state.phone, cat["id"], date.today(), now)
-    apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now)
+    apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now, int(state.litter_count or 0))
     agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
     token = cat_world_active_food_token(state, item_id, cat["id"])
     if agent_state.get("activeFoodToken") != token:
@@ -13261,7 +13628,7 @@ def cat_world_apply_daily_effect(
     now = datetime.utcnow()
     favorite_active_ids = cat_world_active_favorite_decor_ids(cat_id, inventory, room_layout)
     log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now)
-    apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now)
+    apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now, int(state.litter_count or 0))
     if effect_type == "food":
         state.active_food_cat_id = cat["id"]
         if not state.active_food_at:
@@ -13344,7 +13711,7 @@ def cat_world_apply_pet_effect(
     now = datetime.utcnow()
     favorite_active_ids = cat_world_active_favorite_decor_ids(cat["id"], inventory, room_layout)
     log = get_or_create_cat_world_daily_log(db, state.phone, cat["id"], date.today(), now)
-    apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now)
+    apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now, int(state.litter_count or 0))
     agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
     temperament = str(traits.get("temperament") or "balanced")
     mood_gain = {
@@ -13417,7 +13784,7 @@ def cat_world_effect_target_cat_id(
         traits = cat_world_cat_traits(cat)
         favorite_active_ids = cat_world_active_favorite_decor_ids(cat_id, inventory, room_layout)
         log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now)
-        apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now)
+        apply_cat_world_hourly_decay(log, traits, inventory, len(favorite_active_ids), now, int(state.litter_count or 0))
         agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
         db.add(log)
         energy_score = clamp_cat_world_score(int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0))
@@ -13636,6 +14003,20 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     shop = cat_world_effective_shop(db)
     shop_by_id = {item["id"]: item for item in shop}
     owned_cats = parse_cat_world_cats(state.cats)
+    litter_status = cat_world_refresh_litter(state, inventory, owned_cats)
+    active_care = cat_world_active_care_payload(state)
+    if litter_status.get("changed") or active_care.get("changed"):
+        db.add(state)
+        db.commit()
+        db.refresh(state)
+        inventory = parse_cat_world_inventory(state.inventory)
+        litter_status = {
+            **cat_world_refresh_litter(state, inventory, owned_cats),
+            "autoUsed": int(litter_status.get("autoUsed") or 0),
+            "addedCount": int(litter_status.get("addedCount") or 0),
+            "changed": False,
+        }
+        active_care = cat_world_active_care_payload(state)
     damaged_items, damaged_changed = cat_world_apply_agent_damage_events(
         db,
         state,
@@ -13693,6 +14074,8 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "roomLayout": visual_room_layout,
             "styleOptions": style_options,
             "selectedCat": state.selected_cat,
+            "hygiene": litter_status,
+            "activeCare": active_care,
             "dailyLogs": daily_logs,
             "mood": cat_world_mood(state, usable_inventory, owned_cats, available_energy, room_layout, daily_logs),
         },
@@ -13939,6 +14322,16 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_food_cat_id VARCHAR(80) NULL"))
         if "cat_world_states" in table_names and "active_food_at" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_food_at DATETIME NULL"))
+        if "cat_world_states" in table_names and "active_care_item" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_care_item VARCHAR(80) NULL"))
+        if "cat_world_states" in table_names and "active_care_cat_id" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_care_cat_id VARCHAR(80) NULL"))
+        if "cat_world_states" in table_names and "active_care_at" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_care_at DATETIME NULL"))
+        if "cat_world_states" in table_names and "litter_count" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN litter_count INTEGER NOT NULL DEFAULT 0"))
+        if "cat_world_states" in table_names and "litter_updated_at" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN litter_updated_at DATETIME NULL"))
         if "cat_world_states" in table_names and "damaged_items" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN damaged_items TEXT NULL"))
         if "cat_world_daily_logs" in table_names and "agent_state" not in cat_world_daily_log_columns:
