@@ -47,6 +47,14 @@ const TONE_PALETTES = {
   peach: { main: 0xffd7c2, alt: 0xfff3e7, accent: 0xff9d8a },
 };
 
+const TEMPERAMENT_THOUGHTS = {
+  calm: "我想安静地守着书架。",
+  gentle: "我会陪你读完这一页。",
+  chatty: "我想把新单词讲给大家听。",
+  guardian: "巡房完成，玩具状态也要检查。",
+  clingy: "今天想多靠近你一点。",
+};
+
 function clamp(value, min, max) {
   return Math.min(Math.max(Number(value) || 0, min), max);
 }
@@ -922,6 +930,7 @@ class CatWorldScene extends Phaser.Scene {
     const stamina = clamp(Number(agent.stamina || 50), 0, 100);
     const activityBias = clamp(Number(agent.activityBias || 50), 0, 100);
     const socialNeed = clamp(Number(agent.socialNeed || 50), 0, 100);
+    const temperament = String(agent.temperament || traits.temperament || "balanced");
     let key = serverBehavior.key || "active";
     if (sleeping) key = "sleeping";
     else if (energy < restThreshold) key = "resting";
@@ -951,11 +960,19 @@ class CatWorldScene extends Phaser.Scene {
       sleeping,
       nightOwl,
       dailyLabel,
+      dailyMoodKey: agent.dailyMoodKey || "",
+      temperament,
       routine: agent.routine || traits.routine || "观察房间里的学习节奏",
       canWalk: !sleeping && energy >= restThreshold,
       energy,
       mood,
       restThreshold,
+      attention: clamp(Number(agent.attention || 50), 0, 100),
+      curiosity: clamp(Number(agent.curiosity || 50), 0, 100),
+      mischief: clamp(Number(agent.mischief || 35), 0, 100),
+      stamina,
+      activityBias,
+      socialNeed,
       walkSpeed,
       idleChance: clamp(idleChance + socialIdleBonus + activeIdleBonus, 12, 100),
       restless: nightOwl && (hour >= 22 || hour < 5),
@@ -1037,13 +1054,17 @@ class CatWorldScene extends Phaser.Scene {
         return;
       }
       const foodTarget = this.foodTargetForCat(cat);
+      const restTarget = this.restTargetForCat(cat, index, latestBehavior);
       const goalTarget = this.agentGoalTarget(cat);
       const favoriteTarget = this.favoriteItemTarget(cat);
       const shouldVisitFood = Boolean(foodTarget && Phaser.Math.Between(1, 100) <= foodTarget.priority);
-      const shouldVisitGoal = !shouldVisitFood && Boolean(goalTarget && Phaser.Math.Between(1, 100) <= goalTarget.priority);
-      const shouldVisitFavorite = !shouldVisitFood && !shouldVisitGoal && Boolean(favoriteTarget && Phaser.Math.Between(1, 100) <= favoriteTarget.priority);
+      const shouldVisitRest = !shouldVisitFood && Boolean(restTarget && Phaser.Math.Between(1, 100) <= restTarget.priority);
+      const shouldVisitGoal = !shouldVisitFood && !shouldVisitRest && Boolean(goalTarget && Phaser.Math.Between(1, 100) <= goalTarget.priority);
+      const shouldVisitFavorite = !shouldVisitFood && !shouldVisitRest && !shouldVisitGoal && Boolean(favoriteTarget && Phaser.Math.Between(1, 100) <= favoriteTarget.priority);
       const nextX = shouldVisitFood
         ? foodTarget.x
+        : shouldVisitRest
+          ? restTarget.x
         : shouldVisitGoal
           ? goalTarget.x
           : shouldVisitFavorite
@@ -1051,6 +1072,8 @@ class CatWorldScene extends Phaser.Scene {
             : Phaser.Math.Between(38, GAME_WIDTH - 132);
       const nextY = shouldVisitFood
         ? foodTarget.y
+        : shouldVisitRest
+          ? restTarget.y
         : shouldVisitGoal
           ? goalTarget.y
           : shouldVisitFavorite
@@ -1068,6 +1091,8 @@ class CatWorldScene extends Phaser.Scene {
         onComplete: () => {
           if (shouldVisitFood) {
             this.spawnFoodPlayBubble(container, cat, foodTarget);
+          } else if (shouldVisitRest) {
+            this.spawnRestBubble(container, cat, restTarget.message);
           } else if (shouldVisitGoal) {
             if (goalTarget.kind === "mischief") {
               this.spawnMischiefBubble(container, cat, goalTarget);
@@ -1163,6 +1188,27 @@ class CatWorldScene extends Phaser.Scene {
     return toyTarget || decorTarget;
   }
 
+  restTargetForCat(cat = {}, index = 0, behavior = {}) {
+    if (!behavior.canWalk) return null;
+    const energy = Number(behavior.energy || 0);
+    const restThreshold = Number(behavior.restThreshold || 34);
+    if (energy > restThreshold + 18 && behavior.mood >= 42) return null;
+    const position = this.foodRestPosition(cat, index)
+      || this.restDecorPosition(cat, index, ["cloud-rug", "sun-window", "study-desk", "book-shelf"]);
+    if (!position) return null;
+    const urgency = Math.max(0, restThreshold + 18 - energy);
+    const moodBonus = Number(behavior.mood || 0) < 42 ? 14 : 0;
+    const staminaBonus = Number(behavior.stamina || 50) < 42 ? 10 : 0;
+    return {
+      kind: "rest",
+      label: "休息点",
+      message: "体力快低了，先找舒服的位置趴一会儿。",
+      priority: clamp(46 + urgency * 3 + moodBonus + staminaBonus, 38, 90),
+      x: position.x,
+      y: position.y,
+    };
+  }
+
   favoriteToyTarget(cat = {}) {
     const favoriteToyIds = Array.isArray(cat.favoriteToyIds) ? cat.favoriteToyIds : [];
     const ownedFavorites = favoriteToyIds.filter(
@@ -1175,7 +1221,9 @@ class CatWorldScene extends Phaser.Scene {
     const energy = catEnergyForSnapshot(this.owner.snapshot, cat);
     const mood = catMoodForSnapshot(this.owner.snapshot, cat);
     const curiosity = clamp(Number(agent.curiosity || 45), 0, 100);
-    const priority = clamp(42 + Math.round(curiosity / 4) + (mood < 56 ? 16 : 0) - (energy < 38 ? 18 : 0), 18, 78);
+    const temperament = String(agent.temperament || cat.traits?.temperament || "balanced");
+    const temperamentBonus = temperament === "chatty" ? 12 : temperament === "guardian" ? 8 : temperament === "calm" ? -8 : 0;
+    const priority = clamp(42 + Math.round(curiosity / 4) + temperamentBonus + (mood < 56 ? 16 : 0) - (energy < 38 ? 18 : 0), 18, 86);
     return {
       itemId,
       label: target.label,
@@ -1197,11 +1245,15 @@ class CatWorldScene extends Phaser.Scene {
     const position = this.positionForDecor(decorId, spec);
     const nearX = position.x + spec.width / 2 - 45 + Phaser.Math.Between(-38, 38);
     const nearY = Math.max(FLOOR_TOP + 52, position.y + spec.height + 18) + Phaser.Math.Between(-16, 18);
+    const agent = this.owner.snapshot?.dailyLogs?.[cat.id]?.agentState || {};
+    const temperament = String(agent.temperament || cat.traits?.temperament || "balanced");
+    const mood = catMoodForSnapshot(this.owner.snapshot, cat);
+    const priority = clamp(56 + (["calm", "gentle", "clingy"].includes(temperament) ? 10 : 0) + (mood < 52 ? 12 : 0), 38, 82);
     return {
       decorId,
       label: spec.label,
       kind: "favorite-decor",
-      priority: 64,
+      priority,
       x: clamp(nearX, 38, GAME_WIDTH - 132),
       y: clamp(nearY, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
     };
@@ -1472,6 +1524,7 @@ class CatWorldScene extends Phaser.Scene {
     const agent = catAgentForSnapshot(this.owner.snapshot, cat);
     const goal = agent.dailyGoal || {};
     const activeFood = this.owner.snapshot.activeFood || {};
+    const temperament = String(agent.temperament || cat.traits?.temperament || "balanced");
     const lines = [
       ...(cat?.thoughts?.length ? cat.thoughts : [
         "我想听一个新单词。",
@@ -1480,8 +1533,14 @@ class CatWorldScene extends Phaser.Scene {
         "我在检查书桌路线。",
       ]),
     ];
+    if (agent.careTip) lines.unshift(agent.careTip);
     if (agent.dailyMoodLabel) lines.unshift(`${agent.dailyMoodLabel}，${behavior.routine || "想按自己的节奏活动"}。`);
     if (goal.message) lines.unshift(goal.message);
+    if (agent.mischiefLabel) {
+      lines.unshift(`我刚刚碰坏了${agent.mischiefLabel}，可能需要维修。`);
+    } else if (agent.mischiefRepairedLabel) {
+      lines.push(`${agent.mischiefRepairedLabel}已经修好了，我会小心一点。`);
+    }
     if (activeFood.active && activeFood.targetCatId === cat.id) {
       lines.unshift(`那份${activeFood.label || "食物"}是给我的，我会慢慢吃。`);
     }
@@ -1491,6 +1550,10 @@ class CatWorldScene extends Phaser.Scene {
     if (behavior.mood < 38) {
       lines.unshift("今天心情不太好，陪我玩一下会好很多。");
     }
+    if (TEMPERAMENT_THOUGHTS[temperament]) lines.push(TEMPERAMENT_THOUGHTS[temperament]);
+    if (behavior.curiosity >= 76) lines.push("我今天想试一条新的散步路线。");
+    if (behavior.socialNeed >= 78) lines.push("你在旁边的时候，我会更安心。");
+    if (behavior.activityBias <= 36) lines.push("今天慢慢走就很好。");
     if (agent.hourlyReason) lines.push(`现在的节奏: ${agent.hourlyReason}。`);
     return uniqueLines(lines).slice(0, 8);
   }

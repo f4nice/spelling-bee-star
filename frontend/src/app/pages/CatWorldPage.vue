@@ -310,6 +310,7 @@ const catAgentDiaries = computed(() =>
         routineLabel: agent.routine || traits.routine || "观察房间里的学习节奏",
         goalLabel: dailyGoal.label || "自由散步",
         goalMessage: dailyGoal.message || "",
+        careTip: agent.careTip || "",
         damageRiskLabel: dailyGoal.damageRiskReason
           ? `${dailyGoal.damageRiskLabel || "很低"} · ${dailyGoal.damageRiskReason}`
           : dailyGoal.damageRiskLabel || "很低",
@@ -1093,6 +1094,7 @@ async function selectCat(catId) {
           </header>
           <p>{{ cat.behaviorLabel }} · {{ cat.routineLabel }}</p>
           <p class="cat-world-agent-goal">{{ cat.goalLabel }} · {{ cat.goalMessage }}</p>
+          <p v-if="cat.careTip" class="cat-world-agent-care">{{ cat.careTip }}</p>
           <div class="cat-world-agent-meter-row" aria-label="猫咪 agent 参数">
             <span class="cat-world-agent-meter energy">
               体力

@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-036"
-DEFAULT_PAGE_VERSION = "v20260721.36"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-037"
+DEFAULT_PAGE_VERSION = "v20260721.37"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -11095,6 +11095,49 @@ def cat_world_agent_daily_goal(
     )
 
 
+def cat_world_agent_care_tip(
+    cat: dict[str, Any],
+    traits: dict[str, Any],
+    agent_state: dict[str, Any],
+    behavior: dict[str, Any],
+    daily_goal: dict[str, Any],
+    mood_score: int,
+    energy_score: int,
+    favorite_active_ids: list[str],
+) -> str:
+    cat_label = cat.get("label") or "猫咪"
+    temperament = str(traits.get("temperament") or agent_state.get("temperament") or "balanced")
+    rest_threshold = int(traits.get("restThreshold") or 34)
+    social_need = min(max(int(agent_state.get("socialNeed") or 50), 0), 100)
+    active_favorite_labels = [
+        CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("label") or item_id
+        for item_id in favorite_active_ids[:2]
+    ]
+    if behavior.get("sleeping"):
+        return f"{cat_label}现在按作息睡觉，醒来后再喂食或陪玩更有效。"
+    if energy_score < rest_threshold:
+        return f"{cat_label}体力不足，优先摆放食物；吃完前会尽量原地休息。"
+    if daily_goal.get("key") == "mischief-watch":
+        return f"{cat_label}有捣蛋风险，先用食物、摸摸或喜欢的玩具安抚，能降低破坏概率。"
+    if mood_score < 42:
+        return f"{cat_label}心情偏低，优先安排喜欢的玩具或家具，不要让它独处太久。"
+    if social_need >= 78:
+        return f"{cat_label}今天很想被关注，多点几次摸摸或切换成主猫会更安心。"
+    if active_favorite_labels:
+        return f"{cat_label}喜欢的{active_favorite_labels[0]}已经摆出，今天会更愿意靠过去休息。"
+    if temperament == "calm":
+        return f"{cat_label}偏安静，适合书架、窗台这类稳定布局。"
+    if temperament == "gentle":
+        return f"{cat_label}偏温柔，喜欢陪读角落和柔软家具。"
+    if temperament == "chatty":
+        return f"{cat_label}爱热闹，玩具越丰富越容易保持好心情。"
+    if temperament == "guardian":
+        return f"{cat_label}爱巡逻，家具和玩具坏了会特别在意。"
+    if temperament == "clingy":
+        return f"{cat_label}比较黏人，摸摸和喜欢的食物会更快安抚它。"
+    return f"{cat_label}状态稳定，可以按今天目标布置活动室。"
+
+
 def cat_world_agent_payload(
     log: CatWorldDailyLog,
     cat: dict[str, Any],
@@ -11132,11 +11175,22 @@ def cat_world_agent_payload(
         room_layout,
         favorite_active_ids,
     )
+    care_tip = cat_world_agent_care_tip(
+        cat,
+        traits,
+        agent_state,
+        behavior,
+        daily_goal,
+        mood_score,
+        energy_score,
+        favorite_active_ids,
+    )
     public_agent_state = {key: value for key, value in agent_state.items() if key != "seedKey"}
     return {
         **public_agent_state,
         "currentBehavior": behavior,
         "dailyGoal": daily_goal,
+        "careTip": care_tip,
         "adjustedMoodScore": mood_score,
         "adjustedEnergyScore": energy_score,
         "hourlyLabel": hourly_change.get("label") or "",

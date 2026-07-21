@@ -12325,6 +12325,12 @@ select {
   background: rgba(255, 191, 215, 0.22);
 }
 
+.cat-world-agent-card .cat-world-agent-care {
+  padding: 7px;
+  border: 2px solid rgba(44, 47, 58, 0.38);
+  background: rgba(135, 217, 255, 0.2);
+}
+
 .cat-world-agent-meter-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
@@ -12443,7 +12449,9 @@ select {
 }
 
 .cat-world-agent-card.active .cat-world-agent-goal,
-.cat-world-agent-card:not(:disabled):hover .cat-world-agent-goal {
+.cat-world-agent-card:not(:disabled):hover .cat-world-agent-goal,
+.cat-world-agent-card.active .cat-world-agent-care,
+.cat-world-agent-card:not(:disabled):hover .cat-world-agent-care {
   border-color: rgba(255, 255, 255, 0.38);
   background: rgba(255, 255, 255, 0.14);
 }
