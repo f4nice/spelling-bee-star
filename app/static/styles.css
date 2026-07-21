@@ -11656,7 +11656,7 @@ select {
 }
 
 .shell[data-quant-radar-page-key="cat-world"] .cat-world-layout {
-  align-items: start;
+  align-items: stretch;
   grid-template-columns: minmax(860px, 1fr) 360px;
 }
 
@@ -11687,9 +11687,11 @@ select {
 .cat-world-owned-panel {
   position: sticky;
   top: 90px;
+  align-self: stretch;
+  height: 100%;
   min-width: 0;
   max-width: 100%;
-  max-height: calc(100vh - 108px);
+  max-height: none;
   overflow: hidden;
   display: flex;
   flex-direction: column;

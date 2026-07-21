@@ -1,4 +1,8 @@
 import * as Phaser from "phaser";
+import {
+  createCatBubbleReaction,
+  resolveCatBubbleTiming,
+} from "./catWorldBubbleState.js";
 
 const GAME_WIDTH = 1280;
 const GAME_HEIGHT = 560;
@@ -9,8 +13,6 @@ const INK = 0x2c2f3a;
 const CREAM = 0xfff8df;
 const CAT_INTERACTION_DEPTH = 980;
 const CAT_HITBOX = { x: -58, y: -74, width: 232, height: 184 };
-const CAT_BUBBLE_HOLD_MS = 4500;
-const CAT_BUBBLE_FADE_MS = 2500;
 const ACTIVE_FOOD_SPOT = { x: GAME_WIDTH - 260, y: 408, width: 118, height: 46 };
 const ATTENTION_SPOT = { x: GAME_WIDTH / 2 - 46, y: FLOOR_BOTTOM - 78 };
 const ROOM_TOY_TARGETS = {
@@ -299,6 +301,7 @@ class CatWorldScene extends Phaser.Scene {
       this.drawEditModeHint();
     } else {
       this.drawCats(snapshot);
+      this.restoreCatBubbles(snapshot);
     }
   }
 
@@ -1753,11 +1756,20 @@ class CatWorldScene extends Phaser.Scene {
     }
   }
 
-  spawnCatBubble(container, cat, requestedMessage = "") {
+  spawnCatBubble(container, cat, requestedMessage = "", existingReaction = null) {
     if (!container?.active || !cat?.id) return "";
     const behavior = container.getData("behavior") || this.catBehavior(cat);
     const lines = this.catThoughtLines(cat, behavior);
-    const message = requestedMessage || lines[Math.floor(Math.random() * lines.length)];
+    const message = requestedMessage || existingReaction?.message || lines[Math.floor(Math.random() * lines.length)];
+    const now = Date.now();
+    const reaction = existingReaction?.expiresAt > now
+      ? existingReaction
+      : createCatBubbleReaction(message, now);
+    const timing = resolveCatBubbleTiming(reaction, now);
+    if (!timing.active) {
+      this.owner.catReactions.delete(cat.id);
+      return "";
+    }
     const previousBubble = this.catBubbles.get(cat.id);
     if (previousBubble?.active) previousBubble.destroy();
 
@@ -1788,19 +1800,35 @@ class CatWorldScene extends Phaser.Scene {
     container.add(bubble);
     this.syncCatTextOverlays(container);
     this.catBubbles.set(cat.id, bubble);
+    this.owner.catReactions.set(cat.id, reaction);
+    bubble.setAlpha(timing.initialAlpha);
     this.tweens.add({
       targets: bubble,
       y: bubble.y - 12,
       alpha: 0,
-      delay: CAT_BUBBLE_HOLD_MS,
-      duration: CAT_BUBBLE_FADE_MS,
+      delay: timing.holdDelay,
+      duration: Math.max(timing.fadeDuration, 1),
       ease: "Sine.easeInOut",
       onComplete: () => {
         if (this.catBubbles.get(cat.id) === bubble) this.catBubbles.delete(cat.id);
+        if (this.owner.catReactions.get(cat.id) === reaction) this.owner.catReactions.delete(cat.id);
         bubble.destroy();
       },
     });
     return message;
+  }
+
+  restoreCatBubbles(snapshot) {
+    const catsById = new Map(snapshot.cats.map((cat) => [cat.id, cat]));
+    for (const [catId, reaction] of this.owner.catReactions.entries()) {
+      if (Number(reaction?.expiresAt || 0) <= Date.now()) {
+        this.owner.catReactions.delete(catId);
+        continue;
+      }
+      const container = this.catContainers.get(catId);
+      const cat = catsById.get(catId);
+      if (container && cat) this.spawnCatBubble(container, cat, reaction.message, reaction);
+    }
   }
 
   showCatReaction(catId, message) {
@@ -1896,6 +1924,7 @@ export class CatWorldGame {
     this.handlers = handlers;
     this.layout = {};
     this.catPositions = new Map();
+    this.catReactions = new Map();
     this.ready = false;
     this.snapshot = normalizeSnapshot();
     this.game = new Phaser.Game({
@@ -1935,6 +1964,7 @@ export class CatWorldGame {
   }
 
   destroy() {
+    this.catReactions.clear();
     this.game?.destroy(true);
   }
 }
