@@ -249,12 +249,25 @@ class CatWorldScene extends Phaser.Scene {
     this.owner.ready = true;
   }
 
+  isEditMode() {
+    return Boolean(this.owner.snapshot?.editMode);
+  }
+
+  clearCatInteractions() {
+    for (const container of this.catContainers.values()) {
+      container.disableInteractive?.();
+      container.removeAllListeners?.("pointerdown");
+      container.removeAllListeners?.("pointerup");
+    }
+    this.catContainers.clear();
+  }
+
   renderSnapshot() {
+    this.clearCatInteractions();
     this.tweens.killAll();
     this.time.removeAllEvents();
     this.children.removeAll(true);
     this.decorContainers.clear();
-    this.catContainers.clear();
     const snapshot = this.owner.snapshot;
     this.owner.layout = cloneLayout(snapshot.layout);
     this.drawRoom();
@@ -582,10 +595,18 @@ class CatWorldScene extends Phaser.Scene {
       );
       if (container.input) container.input.cursor = "pointer";
       container.on("pointerdown", (_pointer, _localX, _localY, event) => {
+        if (this.isEditMode()) {
+          this.stopPointerEvent(event);
+          return;
+        }
         this.children.bringToTop(container);
         this.stopPointerEvent(event);
       });
       container.on("pointerup", (_pointer, _localX, _localY, event) => {
+        if (this.isEditMode()) {
+          this.stopPointerEvent(event);
+          return;
+        }
         this.children.bringToTop(container);
         this.stopPointerEvent(event);
         this.spawnCatBubble(container, cat);

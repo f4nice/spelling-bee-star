@@ -1,12 +1,12 @@
 export const sidebarNavItems = [
   { label: "首页", path: "/", routes: ["home"] },
-  { label: "猫咪能量世界", path: "/cat-world", routes: ["catWorld"] },
   { label: "我的单词表", path: "/lists", routes: ["lists", "listDetail"] },
   { label: "英文小报", path: "/newspaper", routePrefix: "newspaper" },
   { label: "好词好句", path: "/booklearner", routes: ["booklearner", "booklearnerQuotes", "booklearnerUpload", "booklearnerDetail"] },
   { label: "SPB-个人赛冠军词库", path: "/spb", routes: ["spb"], collection: "individual" },
   { label: "SPB-团队赛冠军词组", path: "/spb/team", routes: ["spb"], collection: "team" },
   { label: "我的生词本", path: "/wrong-words", routes: ["wrongWords"], countKey: "wrongWordCount" },
+  { label: "猫咪能量世界", path: "/cat-world", routes: ["catWorld"] },
 ];
 
 export function isSidebarNavItemActive(item, route) {
