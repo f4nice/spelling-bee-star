@@ -11205,6 +11205,22 @@ select {
   line-height: 1.55;
 }
 
+.cat-world-agent-profile-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.cat-world-agent-profile-tags span {
+  border: 1px solid rgba(157, 232, 255, 0.32);
+  padding: 2px 5px;
+  color: #fff3a4;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
 .cat-world-agent-events {
   display: grid;
   gap: 4px;
@@ -12331,6 +12347,12 @@ select {
   background: rgba(135, 217, 255, 0.2);
 }
 
+.cat-world-agent-card .cat-world-agent-voice {
+  padding: 7px;
+  border: 2px solid rgba(44, 47, 58, 0.38);
+  background: rgba(255, 243, 164, 0.34);
+}
+
 .cat-world-agent-meter-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
@@ -12451,7 +12473,9 @@ select {
 .cat-world-agent-card.active .cat-world-agent-goal,
 .cat-world-agent-card:not(:disabled):hover .cat-world-agent-goal,
 .cat-world-agent-card.active .cat-world-agent-care,
-.cat-world-agent-card:not(:disabled):hover .cat-world-agent-care {
+.cat-world-agent-card:not(:disabled):hover .cat-world-agent-care,
+.cat-world-agent-card.active .cat-world-agent-voice,
+.cat-world-agent-card:not(:disabled):hover .cat-world-agent-voice {
   border-color: rgba(255, 255, 255, 0.38);
   background: rgba(255, 255, 255, 0.14);
 }

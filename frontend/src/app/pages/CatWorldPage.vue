@@ -206,6 +206,13 @@ const activeToolItems = computed(() => {
 const focusedCatThought = computed(() => {
   const agent = focusedAgentState.value || {};
   const behavior = agent.currentBehavior || {};
+  if (agent.voiceLine || agent.dailyWish) {
+    return [
+      agent.voiceLine,
+      agent.dailyWish ? `今日愿望：${agent.dailyWish}` : "",
+      behavior.label ? `当前${behavior.label}` : "",
+    ].filter(Boolean).join("。") + "。";
+  }
   if (agent.dailyMoodLabel || behavior.label) {
     return `${agent.dailyMoodLabel || "今天状态稳定"}，${behavior.label || "自由活动"}。${agent.routine || "正在观察房间里的学习节奏"}。`;
   }
@@ -234,6 +241,13 @@ const focusedAgentEvents = computed(() => {
   const events = focusedAgentState.value.events;
   if (!Array.isArray(events)) return [];
   return events.filter((event) => event?.message).slice(-4).reverse();
+});
+const focusedAgentProfileTags = computed(() => {
+  const tags = focusedAgentState.value.profileTags;
+  if (Array.isArray(tags)) return tags.filter(Boolean).slice(0, 4);
+  return [focusedAgentState.value.personaLabel, focusedAgentState.value.playStyleLabel, focusedAgentState.value.socialStyleLabel]
+    .filter(Boolean)
+    .slice(0, 4);
 });
 function clampCatScore(value) {
   const score = Number(value);
@@ -306,6 +320,12 @@ const catAgentDiaries = computed(() =>
         activityBias: clampCatScore(agent.activityBias ?? 0),
         socialNeed: clampCatScore(agent.socialNeed ?? 0),
         dailyProfileLabel: [agent.staminaLabel, agent.activityLabel, agent.socialNeedLabel].filter(Boolean).join(" · "),
+        personaLabel: agent.personaLabel || cat.personality || "学习陪伴型",
+        dailyWish: agent.dailyWish || dailyGoal.message || "",
+        voiceLine: agent.voiceLine || "",
+        playStyleLabel: agent.playStyleLabel || "玩耍节奏稳定",
+        socialStyleLabel: agent.socialStyleLabel || "陪伴需求稳定",
+        carePreferenceLabel: agent.carePreferenceLabel || traits.label || "",
         sleepLabel: traits.nightOwl ? `夜猫子 · ${sleepStart}-${sleepEnd}` : `${sleepStart}-${sleepEnd}`,
         routineLabel: agent.routine || traits.routine || "观察房间里的学习节奏",
         goalLabel: dailyGoal.label || "自由散步",
@@ -893,6 +913,9 @@ async function selectCat(catId) {
           <span>CAT-OS</span>
           <strong>{{ focusedCat.label || "猫咪" }} · {{ focusedCat.personality || "学习陪伴型" }}</strong>
           <p>{{ focusedCatThought }}</p>
+          <div v-if="focusedAgentProfileTags.length" class="cat-world-agent-profile-tags">
+            <span v-for="tag in focusedAgentProfileTags" :key="tag">{{ tag }}</span>
+          </div>
           <small>{{ focusedCatDailyNote }}</small>
           <ul v-if="focusedAgentEvents.length" class="cat-world-agent-events">
             <li v-for="event in focusedAgentEvents" :key="`${event.time}-${event.kind}-${event.message}`">
@@ -1100,6 +1123,7 @@ async function selectCat(catId) {
           <p>{{ cat.behaviorLabel }} · {{ cat.routineLabel }}</p>
           <p class="cat-world-agent-goal">{{ cat.goalLabel }} · {{ cat.goalMessage }}</p>
           <p v-if="cat.careTip" class="cat-world-agent-care">{{ cat.careTip }}</p>
+          <p v-if="cat.voiceLine" class="cat-world-agent-voice">{{ cat.voiceLine }}</p>
           <div class="cat-world-agent-meter-row" aria-label="猫咪 agent 参数">
             <span class="cat-world-agent-meter energy">
               体力
@@ -1145,7 +1169,23 @@ async function selectCat(catId) {
             </div>
             <div>
               <dt>今日参数</dt>
-              <dd>{{ cat.dailyProfileLabel || "状态稳定" }}</dd>
+              <dd>{{ cat.personaLabel }} · {{ cat.dailyProfileLabel || "状态稳定" }}</dd>
+            </div>
+            <div>
+              <dt>今日愿望</dt>
+              <dd>{{ cat.dailyWish || "想安静陪你学习" }}</dd>
+            </div>
+            <div>
+              <dt>相处方式</dt>
+              <dd>{{ cat.socialStyleLabel }}</dd>
+            </div>
+            <div>
+              <dt>玩耍倾向</dt>
+              <dd>{{ cat.playStyleLabel }}</dd>
+            </div>
+            <div>
+              <dt>照顾偏好</dt>
+              <dd>{{ cat.carePreferenceLabel || "保持房间稳定整洁" }}</dd>
             </div>
             <div>
               <dt>减耗</dt>

@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-038"
-DEFAULT_PAGE_VERSION = "v20260721.38"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-039"
+DEFAULT_PAGE_VERSION = "v20260721.39"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -10579,6 +10579,95 @@ def cat_world_agent_level_label(value: int, low: str, middle: str, high: str) ->
     return middle
 
 
+def cat_world_pick_stable_text(seed: str, options: list[str]) -> str:
+    clean_options = [str(option).strip() for option in options if str(option or "").strip()]
+    if not clean_options:
+        return ""
+    option_index = min(int(cat_world_stable_ratio(seed) * len(clean_options)), len(clean_options) - 1)
+    return clean_options[option_index]
+
+
+def cat_world_daily_persona_profile(
+    cat: dict[str, Any],
+    traits: dict[str, Any],
+    daily_mood: dict[str, Any],
+    attention: int,
+    curiosity: int,
+    mischief: int,
+    stamina: int,
+    activity_bias: int,
+    social_need: int,
+    seed: str,
+) -> dict[str, Any]:
+    temperament = str(traits.get("temperament") or "balanced")
+    persona_labels = {
+        "calm": "冷静观察型",
+        "gentle": "温柔陪读型",
+        "chatty": "话多探索型",
+        "guardian": "巡逻守护型",
+        "clingy": "黏人陪伴型",
+    }
+    care_labels = {
+        "calm": "喜欢安静角落和整齐书架",
+        "gentle": "喜欢柔软家具和慢节奏陪读",
+        "chatty": "喜欢被回应，玩具越多越开心",
+        "guardian": "喜欢巡视房间，坏掉的道具会让它在意",
+        "clingy": "喜欢摸摸和靠近主人的布置",
+    }
+    mood_key = str(daily_mood.get("key") or "stable")
+    wish_pool = {
+        "bright": ["想把今天的单词都变成亮晶晶能量", "想多跑几圈，再等你摸摸头"],
+        "curious": ["想探索房间里没有去过的角落", "想试试今天哪个玩具最好玩"],
+        "clingy": ["想靠近你听英文朗读", "想成为今天的主陪读猫"],
+        "lazy": ["想找一个舒服地方慢慢趴着", "想少跑一点，但陪你学久一点"],
+        "quiet": ["想独处一会儿，再安静陪读", "想待在喜欢的家具旁边观察你"],
+        "grumpy": ["想被食物和玩具哄一哄", "今天有点烦，需要你温柔一点"],
+    }
+    voice_pool = list(cat.get("thoughts") or []) + [
+        f"我的今日模式是{persona_labels.get(temperament, '均衡陪伴型')}。",
+        f"我会按{traits.get('routine') or '自己的节奏'}行动。",
+        f"如果能量低了，我会先找地方休息。",
+    ]
+    play_style = cat_world_agent_level_label(
+        max(curiosity, activity_bias),
+        "今天更适合短互动",
+        "今天玩耍节奏稳定",
+        "今天会主动找玩具",
+    )
+    social_style = cat_world_agent_level_label(
+        social_need,
+        "今天需要一点独处",
+        "今天陪伴需求稳定",
+        "今天很想被关注",
+    )
+    stamina_style = cat_world_agent_level_label(
+        stamina,
+        "体力容易掉",
+        "耐力稳定",
+        "体力储备很好",
+    )
+    mischief_style = cat_world_agent_level_label(
+        mischief,
+        "捣蛋心很低",
+        "偶尔会调皮",
+        "今天要多留意道具",
+    )
+    return {
+        "personaLabel": persona_labels.get(temperament, "均衡陪伴型"),
+        "carePreferenceLabel": care_labels.get(temperament, "喜欢稳定、干净和能陪读的房间"),
+        "dailyWish": cat_world_pick_stable_text(f"{seed}:wish", wish_pool.get(mood_key, ["想安静陪你学习"])),
+        "voiceLine": cat_world_pick_stable_text(f"{seed}:voice", voice_pool),
+        "playStyleLabel": play_style,
+        "socialStyleLabel": social_style,
+        "profileTags": [
+            persona_labels.get(temperament, "均衡陪伴型"),
+            stamina_style,
+            social_style,
+            mischief_style,
+        ],
+    }
+
+
 def cat_world_apply_temperament_daily_bias(
     temperament: str,
     attention: int,
@@ -10657,6 +10746,18 @@ def cat_world_default_agent_state(
         activity_bias,
         social_need,
     )
+    persona_profile = cat_world_daily_persona_profile(
+        cat,
+        traits,
+        daily_mood,
+        attention,
+        curiosity,
+        mischief,
+        stamina,
+        activity_bias,
+        social_need,
+        seed,
+    )
     return {
         "date": log_date.isoformat(),
         "seedKey": cat_world_daily_agent_seed_key(log_date, cat["id"], phone),
@@ -10673,6 +10774,7 @@ def cat_world_default_agent_state(
         "staminaLabel": cat_world_agent_level_label(stamina, "今天容易累", "耐力稳定", "今天耐力很好"),
         "activityLabel": cat_world_agent_level_label(activity_bias, "今天慢悠悠", "活动量稳定", "今天很爱动"),
         "socialNeedLabel": cat_world_agent_level_label(social_need, "今天想独处", "陪伴需求稳定", "今天想黏人"),
+        **persona_profile,
         "routine": traits.get("routine") or "观察房间里的学习节奏",
         "temperament": temperament,
         "mischiefChecked": False,
@@ -10746,6 +10848,13 @@ def ensure_cat_world_agent_state(log: CatWorldDailyLog, cat: dict[str, Any], tra
             "staminaLabel",
             "activityLabel",
             "socialNeedLabel",
+            "personaLabel",
+            "carePreferenceLabel",
+            "dailyWish",
+            "voiceLine",
+            "playStyleLabel",
+            "socialStyleLabel",
+            "profileTags",
         ):
             if key not in state:
                 state[key] = default_state.get(key)
