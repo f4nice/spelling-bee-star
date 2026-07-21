@@ -350,7 +350,9 @@ class CatWorldScene extends Phaser.Scene {
         })
         .setOrigin(0.5)
         .setDepth(726);
-      this.addRoomHitZone(snapshot.activeFood.itemId || "active-food", bowlX, 374, 142, 86, 728);
+      if (!snapshot.editMode) {
+        this.addRoomHitZone(snapshot.activeFood.itemId || "active-food", bowlX, 374, 142, 86, 728);
+      }
     }
     if (owned(snapshot.inventory, "rolling-ball")) {
       this.drawOwnedToy(snapshot, "rolling-ball", lastPlayItem === "rolling-ball");

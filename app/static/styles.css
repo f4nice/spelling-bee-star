@@ -414,9 +414,14 @@ body {
 }
 
 .topbar-nav a.active {
-  border-color: rgba(147, 235, 194, 0.52);
-  color: #123426;
-  background: linear-gradient(180deg, #e2fff1, #a7eccb);
+  border-color: rgba(147, 235, 194, 0.66);
+  color: #fff;
+  background: linear-gradient(180deg, #2f8b68, #236b55);
+}
+
+.topbar-nav a.active em {
+  color: #236b55;
+  background: #fff;
 }
 
 .topbar-nav em {

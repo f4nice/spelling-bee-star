@@ -65,14 +65,18 @@ onMounted(async () => {
   const { CatWorldGame } = await import("../catWorldGame.js");
   if (!gameMountActive || !gameMountRef.value) return;
   catWorldGame.value = new CatWorldGame(gameMountRef.value, {
-    onCatPet: petCat,
+    onCatPet: (cat) => {
+      if (!roomEditMode.value) petCat(cat);
+    },
     onDecorClick: handleDecorClick,
     onDecorSelect: (decorId) => {
       selectedDecorId.value = decorId || "";
     },
     onLayoutChange: handleGameLayoutChange,
     onToyClick: handleRoomToyClick,
-    onCatThought: (cat, message) => showCatReaction(cat, message),
+    onCatThought: (cat, message) => {
+      if (!roomEditMode.value) showCatReaction(cat, message);
+    },
     onCatAmbient: recordCatAmbientEvent,
     onFoodVisit: recordCatFoodNibble,
   });
@@ -467,12 +471,6 @@ function handleRoomToyClick(itemId) {
       repairItem(item);
       return;
     }
-    if (item.category === "food" && activeFood.value.active && activeFood.value.itemId === item.id) {
-      notice.value = `${item.label} 正在房间里，优先给${activeFood.value.targetCatLabel || "体力最低的小猫"}慢慢吃，剩余可补体力 ${activeFood.value.remainingEnergy || 0}，还剩 ${formatSeconds(activeFood.value.remainingSeconds)}。`;
-      const targetCat = cats.value.find((cat) => cat.id === activeFood.value.targetCatId) || focusedCat.value;
-      showCatReaction(targetCat, `${item.label}还在房间里，我会慢慢吃完。`);
-      return;
-    }
     if (roomEditMode.value) {
       selectedDecorId.value = item.id;
       notice.value = item.category === "toy"
@@ -480,11 +478,18 @@ function handleRoomToyClick(itemId) {
         : `${item.label} 会被猫咪慢慢吃完，暂时不能拖动。`;
       return;
     }
+    if (item.category === "food" && activeFood.value.active && activeFood.value.itemId === item.id) {
+      notice.value = `${item.label} 正在房间里，优先给${activeFood.value.targetCatLabel || "体力最低的小猫"}慢慢吃，剩余可补体力 ${activeFood.value.remainingEnergy || 0}，还剩 ${formatSeconds(activeFood.value.remainingSeconds)}。`;
+      const targetCat = cats.value.find((cat) => cat.id === activeFood.value.targetCatId) || focusedCat.value;
+      showCatReaction(targetCat, `${item.label}还在房间里，我会慢慢吃完。`);
+      return;
+    }
     play(item);
   }
 }
 
 function recordCatAmbientEvent(cat, event = {}) {
+  if (roomEditMode.value) return;
   if (!cat?.id || !event?.kind || !event?.itemId) return;
   const key = `${cat.id}:${event.kind}:${event.itemId}`;
   const now = Date.now();
@@ -500,6 +505,7 @@ function recordCatAmbientEvent(cat, event = {}) {
       label: event.label || "",
     }),
   }).then((nextPayload) => {
+    if (roomEditMode.value) return;
     if (nextPayload?.energy && nextPayload?.state) {
       replacePayload(nextPayload);
     }
@@ -513,6 +519,7 @@ function recordCatAmbientEvent(cat, event = {}) {
 }
 
 function recordCatFoodNibble(cat, event = {}) {
+  if (roomEditMode.value) return;
   if (!cat?.id || !activeFood.value.active) return;
   if (activeFood.value.targetCatId && activeFood.value.targetCatId !== cat.id) return;
   const token = rawActiveFood.value?.expiresAt || activeFood.value.itemId || "active-food";
@@ -528,6 +535,7 @@ function recordCatFoodNibble(cat, event = {}) {
       itemId: event.itemId || activeFood.value.itemId,
     }),
   }).then((nextPayload) => {
+    if (roomEditMode.value) return;
     replacePayload(nextPayload);
     const effect = nextPayload?.effect || {};
     if (effect.recorded && effect.message) {
@@ -685,6 +693,7 @@ function startRoomEditMode() {
   if (savingRoomLayout.value) return;
   roomEditMode.value = true;
   catReaction.value = "";
+  window.clearTimeout(catReactionTimer);
   notice.value = "已进入编辑模式，猫咪先躲到旁边；现在可以拖动家具和玩具，保存后猫咪会回来。";
 }
 
@@ -766,6 +775,7 @@ function purchaseButtonText(item) {
 }
 
 function showCatReaction(cat = selectedCat.value, message = "") {
+  if (roomEditMode.value) return;
   const catLabel = cat?.label || "猫咪";
   const nextIndex = catPetSequence.value % catReactionTexts.length;
   focusedCatId.value = cat?.id || "";
@@ -778,6 +788,7 @@ function showCatReaction(cat = selectedCat.value, message = "") {
 }
 
 async function petCat(cat = selectedCat.value, options = {}) {
+  if (roomEditMode.value) return;
   if (!cat?.id) return;
   showCatReaction(cat, options.message || "");
   if (options.sync === false || petBusyCatId.value === cat.id) return;
@@ -824,6 +835,10 @@ async function purchase(item) {
 
 async function play(item) {
   if (!item?.id || busyItemId.value) return;
+  if (roomEditMode.value) {
+    notice.value = "编辑物品时猫咪互动暂停；保存或完成编辑后再陪猫咪玩。";
+    return;
+  }
   busyItemId.value = item.id;
   notice.value = "";
   try {
@@ -1020,7 +1035,7 @@ async function selectCat(catId) {
             </button>
           </div>
           <div
-            v-if="catReaction"
+            v-if="catReaction && !roomEditMode"
             :key="`cat-reaction-${catPetSequence}`"
             class="cat-world-reaction"
             aria-live="polite"
@@ -1028,7 +1043,7 @@ async function selectCat(catId) {
             {{ catReaction }}
           </div>
           <div
-            v-if="catPetSequence"
+            v-if="catPetSequence && !roomEditMode"
             :key="`cat-sparkles-${catPetSequence}`"
             class="cat-world-sparkles"
             aria-hidden="true"
