@@ -85,6 +85,7 @@ function normalizeSnapshot(snapshot = {}) {
     ownedFoodCount: Number(snapshot.ownedFoodCount || 0),
     roomStyles: snapshot.roomStyles || {},
     selectedCatId: snapshot.selectedCatId || "",
+    editMode: Boolean(snapshot.editMode),
   };
 }
 
@@ -259,7 +260,11 @@ class CatWorldScene extends Phaser.Scene {
     this.drawRoom();
     this.drawInventoryItems(snapshot);
     this.drawOwnedDecor(snapshot);
-    this.drawCats(snapshot);
+    if (snapshot.editMode) {
+      this.drawEditModeHint();
+    } else {
+      this.drawCats(snapshot);
+    }
   }
 
   drawRoom() {
@@ -282,6 +287,7 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   drawOwnedDecor(snapshot) {
+    const editMode = Boolean(snapshot.editMode);
     for (const [decorId, spec] of Object.entries(DECOR_SPECS)) {
       if (!owned(snapshot.inventory, decorId)) continue;
       const damaged = isDamaged(snapshot, decorId);
@@ -297,7 +303,7 @@ class CatWorldScene extends Phaser.Scene {
       container.setData("height", spec.height);
       container.setDepth(position.y + 20);
       container.setInteractive(new Phaser.Geom.Rectangle(0, 0, spec.width, spec.height), Phaser.Geom.Rectangle.Contains);
-      if (!damaged) {
+      if (!damaged && editMode) {
         this.input.setDraggable(container);
       }
       container.on("pointerdown", (_pointer, _localX, _localY, event) => {
@@ -361,6 +367,7 @@ class CatWorldScene extends Phaser.Scene {
     const spec = ROOM_TOY_TARGETS[itemId];
     if (!spec) return;
     const damaged = isDamaged(snapshot, itemId);
+    const editMode = Boolean(snapshot.editMode);
     const position = this.positionForToy(itemId, spec);
     const container = this.add.container(position.x, position.y);
     container.setSize(spec.width, spec.height);
@@ -372,7 +379,7 @@ class CatWorldScene extends Phaser.Scene {
     container.setData("height", spec.height);
     container.setDepth(position.y + 95);
     container.setInteractive(new Phaser.Geom.Rectangle(0, 0, spec.width, spec.height), Phaser.Geom.Rectangle.Contains);
-    if (!damaged) {
+    if (!damaged && editMode) {
       this.input.setDraggable(container);
     }
     container.on("pointerdown", (_pointer, _localX, _localY, event) => {
@@ -385,6 +392,21 @@ class CatWorldScene extends Phaser.Scene {
       }
     });
     this.drawToyShape(container, itemId, spec, damaged, active);
+  }
+
+  drawEditModeHint() {
+    const hint = this.add
+      .text(GAME_WIDTH / 2, FLOOR_TOP + 42, "编辑物品中 · 猫咪先去旁边等你保存", {
+        color: "#263047",
+        backgroundColor: "#fff8df",
+        fontFamily: "Consolas, monospace",
+        fontSize: "15px",
+        fontStyle: "bold",
+        padding: { x: 12, y: 7 },
+      })
+      .setOrigin(0.5)
+      .setDepth(CAT_INTERACTION_DEPTH + 160);
+    hint.setAlpha(0.94);
   }
 
   drawToyShape(container, itemId, spec, damaged, active = false) {

@@ -11669,6 +11669,53 @@ select {
   box-shadow: none;
 }
 
+.cat-world-room-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.cat-world-edit-button {
+  border: 3px solid #2c2f3a;
+  border-radius: 4px;
+  min-height: 42px;
+  padding: 8px 12px;
+  color: #263047;
+  background: #fff8df;
+  box-shadow: 4px 4px 0 #2c2f3a;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.cat-world-edit-button:hover,
+.cat-world-edit-button.active {
+  color: #fff;
+  background: #236b55;
+}
+
+.cat-world-edit-button:disabled {
+  color: #6b7280;
+  background: #d7d1bd;
+  cursor: wait;
+  box-shadow: none;
+}
+
+.cat-world-room:not(.is-editing) .cat-world-game-stage canvas {
+  cursor: default;
+}
+
+.cat-world-room.is-editing .cat-world-game-stage canvas {
+  cursor: grab;
+}
+
+.cat-world-room.is-editing .cat-world-game-stage canvas:active {
+  cursor: grabbing;
+}
+
 .cat-world-window.decor-tone-sunset {
   background:
     linear-gradient(90deg, transparent calc(50% - 2px), #2c2f3a calc(50% - 2px) calc(50% + 2px), transparent calc(50% + 2px)),

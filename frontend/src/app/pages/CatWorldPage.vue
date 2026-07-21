@@ -23,6 +23,7 @@ const layoutDraft = ref({});
 const selectedDecorId = ref("");
 const layoutDirty = ref(false);
 const savingRoomLayout = ref(false);
+const roomEditMode = ref(false);
 const activeToolCategory = ref("decor");
 const clockNow = ref(Date.now());
 const energyModalOpen = ref(false);
@@ -382,6 +383,7 @@ const gameSnapshot = computed(() => ({
   ownedFoodCount: ownedFoodCount.value,
   roomStyles: roomStyles.value,
   selectedCatId: state.value.selectedCat,
+  editMode: roomEditMode.value,
 }));
 
 watch(
@@ -449,6 +451,11 @@ function handleDecorClick(decorId) {
     repairItem(item);
     return;
   }
+  if (!roomEditMode.value) {
+    selectedDecorId.value = decorId;
+    notice.value = `点击“编辑物品”后，可以拖动 ${item?.label || "这个道具"} 或切换已解锁配色。`;
+    return;
+  }
   selectedDecorId.value = decorId;
   cycleDecorStyle(decorId);
 }
@@ -464,6 +471,13 @@ function handleRoomToyClick(itemId) {
       notice.value = `${item.label} 正在房间里，优先给${activeFood.value.targetCatLabel || "体力最低的小猫"}慢慢吃，剩余可补体力 ${activeFood.value.remainingEnergy || 0}，还剩 ${formatSeconds(activeFood.value.remainingSeconds)}。`;
       const targetCat = cats.value.find((cat) => cat.id === activeFood.value.targetCatId) || focusedCat.value;
       showCatReaction(targetCat, `${item.label}还在房间里，我会慢慢吃完。`);
+      return;
+    }
+    if (roomEditMode.value) {
+      selectedDecorId.value = item.id;
+      notice.value = item.category === "toy"
+        ? `已选中 ${item.label}，可以拖动它，保存后猫咪会回到活动室。`
+        : `${item.label} 会被猫咪慢慢吃完，暂时不能拖动。`;
       return;
     }
     play(item);
@@ -533,9 +547,12 @@ function ownedToolCount(categoryKey) {
 function ownedToolActionText(item) {
   const damaged = damageInfo(item);
   if (damaged) return `维修 ${damaged.repairCost || 0} 能量`;
-  if (item.category === "decor") return selectedDecorId.value === item.id ? "已选中" : "选择拖动";
+  if (item.category === "decor") {
+    if (!roomEditMode.value) return "点击编辑后拖动";
+    return selectedDecorId.value === item.id ? "已选中" : "选择拖动";
+  }
   if (item.category === "food") return `摆进房间 +${foodEnergyGainValue(item)}体力`;
-  if (item.category === "toy") return "房间可拖动";
+  if (item.category === "toy") return roomEditMode.value ? "房间可拖动" : "编辑后拖动";
   if (item.category === "cat") return state.value.selectedCat === item.id ? "正在陪读" : "切换主猫";
   return "使用";
 }
@@ -593,12 +610,16 @@ function handleOwnedToolClick(item) {
   }
   if (item.category === "decor") {
     selectedDecorId.value = item.id;
-    notice.value = `已选中 ${item.label}，在左侧房间里拖动它后点击保存布局。`;
+    notice.value = roomEditMode.value
+      ? `已选中 ${item.label}，在左侧房间里拖动它后点击保存并退出。`
+      : `已选中 ${item.label}。点击“编辑物品”后，猫咪会暂时隐藏，就可以拖动它。`;
     return;
   }
   if (item.category === "toy") {
     selectedDecorId.value = item.id;
-    notice.value = `${item.label} 可以直接在左侧房间里拖动保存；点击房间里的它会和猫咪互动。`;
+    notice.value = roomEditMode.value
+      ? `${item.label} 可以在左侧房间拖动保存。`
+      : `${item.label} 正常模式下点击会和猫咪互动；点击“编辑物品”后可以拖动。`;
     return;
   }
   if (item.category === "food") {
@@ -619,7 +640,13 @@ function formatSeconds(seconds) {
 }
 
 async function saveRoomLayout() {
-  if (savingRoomLayout.value || !layoutDirty.value) return;
+  if (savingRoomLayout.value) return;
+  if (!layoutDirty.value) {
+    roomEditMode.value = false;
+    selectedDecorId.value = "";
+    notice.value = "已退出编辑模式，猫咪回到活动室。";
+    return;
+  }
   savingRoomLayout.value = true;
   notice.value = "";
   try {
@@ -632,6 +659,8 @@ async function saveRoomLayout() {
     });
     replacePayload(nextPayload);
     layoutDirty.value = false;
+    roomEditMode.value = false;
+    selectedDecorId.value = "";
     const rewards = Array.isArray(nextPayload.layoutRewards) ? nextPayload.layoutRewards : [];
     if (rewards.length) {
       const firstReward = rewards[0];
@@ -650,6 +679,27 @@ async function saveRoomLayout() {
   } finally {
     savingRoomLayout.value = false;
   }
+}
+
+function startRoomEditMode() {
+  if (savingRoomLayout.value) return;
+  roomEditMode.value = true;
+  catReaction.value = "";
+  notice.value = "已进入编辑模式，猫咪先躲到旁边；现在可以拖动家具和玩具，保存后猫咪会回来。";
+}
+
+function handleRoomEditButton() {
+  if (roomEditMode.value) {
+    saveRoomLayout();
+    return;
+  }
+  startRoomEditMode();
+}
+
+function roomEditButtonText() {
+  if (savingRoomLayout.value) return "保存中...";
+  if (!roomEditMode.value) return "编辑物品";
+  return layoutDirty.value ? "保存并退出" : "完成编辑";
 }
 
 function decorTone(decorId) {
@@ -922,10 +972,21 @@ async function selectCat(catId) {
             <p class="section-kicker">Room</p>
             <h2>像素猫活动室</h2>
           </div>
-          <div class="cat-world-mood cat-world-dual-status">
-            <span>{{ mood.catEnergyLabel || "体力稳定" }}</span>
-            <strong>{{ catEnergyScore }}</strong>
-            <small>{{ mood.label || "安静陪读" }} · {{ moodScore }}</small>
+          <div class="cat-world-room-actions">
+            <button
+              class="cat-world-edit-button"
+              type="button"
+              :class="{ active: roomEditMode }"
+              :disabled="savingRoomLayout"
+              @click="handleRoomEditButton"
+            >
+              {{ roomEditButtonText() }}
+            </button>
+            <div class="cat-world-mood cat-world-dual-status">
+              <span>{{ roomEditMode ? "编辑中 · 猫咪隐藏" : mood.catEnergyLabel || "体力稳定" }}</span>
+              <strong>{{ catEnergyScore }}</strong>
+              <small>{{ mood.label || "安静陪读" }} · {{ moodScore }}</small>
+            </div>
           </div>
         </div>
 
@@ -946,16 +1007,16 @@ async function selectCat(catId) {
           </ul>
         </div>
 
-        <div class="cat-world-room" aria-label="猫咪房间场景">
+        <div :class="['cat-world-room', { 'is-editing': roomEditMode }]" aria-label="猫咪房间场景">
           <div ref="gameMountRef" class="cat-world-game-stage"></div>
-          <div v-if="selectedDecorId || layoutDirty" class="cat-world-layout-toolbar">
-            <span>{{ layoutDirty ? "布局有改动" : "拖动道具后可保存布局" }}</span>
+          <div v-if="roomEditMode || layoutDirty" class="cat-world-layout-toolbar">
+            <span>{{ roomEditMode ? (layoutDirty ? "编辑中 · 布局有改动" : "编辑中 · 猫咪暂时隐藏") : "点击编辑物品后可拖动" }}</span>
             <button
               type="button"
-              :disabled="!layoutDirty || savingRoomLayout"
+              :disabled="savingRoomLayout"
               @click="saveRoomLayout"
             >
-              {{ savingRoomLayout ? "保存中..." : "保存布局" }}
+              {{ savingRoomLayout ? "保存中..." : layoutDirty ? "保存并退出" : "完成编辑" }}
             </button>
           </div>
           <div
