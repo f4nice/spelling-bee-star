@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Cat as CatIcon } from "lucide-vue-next";
+import { Cat as CatIcon, X as XIcon } from "lucide-vue-next";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
 
@@ -40,7 +40,7 @@ const catReactionTexts = [
   "尾巴雷达晃了晃，发现新单词",
   "想法缓存刷新，准备继续陪你学",
 ];
-const CAT_REACTION_DURATION_MS = 4000;
+const CAT_REACTION_DURATION_MS = 7000;
 let catReactionTimer = 0;
 let activeFoodClockTimer = 0;
 let gameMountActive = false;
@@ -56,11 +56,13 @@ onBeforeUnmount(() => {
   gameMountActive = false;
   window.clearTimeout(catReactionTimer);
   window.clearInterval(activeFoodClockTimer);
+  window.removeEventListener("keydown", handleGlobalKeydown);
   catWorldGame.value?.destroy();
   catWorldGame.value = null;
 });
 
 onMounted(async () => {
+  window.addEventListener("keydown", handleGlobalKeydown);
   activeFoodClockTimer = window.setInterval(() => {
     clockNow.value = Date.now();
   }, 10000);
@@ -449,8 +451,21 @@ function catIconColor(catId) {
 
 function toggleCatDiary(cat) {
   if (!cat?.id) return;
-  openCatDiaryId.value = openCatDiaryId.value === cat.id ? "" : cat.id;
+  openCatDiaryId.value = cat.id;
   focusedCatId.value = cat.id;
+}
+
+function closeCatDiary() {
+  openCatDiaryId.value = "";
+}
+
+function handleGlobalKeydown(event) {
+  if (event.key !== "Escape") return;
+  if (activeCatDiary.value) {
+    closeCatDiary();
+    return;
+  }
+  energyModalOpen.value = false;
 }
 
 function clampNumber(value, min, max) {
@@ -1156,36 +1171,62 @@ async function selectCat(catId) {
           </article>
           <p v-if="!activeToolItems.length" class="cat-world-owned-empty">这个分类还没有道具，可以在下方商店购买。</p>
         </div>
+
+        <section class="cat-world-profile-dock" aria-labelledby="cat-world-profile-dock-title">
+          <div class="cat-world-profile-dock-head">
+            <div>
+              <p class="section-kicker">Agent Diary</p>
+              <h3 id="cat-world-profile-dock-title">今日猫咪档案</h3>
+            </div>
+            <span>{{ catAgentDiaries.length }} 只</span>
+          </div>
+          <div class="cat-world-profile-icons" role="list" aria-label="选择猫咪档案">
+            <button
+              v-for="cat in catAgentDiaries"
+              :key="`diary-icon-${cat.id}`"
+              type="button"
+              :class="['cat-world-profile-icon-button', { active: openCatDiaryId === cat.id }]"
+              aria-haspopup="dialog"
+              :aria-expanded="openCatDiaryId === cat.id"
+              :aria-label="`查看${cat.label}的今日档案`"
+              aria-controls="cat-world-active-diary"
+              @click="toggleCatDiary(cat)"
+            >
+              <span class="cat-world-profile-icon" :style="{ '--cat-icon-color': catIconColor(cat.id) }">
+                <CatIcon :size="20" :stroke-width="2.5" aria-hidden="true" />
+              </span>
+              <strong>{{ cat.label }}</strong>
+              <small>{{ cat.dailyMoodLabel }}</small>
+            </button>
+          </div>
+        </section>
       </aside>
     </section>
 
-    <section class="cat-world-agent-diary panel">
-      <div class="cat-world-profile-head">
-        <p class="section-kicker">Agent Diary</p>
-        <h2>今日猫咪档案</h2>
-      </div>
-
-      <div class="cat-world-profile-icons" role="list" aria-label="选择猫咪档案">
-        <button
-          v-for="cat in catAgentDiaries"
-          :key="`diary-icon-${cat.id}`"
-          type="button"
-          :class="['cat-world-profile-icon-button', { active: openCatDiaryId === cat.id }]"
-          :aria-expanded="openCatDiaryId === cat.id"
-          :aria-label="`查看${cat.label}的今日档案`"
-          aria-controls="cat-world-active-diary"
-          @click="toggleCatDiary(cat)"
-        >
-          <span class="cat-world-profile-icon" :style="{ '--cat-icon-color': catIconColor(cat.id) }">
-            <CatIcon :size="24" :stroke-width="2.5" aria-hidden="true" />
-          </span>
-          <strong>{{ cat.label }}</strong>
-          <small>{{ cat.dailyMoodLabel }}</small>
-        </button>
-      </div>
-
+    <div v-if="activeCatDiary" class="cat-world-modal-backdrop" @click.self="closeCatDiary">
+      <section
+        class="cat-world-profile-modal panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cat-world-profile-modal-title"
+      >
+        <header class="cat-world-profile-modal-head">
+          <div>
+            <p class="section-kicker">Agent Diary</p>
+            <h2 id="cat-world-profile-modal-title">{{ activeCatDiary.label }}的今日档案</h2>
+          </div>
+          <button
+            class="cat-world-profile-modal-close"
+            type="button"
+            title="关闭档案"
+            aria-label="关闭猫咪档案"
+            autofocus
+            @click="closeCatDiary"
+          >
+            <XIcon :size="22" :stroke-width="3" aria-hidden="true" />
+          </button>
+        </header>
       <article
-        v-if="activeCatDiary"
         id="cat-world-active-diary"
         :key="`active-diary-${activeCatDiary.id}`"
         class="cat-world-agent-card cat-world-agent-card-expanded"
@@ -1240,7 +1281,8 @@ async function selectCat(catId) {
         <small>{{ activeCatDiary.damageLabel }}</small>
         <em v-if="activeCatDiary.latestEvent">{{ activeCatDiary.latestEvent.time }} · {{ activeCatDiary.latestEvent.message }}</em>
       </article>
-    </section>
+      </section>
+    </div>
 
     <section class="cat-world-market panel">
       <div class="cat-world-market-head">
