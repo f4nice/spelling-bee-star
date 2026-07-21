@@ -1026,6 +1026,8 @@ async function selectCat(catId) {
       </button>
     </section>
 
+    <p v-if="notice" class="cat-world-notice" aria-live="polite">{{ notice }}</p>
+
     <section class="cat-world-layout">
       <section class="cat-world-room-panel panel">
         <div class="cat-world-room-head">
@@ -1319,8 +1321,6 @@ async function selectCat(catId) {
           </button>
         </div>
       </div>
-
-      <p v-if="notice" class="cat-world-notice">{{ notice }}</p>
 
       <div class="cat-world-shop-grid">
         <article v-for="item in selectedItems" :key="item.id" class="cat-world-shop-card">
