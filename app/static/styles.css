@@ -13519,6 +13519,11 @@ select {
   line-height: 1.45;
 }
 
+.admin-cat-world-operations-panel {
+  display: grid;
+  gap: 14px;
+}
+
 .admin-cat-speed-slider,
 .admin-cat-speed-number {
   display: grid;

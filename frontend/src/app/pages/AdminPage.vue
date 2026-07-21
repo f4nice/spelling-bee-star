@@ -490,6 +490,46 @@ async function resetCatWorldData() {
             </button>
           </div>
 
+          <div v-if="activePricingPlan" class="admin-pricing-groups">
+            <section class="admin-pricing-group admin-pricing-group-active">
+              <header class="admin-pricing-group-head">
+                <div>
+                  <h3>{{ activePricingPlan.label }}</h3>
+                  <p>{{ activePricingPlan.strategy }}</p>
+                </div>
+                <span>{{ activePricingItems.length }} 个商品</span>
+              </header>
+              <div class="admin-pricing-list">
+                <article v-for="item in activePricingItems" :key="item.id" class="admin-price-row">
+                  <div>
+                    <strong>{{ item.label }}</strong>
+                    <span>{{ item.englishName }} · 默认 {{ item.defaultCost }} 积分</span>
+                    <em v-if="item.targetDecorLabel">用于 {{ item.targetDecorLabel }}</em>
+                  </div>
+                  <label>
+                    <span>当前价格</span>
+                    <input v-model.number="priceDrafts[item.id]" type="number" min="0" max="99999" step="10">
+                  </label>
+                  <button class="secondary-button compact-button" type="button" @click="resetPrice(item)">默认价</button>
+                  <button class="challenge-button compact-button" type="button" :disabled="savingPriceItemId === item.id" @click="savePrice(item)">
+                    {{ savingPriceItemId === item.id ? "保存中" : "保存" }}
+                  </button>
+                </article>
+              </div>
+            </section>
+          </div>
+          <p v-else class="empty-state compact-empty-state">还没有可配置的猫咪商品分类。</p>
+        </section>
+
+        <section v-if="activeAdminSection === 'catShop'" class="panel admin-cat-world-operations-panel">
+          <div class="admin-section-head">
+            <div>
+              <p class="section-kicker">CAT WORLD SETTINGS</p>
+              <h2>猫咪世界设置</h2>
+              <p>调整活动室运行参数，或清理当前账号的测试数据。</p>
+            </div>
+          </div>
+
           <section class="admin-cat-world-settings-panel">
             <div>
               <strong>猫咪移动速度</strong>
@@ -535,36 +575,6 @@ async function resetCatWorldData() {
               {{ resettingCatWorld ? "清零中..." : "一键清零" }}
             </button>
           </section>
-
-          <div v-if="activePricingPlan" class="admin-pricing-groups">
-            <section class="admin-pricing-group admin-pricing-group-active">
-              <header class="admin-pricing-group-head">
-                <div>
-                  <h3>{{ activePricingPlan.label }}</h3>
-                  <p>{{ activePricingPlan.strategy }}</p>
-                </div>
-                <span>{{ activePricingItems.length }} 个商品</span>
-              </header>
-              <div class="admin-pricing-list">
-                <article v-for="item in activePricingItems" :key="item.id" class="admin-price-row">
-                  <div>
-                    <strong>{{ item.label }}</strong>
-                    <span>{{ item.englishName }} · 默认 {{ item.defaultCost }} 积分</span>
-                    <em v-if="item.targetDecorLabel">用于 {{ item.targetDecorLabel }}</em>
-                  </div>
-                  <label>
-                    <span>当前价格</span>
-                    <input v-model.number="priceDrafts[item.id]" type="number" min="0" max="99999" step="10">
-                  </label>
-                  <button class="secondary-button compact-button" type="button" @click="resetPrice(item)">默认价</button>
-                  <button class="challenge-button compact-button" type="button" :disabled="savingPriceItemId === item.id" @click="savePrice(item)">
-                    {{ savingPriceItemId === item.id ? "保存中" : "保存" }}
-                  </button>
-                </article>
-              </div>
-            </section>
-          </div>
-          <p v-else class="empty-state compact-empty-state">还没有可配置的猫咪商品分类。</p>
         </section>
       </main>
     </div>

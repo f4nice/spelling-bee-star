@@ -15,6 +15,7 @@ const activeCategory = ref("food");
 const busyItemId = ref("");
 const notice = ref("");
 const catReaction = ref("");
+const catReactionAnchored = ref(false);
 const catPetSequence = ref(0);
 const focusedCatId = ref("");
 const gameMountRef = ref(null);
@@ -65,8 +66,8 @@ onMounted(async () => {
   const { CatWorldGame } = await import("../catWorldGame.js");
   if (!gameMountActive || !gameMountRef.value) return;
   catWorldGame.value = new CatWorldGame(gameMountRef.value, {
-    onCatPet: (cat) => {
-      if (!roomEditMode.value) petCat(cat);
+    onCatPet: (cat, message) => {
+      if (!roomEditMode.value) petCat(cat, { message, anchor: false });
     },
     onDecorClick: handleDecorClick,
     onDecorSelect: (decorId) => {
@@ -75,7 +76,7 @@ onMounted(async () => {
     onLayoutChange: handleGameLayoutChange,
     onToyClick: handleRoomToyClick,
     onCatThought: (cat, message) => {
-      if (!roomEditMode.value) showCatReaction(cat, message);
+      if (!roomEditMode.value) showCatReaction(cat, message, { anchor: false });
     },
     onCatAmbient: recordCatAmbientEvent,
     onFoodVisit: recordCatFoodNibble,
@@ -695,6 +696,7 @@ function startRoomEditMode() {
   if (savingRoomLayout.value) return;
   roomEditMode.value = true;
   catReaction.value = "";
+  catReactionAnchored.value = false;
   window.clearTimeout(catReactionTimer);
   notice.value = "已进入编辑模式，猫咪先躲到旁边；现在可以拖动家具和玩具，保存后猫咪会回来。";
 }
@@ -776,23 +778,28 @@ function purchaseButtonText(item) {
   return canAfford(item) ? `扣 ${item.cost} 积分购买` : "能量不足";
 }
 
-function showCatReaction(cat = selectedCat.value, message = "") {
+function showCatReaction(cat = selectedCat.value, message = "", options = {}) {
   if (roomEditMode.value) return;
   const catLabel = cat?.label || "猫咪";
   const nextIndex = catPetSequence.value % catReactionTexts.length;
+  const reactionMessage = message || catReactionTexts[nextIndex];
   focusedCatId.value = cat?.id || "";
-  catReaction.value = `${catLabel}: ${message || catReactionTexts[nextIndex]}`;
+  catReaction.value = `${catLabel}: ${reactionMessage}`;
+  catReactionAnchored.value = options.anchor === false
+    ? true
+    : Boolean(catWorldGame.value?.showCatReaction(cat?.id, reactionMessage));
   catPetSequence.value += 1;
   window.clearTimeout(catReactionTimer);
   catReactionTimer = window.setTimeout(() => {
     catReaction.value = "";
+    catReactionAnchored.value = false;
   }, 2200);
 }
 
 async function petCat(cat = selectedCat.value, options = {}) {
   if (roomEditMode.value) return;
   if (!cat?.id) return;
-  showCatReaction(cat, options.message || "");
+  showCatReaction(cat, options.message || "", { anchor: options.anchor });
   if (options.sync === false || petBusyCatId.value === cat.id) return;
   petBusyCatId.value = cat.id;
   try {
@@ -1037,7 +1044,7 @@ async function selectCat(catId) {
             </button>
           </div>
           <div
-            v-if="catReaction && !roomEditMode"
+            v-if="catReaction && !roomEditMode && !catReactionAnchored"
             :key="`cat-reaction-${catPetSequence}`"
             class="cat-world-reaction"
             aria-live="polite"
@@ -1045,7 +1052,7 @@ async function selectCat(catId) {
             {{ catReaction }}
           </div>
           <div
-            v-if="catPetSequence && !roomEditMode"
+            v-if="catPetSequence && !roomEditMode && !catReactionAnchored"
             :key="`cat-sparkles-${catPetSequence}`"
             class="cat-world-sparkles"
             aria-hidden="true"

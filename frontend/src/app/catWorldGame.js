@@ -210,6 +210,7 @@ class CatWorldScene extends Phaser.Scene {
     this.owner = owner;
     this.decorContainers = new Map();
     this.catContainers = new Map();
+    this.catBubbles = new Map();
   }
 
   create() {
@@ -286,6 +287,7 @@ class CatWorldScene extends Phaser.Scene {
     this.time.removeAllEvents();
     this.children.removeAll(true);
     this.decorContainers.clear();
+    this.catBubbles.clear();
     const snapshot = this.owner.snapshot;
     this.owner.layout = cloneLayout(snapshot.layout);
     this.drawRoom();
@@ -631,8 +633,8 @@ class CatWorldScene extends Phaser.Scene {
         }
         this.children.bringToTop(container);
         this.stopPointerEvent(event);
-        this.spawnCatBubble(container, cat);
-        this.owner.handlers.onCatPet?.(cat);
+        const message = this.spawnCatBubble(container, cat);
+        this.owner.handlers.onCatPet?.(cat, message);
       });
       this.drawCatShape(container, cat, snapshot.selectedCatId === cat.id, snapshot, behavior);
       this.catContainers.set(cat.id, container);
@@ -1749,30 +1751,63 @@ class CatWorldScene extends Phaser.Scene {
     }
   }
 
-  spawnCatBubble(container, cat) {
+  spawnCatBubble(container, cat, requestedMessage = "") {
+    if (!container?.active || !cat?.id) return "";
     const behavior = container.getData("behavior") || this.catBehavior(cat);
     const lines = this.catThoughtLines(cat, behavior);
-    const message = lines[Math.floor(Math.random() * lines.length)];
-    const bubble = this.add
-      .text(container.x + 34, container.y - 24, message, {
+    const message = requestedMessage || lines[Math.floor(Math.random() * lines.length)];
+    const previousBubble = this.catBubbles.get(cat.id);
+    if (previousBubble?.active) previousBubble.destroy();
+
+    const bubbleWorldX = clamp(container.x + 42, 150, GAME_WIDTH - 150);
+    const bubble = this.add.container(bubbleWorldX - container.x, -78);
+    const messageText = this.add
+      .text(0, 0, message, {
         color: "#263047",
         backgroundColor: "#fff8df",
         fontFamily: "Consolas, monospace",
         fontSize: "12px",
         fontStyle: "bold",
         padding: { x: 8, y: 5 },
+        wordWrap: { width: 260 },
+        align: "center",
       })
-      .setOrigin(0.5)
-      .setDepth(CAT_INTERACTION_DEPTH + 120);
+      .setOrigin(0.5, 1);
+    const tail = this.add
+      .text(0, 2, "▼", {
+        color: "#fff8df",
+        fontFamily: "Consolas, monospace",
+        fontSize: "12px",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5, 0);
+    bubble.add([messageText, tail]);
+    this.pinCatTextOverlay(bubble);
+    container.add(bubble);
+    this.syncCatTextOverlays(container);
+    this.catBubbles.set(cat.id, bubble);
     this.tweens.add({
       targets: bubble,
       y: bubble.y - 22,
       alpha: 0,
-      duration: 1500,
+      duration: 2200,
       ease: "Cubic.easeOut",
-      onComplete: () => bubble.destroy(),
+      onComplete: () => {
+        if (this.catBubbles.get(cat.id) === bubble) this.catBubbles.delete(cat.id);
+        bubble.destroy();
+      },
     });
-    this.owner.handlers.onCatThought?.(cat, message);
+    return message;
+  }
+
+  showCatReaction(catId, message) {
+    if (this.isEditMode()) return false;
+    const container = this.catContainers.get(catId);
+    const cat = this.owner.snapshot?.cats?.find((item) => item.id === catId);
+    if (!container?.active || !cat) return false;
+    this.children.bringToTop(container);
+    this.spawnCatBubble(container, cat, message);
+    return true;
   }
 
   catThoughtLines(cat = {}, behavior = {}) {
@@ -1890,6 +1925,10 @@ export class CatWorldGame {
 
   getLayout() {
     return cloneLayout(this.layout);
+  }
+
+  showCatReaction(catId, message) {
+    return Boolean(this.game.scene.getScene("CatWorldScene")?.showCatReaction(catId, message));
   }
 
   destroy() {
