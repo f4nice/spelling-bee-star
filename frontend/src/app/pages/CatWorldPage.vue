@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { Cat as CatIcon } from "lucide-vue-next";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
 
@@ -18,6 +19,7 @@ const catReaction = ref("");
 const catReactionAnchored = ref(false);
 const catPetSequence = ref(0);
 const focusedCatId = ref("");
+const openCatDiaryId = ref("");
 const gameMountRef = ref(null);
 const catWorldGame = ref(null);
 const layoutDraft = ref({});
@@ -112,6 +114,14 @@ const decorToneColors = {
   peach: "#ffd7c2",
 };
 
+const catIconColors = {
+  mimi: "#ffc46b",
+  "british-shorthair": "#b9c2c8",
+  ragdoll: "#f4e5cf",
+  "maine-coon": "#ae7c4f",
+  siamese: "#f1ddbd",
+};
+
 const energy = computed(() => payload.value.energy || {});
 const state = computed(() => payload.value.state || {});
 const inventory = computed(() => state.value.inventory || {});
@@ -199,7 +209,6 @@ const activeToolItems = computed(() => {
         ...cat,
         category: "cat",
         count: 1,
-        actionLabel: state.value.selectedCat === cat.id ? "正在陪读" : "切换主猫",
       }));
   }
   return shop.value
@@ -210,7 +219,6 @@ const activeToolItems = computed(() => {
       damageInfo: damagedItems.value[item.id] || null,
       styleOptions: item.category === "decor" ? decorStyleOptions(item.id) : [],
       favoriteLabel: itemFavoriteLabel(item),
-      actionLabel: ownedToolActionText(item),
     }));
 });
 const focusedCatThought = computed(() => {
@@ -378,6 +386,9 @@ const catAgentDiaries = computed(() =>
       };
     }),
 );
+const activeCatDiary = computed(() =>
+  catAgentDiaries.value.find((cat) => cat.id === openCatDiaryId.value) || null,
+);
 const gameSnapshot = computed(() => ({
   cats: cats.value,
   inventory: inventory.value,
@@ -430,6 +441,16 @@ function handleGameLayoutChange(nextLayout, itemId) {
 
 function itemCount(itemId) {
   return Number(inventory.value[itemId] || 0);
+}
+
+function catIconColor(catId) {
+  return catIconColors[catId] || "#ffbfd7";
+}
+
+function toggleCatDiary(cat) {
+  if (!cat?.id) return;
+  openCatDiaryId.value = openCatDiaryId.value === cat.id ? "" : cat.id;
+  focusedCatId.value = cat.id;
 }
 
 function clampNumber(value, min, max) {
@@ -554,19 +575,6 @@ function recordCatFoodNibble(cat, event = {}) {
 function ownedToolCount(categoryKey) {
   if (categoryKey === "cat") return ownedCats.value.length;
   return shop.value.filter((item) => item.category === categoryKey && itemCount(item.id) > 0).length;
-}
-
-function ownedToolActionText(item) {
-  const damaged = damageInfo(item);
-  if (damaged) return `维修 ${damaged.repairCost || 0} 能量`;
-  if (item.category === "decor") {
-    if (!roomEditMode.value) return "点击编辑后拖动";
-    return selectedDecorId.value === item.id ? "已选中" : "选择拖动";
-  }
-  if (item.category === "food") return `摆进房间 +${foodEnergyGainValue(item)}体力`;
-  if (item.category === "toy") return roomEditMode.value ? "房间可拖动" : "编辑后拖动";
-  if (item.category === "cat") return state.value.selectedCat === item.id ? "正在陪读" : "切换主猫";
-  return "使用";
 }
 
 function ownedToolSubtext(item) {
@@ -1130,7 +1138,6 @@ async function selectCat(catId) {
               <span>{{ item.englishName || item.rarity || item.category }}</span>
               <strong>{{ item.label }}</strong>
               <small>{{ ownedToolSubtext(item) }}</small>
-              <em>{{ busyItemId === item.id ? "处理中..." : item.actionLabel }}</em>
             </button>
             <div v-if="item.category === 'decor' && item.styleOptions?.length" class="cat-world-color-swatches" aria-label="已拥有配色">
               <button
@@ -1150,6 +1157,89 @@ async function selectCat(catId) {
           <p v-if="!activeToolItems.length" class="cat-world-owned-empty">这个分类还没有道具，可以在下方商店购买。</p>
         </div>
       </aside>
+    </section>
+
+    <section class="cat-world-agent-diary panel">
+      <div class="cat-world-profile-head">
+        <p class="section-kicker">Agent Diary</p>
+        <h2>今日猫咪档案</h2>
+      </div>
+
+      <div class="cat-world-profile-icons" role="list" aria-label="选择猫咪档案">
+        <button
+          v-for="cat in catAgentDiaries"
+          :key="`diary-icon-${cat.id}`"
+          type="button"
+          :class="['cat-world-profile-icon-button', { active: openCatDiaryId === cat.id }]"
+          :aria-expanded="openCatDiaryId === cat.id"
+          :aria-label="`查看${cat.label}的今日档案`"
+          aria-controls="cat-world-active-diary"
+          @click="toggleCatDiary(cat)"
+        >
+          <span class="cat-world-profile-icon" :style="{ '--cat-icon-color': catIconColor(cat.id) }">
+            <CatIcon :size="24" :stroke-width="2.5" aria-hidden="true" />
+          </span>
+          <strong>{{ cat.label }}</strong>
+          <small>{{ cat.dailyMoodLabel }}</small>
+        </button>
+      </div>
+
+      <article
+        v-if="activeCatDiary"
+        id="cat-world-active-diary"
+        :key="`active-diary-${activeCatDiary.id}`"
+        class="cat-world-agent-card cat-world-agent-card-expanded"
+      >
+        <header>
+          <span>{{ activeCatDiary.label }}</span>
+          <strong>{{ activeCatDiary.dailyMoodLabel }}</strong>
+        </header>
+        <p>{{ activeCatDiary.behaviorLabel }} · {{ activeCatDiary.routineLabel }}</p>
+        <p class="cat-world-agent-goal">{{ activeCatDiary.goalLabel }} · {{ activeCatDiary.goalMessage }}</p>
+        <p :class="['cat-world-agent-need', `need-${activeCatDiary.needStatus}`]">
+          <strong>{{ activeCatDiary.needLabel }}</strong>
+          <span>{{ activeCatDiary.needActionLabel }}</span>
+          <em>{{ activeCatDiary.needMessage }}</em>
+        </p>
+        <p v-if="activeCatDiary.careTip" class="cat-world-agent-care">{{ activeCatDiary.careTip }}</p>
+        <p v-if="activeCatDiary.voiceLine" class="cat-world-agent-voice">{{ activeCatDiary.voiceLine }}</p>
+        <div class="cat-world-agent-meter-row" aria-label="猫咪 agent 参数">
+          <span class="cat-world-agent-meter energy">体力<i><b :style="{ width: `${activeCatDiary.energyScore}%` }"></b></i></span>
+          <span class="cat-world-agent-meter mood">心情<i><b :style="{ width: `${activeCatDiary.moodScore}%` }"></b></i></span>
+          <span class="cat-world-agent-meter trust">信任<i><b :style="{ width: `${activeCatDiary.bondScore}%` }"></b></i></span>
+          <span class="cat-world-agent-meter focus">专注<i><b :style="{ width: `${activeCatDiary.attention}%` }"></b></i></span>
+          <span class="cat-world-agent-meter curious">好奇<i><b :style="{ width: `${activeCatDiary.curiosity}%` }"></b></i></span>
+          <span class="cat-world-agent-meter stamina">耐力<i><b :style="{ width: `${activeCatDiary.stamina}%` }"></b></i></span>
+          <span class="cat-world-agent-meter activity">活跃<i><b :style="{ width: `${activeCatDiary.activityBias}%` }"></b></i></span>
+          <span class="cat-world-agent-meter social">黏人<i><b :style="{ width: `${activeCatDiary.socialNeed}%` }"></b></i></span>
+          <span class="cat-world-agent-meter mischief">捣蛋<i><b :style="{ width: `${activeCatDiary.mischief}%` }"></b></i></span>
+        </div>
+        <dl class="cat-world-agent-facts">
+          <div><dt>作息</dt><dd>{{ activeCatDiary.sleepLabel }}</dd></div>
+          <div><dt>消耗</dt><dd>{{ activeCatDiary.decayLabel }}</dd></div>
+          <div><dt>亲密</dt><dd>{{ activeCatDiary.bondLabel }} · {{ activeCatDiary.bondDetailLabel }}</dd></div>
+          <div><dt>今日参数</dt><dd>{{ activeCatDiary.personaLabel }} · {{ activeCatDiary.dailyProfileLabel || "状态稳定" }}</dd></div>
+          <div><dt>今日愿望</dt><dd>{{ activeCatDiary.dailyWish || "想安静陪你学习" }}</dd></div>
+          <div><dt>相处方式</dt><dd>{{ activeCatDiary.socialStyleLabel }}</dd></div>
+          <div><dt>玩耍倾向</dt><dd>{{ activeCatDiary.playStyleLabel }}</dd></div>
+          <div><dt>照顾偏好</dt><dd>{{ activeCatDiary.carePreferenceLabel || "保持房间稳定整洁" }}</dd></div>
+          <div><dt>当前需求</dt><dd>{{ activeCatDiary.needLabel }} · {{ activeCatDiary.needActionLabel }}</dd></div>
+          <div><dt>减耗</dt><dd>{{ activeCatDiary.comfortLabel }}</dd></div>
+          <div><dt>偏好</dt><dd>{{ activeCatDiary.favoriteItemLabel }}</dd></div>
+          <div><dt>家具加成</dt><dd>{{ activeCatDiary.activeFavoriteLabel }}</dd></div>
+          <div><dt>互动</dt><dd>{{ activeCatDiary.countsLabel }}</dd></div>
+          <div><dt>破坏风险</dt><dd>{{ activeCatDiary.damageRiskLabel }}</dd></div>
+        </dl>
+        <div v-if="activeCatDiary.hourlyHistory.length" class="cat-world-agent-hourly">
+          <b>小时记录</b>
+          <span v-for="row in activeCatDiary.hourlyHistory" :key="`${activeCatDiary.id}-${row.time}-${row.label}`">
+            {{ row.time }} · {{ row.label }} · 体力 {{ signedHourlyValue(row.energyDelta) }} / 心情 {{ signedHourlyValue(row.moodDelta) }}
+            <small>现在 {{ row.energyScore }}/{{ row.moodScore }}{{ row.hours > 1 ? ` · ${row.hours} 小时汇总` : "" }}</small>
+          </span>
+        </div>
+        <small>{{ activeCatDiary.damageLabel }}</small>
+        <em v-if="activeCatDiary.latestEvent">{{ activeCatDiary.latestEvent.time }} · {{ activeCatDiary.latestEvent.message }}</em>
+      </article>
     </section>
 
     <section class="cat-world-market panel">
@@ -1203,144 +1293,6 @@ async function selectCat(catId) {
             {{ purchaseButtonText(item) }}
           </button>
         </article>
-      </div>
-    </section>
-
-    <section class="cat-world-agent-diary panel">
-      <div class="cat-world-market-head">
-        <div>
-          <p class="section-kicker">Agent Diary</p>
-          <h2>今日猫咪档案</h2>
-        </div>
-      </div>
-      <div class="cat-world-agent-diary-grid">
-        <button
-          v-for="cat in catAgentDiaries"
-          :key="`diary-${cat.id}`"
-          type="button"
-          :class="['cat-world-agent-card', { active: state.selectedCat === cat.id }]"
-          :disabled="busyItemId === cat.id"
-          @click="selectCat(cat.id)"
-        >
-          <header>
-            <span>{{ cat.label }}</span>
-            <strong>{{ cat.dailyMoodLabel }}</strong>
-          </header>
-          <p>{{ cat.behaviorLabel }} · {{ cat.routineLabel }}</p>
-          <p class="cat-world-agent-goal">{{ cat.goalLabel }} · {{ cat.goalMessage }}</p>
-          <p :class="['cat-world-agent-need', `need-${cat.needStatus}`]">
-            <strong>{{ cat.needLabel }}</strong>
-            <span>{{ cat.needActionLabel }}</span>
-            <em>{{ cat.needMessage }}</em>
-          </p>
-          <p v-if="cat.careTip" class="cat-world-agent-care">{{ cat.careTip }}</p>
-          <p v-if="cat.voiceLine" class="cat-world-agent-voice">{{ cat.voiceLine }}</p>
-          <div class="cat-world-agent-meter-row" aria-label="猫咪 agent 参数">
-            <span class="cat-world-agent-meter energy">
-              体力
-              <i><b :style="{ width: `${cat.energyScore}%` }"></b></i>
-            </span>
-            <span class="cat-world-agent-meter mood">
-              心情
-              <i><b :style="{ width: `${cat.moodScore}%` }"></b></i>
-            </span>
-            <span class="cat-world-agent-meter trust">
-              信任
-              <i><b :style="{ width: `${cat.bondScore}%` }"></b></i>
-            </span>
-            <span class="cat-world-agent-meter focus">
-              专注
-              <i><b :style="{ width: `${cat.attention}%` }"></b></i>
-            </span>
-            <span class="cat-world-agent-meter curious">
-              好奇
-              <i><b :style="{ width: `${cat.curiosity}%` }"></b></i>
-            </span>
-            <span class="cat-world-agent-meter stamina">
-              耐力
-              <i><b :style="{ width: `${cat.stamina}%` }"></b></i>
-            </span>
-            <span class="cat-world-agent-meter activity">
-              活跃
-              <i><b :style="{ width: `${cat.activityBias}%` }"></b></i>
-            </span>
-            <span class="cat-world-agent-meter social">
-              黏人
-              <i><b :style="{ width: `${cat.socialNeed}%` }"></b></i>
-            </span>
-            <span class="cat-world-agent-meter mischief">
-              捣蛋
-              <i><b :style="{ width: `${cat.mischief}%` }"></b></i>
-            </span>
-          </div>
-          <dl class="cat-world-agent-facts">
-            <div>
-              <dt>作息</dt>
-              <dd>{{ cat.sleepLabel }}</dd>
-            </div>
-            <div>
-              <dt>消耗</dt>
-              <dd>{{ cat.decayLabel }}</dd>
-            </div>
-            <div>
-              <dt>亲密</dt>
-              <dd>{{ cat.bondLabel }} · {{ cat.bondDetailLabel }}</dd>
-            </div>
-            <div>
-              <dt>今日参数</dt>
-              <dd>{{ cat.personaLabel }} · {{ cat.dailyProfileLabel || "状态稳定" }}</dd>
-            </div>
-            <div>
-              <dt>今日愿望</dt>
-              <dd>{{ cat.dailyWish || "想安静陪你学习" }}</dd>
-            </div>
-            <div>
-              <dt>相处方式</dt>
-              <dd>{{ cat.socialStyleLabel }}</dd>
-            </div>
-            <div>
-              <dt>玩耍倾向</dt>
-              <dd>{{ cat.playStyleLabel }}</dd>
-            </div>
-            <div>
-              <dt>照顾偏好</dt>
-              <dd>{{ cat.carePreferenceLabel || "保持房间稳定整洁" }}</dd>
-            </div>
-            <div>
-              <dt>当前需求</dt>
-              <dd>{{ cat.needLabel }} · {{ cat.needActionLabel }}</dd>
-            </div>
-            <div>
-              <dt>减耗</dt>
-              <dd>{{ cat.comfortLabel }}</dd>
-            </div>
-            <div>
-              <dt>偏好</dt>
-              <dd>{{ cat.favoriteItemLabel }}</dd>
-            </div>
-            <div>
-              <dt>家具加成</dt>
-              <dd>{{ cat.activeFavoriteLabel }}</dd>
-            </div>
-            <div>
-              <dt>互动</dt>
-              <dd>{{ cat.countsLabel }}</dd>
-            </div>
-            <div>
-              <dt>破坏风险</dt>
-              <dd>{{ cat.damageRiskLabel }}</dd>
-            </div>
-          </dl>
-          <div v-if="cat.hourlyHistory.length" class="cat-world-agent-hourly">
-            <b>小时记录</b>
-            <span v-for="row in cat.hourlyHistory" :key="`${cat.id}-${row.time}-${row.label}`">
-              {{ row.time }} · {{ row.label }} · 体力 {{ signedHourlyValue(row.energyDelta) }} / 心情 {{ signedHourlyValue(row.moodDelta) }}
-              <small>现在 {{ row.energyScore }}/{{ row.moodScore }}{{ row.hours > 1 ? ` · ${row.hours} 小时汇总` : "" }}</small>
-            </span>
-          </div>
-          <small>{{ cat.damageLabel }}</small>
-          <em v-if="cat.latestEvent">{{ cat.latestEvent.time }} · {{ cat.latestEvent.message }}</em>
-        </button>
       </div>
     </section>
 
