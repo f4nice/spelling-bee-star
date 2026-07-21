@@ -1534,6 +1534,7 @@ class CatWorldScene extends Phaser.Scene {
   catThoughtLines(cat = {}, behavior = {}) {
     const agent = catAgentForSnapshot(this.owner.snapshot, cat);
     const goal = agent.dailyGoal || {};
+    const careNeed = agent.careNeed || {};
     const activeFood = this.owner.snapshot.activeFood || {};
     const temperament = String(agent.temperament || cat.traits?.temperament || "balanced");
     const lines = [
@@ -1544,6 +1545,9 @@ class CatWorldScene extends Phaser.Scene {
         "我在检查书桌路线。",
       ]),
     ];
+    if (careNeed.message) {
+      lines.unshift(careNeed.actionLabel ? `${careNeed.label || "当前需求"}: ${careNeed.actionLabel}。${careNeed.message}` : careNeed.message);
+    }
     if (agent.careTip) lines.unshift(agent.careTip);
     if (agent.dailyMoodLabel) lines.unshift(`${agent.dailyMoodLabel}，${behavior.routine || "想按自己的节奏活动"}。`);
     if (goal.message) lines.unshift(goal.message);

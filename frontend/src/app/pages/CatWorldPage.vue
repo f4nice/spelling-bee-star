@@ -282,6 +282,7 @@ const catAgentCards = computed(() =>
     const agent = log.agentState || {};
     const behavior = agent.currentBehavior || {};
     const bond = catBonds.value[cat.id] || {};
+    const careNeed = agent.careNeed || {};
     const agentEvents = Array.isArray(agent.events) ? agent.events.filter((event) => event?.message) : [];
     const latestEvent = agentEvents.length ? agentEvents[agentEvents.length - 1] : null;
     return {
@@ -295,6 +296,11 @@ const catAgentCards = computed(() =>
       bondScore: clampCatScore(bond.score ?? 18),
       bondLabel: bond.levelLabel || "刚开始熟悉",
       bondDetailLabel: bond.detailLabel || "还没有照顾记录",
+      needLabel: careNeed.label || "",
+      needActionLabel: careNeed.actionLabel || "",
+      needMessage: careNeed.message || "",
+      needStatus: careNeed.status || "calm",
+      needPriority: clampCatScore(careNeed.priority ?? 0),
       dailyMoodLabel: agent.dailyMoodLabel || (owned ? "今天状态稳定" : "等待解锁"),
       latestEvent,
     };
@@ -338,6 +344,11 @@ const catAgentDiaries = computed(() =>
         goalLabel: dailyGoal.label || "自由散步",
         goalMessage: dailyGoal.message || "",
         careTip: agent.careTip || "",
+        needLabel: cat.needLabel || "状态稳定",
+        needActionLabel: cat.needActionLabel || "自由活动",
+        needMessage: cat.needMessage || "",
+        needStatus: cat.needStatus || "calm",
+        needPriority: cat.needPriority || 0,
         damageRiskLabel: dailyGoal.damageRiskReason
           ? `${dailyGoal.damageRiskLabel || "很低"} · ${dailyGoal.damageRiskReason}`
           : dailyGoal.damageRiskLabel || "很低",
@@ -1131,6 +1142,11 @@ async function selectCat(catId) {
           </header>
           <p>{{ cat.behaviorLabel }} · {{ cat.routineLabel }}</p>
           <p class="cat-world-agent-goal">{{ cat.goalLabel }} · {{ cat.goalMessage }}</p>
+          <p :class="['cat-world-agent-need', `need-${cat.needStatus}`]">
+            <strong>{{ cat.needLabel }}</strong>
+            <span>{{ cat.needActionLabel }}</span>
+            <em>{{ cat.needMessage }}</em>
+          </p>
           <p v-if="cat.careTip" class="cat-world-agent-care">{{ cat.careTip }}</p>
           <p v-if="cat.voiceLine" class="cat-world-agent-voice">{{ cat.voiceLine }}</p>
           <div class="cat-world-agent-meter-row" aria-label="猫咪 agent 参数">
@@ -1205,6 +1221,10 @@ async function selectCat(catId) {
               <dd>{{ cat.carePreferenceLabel || "保持房间稳定整洁" }}</dd>
             </div>
             <div>
+              <dt>当前需求</dt>
+              <dd>{{ cat.needLabel }} · {{ cat.needActionLabel }}</dd>
+            </div>
+            <div>
               <dt>减耗</dt>
               <dd>{{ cat.comfortLabel }}</dd>
             </div>
@@ -1261,6 +1281,10 @@ async function selectCat(catId) {
             <p>
               <b>{{ cat.dailyMoodLabel }}</b>
               <em>{{ cat.behaviorLabel }}</em>
+            </p>
+            <p class="cat-world-cat-agent-need">
+              <b>{{ cat.needLabel || "状态稳定" }}</b>
+              <em>{{ cat.needActionLabel || "自由活动" }}</em>
             </p>
             <div class="cat-world-cat-agent-bars" aria-label="猫咪状态">
               <i class="energy" :style="{ width: `${cat.energyScore}%` }"></i>

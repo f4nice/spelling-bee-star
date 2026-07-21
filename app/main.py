@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-040"
-DEFAULT_PAGE_VERSION = "v20260721.40"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-041"
+DEFAULT_PAGE_VERSION = "v20260721.41"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -11456,6 +11456,187 @@ def cat_world_agent_care_tip(
     return f"{cat_label}状态稳定，可以按今天目标布置活动室。"
 
 
+def cat_world_agent_care_need(
+    cat: dict[str, Any],
+    traits: dict[str, Any],
+    agent_state: dict[str, Any],
+    behavior: dict[str, Any],
+    daily_goal: dict[str, Any],
+    mood_score: int,
+    energy_score: int,
+    favorite_active_ids: list[str],
+    inventory: dict[str, int],
+    room_layout: dict[str, dict[str, float]],
+    damaged_item_id: str = "",
+) -> dict[str, Any]:
+    cat_id = str(cat.get("id") or CAT_WORLD_DEFAULT_CAT_ID)
+    cat_label = str(cat.get("label") or "猫咪")
+    rest_threshold = int(traits.get("restThreshold") or 34)
+    social_need = min(max(int(agent_state.get("socialNeed") or 50), 0), 100)
+
+    def status_for(priority: int) -> str:
+        if priority >= 86:
+            return "urgent"
+        if priority >= 70:
+            return "high"
+        if priority >= 48:
+            return "normal"
+        return "calm"
+
+    def need(
+        key: str,
+        label: str,
+        action_label: str,
+        message: str,
+        priority: int,
+        target_type: str = "",
+        target_item_id: str = "",
+    ) -> dict[str, Any]:
+        item = CAT_WORLD_SHOP_BY_ID.get(str(target_item_id or ""), {})
+        return {
+            "key": key,
+            "label": label,
+            "actionLabel": action_label,
+            "message": message,
+            "priority": int(min(max(priority, 0), 100)),
+            "status": status_for(priority),
+            "targetType": target_type or str(item.get("category") or ""),
+            "targetItemId": str(target_item_id or ""),
+            "targetLabel": str(item.get("label") or ""),
+        }
+
+    if behavior.get("sleeping"):
+        return need(
+            "sleep",
+            "睡觉中",
+            "醒后照顾",
+            f"{cat_label}现在按自己的作息睡觉，先让它休息。",
+            18,
+            "rest",
+        )
+
+    if damaged_item_id:
+        damaged_label = CAT_WORLD_SHOP_BY_ID.get(damaged_item_id, {}).get("label") or damaged_item_id
+        return need(
+            "repair",
+            "需要维修",
+            "维修道具",
+            f"{cat_label}在意坏掉的{damaged_label}，修好后会更安心。",
+            92,
+            CAT_WORLD_SHOP_BY_ID.get(damaged_item_id, {}).get("category") or "decor",
+            damaged_item_id,
+        )
+
+    owned_food_ids = [
+        item_id
+        for item_id, count in inventory.items()
+        if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") == "food"
+    ]
+    favorite_food_ids = [item_id for item_id in owned_food_ids if cat_world_item_favorite_cat_id(item_id) == cat_id]
+    if energy_score < rest_threshold:
+        target_item_id = favorite_food_ids[0] if favorite_food_ids else (owned_food_ids[0] if owned_food_ids else "")
+        action_label = "摆放食物" if target_item_id else "购买猫粮"
+        return need(
+            "food",
+            "体力不足",
+            action_label,
+            f"{cat_label}体力低，优先给它食物；吃完前会少走动。",
+            90,
+            "food",
+            target_item_id,
+        )
+
+    if daily_goal.get("key") == "mischief-watch":
+        return need(
+            "comfort",
+            "需要安抚",
+            "摸摸或喂食",
+            f"{cat_label}有一点捣蛋冲动，先安抚会更稳。",
+            88,
+            daily_goal.get("targetType") or "",
+            daily_goal.get("targetItemId") or "",
+        )
+
+    owned_toys = [
+        item_id
+        for item_id, count in inventory.items()
+        if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") == "toy"
+    ]
+    favorite_toy_ids = [item_id for item_id in owned_toys if cat_world_item_favorite_cat_id(item_id) == cat_id]
+    if mood_score < 42:
+        target_item_id = favorite_toy_ids[0] if favorite_toy_ids else (owned_toys[0] if owned_toys else "")
+        action_label = "玩喜欢的玩具" if target_item_id else "摸摸安抚"
+        return need(
+            "mood",
+            "心情偏低",
+            action_label,
+            f"{cat_label}心情不太好，喜欢的玩具或摸摸会更有效。",
+            82,
+            "toy" if target_item_id else "touch",
+            target_item_id,
+        )
+
+    if social_need >= 78:
+        return need(
+            "attention",
+            "想要陪伴",
+            "摸摸",
+            f"{cat_label}今天更黏人，点它几次会更安心。",
+            76,
+            "touch",
+        )
+
+    favorite_decor_ids = cat_world_cat_favorite_decor_ids(cat_id)
+    owned_favorite_decor = [
+        decor_id
+        for decor_id in favorite_decor_ids
+        if inventory.get(decor_id, 0) > 0 and decor_id not in favorite_active_ids
+    ]
+    if owned_favorite_decor:
+        target_item_id = owned_favorite_decor[0]
+        return need(
+            "place-favorite",
+            "想要布置",
+            "摆出喜欢家具",
+            f"{cat_label}喜欢{CAT_WORLD_SHOP_BY_ID[target_item_id]['label']}，摆出来会更开心。",
+            66,
+            "decor",
+            target_item_id,
+        )
+
+    if favorite_active_ids:
+        target_item_id = favorite_active_ids[0]
+        return need(
+            "settled",
+            "状态满足",
+            "保持布局",
+            f"{cat_label}喜欢的{CAT_WORLD_SHOP_BY_ID.get(target_item_id, {}).get('label') or '家具'}已经在房间里。",
+            42,
+            "decor",
+            target_item_id,
+        )
+
+    if daily_goal.get("targetItemId"):
+        return need(
+            "daily-goal",
+            "有今日目标",
+            daily_goal.get("label") or "陪它过去",
+            daily_goal.get("message") or f"{cat_label}有自己的今日目标。",
+            int(daily_goal.get("priority") or 56),
+            daily_goal.get("targetType") or "",
+            daily_goal.get("targetItemId") or "",
+        )
+
+    return need(
+        "stable",
+        "状态稳定",
+        "自由活动",
+        f"{cat_label}现在状态稳定，可以让它自由活动。",
+        34,
+        "walk",
+    )
+
+
 def cat_world_agent_payload(
     log: CatWorldDailyLog,
     cat: dict[str, Any],
@@ -11503,12 +11684,26 @@ def cat_world_agent_payload(
         energy_score,
         favorite_active_ids,
     )
+    care_need = cat_world_agent_care_need(
+        cat,
+        traits,
+        agent_state,
+        behavior,
+        daily_goal,
+        mood_score,
+        energy_score,
+        favorite_active_ids,
+        inventory,
+        room_layout,
+        log.damaged_item_id or agent_state.get("mischiefItemId") or "",
+    )
     public_agent_state = {key: value for key, value in agent_state.items() if key != "seedKey"}
     return {
         **public_agent_state,
         "currentBehavior": behavior,
         "dailyGoal": daily_goal,
         "careTip": care_tip,
+        "careNeed": care_need,
         "adjustedMoodScore": mood_score,
         "adjustedEnergyScore": energy_score,
         "hourlyLabel": hourly_change.get("label") or "",

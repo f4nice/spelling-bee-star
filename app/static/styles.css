@@ -12236,6 +12236,11 @@ select {
   margin: 0;
 }
 
+.cat-world-cat-agent-status .cat-world-cat-agent-need {
+  padding-top: 4px;
+  border-top: 2px solid rgba(44, 47, 58, 0.18);
+}
+
 .cat-world-cat-agent-status b,
 .cat-world-cat-agent-status em {
   color: #263047;
@@ -12345,6 +12350,47 @@ select {
   padding: 7px;
   border: 2px solid rgba(44, 47, 58, 0.38);
   background: rgba(135, 217, 255, 0.2);
+}
+
+.cat-world-agent-card .cat-world-agent-need {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 8px;
+  align-items: center;
+  padding: 7px;
+  border: 2px solid rgba(44, 47, 58, 0.42);
+  background: rgba(169, 232, 200, 0.28);
+}
+
+.cat-world-agent-card .cat-world-agent-need strong {
+  color: #263047;
+  font-size: 12px;
+}
+
+.cat-world-agent-card .cat-world-agent-need span {
+  justify-self: start;
+  border: 2px solid rgba(44, 47, 58, 0.3);
+  padding: 2px 6px;
+  background: #fff8df;
+  color: #007f67;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.cat-world-agent-card .cat-world-agent-need em {
+  grid-column: 1 / -1;
+}
+
+.cat-world-agent-card .cat-world-agent-need.need-urgent {
+  background: rgba(255, 107, 125, 0.22);
+}
+
+.cat-world-agent-card .cat-world-agent-need.need-high {
+  background: rgba(255, 190, 102, 0.25);
+}
+
+.cat-world-agent-card .cat-world-agent-need.need-calm {
+  background: rgba(217, 246, 255, 0.34);
 }
 
 .cat-world-agent-card .cat-world-agent-voice {
@@ -12476,12 +12522,21 @@ select {
 
 .cat-world-agent-card.active .cat-world-agent-goal,
 .cat-world-agent-card:not(:disabled):hover .cat-world-agent-goal,
+.cat-world-agent-card.active .cat-world-agent-need,
+.cat-world-agent-card:not(:disabled):hover .cat-world-agent-need,
 .cat-world-agent-card.active .cat-world-agent-care,
 .cat-world-agent-card:not(:disabled):hover .cat-world-agent-care,
 .cat-world-agent-card.active .cat-world-agent-voice,
 .cat-world-agent-card:not(:disabled):hover .cat-world-agent-voice {
   border-color: rgba(255, 255, 255, 0.38);
   background: rgba(255, 255, 255, 0.14);
+}
+
+.cat-world-agent-card.active .cat-world-agent-need span,
+.cat-world-agent-card:not(:disabled):hover .cat-world-agent-need span {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
 }
 
 .cat-world-tabs button.active,
