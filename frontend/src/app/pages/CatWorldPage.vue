@@ -80,6 +80,9 @@ onMounted(async () => {
     },
     onLayoutChange: handleGameLayoutChange,
     onToyClick: handleRoomToyClick,
+    onItemInteractionEnd: (interaction) => {
+      if (interaction?.message) notice.value = interaction.message;
+    },
     onCatThought: (cat, message) => {
       if (!roomEditMode.value) showCatReaction(cat, message, { anchor: false });
     },
@@ -489,10 +492,15 @@ function normalizeLayoutDraft(layout) {
   return nextLayout;
 }
 
-function handleDecorClick(decorId) {
+function handleDecorClick(decorId, interaction = null) {
   const item = shopById.value[decorId];
   if (item && damageInfo(item)) {
     repairItem(item);
+    return;
+  }
+  if (!roomEditMode.value && interaction?.handled) {
+    selectedDecorId.value = decorId;
+    notice.value = interaction.message || `${item?.label || "道具"} 已互动。`;
     return;
   }
   if (!roomEditMode.value) {
@@ -504,7 +512,7 @@ function handleDecorClick(decorId) {
   cycleDecorStyle(decorId);
 }
 
-function handleRoomToyClick(itemId) {
+function handleRoomToyClick(itemId, interaction = null) {
   const item = shopById.value[itemId];
   if (item && ["food", "toy"].includes(item.category)) {
     if (damageInfo(item)) {
@@ -516,6 +524,11 @@ function handleRoomToyClick(itemId) {
       notice.value = item.category === "toy"
         ? `已选中 ${item.label}，可以拖动它，保存后猫咪会回到活动室。`
         : `${item.label} 会被猫咪慢慢吃完，暂时不能拖动。`;
+      return;
+    }
+    if (!roomEditMode.value && interaction?.handled) {
+      selectedDecorId.value = item.id;
+      notice.value = interaction.message || `${item.label} 已互动。`;
       return;
     }
     if (item.category === "food" && activeFood.value.active && activeFood.value.itemId === item.id) {

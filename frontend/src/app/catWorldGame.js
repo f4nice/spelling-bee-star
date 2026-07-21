@@ -3,6 +3,11 @@ import {
   createCatBubbleReaction,
   resolveCatBubbleTiming,
 } from "./catWorldBubbleState.js";
+import {
+  catLikesItem,
+  interactionMoveDuration,
+  itemInteractionFor,
+} from "./catWorldItemInteractions.js";
 
 const GAME_WIDTH = 1280;
 const GAME_HEIGHT = 560;
@@ -13,6 +18,7 @@ const INK = 0x2c2f3a;
 const CREAM = 0xfff8df;
 const CAT_INTERACTION_DEPTH = 980;
 const CAT_HITBOX = { x: -58, y: -74, width: 232, height: 184 };
+const FEATHER_WAND_CURSOR = 'url("/static/cursors/feather-wand-cursor.svg") 4 28, crosshair';
 const ACTIVE_FOOD_SPOT = { x: GAME_WIDTH - 260, y: 408, width: 118, height: 46 };
 const ATTENTION_SPOT = { x: GAME_WIDTH / 2 - 46, y: FLOOR_BOTTOM - 78 };
 const ROOM_TOY_TARGETS = {
@@ -256,6 +262,9 @@ class CatWorldScene extends Phaser.Scene {
       }
     });
 
+    this.input.on("pointermove", (pointer) => this.handleFeatherWandPointer(pointer));
+    this.input.on("gameout", () => this.stopFeatherWandMode({ notify: true }));
+
     this.renderSnapshot();
     this.owner.ready = true;
   }
@@ -286,6 +295,9 @@ class CatWorldScene extends Phaser.Scene {
 
   renderSnapshot() {
     this.cacheCatPositions();
+    if (this.owner.snapshot.editMode && this.owner.wandMode) {
+      this.stopFeatherWandMode({ notify: false, resume: false });
+    }
     this.clearCatInteractions();
     this.tweens.killAll();
     this.time.removeAllEvents();
@@ -302,6 +314,7 @@ class CatWorldScene extends Phaser.Scene {
     } else {
       this.drawCats(snapshot);
       this.restoreCatBubbles(snapshot);
+      this.restoreActiveItemInteractions();
     }
   }
 
@@ -350,10 +363,14 @@ class CatWorldScene extends Phaser.Scene {
       container.on("pointerup", (_pointer, _localX, _localY, event) => {
         this.stopPointerEvent(event);
         if (!container.getData("dragMoved")) {
-          this.owner.handlers.onDecorClick?.(decorId);
+          const interaction = !editMode && !damaged ? this.interactWithDecor(decorId) : null;
+          this.owner.handlers.onDecorClick?.(decorId, interaction);
         }
       });
       this.drawDecorShape(container, decorId, spec, palette(tone));
+      if (decorId === "reading-lamp" && this.owner.itemInteractionStates.get(decorId)?.active && !damaged) {
+        this.applyLampVisual(container, true);
+      }
       if (damaged) {
         container.setAlpha(0.74);
         this.drawDamagedOverlay(container, spec.width, spec.height);
@@ -428,10 +445,11 @@ class CatWorldScene extends Phaser.Scene {
     container.on("pointerup", (_pointer, _localX, _localY, event) => {
       this.stopPointerEvent(event);
       if (!container.getData("dragMoved")) {
-        this.owner.handlers.onToyClick?.(itemId);
+        const interaction = !editMode && !damaged ? this.interactWithToy(itemId) : null;
+        this.owner.handlers.onToyClick?.(itemId, interaction);
       }
     });
-    this.drawToyShape(container, itemId, spec, damaged, active);
+    this.drawToyShape(container, itemId, spec, damaged, active || (itemId === "feather-wand" && this.owner.wandMode));
   }
 
   drawEditModeHint() {
@@ -476,8 +494,9 @@ class CatWorldScene extends Phaser.Scene {
       graphics.fillStyle(0xa9e8c8, 1);
       graphics.fillTriangle(112, 2, 143, 12, 125, 38);
     }
+    const activeLabel = itemId === "feather-wand" && this.owner.wandMode ? `${spec.label} · 跟随中` : spec.label;
     const label = this.add
-      .text(spec.width / 2, -8, damaged ? `${spec.label} 损坏` : spec.label, {
+      .text(spec.width / 2, -8, damaged ? `${spec.label} 损坏` : activeLabel, {
         color: "#263047",
         backgroundColor: "#fff8df",
         fontFamily: "Consolas, monospace",
@@ -601,10 +620,35 @@ class CatWorldScene extends Phaser.Scene {
     }
   }
 
+  applyLampVisual(container, active) {
+    const previousGlow = container?.getData("lampGlow");
+    if (previousGlow?.active) {
+      this.tweens.killTweensOf(previousGlow);
+      previousGlow.destroy();
+    }
+    container?.setData("lampGlow", null);
+    if (!container?.active || !active) return;
+    const glow = this.add.graphics();
+    glow.fillStyle(0xfff07d, 0.16);
+    glow.fillCircle(31, 48, 70);
+    glow.fillStyle(0xffe36b, 0.24);
+    glow.fillCircle(31, 48, 48);
+    glow.fillStyle(0xfff8df, 0.42);
+    glow.fillCircle(31, 42, 26);
+    container.addAt(glow, 0);
+    container.setData("lampGlow", glow);
+    this.tweens.add({
+      targets: glow,
+      alpha: 0.62,
+      yoyo: true,
+      repeat: -1,
+      duration: 900,
+      ease: "Sine.easeInOut",
+    });
+  }
+
   drawCats(snapshot) {
-    const ownedCatIds = new Set(snapshot.ownedCats);
-    const cats = snapshot.cats.filter((cat) => ownedCatIds.has(cat.id));
-    const visibleCats = cats.length ? cats : snapshot.cats.slice(0, 1);
+    const visibleCats = this.visibleRoomCats();
     visibleCats.forEach((cat, index) => {
       const behavior = this.catBehavior(cat, index);
       const savedPosition = this.savedCatPosition(cat);
@@ -645,6 +689,358 @@ class CatWorldScene extends Phaser.Scene {
       this.catContainers.set(cat.id, container);
       this.scheduleCatWalk(container, index, cat);
     });
+  }
+
+  visibleRoomCats() {
+    const snapshot = this.owner.snapshot;
+    const ownedCatIds = new Set(snapshot.ownedCats);
+    const cats = snapshot.cats.filter((cat) => ownedCatIds.has(cat.id));
+    return cats.length ? cats : snapshot.cats.slice(0, 1);
+  }
+
+  roomCatEntries() {
+    return this.visibleRoomCats()
+      .map((cat, index) => ({
+        cat,
+        index,
+        container: this.catContainers.get(cat.id),
+        behavior: this.catBehavior(cat, index),
+      }))
+      .filter((entry) => entry.container?.active);
+  }
+
+  favoriteCatEntries(itemId, itemKind) {
+    return this.roomCatEntries().filter((entry) => catLikesItem(entry.cat, itemId, itemKind));
+  }
+
+  interactWithDecor(decorId) {
+    const interaction = itemInteractionFor(decorId, "decor");
+    if (!interaction) return null;
+    if (this.owner.wandMode) this.stopFeatherWandMode({ notify: false });
+    if (interaction.behavior === "toggle-attract") return this.toggleReadingLamp(decorId);
+    if (interaction.behavior === "walk-and-jump") return this.startDeskFavoriteInteraction(decorId);
+    return null;
+  }
+
+  interactWithToy(itemId) {
+    const interaction = itemInteractionFor(itemId, "toy");
+    if (interaction?.behavior === "pointer-follow") return this.toggleFeatherWandMode(itemId);
+    if (this.owner.wandMode) this.stopFeatherWandMode({ notify: false });
+    return null;
+  }
+
+  toggleReadingLamp(decorId) {
+    const current = Boolean(this.owner.itemInteractionStates.get(decorId)?.active);
+    const active = !current;
+    this.owner.itemInteractionStates.set(decorId, { active });
+    this.applyLampVisual(this.decorContainers.get(decorId), active);
+    if (!active) {
+      this.releaseCatsForItem(decorId);
+      return {
+        handled: true,
+        active: false,
+        message: "阅读台灯关掉了，猫咪恢复自己的活动。",
+      };
+    }
+
+    const favorites = this.favoriteCatEntries(decorId, "decor");
+    const movable = favorites.filter((entry) => entry.behavior.canWalk);
+    movable.forEach((entry) => this.startLampFavoriteAction(entry, decorId));
+    if (!favorites.length) {
+      return { handled: true, active: true, message: "阅读台灯亮起来了，目前房间里还没有偏爱它的猫咪。" };
+    }
+    if (!movable.length) {
+      return { handled: true, active: true, message: `${favorites.map((entry) => entry.cat.label).join("、")}喜欢这盏灯，不过现在正在休息。` };
+    }
+    return {
+      handled: true,
+      active: true,
+      message: `阅读台灯亮起来了，${movable.map((entry) => entry.cat.label).join("、")}正在慢慢走过去。`,
+    };
+  }
+
+  startLampFavoriteAction(entry, decorId, action = null) {
+    const nextAction = action || {
+      kind: "lamp",
+      itemId: decorId,
+      expiresAt: Date.now() + 16000,
+    };
+    this.owner.catItemActions.set(entry.cat.id, nextAction);
+    const target = this.nearDecorPosition(decorId, entry.index);
+    if (!target) return;
+    this.moveCatForInteraction(entry, target, decorId, () => {
+      if (this.owner.catItemActions.get(entry.cat.id) !== nextAction) return;
+      this.spawnCatBubble(entry.container, entry.cat, "灯亮了，我去旁边陪你读书。");
+      const holdMs = Math.min(Math.max(nextAction.expiresAt - Date.now(), 400), 6000);
+      this.holdCatInteraction(entry, decorId, holdMs);
+    });
+  }
+
+  startDeskFavoriteInteraction(decorId) {
+    const favorites = this.favoriteCatEntries(decorId, "decor");
+    const movable = favorites.filter((entry) => entry.behavior.canWalk);
+    movable.forEach((entry) => {
+      const action = {
+        kind: "desk",
+        itemId: decorId,
+        expiresAt: Date.now() + 19000,
+      };
+      this.owner.catItemActions.set(entry.cat.id, action);
+      this.startDeskFavoriteAction(entry, decorId, action);
+    });
+    if (!favorites.length) {
+      return { handled: true, message: "点了点英文书桌，目前房间里还没有偏爱它的猫咪。" };
+    }
+    if (!movable.length) {
+      return { handled: true, message: `${favorites.map((entry) => entry.cat.label).join("、")}喜欢这张桌子，不过现在正在休息。` };
+    }
+    return {
+      handled: true,
+      message: `${movable.map((entry) => entry.cat.label).join("、")}正在走向英文书桌，到了会跳上去坐一会儿。`,
+    };
+  }
+
+  startDeskFavoriteAction(entry, decorId, action) {
+    const approach = this.nearDecorPosition(decorId, entry.index);
+    const spec = DECOR_SPECS[decorId];
+    if (!approach || !spec) return;
+    this.moveCatForInteraction(entry, approach, decorId, () => {
+      if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
+      const desk = this.positionForDecor(decorId, spec);
+      const deskX = clamp(desk.x + spec.width / 2 - 45 + (entry.index % 2 === 0 ? -30 : 30), 38, GAME_WIDTH - 132);
+      const deskY = clamp(desk.y - 50, 74, FLOOR_BOTTOM - 70);
+      this.turnCat(entry.container, deskX);
+      this.tweens.add({
+        targets: entry.container,
+        x: deskX,
+        y: deskY - 26,
+        duration: 430,
+        ease: "Quad.easeOut",
+        onUpdate: () => entry.container.setDepth(CAT_INTERACTION_DEPTH + entry.index),
+        onComplete: () => {
+          if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
+          this.tweens.add({
+            targets: entry.container,
+            y: deskY,
+            duration: 250,
+            ease: "Bounce.easeOut",
+            onComplete: () => {
+              if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
+              this.spawnCatBubble(entry.container, entry.cat, "跳上书桌啦，我在这里陪你学习。");
+              const holdMs = Math.min(Math.max(action.expiresAt - Date.now(), 500), 6000);
+              const timer = this.time.delayedCall(holdMs, () => this.jumpCatOffDesk(entry, decorId, approach, action));
+              entry.container.setData("interactionTimer", timer);
+            },
+          });
+        },
+      });
+    });
+  }
+
+  jumpCatOffDesk(entry, decorId, target, action) {
+    if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
+    this.tweens.add({
+      targets: entry.container,
+      x: target.x,
+      y: target.y - 24,
+      duration: 480,
+      ease: "Quad.easeOut",
+      onComplete: () => {
+        if (!entry.container.active) return;
+        this.tweens.add({
+          targets: entry.container,
+          y: target.y,
+          duration: 250,
+          ease: "Bounce.easeOut",
+          onComplete: () => this.resumeCatAutonomy(entry, decorId),
+        });
+      },
+    });
+  }
+
+  toggleFeatherWandMode(itemId) {
+    if (this.owner.wandMode) {
+      this.stopFeatherWandMode({ notify: false });
+      return { handled: true, active: false, message: "逗猫棒互动结束，猫咪恢复自己的活动。" };
+    }
+    const favorites = this.favoriteCatEntries(itemId, "toy");
+    const movable = favorites.filter((entry) => entry.behavior.canWalk);
+    if (!favorites.length) {
+      return { handled: true, active: false, message: "挥了挥逗猫棒，目前房间里还没有偏爱它的猫咪。" };
+    }
+    if (!movable.length) {
+      return { handled: true, active: false, message: `${favorites.map((entry) => entry.cat.label).join("、")}喜欢逗猫棒，不过现在正在休息。` };
+    }
+    this.owner.wandMode = true;
+    this.owner.wandCatIds = new Set(movable.map((entry) => entry.cat.id));
+    movable.forEach((entry) => {
+      this.owner.catItemActions.delete(entry.cat.id);
+      this.interruptCatAutonomy(entry, itemId);
+      this.spawnCatBubble(entry.container, entry.cat, "逗猫棒动起来了，我来追！");
+    });
+    this.setFeatherWandCursor(true);
+    return {
+      handled: true,
+      active: true,
+      message: `逗猫棒模式开启，${movable.map((entry) => entry.cat.label).join("、")}会慢慢跟随鼠标；再次点击或移出活动室可结束。`,
+    };
+  }
+
+  handleFeatherWandPointer(pointer) {
+    if (!this.owner.wandMode || this.isEditMode()) return;
+    const now = Date.now();
+    if (now - Number(this.owner.lastWandMoveAt || 0) < 120) return;
+    this.owner.lastWandMoveAt = now;
+    const target = {
+      x: clamp(pointer.worldX, 92, GAME_WIDTH - 92),
+      y: clamp(pointer.worldY, FLOOR_TOP + 56, FLOOR_BOTTOM - 86),
+    };
+    this.owner.wandTarget = target;
+    const entries = new Map(this.roomCatEntries().map((entry) => [entry.cat.id, entry]));
+    [...this.owner.wandCatIds].forEach((catId, followerIndex) => {
+      const entry = entries.get(catId);
+      if (!entry?.container?.active) return;
+      const nextX = clamp(target.x - 68 - followerIndex * 34, 38, GAME_WIDTH - 132);
+      const nextY = clamp(target.y + 42 + (followerIndex % 2) * 18, FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
+      this.tweens.killTweensOf(entry.container);
+      entry.container.setScale(nextX < entry.container.x ? -1 : 1, 1);
+      this.syncCatTextOverlays(entry.container);
+      const duration = interactionMoveDuration(entry.container, { x: nextX, y: nextY }, entry.behavior.walkSpeed, {
+        minMs: 780,
+        maxMs: 1800,
+      });
+      this.tweens.add({
+        targets: entry.container,
+        x: nextX,
+        y: nextY,
+        duration,
+        ease: "Sine.easeOut",
+        onUpdate: () => entry.container.setDepth(CAT_INTERACTION_DEPTH + entry.index),
+      });
+    });
+    this.setFeatherWandCursor(true);
+  }
+
+  stopFeatherWandMode(options = {}) {
+    if (!this.owner.wandMode) return;
+    const resume = options.resume !== false;
+    const entries = new Map(this.roomCatEntries().map((entry) => [entry.cat.id, entry]));
+    const catIds = [...this.owner.wandCatIds];
+    this.owner.wandMode = false;
+    this.owner.wandCatIds.clear();
+    this.owner.wandTarget = null;
+    this.setFeatherWandCursor(false);
+    if (resume) {
+      catIds.forEach((catId) => {
+        const entry = entries.get(catId);
+        if (entry) this.resumeCatAutonomy(entry, "feather-wand");
+      });
+    }
+    if (options.notify) {
+      this.owner.handlers.onItemInteractionEnd?.({ message: "逗猫棒互动结束，猫咪恢复自己的活动。" });
+    }
+  }
+
+  setFeatherWandCursor(active) {
+    const cursor = active ? FEATHER_WAND_CURSOR : "default";
+    this.input?.setDefaultCursor?.(cursor);
+    if (this.game?.canvas) {
+      if (active) this.game.canvas.style.cursor = FEATHER_WAND_CURSOR;
+      else this.game.canvas.style.removeProperty("cursor");
+    }
+    for (const child of this.children.list) {
+      if (!child?.input) continue;
+      child.input.cursor = active ? FEATHER_WAND_CURSOR : child.getData?.("kind") === "cat" ? "pointer" : "default";
+    }
+  }
+
+  interruptCatAutonomy(entry, itemId) {
+    if (!entry?.container?.active) return;
+    entry.container.getData("walkTimer")?.remove?.(false);
+    entry.container.getData("interactionTimer")?.remove?.(false);
+    entry.container.setData("walkTimer", null);
+    entry.container.setData("interactionTimer", null);
+    this.tweens.killTweensOf(entry.container);
+    entry.container.setScale(entry.container.scaleX < 0 ? -1 : 1, 1);
+    this.syncCatTextOverlays(entry.container);
+    entry.container.setData("interactionActive", true);
+    entry.container.setData("interactionItemId", itemId);
+  }
+
+  moveCatForInteraction(entry, target, itemId, onComplete) {
+    this.interruptCatAutonomy(entry, itemId);
+    this.turnCat(entry.container, target.x);
+    const duration = interactionMoveDuration(entry.container, target, entry.behavior.walkSpeed);
+    this.tweens.add({
+      targets: entry.container,
+      x: target.x,
+      y: target.y,
+      duration,
+      ease: "Sine.easeInOut",
+      onUpdate: () => entry.container.setDepth(CAT_INTERACTION_DEPTH + entry.index),
+      onComplete: () => {
+        if (entry.container.active && entry.container.getData("interactionItemId") === itemId) onComplete?.();
+      },
+    });
+  }
+
+  holdCatInteraction(entry, itemId, holdMs) {
+    const timer = this.time.delayedCall(holdMs, () => this.resumeCatAutonomy(entry, itemId));
+    entry.container.setData("interactionTimer", timer);
+  }
+
+  resumeCatAutonomy(entry, itemId) {
+    if (!entry?.container?.active) return;
+    if (itemId && entry.container.getData("interactionItemId") !== itemId) return;
+    entry.container.getData("interactionTimer")?.remove?.(false);
+    entry.container.setData("interactionTimer", null);
+    entry.container.setData("interactionActive", false);
+    entry.container.setData("interactionItemId", "");
+    const action = this.owner.catItemActions.get(entry.cat.id);
+    if (!itemId || action?.itemId === itemId) this.owner.catItemActions.delete(entry.cat.id);
+    this.scheduleCatWalk(entry.container, entry.index, entry.cat);
+  }
+
+  releaseCatsForItem(itemId) {
+    for (const [catId, action] of this.owner.catItemActions.entries()) {
+      if (action?.itemId === itemId) this.owner.catItemActions.delete(catId);
+    }
+    this.roomCatEntries().forEach((entry) => {
+      if (entry.container.getData("interactionItemId") === itemId) this.resumeCatAutonomy(entry, itemId);
+    });
+  }
+
+  restoreActiveItemInteractions() {
+    const entries = new Map(this.roomCatEntries().map((entry) => [entry.cat.id, entry]));
+    if (this.owner.wandMode) {
+      for (const catId of [...this.owner.wandCatIds]) {
+        const entry = entries.get(catId);
+        if (!entry?.behavior.canWalk) {
+          this.owner.wandCatIds.delete(catId);
+          continue;
+        }
+        this.interruptCatAutonomy(entry, "feather-wand");
+      }
+      if (this.owner.wandCatIds.size) this.setFeatherWandCursor(true);
+      else this.stopFeatherWandMode({ notify: false });
+    } else {
+      this.setFeatherWandCursor(false);
+    }
+
+    for (const [catId, action] of [...this.owner.catItemActions.entries()]) {
+      const entry = entries.get(catId);
+      if (!entry?.behavior.canWalk || Number(action.expiresAt || 0) <= Date.now()) {
+        this.owner.catItemActions.delete(catId);
+        continue;
+      }
+      if (action.kind === "lamp" && this.owner.itemInteractionStates.get(action.itemId)?.active) {
+        this.startLampFavoriteAction(entry, action.itemId, action);
+      } else if (action.kind === "desk") {
+        this.startDeskFavoriteAction(entry, action.itemId, action);
+      } else {
+        this.owner.catItemActions.delete(catId);
+      }
+    }
   }
 
   savedCatPosition(cat = {}) {
@@ -1169,6 +1565,7 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   scheduleCatWalk(container, index, cat = {}) {
+    if (!container?.active || container.getData("interactionActive")) return;
     const behavior = this.catBehavior(cat, index);
     const movement = Number(behavior.walkSpeed || 0.62);
     container.setData("behavior", behavior);
@@ -1188,8 +1585,9 @@ class CatWorldScene extends Phaser.Scene {
       return;
     }
     const delay = Math.round((Phaser.Math.Between(5800, 12200) + index * 780) / Math.max(movement, 0.38));
-    this.time.delayedCall(delay, () => {
-      if (!container.active) return;
+    const walkTimer = this.time.delayedCall(delay, () => {
+      container.setData("walkTimer", null);
+      if (!container.active || container.getData("interactionActive")) return;
       const latestBehavior = this.catBehavior(cat, index);
       container.setData("behavior", latestBehavior);
       if (this.shouldCatIdle(latestBehavior)) {
@@ -1238,6 +1636,7 @@ class CatWorldScene extends Phaser.Scene {
         ease: "Sine.easeInOut",
         onUpdate: () => container.setDepth(CAT_INTERACTION_DEPTH + index),
         onComplete: () => {
+          if (container.getData("interactionActive")) return;
           if (shouldVisitFood) {
             this.spawnFoodPlayBubble(container, cat, foodTarget);
           } else if (shouldVisitRest) {
@@ -1262,6 +1661,7 @@ class CatWorldScene extends Phaser.Scene {
         },
       });
     });
+    container.setData("walkTimer", walkTimer);
   }
 
   shouldCatIdle(behavior = {}) {
@@ -1280,9 +1680,11 @@ class CatWorldScene extends Phaser.Scene {
       duration: 520,
       ease: "Sine.easeInOut",
     });
-    this.time.delayedCall(idleMs, () => {
-      if (container.active) this.scheduleCatWalk(container, index, cat);
+    const idleTimer = this.time.delayedCall(idleMs, () => {
+      container.setData("walkTimer", null);
+      if (container.active && !container.getData("interactionActive")) this.scheduleCatWalk(container, index, cat);
     });
+    container.setData("walkTimer", idleTimer);
   }
 
   catIdleMessage(cat = {}, behavior = {}) {
@@ -1925,6 +2327,12 @@ export class CatWorldGame {
     this.layout = {};
     this.catPositions = new Map();
     this.catReactions = new Map();
+    this.catItemActions = new Map();
+    this.itemInteractionStates = new Map();
+    this.wandMode = false;
+    this.wandCatIds = new Set();
+    this.wandTarget = null;
+    this.lastWandMoveAt = 0;
     this.ready = false;
     this.snapshot = normalizeSnapshot();
     this.game = new Phaser.Game({
@@ -1964,7 +2372,11 @@ export class CatWorldGame {
   }
 
   destroy() {
+    this.game?.scene?.getScene("CatWorldScene")?.stopFeatherWandMode({ notify: false, resume: false });
     this.catReactions.clear();
+    this.catItemActions.clear();
+    this.itemInteractionStates.clear();
+    this.wandCatIds.clear();
     this.game?.destroy(true);
   }
 }

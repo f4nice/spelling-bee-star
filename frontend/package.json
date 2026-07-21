@@ -6,7 +6,7 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite --host 127.0.0.1",
-    "test:cat-world": "node --test tests/catWorldBubbleState.test.mjs"
+    "test:cat-world": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-vue": "^5.2.1",
