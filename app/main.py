@@ -88,8 +88,8 @@ BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-037"
-DEFAULT_PAGE_VERSION = "v20260721.37"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-038"
+DEFAULT_PAGE_VERSION = "v20260721.38"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3697,28 +3697,47 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
     cat_id = str(payload.get("catId") or "").strip()
     item_id = str(payload.get("itemId") or "").strip()
     event_kind = str(payload.get("kind") or "").strip()
-    if event_kind not in {"favorite-toy", "favorite-decor"}:
+    if event_kind not in {"favorite-toy", "favorite-decor", "rest-spot"}:
         raise HTTPException(status_code=400, detail="不支持这个猫咪事件。")
     state = get_or_create_cat_world_state(db, phone)
     owned_cats = parse_cat_world_cats(state.cats)
     if cat_id not in owned_cats:
         raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
-    item = CAT_WORLD_SHOP_BY_ID.get(item_id)
-    expected_category = "toy" if event_kind == "favorite-toy" else "decor"
-    if not item or item.get("category") != expected_category:
-        raise HTTPException(status_code=400, detail="这个道具不能记录为猫咪偏好事件。")
     inventory = parse_cat_world_inventory(state.inventory)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
-    if inventory.get(item_id, 0) <= 0 or item_id in damaged_items:
-        return {"ok": True, "recorded": False}
     usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
     room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
-    if event_kind == "favorite-toy":
-        favorite_match = cat_world_item_favorite_cat_id(item_id) == cat_id
+    item = CAT_WORLD_SHOP_BY_ID.get(item_id)
+    label_hint = str(payload.get("label") or "").strip()
+    if event_kind in {"favorite-toy", "favorite-decor"}:
+        expected_category = "toy" if event_kind == "favorite-toy" else "decor"
+        if not item or item.get("category") != expected_category:
+            raise HTTPException(status_code=400, detail="这个道具不能记录为猫咪偏好事件。")
+        if inventory.get(item_id, 0) <= 0 or item_id in damaged_items:
+            return {"ok": True, "recorded": False}
+        if event_kind == "favorite-toy":
+            favorite_match = cat_world_item_favorite_cat_id(item_id) == cat_id
+        else:
+            favorite_match = item_id in cat_world_cat_favorite_decor_ids(cat_id) and item_id in room_layout
+        if not favorite_match:
+            return {"ok": True, "recorded": False}
     else:
-        favorite_match = item_id in cat_world_cat_favorite_decor_ids(cat_id) and item_id in room_layout
-    if not favorite_match:
-        return {"ok": True, "recorded": False}
+        if item_id and item_id != "room-rest":
+            if not item or item.get("category") not in {"decor", "toy", "food"}:
+                raise HTTPException(status_code=400, detail="这个位置不能记录为猫咪休息事件。")
+            if item_id in damaged_items:
+                return {"ok": True, "recorded": False}
+            if item.get("category") != "food" and inventory.get(item_id, 0) <= 0:
+                return {"ok": True, "recorded": False}
+            if item.get("category") == "decor" and item_id not in room_layout:
+                return {"ok": True, "recorded": False}
+        favorite_match = bool(
+            item_id
+            and (
+                cat_world_item_favorite_cat_id(item_id) == cat_id
+                or item_id in cat_world_cat_favorite_decor_ids(cat_id)
+            )
+        )
     cat = CAT_WORLD_CAT_BY_ID.get(cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     traits = cat_world_cat_traits(cat)
     now = datetime.utcnow()
@@ -3741,7 +3760,7 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
         ambient_effect_count = 0
     if ambient_effect_count >= 8:
         return {"ok": True, "recorded": False}
-    label = item.get("label") or item_id
+    label = (item or {}).get("label") or label_hint or "休息点"
     mood_key = str(agent_state.get("dailyMoodKey") or "")
     adjusted_mood_score = clamp_cat_world_score(int(log.mood_score or 0) + int(agent_state.get("moodOffset") or 0))
     adjusted_energy_score = clamp_cat_world_score(int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0))
@@ -3763,7 +3782,7 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
             energy_gain = 0
             event_label = "轻轻看玩具"
             message = f"{cat['label']}体力不太够，只是在最喜欢的{label}旁边看了一会儿，心情 +{mood_gain}。"
-    else:
+    elif event_kind == "favorite-decor":
         mood_gain = 2
         if adjusted_mood_score < 52:
             mood_gain += 1
@@ -3773,6 +3792,27 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
         energy_gain = 0
         event_label = "偏好停留"
         message = f"{cat['label']}自己跑到喜欢的{label}旁边待了一会儿，心情 +{mood_gain}。"
+    else:
+        rest_threshold = int(traits.get("restThreshold") or 34)
+        needs_rest = adjusted_energy_score < rest_threshold + 20 or adjusted_mood_score < 45
+        if behavior.get("sleeping") or not needs_rest:
+            return {"ok": True, "recorded": False}
+        urgency = max(rest_threshold + 20 - adjusted_energy_score, 0)
+        temperament = str(traits.get("temperament") or agent_state.get("temperament") or "balanced")
+        energy_gain = max(2, min(6, 2 + round(urgency / 8)))
+        if temperament in {"calm", "gentle"}:
+            energy_gain += 1
+        energy_gain = min(energy_gain, 7)
+        mood_gain = 1 if adjusted_mood_score < 52 or favorite_match else 0
+        if mood_key in {"quiet", "lazy"}:
+            mood_gain += 1
+        mood_gain = min(mood_gain, 4)
+        event_label = "自主休息"
+        favorite_text = "喜欢的" if favorite_match else ""
+        message = f"{cat['label']}自己跑到{favorite_text}{label}附近休息，体力 +{energy_gain}"
+        if mood_gain:
+            message += f"，心情 +{mood_gain}"
+        message += "。"
     log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_gain)
     if energy_gain:
         log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) + energy_gain)

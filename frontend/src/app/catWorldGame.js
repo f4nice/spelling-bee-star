@@ -605,6 +605,8 @@ class CatWorldScene extends Phaser.Scene {
     if (activeFood.targetCatId && activeFood.targetCatId !== cat.id) return null;
     const side = index % 2 === 0 ? -1 : 1;
     return {
+      itemId: activeFood.itemId || "room-rest",
+      label: activeFood.label || "食物",
       x: clamp(ACTIVE_FOOD_SPOT.x + 52 + side * (34 + (index % 3) * 12), 38, GAME_WIDTH - 132),
       y: clamp(ACTIVE_FOOD_SPOT.y + 62 + (index % 3) * 8, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
     };
@@ -617,7 +619,10 @@ class CatWorldScene extends Phaser.Scene {
       (candidate) => owned(this.owner.snapshot.inventory, candidate) && DECOR_SPECS[candidate] && !isDamaged(this.owner.snapshot, candidate),
     );
     if (!decorId) return null;
-    return this.nearDecorPosition(decorId, index);
+    const position = this.nearDecorPosition(decorId, index);
+    return position
+      ? { ...position, itemId: decorId, label: DECOR_SPECS[decorId]?.label || "休息点" }
+      : null;
   }
 
   stableAgentGoalPosition(cat, index, goal = {}) {
@@ -1093,6 +1098,11 @@ class CatWorldScene extends Phaser.Scene {
             this.spawnFoodPlayBubble(container, cat, foodTarget);
           } else if (shouldVisitRest) {
             this.spawnRestBubble(container, cat, restTarget.message);
+            this.owner.handlers.onCatAmbient?.(cat, {
+              kind: "rest-spot",
+              itemId: restTarget.itemId || "room-rest",
+              label: restTarget.label || "休息点",
+            });
           } else if (shouldVisitGoal) {
             if (goalTarget.kind === "mischief") {
               this.spawnMischiefBubble(container, cat, goalTarget);
@@ -1201,7 +1211,8 @@ class CatWorldScene extends Phaser.Scene {
     const staminaBonus = Number(behavior.stamina || 50) < 42 ? 10 : 0;
     return {
       kind: "rest",
-      label: "休息点",
+      itemId: position.itemId || "room-rest",
+      label: position.label || "休息点",
       message: "体力快低了，先找舒服的位置趴一会儿。",
       priority: clamp(46 + urgency * 3 + moodBonus + staminaBonus, 38, 90),
       x: position.x,

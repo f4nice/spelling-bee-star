@@ -443,10 +443,15 @@ function recordCatAmbientEvent(cat, event = {}) {
       catId: cat.id,
       kind: event.kind,
       itemId: event.itemId,
+      label: event.label || "",
     }),
   }).then((nextPayload) => {
     if (nextPayload?.energy && nextPayload?.state) {
       replacePayload(nextPayload);
+    }
+    if (event.kind === "rest-spot" && nextPayload?.recorded && nextPayload?.event?.message) {
+      const targetCat = cats.value.find((item) => item.id === nextPayload.effect?.catId) || cat;
+      showCatReaction(targetCat, nextPayload.event.message);
     }
   }).catch(() => {
     ambientEventCooldowns.delete(key);
