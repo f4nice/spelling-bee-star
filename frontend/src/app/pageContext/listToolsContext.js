@@ -10,6 +10,8 @@ export function buildListToolsContext(listTools) {
     renameList: listTools.renameList,
     deleteList: listTools.deleteList,
     syncListImages: listTools.syncListImages,
+    moveListToGroup: listTools.moveListToGroup,
+    createWordInList: listTools.createWordInList,
     generateListAiImages: listTools.generateListAiImages,
   };
 }

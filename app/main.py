@@ -92,8 +92,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-056"
-DEFAULT_PAGE_VERSION = "v20260721.56"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-057"
+DEFAULT_PAGE_VERSION = "v20260721.57"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -4670,6 +4670,48 @@ def vue_list_detail_api(word_list_id: int, db: Session = Depends(get_db)):
             }
             for index, word in enumerate(words)
         ],
+    }
+
+
+@app.post("/api/vue/lists/{word_list_id}/words")
+def vue_create_word_in_list(
+    word_list_id: int,
+    word: str = Form(...),
+    phonetic: str = Form(default=""),
+    part_of_speech: str = Form(default=""),
+    english_definition: str = Form(default=""),
+    chinese_definition: str = Form(default=""),
+    english_example: str = Form(default=""),
+    note: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    word_list = db.get(WordList, word_list_id)
+    if not word_list:
+        raise HTTPException(status_code=404, detail="Word list not found")
+    word_text = clean_manual_word_text(word)
+    row = {
+        "word": word_text,
+        "phonetic": optional_manual_word_text(phonetic),
+        "part_of_speech": optional_manual_word_text(part_of_speech),
+        "english_definition": optional_manual_word_text(english_definition),
+        "chinese_definition": optional_manual_word_text(chinese_definition),
+        "english_example": optional_manual_word_text(english_example),
+        "note": optional_manual_word_text(note),
+        "row_number": 1,
+    }
+    word_ids = import_rows([row], db, word_list)
+    if not word_ids:
+        raise HTTPException(status_code=400, detail="单词保存失败，请检查输入内容。")
+    created_word = db.get(Word, word_ids[0])
+    if not created_word:
+        raise HTTPException(status_code=404, detail="Word not found")
+    start_enrichment_thread(word_ids, include_images=False)
+    return {
+        "ok": True,
+        "word": serialize_word(created_word),
+        "word_list_id": word_list.id,
+        "word_list_name": word_list.name,
+        "detail_url": f"/words/{created_word.id}?edit=1&list_id={word_list.id}",
     }
 
 
@@ -9913,6 +9955,22 @@ def start_spb_detail_backfill_thread(
 def clean_list_name(name: str) -> str:
     text = " ".join((name or "").split())
     return text[:255] or "新单词表"
+
+
+def clean_manual_word_text(value: str | None) -> str:
+    text = " ".join(str(value or "").strip().split())
+    if not text:
+        raise HTTPException(status_code=400, detail="请输入英文单词。")
+    if len(text) > 128:
+        raise HTTPException(status_code=400, detail="单词不能超过 128 个字符。")
+    if not re.fullmatch(r"[A-Za-z][A-Za-z' -]*", text):
+        raise HTTPException(status_code=400, detail="单词只能包含英文字母、空格、连字符或撇号。")
+    return text
+
+
+def optional_manual_word_text(value: str | None) -> str | None:
+    text = str(value or "").strip()
+    return text or None
 
 
 def normalize_resource_word(value: str | None) -> str:

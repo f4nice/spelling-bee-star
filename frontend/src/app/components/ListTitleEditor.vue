@@ -14,6 +14,10 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  openCreateWordModal: {
+    type: Function,
+    required: true,
+  },
   openImportModal: {
     type: Function,
     required: true,
@@ -108,6 +112,7 @@ async function changeGroup(event) {
     </div>
     <div class="word-list-meta">
       <p>{{ wordCount }} 个单词</p>
+      <button class="ghost-button compact-button" type="button" @click="openCreateWordModal">新建单词</button>
       <button class="ghost-button compact-button" type="button" @click="openImportModal">继续导入</button>
       <label class="word-list-group-picker">
         <span>单词组</span>

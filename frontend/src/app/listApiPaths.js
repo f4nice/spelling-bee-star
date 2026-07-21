@@ -4,6 +4,7 @@ export const listApiPaths = {
   aiImagesStatus: (wordListId, jobId) => `/api/vue/lists/${wordListId}/ai-images/${jobId}`,
   batchImages: () => "/api/vue/lists/batch-images",
   createGroup: () => "/api/vue/lists/groups",
+  createWord: (wordListId) => `/api/vue/lists/${wordListId}/words`,
   delete: (wordListId) => `/api/vue/lists/${wordListId}/delete`,
   deleteGroup: (groupId) => `/api/vue/lists/groups/${groupId}/delete`,
   moveToGroup: (wordListId) => `/api/vue/lists/${wordListId}/group`,

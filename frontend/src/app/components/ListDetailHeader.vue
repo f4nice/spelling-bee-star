@@ -24,6 +24,10 @@ defineProps({
     type: Function,
     required: true,
   },
+  openCreateWordModal: {
+    type: Function,
+    required: true,
+  },
   openImportModal: {
     type: Function,
     required: true,
@@ -39,6 +43,7 @@ defineProps({
       :groups="data.groups || []"
       :move-list-to-group="moveListToGroup"
       :rename-list="renameList"
+      :open-create-word-modal="openCreateWordModal"
       :open-import-modal="openImportModal"
     />
     <ListHeaderActions

@@ -43,6 +43,18 @@ export function useListDetailTools({ data, go, loadRoute }) {
     await refreshCurrentListDetail();
   }
 
+  async function createWordInList(formState) {
+    const wordListId = data.value?.word_list?.id;
+    if (!wordListId) throw new Error("没有找到当前单词表。");
+    const form = new FormData();
+    ["word", "phonetic", "part_of_speech", "english_definition", "chinese_definition", "english_example", "note"].forEach((field) => {
+      form.append(field, formState?.[field] || "");
+    });
+    const result = await fetchJson(listApiPaths.createWord(wordListId), { method: "POST", body: form });
+    await refreshCurrentListDetail();
+    return result;
+  }
+
   async function generateListAiImages({ allowPaid = false } = {}) {
     await generateWordListAiImages({
       wordListId: data.value.word_list.id,
@@ -62,6 +74,7 @@ export function useListDetailTools({ data, go, loadRoute }) {
     deleteList,
     syncListImages,
     moveListToGroup,
+    createWordInList,
     generateListAiImages,
   };
 }

@@ -10237,6 +10237,65 @@ dd {
   font-weight: 900;
 }
 
+.manual-word-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.manual-word-field {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.manual-word-field-wide,
+.manual-word-notice,
+.manual-word-actions {
+  grid-column: 1 / -1;
+}
+
+.manual-word-field input,
+.manual-word-field textarea {
+  width: 100%;
+  min-height: 40px;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 11px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+}
+
+.manual-word-field textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.manual-word-field input:focus,
+.manual-word-field textarea:focus {
+  border-color: rgba(15, 127, 89, 0.5);
+  outline: 3px solid rgba(15, 127, 89, 0.12);
+}
+
+.manual-word-notice {
+  margin: 0;
+  color: #0b6f4c;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.manual-word-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .compact-button {
   min-height: 28px;
   border-radius: 5px;
@@ -10998,6 +11057,7 @@ select {
 
   .lists-tools-panel,
   .lists-import-form,
+  .manual-word-form,
   .batch-image-form {
     grid-template-columns: 1fr;
   }
