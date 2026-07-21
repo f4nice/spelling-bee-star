@@ -92,8 +92,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-054"
-DEFAULT_PAGE_VERSION = "v20260721.54"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-055"
+DEFAULT_PAGE_VERSION = "v20260721.55"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -4948,6 +4948,48 @@ def vue_update_word_field(
     db.commit()
     remember_word_resource(db, word, override_text=True, commit=True)
     return {"ok": True, "field": field, "value": next_value}
+
+
+@app.post("/api/vue/words/{word_id}/remove-from-list")
+def vue_remove_word_from_list(
+    word_id: int,
+    request: Request,
+    list_id: int = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    user = current_admin_user(request, db)
+    cleaned_password = normalize_login_password(password)
+    if not cleaned_password or not verify_login_password(cleaned_password, user.login_password_hash):
+        raise HTTPException(status_code=403, detail="登录密码不正确。")
+
+    word = db.get(Word, word_id)
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+    word_list = db.get(WordList, list_id)
+    if not word_list:
+        raise HTTPException(status_code=404, detail="Word list not found")
+
+    item = db.scalar(
+        select(WordListItem).where(
+            WordListItem.word_list_id == list_id,
+            WordListItem.word_id == word_id,
+        )
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="这个单词不在当前单词表中。")
+
+    db.delete(item)
+    db.execute(delete(ChallengeProgress).where(ChallengeProgress.word_list_id == list_id))
+    db.commit()
+    return {
+        "ok": True,
+        "word_id": word_id,
+        "word": word.word,
+        "list_id": list_id,
+        "word_list_name": word_list.name,
+        "redirect_url": f"/lists/{list_id}",
+    }
 
 
 @app.post("/api/vue/words/{word_id}/refresh")

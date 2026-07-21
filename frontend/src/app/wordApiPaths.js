@@ -10,5 +10,6 @@ export const wordApiPaths = {
   imageCandidates: (wordId) => `/api/vue/words/${wordId}/image-candidates`,
   networkImage: (wordId) => `/api/vue/words/${wordId}/network-image`,
   recordedAudio: (wordId) => `/api/vue/words/${wordId}/recorded-audio`,
+  removeFromList: (wordId) => `/api/vue/words/${wordId}/remove-from-list`,
   refresh: (wordId) => `/api/vue/words/${wordId}/refresh`,
 };
