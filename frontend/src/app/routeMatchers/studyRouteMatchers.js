@@ -16,8 +16,8 @@ export const studyRouteMatchers = [
     route: () => ({ name: "essays", params: {} }),
   },
   {
-    match: ([section, collection]) => section === "spb" && (!collection || collection === "team"),
-    route: ([, collection]) => ({ name: "spb", params: { collection: collection || "individual" } }),
+    match: ([section]) => section === "spb",
+    route: () => ({ name: "spb", params: { collection: "individual" } }),
   },
   {
     match: ([section, day]) => section === "challenge-calendar" && day,

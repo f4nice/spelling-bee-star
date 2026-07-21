@@ -2,9 +2,7 @@ export function routeTitle(route, data) {
   if (route.name === "lists") return "我的单词表";
   if (route.name === "listDetail") return data?.word_list?.name || "单词表";
   if (route.name === "wrongWords") return "我的生词本";
-  if (route.name === "spb") {
-    return route.params?.collection === "team" ? "SPB-团队赛冠军词组" : "SPB-个人赛冠军词库";
-  }
+  if (route.name === "spb") return "SPB-个人赛冠军词库";
   if (route.name === "growth") return "成长体系";
   if (route.name === "catWorld") return "猫咪世界";
   if (route.name === "essays") return "我的作文集";
