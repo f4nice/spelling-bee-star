@@ -10,6 +10,7 @@ const CREAM = 0xfff8df;
 const CAT_INTERACTION_DEPTH = 980;
 const CAT_HITBOX = { x: -58, y: -74, width: 232, height: 184 };
 const ACTIVE_FOOD_SPOT = { x: GAME_WIDTH - 260, y: 408, width: 118, height: 46 };
+const ATTENTION_SPOT = { x: GAME_WIDTH / 2 - 46, y: FLOOR_BOTTOM - 78 };
 const ROOM_TOY_TARGETS = {
   "rolling-ball": { label: "滚滚球", width: 72, height: 64, defaultX: 312, defaultY: 392, focusX: 42, focusY: 34 },
   "scratch-board": { label: "猫抓板", width: 150, height: 48, defaultX: 90, defaultY: 418, focusX: 74, focusY: 22 },
@@ -158,6 +159,10 @@ function catAgentForSnapshot(snapshot, cat) {
 
 function catDailyGoalForSnapshot(snapshot, cat) {
   return catAgentForSnapshot(snapshot, cat).dailyGoal || {};
+}
+
+function catCareNeedForSnapshot(snapshot, cat) {
+  return catAgentForSnapshot(snapshot, cat).careNeed || {};
 }
 
 function catTraitNumber(cat, key, fallback = 1) {
@@ -588,6 +593,10 @@ class CatWorldScene extends Phaser.Scene {
     if (snapshot.activeFood?.active && snapshot.activeFood.targetCatId === cat.id) {
       return this.foodRestPosition(cat, index) || fallback;
     }
+    const careNeedTarget = this.careNeedTarget(cat, index, behavior, { stable: true });
+    if (careNeedTarget && careNeedTarget.priority >= 78) {
+      return { x: careNeedTarget.x, y: careNeedTarget.y };
+    }
     const goal = this.dailyGoalForCat(cat);
     if (Number(goal.priority || 0) >= 76) {
       return this.stableAgentGoalPosition(cat, index, goal) || fallback;
@@ -656,6 +665,30 @@ class CatWorldScene extends Phaser.Scene {
       x: clamp(position.x + spec.width / 2 - 45 + (lane - 1) * 34, 38, GAME_WIDTH - 132),
       y: clamp(Math.max(FLOOR_TOP + 52, position.y + spec.height + 24) + (lane - 1) * 8, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
     };
+  }
+
+  roomItemFocusPoint(itemId, index = 0, options = {}) {
+    const allowDamaged = Boolean(options.allowDamaged);
+    if (!itemId || (!allowDamaged && isDamaged(this.owner.snapshot, itemId))) return null;
+    if (ROOM_TOY_TARGETS[itemId] && owned(this.owner.snapshot.inventory, itemId)) {
+      const target = this.toyFocusPoint(itemId);
+      return { ...target, itemKind: "toy" };
+    }
+    if (DECOR_SPECS[itemId] && owned(this.owner.snapshot.inventory, itemId)) {
+      const position = this.nearDecorPosition(itemId, index);
+      if (!position) return null;
+      return { ...position, label: DECOR_SPECS[itemId].label, itemKind: "decor" };
+    }
+    const activeFood = this.owner.snapshot.activeFood || {};
+    if (activeFood.active && (itemId === activeFood.itemId || itemId === "active-food")) {
+      return {
+        label: activeFood.label || "食物",
+        itemKind: "food",
+        x: clamp(ACTIVE_FOOD_SPOT.x + 58, 38, GAME_WIDTH - 132),
+        y: clamp(ACTIVE_FOOD_SPOT.y + 52, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+      };
+    }
+    return null;
   }
 
   drawCatShape(container, cat, selected, snapshot, behavior = {}) {
@@ -752,12 +785,32 @@ class CatWorldScene extends Phaser.Scene {
   catIntentInfo(cat, snapshot, behavior = {}) {
     const agent = catAgentForSnapshot(snapshot, cat);
     const goal = agent.dailyGoal || {};
+    const careNeed = agent.careNeed || {};
     const targetLabel = shortCatText(goal.targetLabel || "", 5);
+    const needTargetLabel = shortCatText(careNeed.targetLabel || "", 5);
     if (behavior.sleeping || goal.key === "sleep") {
       return { text: "睡觉", color: "#263047", background: "#fff8df" };
     }
     if (behavior.key === "resting" || goal.key === "rest") {
       return { text: "休息", color: "#263047", background: "#d9f6ff" };
+    }
+    if (careNeed.key === "repair") {
+      return { text: needTargetLabel ? `修${needTargetLabel}` : "要维修", color: "#fff8df", background: "#db2777" };
+    }
+    if (careNeed.key === "comfort") {
+      return { text: "要安抚", color: "#fff8df", background: "#db2777" };
+    }
+    if (careNeed.key === "food") {
+      return { text: needTargetLabel ? `想吃${needTargetLabel}` : "想吃饭", color: "#263047", background: "#fff07d" };
+    }
+    if (careNeed.key === "mood") {
+      return { text: needTargetLabel ? `想玩${needTargetLabel}` : "想玩", color: "#263047", background: "#87d9ff" };
+    }
+    if (careNeed.key === "attention") {
+      return { text: "求摸摸", color: "#fff8df", background: "#1d7f5b" };
+    }
+    if (careNeed.key === "place-favorite") {
+      return { text: needTargetLabel ? `想要${needTargetLabel}` : "要布置", color: "#fff8df", background: "#236b55" };
     }
     if (goal.key === "mischief-watch") {
       return { text: targetLabel ? `盯着${targetLabel}` : "想捣蛋", color: "#fff8df", background: "#db2777" };
@@ -1060,16 +1113,20 @@ class CatWorldScene extends Phaser.Scene {
       }
       const foodTarget = this.foodTargetForCat(cat);
       const restTarget = this.restTargetForCat(cat, index, latestBehavior);
+      const careNeedTarget = this.careNeedTarget(cat, index, latestBehavior);
       const goalTarget = this.agentGoalTarget(cat);
       const favoriteTarget = this.favoriteItemTarget(cat);
       const shouldVisitFood = Boolean(foodTarget && Phaser.Math.Between(1, 100) <= foodTarget.priority);
       const shouldVisitRest = !shouldVisitFood && Boolean(restTarget && Phaser.Math.Between(1, 100) <= restTarget.priority);
-      const shouldVisitGoal = !shouldVisitFood && !shouldVisitRest && Boolean(goalTarget && Phaser.Math.Between(1, 100) <= goalTarget.priority);
-      const shouldVisitFavorite = !shouldVisitFood && !shouldVisitRest && !shouldVisitGoal && Boolean(favoriteTarget && Phaser.Math.Between(1, 100) <= favoriteTarget.priority);
+      const shouldVisitCareNeed = !shouldVisitFood && !shouldVisitRest && Boolean(careNeedTarget && Phaser.Math.Between(1, 100) <= careNeedTarget.priority);
+      const shouldVisitGoal = !shouldVisitFood && !shouldVisitRest && !shouldVisitCareNeed && Boolean(goalTarget && Phaser.Math.Between(1, 100) <= goalTarget.priority);
+      const shouldVisitFavorite = !shouldVisitFood && !shouldVisitRest && !shouldVisitCareNeed && !shouldVisitGoal && Boolean(favoriteTarget && Phaser.Math.Between(1, 100) <= favoriteTarget.priority);
       const nextX = shouldVisitFood
         ? foodTarget.x
         : shouldVisitRest
           ? restTarget.x
+        : shouldVisitCareNeed
+          ? careNeedTarget.x
         : shouldVisitGoal
           ? goalTarget.x
           : shouldVisitFavorite
@@ -1079,6 +1136,8 @@ class CatWorldScene extends Phaser.Scene {
         ? foodTarget.y
         : shouldVisitRest
           ? restTarget.y
+        : shouldVisitCareNeed
+          ? careNeedTarget.y
         : shouldVisitGoal
           ? goalTarget.y
           : shouldVisitFavorite
@@ -1103,6 +1162,8 @@ class CatWorldScene extends Phaser.Scene {
               itemId: restTarget.itemId || "room-rest",
               label: restTarget.label || "休息点",
             });
+          } else if (shouldVisitCareNeed) {
+            this.spawnCareNeedBubble(container, cat, careNeedTarget);
           } else if (shouldVisitGoal) {
             if (goalTarget.kind === "mischief") {
               this.spawnMischiefBubble(container, cat, goalTarget);
@@ -1217,6 +1278,61 @@ class CatWorldScene extends Phaser.Scene {
       priority: clamp(46 + urgency * 3 + moodBonus + staminaBonus, 38, 90),
       x: position.x,
       y: position.y,
+    };
+  }
+
+  careNeedTarget(cat = {}, index = 0, behavior = {}, options = {}) {
+    if (!behavior.canWalk) return null;
+    const careNeed = catCareNeedForSnapshot(this.owner.snapshot, cat);
+    const key = String(careNeed.key || "");
+    const targetType = String(careNeed.targetType || "");
+    const targetItemId = String(careNeed.targetItemId || "");
+    const priority = clamp(Number(careNeed.priority || 0), 0, 100);
+    if (!key || ["sleep", "stable", "settled"].includes(key) || priority < 48) return null;
+    const stable = Boolean(options.stable);
+    const seed = `${cat.id || "cat"}:${key}:${targetItemId || targetType}:${index}`;
+    const offsetX = stable ? seededOffset(`${seed}:x`, 32) : Phaser.Math.Between(-36, 36);
+    const offsetY = stable ? seededOffset(`${seed}:y`, 18) : Phaser.Math.Between(-20, 22);
+    const message = careNeed.message || `${cat?.label || "猫咪"}现在想要${careNeed.actionLabel || careNeed.label || "一点照顾"}。`;
+    if (targetType === "touch" || key === "attention") {
+      return {
+        kind: "care-need",
+        careKey: key,
+        label: careNeed.actionLabel || careNeed.label || "摸摸",
+        message,
+        priority: clamp(priority + 4, 52, 92),
+        x: clamp(ATTENTION_SPOT.x + offsetX, 38, GAME_WIDTH - 132),
+        y: clamp(ATTENTION_SPOT.y + offsetY, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+      };
+    }
+    if (targetType === "food") {
+      const foodTarget = this.foodTargetForCat(cat);
+      if (!foodTarget) return null;
+      return {
+        ...foodTarget,
+        kind: "care-need",
+        careKey: key,
+        message,
+        priority: Math.max(priority, foodTarget.priority),
+      };
+    }
+    if (!targetItemId) return null;
+    const allowDamaged = key === "repair";
+    const point = this.roomItemFocusPoint(targetItemId, index, { allowDamaged });
+    if (!point) return null;
+    const favoriteToy = point.itemKind === "toy" && (cat.favoriteToyIds || []).includes(targetItemId);
+    const favoriteDecor = point.itemKind === "decor" && (cat.favoriteDecorIds || []).includes(targetItemId) && !isDamaged(this.owner.snapshot, targetItemId);
+    return {
+      kind: key === "repair" ? "repair-need" : "care-need",
+      careKey: key,
+      itemId: targetItemId,
+      itemKind: point.itemKind,
+      label: careNeed.targetLabel || point.label || careNeed.label || "目标",
+      message,
+      ambientKind: favoriteToy ? "favorite-toy" : favoriteDecor ? "favorite-decor" : "",
+      priority: clamp(priority + (key === "repair" ? 4 : 0), 48, 96),
+      x: clamp(point.x + offsetX, 38, GAME_WIDTH - 132),
+      y: clamp(point.y + offsetY, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
     };
   }
 
@@ -1407,6 +1523,56 @@ class CatWorldScene extends Phaser.Scene {
       itemId: target.itemId || target.decorId,
       label: target.label,
     });
+  }
+
+  spawnCareNeedBubble(container, cat, target) {
+    const urgent = target.kind === "repair-need" || target.careKey === "comfort";
+    const catLabel = cat?.label || "猫咪";
+    const prefix = target.label ? `${target.label}: ` : "";
+    const rawMessage = target.message || "现在想要一点照顾。";
+    const cleanMessage = rawMessage.startsWith(catLabel) ? rawMessage.slice(catLabel.length).replace(/^[，。:：\s]+/, "") : rawMessage;
+    const thoughtMessage = `${prefix}${cleanMessage}`;
+    const message = `${catLabel} ${thoughtMessage}`;
+    const bubble = this.add
+      .text(container.x + 36, container.y - 28, message, {
+        color: "#fff8df",
+        backgroundColor: urgent ? "#db2777" : "#236b55",
+        fontFamily: "Consolas, monospace",
+        fontSize: "12px",
+        fontStyle: "bold",
+        padding: { x: 8, y: 5 },
+        wordWrap: { width: 270 },
+        align: "center",
+      })
+      .setOrigin(0.5)
+      .setDepth(CAT_INTERACTION_DEPTH + 142);
+    if (urgent) {
+      this.spawnMischiefMarks(container.x + 60, container.y - 28);
+    }
+    this.tweens.add({
+      targets: container,
+      y: container.y - 7,
+      yoyo: true,
+      repeat: urgent ? 3 : 1,
+      duration: urgent ? 160 : 260,
+      ease: "Sine.easeInOut",
+    });
+    this.tweens.add({
+      targets: bubble,
+      y: bubble.y - 24,
+      alpha: 0,
+      duration: 2300,
+      ease: "Cubic.easeOut",
+      onComplete: () => bubble.destroy(),
+    });
+    this.owner.handlers.onCatThought?.(cat, thoughtMessage);
+    if (target.ambientKind && target.itemId) {
+      this.owner.handlers.onCatAmbient?.(cat, {
+        kind: target.ambientKind,
+        itemId: target.itemId,
+        label: target.label,
+      });
+    }
   }
 
   spawnGoalBubble(container, cat, target) {
