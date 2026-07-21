@@ -13,6 +13,7 @@ export const routeApiPaths = {
   catWorldPet: () => "/api/vue/cat-world/pet",
   admin: () => "/api/vue/admin",
   adminCatWorldPricing: () => "/api/vue/admin/cat-world/pricing",
+  adminCatWorldSettings: () => "/api/vue/admin/cat-world/settings",
   adminCatWorldReset: () => "/api/vue/admin/cat-world/reset",
   essays: () => "/api/vue/essays",
   essay: (id) => `/api/vue/essays/${id}`,

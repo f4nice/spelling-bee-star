@@ -975,6 +975,7 @@ body {
 .admin-create-panel select,
 .admin-user-card input[type="text"],
 .admin-user-card input[type="password"],
+.admin-cat-speed-number input,
 .admin-price-row input[type="number"],
 .admin-user-card select {
   width: 100%;
@@ -13494,8 +13495,51 @@ select {
   font-weight: 800;
 }
 
+.admin-cat-world-settings-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 340px) minmax(118px, 150px) auto;
+  gap: 12px;
+  align-items: end;
+  border: 1px solid rgba(29, 127, 91, 0.16);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: #f7fcf9;
+}
+
+.admin-cat-world-settings-panel strong {
+  color: var(--accent-dark);
+  font-weight: 900;
+}
+
+.admin-cat-world-settings-panel p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.admin-cat-speed-slider,
+.admin-cat-speed-number {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-cat-speed-slider span,
+.admin-cat-speed-number span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.admin-cat-speed-slider input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
 @media (max-width: 1180px) {
   .shell[data-quant-radar-page-key="cat-world"] .cat-world-layout,
+  .admin-cat-world-settings-panel,
   .admin-reset-panel {
     grid-template-columns: 1fr;
   }

@@ -123,6 +123,7 @@ const catBonds = computed(() => state.value.catBonds || {});
 const ownedCats = computed(() => state.value.ownedCats || ["mimi"]);
 const cats = computed(() => payload.value.cats || []);
 const shop = computed(() => payload.value.shop || []);
+const gameSettings = computed(() => payload.value.gameSettings || {});
 const shopById = computed(() => Object.fromEntries(shop.value.map((item) => [item.id, item])));
 const selectedCat = computed(() => cats.value.find((cat) => cat.id === state.value.selectedCat) || cats.value[0] || {});
 const roomCats = computed(() => {
@@ -387,6 +388,7 @@ const gameSnapshot = computed(() => ({
   ownedFoodCount: ownedFoodCount.value,
   roomStyles: roomStyles.value,
   selectedCatId: state.value.selectedCat,
+  gameSettings: gameSettings.value,
   editMode: roomEditMode.value,
 }));
 

@@ -17,10 +17,12 @@ const savingPhones = ref([]);
 const visiblePasswordPhones = ref([]);
 const notice = ref("");
 const newUser = ref({ phone: "", username: "", role: "viewer", loginPassword: "" });
-const catWorldPricing = ref(props.data.catWorldPricing || { plans: [], items: [] });
+const catWorldPricing = ref(normalizeCatWorldPricing(props.data.catWorldPricing || {}));
 const savingPriceItemId = ref("");
+const savingCatWorldSettings = ref(false);
 const catWorldResetPassword = ref("");
 const resettingCatWorld = ref(false);
+const catMovementSpeedDraft = ref(Number(catWorldPricing.value.settings?.movementSpeed || 1));
 const priceDrafts = ref(
   Object.fromEntries((catWorldPricing.value.items || []).map((item) => [item.id, Number(item.cost || 0)])),
 );
@@ -50,12 +52,71 @@ const activePricingPlan = computed(
 const activePricingItems = computed(
   () => (activePricingPlan.value ? pricingItemsByCategory.value[activePricingPlan.value.category] || [] : []),
 );
+const catMovementSpeedLimits = computed(() => ({
+  min: Number(catWorldPricing.value.settings?.limits?.movementSpeed?.min ?? 0.4),
+  max: Number(catWorldPricing.value.settings?.limits?.movementSpeed?.max ?? 2),
+  step: Number(catWorldPricing.value.settings?.limits?.movementSpeed?.step ?? 0.05),
+}));
+const catMovementSpeedLabel = computed(() => `${clampCatMovementSpeed(catMovementSpeedDraft.value).toFixed(2)}x`);
 const siteSummaryCards = computed(() => [
   { label: "登录方式", value: "手机号 + 密码", detail: "手机号仍是唯一登录标识，页面只展示昵称。" },
   { label: "图片 AI", value: `${props.data.imageAiOptions?.length || 0} 项`, detail: "在用户中心为不同用户选择默认图片 AI。" },
   { label: "音频 AI", value: `${props.data.audioAiOptions?.length || 0} 项`, detail: "在用户中心为不同用户选择默认音频服务。" },
   { label: "声音", value: `${props.data.voiceOptions?.length || 0} 项`, detail: "可配置女声或男声作为默认声音。" },
 ]);
+
+function finiteNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function normalizedSpeed(value, fallback = 1, min = 0.4, max = 2) {
+  const lower = finiteNumber(min, 0.4);
+  const upper = finiteNumber(max, 2);
+  const number = Number(value);
+  const speed = Number.isFinite(number) ? number : fallback;
+  return Math.round(Math.min(Math.max(speed, lower), upper) * 100) / 100;
+}
+
+function normalizeCatWorldPricing(source = {}) {
+  const rawSettings = source.settings || {};
+  const rawLimits = rawSettings.limits?.movementSpeed || {};
+  const speedLimits = {
+    min: finiteNumber(rawLimits.min, 0.4),
+    max: finiteNumber(rawLimits.max, 2),
+    step: finiteNumber(rawLimits.step, 0.05),
+  };
+  return {
+    plans: Array.isArray(source.plans) ? source.plans : [],
+    items: Array.isArray(source.items) ? source.items : [],
+    settings: {
+      ...rawSettings,
+      movementSpeed: normalizedSpeed(rawSettings.movementSpeed, 1, speedLimits.min, speedLimits.max),
+      defaults: {
+        movementSpeed: 1,
+        ...(rawSettings.defaults || {}),
+      },
+      limits: {
+        ...(rawSettings.limits || {}),
+        movementSpeed: speedLimits,
+      },
+    },
+  };
+}
+
+function clampCatMovementSpeed(value) {
+  const limits = catMovementSpeedLimits.value;
+  return normalizedSpeed(value, catWorldPricing.value.settings?.movementSpeed || 1, limits.min, limits.max);
+}
+
+function applyCatWorldPricing(nextPricing) {
+  catWorldPricing.value = normalizeCatWorldPricing(nextPricing || catWorldPricing.value);
+  priceDrafts.value = Object.fromEntries((catWorldPricing.value.items || []).map((item) => [item.id, Number(item.cost || 0)]));
+  catMovementSpeedDraft.value = Number(catWorldPricing.value.settings?.movementSpeed || 1);
+  if (!(catWorldPricing.value.plans || []).some((plan) => plan.category === activePricingCategory.value)) {
+    activePricingCategory.value = catWorldPricing.value.plans?.[0]?.category || "";
+  }
+}
 
 function createEditableUser(user) {
   return {
@@ -167,13 +228,32 @@ async function savePrice(item) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ itemId: item.id, cost: Math.round(cost) }),
     });
-    catWorldPricing.value = result.catWorldPricing || catWorldPricing.value;
-    priceDrafts.value = Object.fromEntries((catWorldPricing.value.items || []).map((nextItem) => [nextItem.id, Number(nextItem.cost || 0)]));
+    applyCatWorldPricing(result.catWorldPricing);
     notice.value = `${item.label} 价格已更新。`;
   } catch (error) {
     notice.value = error.message || "价格保存失败。";
   } finally {
     savingPriceItemId.value = "";
+  }
+}
+
+async function saveCatWorldSettings() {
+  const speed = clampCatMovementSpeed(catMovementSpeedDraft.value);
+  catMovementSpeedDraft.value = speed;
+  savingCatWorldSettings.value = true;
+  notice.value = "";
+  try {
+    const result = await fetchJson(routeApiPaths.adminCatWorldSettings(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ movementSpeed: speed }),
+    });
+    applyCatWorldPricing(result.catWorldPricing);
+    notice.value = `猫咪移动速度已更新为 ${speed.toFixed(2)}x。`;
+  } catch (error) {
+    notice.value = error.message || "猫咪移动速度保存失败。";
+  } finally {
+    savingCatWorldSettings.value = false;
   }
 }
 
@@ -191,7 +271,7 @@ async function resetCatWorldData() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password }),
     });
-    catWorldPricing.value = result.catWorldPricing || catWorldPricing.value;
+    applyCatWorldPricing(result.catWorldPricing);
     const deleted = result.deleted || {};
     notice.value = `猫咪世界测试数据已清零：状态 ${deleted.state || 0} 条，每日日志 ${deleted.dailyLogs || 0} 条。`;
     catWorldResetPassword.value = "";
@@ -409,6 +489,36 @@ async function resetCatWorldData() {
               <p>{{ plan.strategy }}</p>
             </button>
           </div>
+
+          <section class="admin-cat-world-settings-panel">
+            <div>
+              <strong>猫咪移动速度</strong>
+              <p>控制活动室里所有猫走动、靠近喜欢道具和回休息点的整体速度。</p>
+            </div>
+            <label class="admin-cat-speed-slider">
+              <span>速度倍率</span>
+              <input
+                v-model.number="catMovementSpeedDraft"
+                type="range"
+                :min="catMovementSpeedLimits.min"
+                :max="catMovementSpeedLimits.max"
+                :step="catMovementSpeedLimits.step"
+              >
+            </label>
+            <label class="admin-cat-speed-number">
+              <span>当前值</span>
+              <input
+                v-model.number="catMovementSpeedDraft"
+                type="number"
+                :min="catMovementSpeedLimits.min"
+                :max="catMovementSpeedLimits.max"
+                :step="catMovementSpeedLimits.step"
+              >
+            </label>
+            <button class="challenge-button compact-button" type="button" :disabled="savingCatWorldSettings" @click="saveCatWorldSettings">
+              {{ savingCatWorldSettings ? "保存中" : `保存 ${catMovementSpeedLabel}` }}
+            </button>
+          </section>
 
           <section class="admin-reset-panel">
             <div>

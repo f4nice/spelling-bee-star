@@ -85,6 +85,7 @@ function normalizeSnapshot(snapshot = {}) {
     ownedFoodCount: Number(snapshot.ownedFoodCount || 0),
     roomStyles: snapshot.roomStyles || {},
     selectedCatId: snapshot.selectedCatId || "",
+    gameSettings: snapshot.gameSettings || {},
     editMode: Boolean(snapshot.editMode),
   };
 }
@@ -169,6 +170,11 @@ function catCareNeedForSnapshot(snapshot, cat) {
 function catTraitNumber(cat, key, fallback = 1) {
   const value = Number(cat?.traits?.[key]);
   return Number.isFinite(value) ? value : fallback;
+}
+
+function snapshotMovementSpeed(snapshot) {
+  const configured = Number(snapshot?.gameSettings?.movementSpeed);
+  return clamp(Number.isFinite(configured) ? configured : 1, 0.4, 2);
 }
 
 function uniqueLines(lines) {
@@ -262,7 +268,19 @@ class CatWorldScene extends Phaser.Scene {
     this.catContainers.clear();
   }
 
+  cacheCatPositions() {
+    for (const [catId, container] of this.catContainers.entries()) {
+      if (!container?.active) continue;
+      this.owner.catPositions.set(catId, {
+        x: clamp(container.x, 38, GAME_WIDTH - 132),
+        y: clamp(container.y, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+        facing: container.scaleX < 0 ? -1 : 1,
+      });
+    }
+  }
+
   renderSnapshot() {
+    this.cacheCatPositions();
     this.clearCatInteractions();
     this.tweens.killAll();
     this.time.removeAllEvents();
@@ -582,13 +600,17 @@ class CatWorldScene extends Phaser.Scene {
     const visibleCats = cats.length ? cats : snapshot.cats.slice(0, 1);
     visibleCats.forEach((cat, index) => {
       const behavior = this.catBehavior(cat, index);
-      const position = this.initialCatPosition(snapshot, cat, index, behavior);
+      const savedPosition = this.savedCatPosition(cat);
+      const position = savedPosition || this.initialCatPosition(snapshot, cat, index, behavior);
       const container = this.add.container(position.x, position.y);
       container.setSize(100, 70);
       container.setData("kind", "cat");
       container.setData("id", cat.id);
       container.setData("behavior", behavior);
       container.setDepth(CAT_INTERACTION_DEPTH + index);
+      if (savedPosition?.facing === -1) {
+        container.setScale(-1, 1);
+      }
       container.setInteractive(
         new Phaser.Geom.Rectangle(CAT_HITBOX.x, CAT_HITBOX.y, CAT_HITBOX.width, CAT_HITBOX.height),
         Phaser.Geom.Rectangle.Contains,
@@ -616,6 +638,16 @@ class CatWorldScene extends Phaser.Scene {
       this.catContainers.set(cat.id, container);
       this.scheduleCatWalk(container, index, cat);
     });
+  }
+
+  savedCatPosition(cat = {}) {
+    const saved = this.owner.catPositions.get(cat.id);
+    if (!saved) return null;
+    return {
+      x: clamp(saved.x, 38, GAME_WIDTH - 132),
+      y: clamp(saved.y, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+      facing: saved.facing === -1 ? -1 : 1,
+    };
   }
 
   defaultCatPosition(index) {
@@ -1042,7 +1074,8 @@ class CatWorldScene extends Phaser.Scene {
     const energyFactor = energy < restThreshold + 8 ? 0.58 : energy < 58 ? 0.78 : 1;
     const behaviorFactor = key === "slow" ? 0.72 : key === "exploring" ? 1.04 : key === "night-watch" ? 0.94 : key === "seeking-touch" ? 0.86 : 1;
     const agentPace = clamp(0.86 + (activityBias - 50) / 180 + (stamina - 50) / 280, 0.72, 1.08);
-    const walkSpeed = clamp(catTraitNumber(cat, "movement", 1) * moodFactor * energyFactor * behaviorFactor * agentPace, 0.32, 0.92);
+    const movementSpeed = snapshotMovementSpeed(this.owner.snapshot);
+    const walkSpeed = clamp(catTraitNumber(cat, "movement", 1) * movementSpeed * moodFactor * energyFactor * behaviorFactor * agentPace, 0.2, 1.65);
     const idleChance = sleeping
       ? 100
       : key === "resting"
@@ -1824,6 +1857,7 @@ export class CatWorldGame {
   constructor(parent, handlers = {}) {
     this.handlers = handlers;
     this.layout = {};
+    this.catPositions = new Map();
     this.ready = false;
     this.snapshot = normalizeSnapshot();
     this.game = new Phaser.Game({

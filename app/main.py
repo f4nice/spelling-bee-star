@@ -7,6 +7,7 @@ import hashlib
 from io import BytesIO
 import json
 import logging
+import math
 from pathlib import Path
 import random
 import re
@@ -33,6 +34,7 @@ from app.database import Base, SessionLocal, engine, get_db
 from app.models import (
     CacheEntry,
     CatWorldDailyLog,
+    CatWorldGameSetting,
     CatWorldShopSetting,
     CatWorldState,
     ChallengeDailyStat,
@@ -90,8 +92,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-045"
-DEFAULT_PAGE_VERSION = "v20260721.45"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-046"
+DEFAULT_PAGE_VERSION = "v20260721.46"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -224,6 +226,11 @@ GROWTH_BADGE_CONFIG = [
 ]
 
 CAT_WORLD_DEFAULT_CAT_ID = "mimi"
+CAT_WORLD_MOVEMENT_SPEED_SETTING_KEY = "movement_speed"
+CAT_WORLD_DEFAULT_MOVEMENT_SPEED = 1.0
+CAT_WORLD_MIN_MOVEMENT_SPEED = 0.4
+CAT_WORLD_MAX_MOVEMENT_SPEED = 2.0
+CAT_WORLD_MOVEMENT_SPEED_STEP = 0.05
 CAT_WORLD_SHOP = [
     {
         "id": "salmon-bowl",
@@ -4166,6 +4173,18 @@ async def vue_admin_cat_world_pricing_api(request: Request, db: Session = Depend
         setting = CatWorldShopSetting(item_id=item_id)
         db.add(setting)
     setting.cost = cost
+    db.commit()
+    return {"ok": True, "catWorldPricing": admin_cat_world_pricing_payload(db)}
+
+
+@app.post("/api/vue/admin/cat-world/settings")
+async def vue_admin_cat_world_settings_api(request: Request, db: Session = Depends(get_db)):
+    require_admin_panel_access(request, db)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="猫咪世界设置不是有效 JSON。") from exc
+    save_cat_world_movement_speed(db, (payload or {}).get("movementSpeed"))
     db.commit()
     return {"ok": True, "catWorldPricing": admin_cat_world_pricing_payload(db)}
 
@@ -10635,6 +10654,57 @@ def cat_world_shop_settings_map(db: Session) -> dict[str, int]:
     return costs
 
 
+def cat_world_clamp_movement_speed(value: Any) -> float:
+    try:
+        speed = float(value)
+    except (TypeError, ValueError):
+        speed = CAT_WORLD_DEFAULT_MOVEMENT_SPEED
+    if not math.isfinite(speed):
+        speed = CAT_WORLD_DEFAULT_MOVEMENT_SPEED
+    speed = min(max(speed, CAT_WORLD_MIN_MOVEMENT_SPEED), CAT_WORLD_MAX_MOVEMENT_SPEED)
+    return round(speed, 2)
+
+
+def cat_world_movement_speed(db: Session) -> float:
+    row = db.scalar(
+        select(CatWorldGameSetting).where(
+            CatWorldGameSetting.setting_key == CAT_WORLD_MOVEMENT_SPEED_SETTING_KEY
+        )
+    )
+    return cat_world_clamp_movement_speed(row.setting_value if row else CAT_WORLD_DEFAULT_MOVEMENT_SPEED)
+
+
+def save_cat_world_movement_speed(db: Session, value: Any) -> float:
+    speed = cat_world_clamp_movement_speed(value)
+    row = db.scalar(
+        select(CatWorldGameSetting).where(
+            CatWorldGameSetting.setting_key == CAT_WORLD_MOVEMENT_SPEED_SETTING_KEY
+        )
+    )
+    if not row:
+        row = CatWorldGameSetting(setting_key=CAT_WORLD_MOVEMENT_SPEED_SETTING_KEY, setting_value=f"{speed:.2f}")
+        db.add(row)
+    else:
+        row.setting_value = f"{speed:.2f}"
+    return speed
+
+
+def cat_world_game_settings_payload(db: Session) -> dict[str, Any]:
+    return {
+        "movementSpeed": cat_world_movement_speed(db),
+        "defaults": {
+            "movementSpeed": CAT_WORLD_DEFAULT_MOVEMENT_SPEED,
+        },
+        "limits": {
+            "movementSpeed": {
+                "min": CAT_WORLD_MIN_MOVEMENT_SPEED,
+                "max": CAT_WORLD_MAX_MOVEMENT_SPEED,
+                "step": CAT_WORLD_MOVEMENT_SPEED_STEP,
+            },
+        },
+    }
+
+
 def cat_world_effective_shop(db: Session) -> list[dict[str, Any]]:
     override_costs = cat_world_shop_settings_map(db)
     items = []
@@ -13311,6 +13381,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         "decorFavorites": cat_world_decor_favorite_payload(),
         "shop": shop,
         "pricingPlans": CAT_WORLD_PRICING_PLANS,
+        "gameSettings": cat_world_game_settings_payload(db),
     }
 
 
@@ -13325,6 +13396,7 @@ def admin_cat_world_pricing_payload(db: Session) -> dict[str, Any]:
     return {
         "plans": CAT_WORLD_PRICING_PLANS,
         "items": cat_world_effective_shop(db),
+        "settings": cat_world_game_settings_payload(db),
     }
 
 

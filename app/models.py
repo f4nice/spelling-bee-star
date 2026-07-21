@@ -237,6 +237,16 @@ class CatWorldShopSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class CatWorldGameSetting(Base):
+    __tablename__ = "cat_world_game_settings"
+    __table_args__ = (UniqueConstraint("setting_key", name="uq_cat_world_game_settings_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    setting_key: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    setting_value: Mapped[str] = mapped_column(String(255), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class CatWorldDailyLog(Base):
     __tablename__ = "cat_world_daily_logs"
     __table_args__ = (UniqueConstraint("phone", "log_date", "cat_id", name="uq_cat_world_daily_logs_phone_date_cat"),)
