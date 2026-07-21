@@ -10289,6 +10289,63 @@ dd {
   font-weight: 900;
 }
 
+.manual-word-candidates {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+  border: 1px solid rgba(29, 127, 91, 0.16);
+  border-radius: 8px;
+  padding: 10px;
+  background: #f7fbf8;
+}
+
+.manual-word-candidates-head,
+.manual-word-candidate-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.manual-word-candidates-head strong,
+.manual-word-candidate-card strong {
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.manual-word-candidates-head span,
+.manual-word-candidate-card span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.manual-word-candidate-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px;
+  background: #fff;
+}
+
+.manual-word-candidate-card div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.manual-word-candidate-card span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manual-word-candidate-card em {
+  color: #0b6f4c;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+}
+
 .manual-word-actions {
   display: flex;
   justify-content: flex-end;
@@ -11060,6 +11117,12 @@ select {
   .manual-word-form,
   .batch-image-form {
     grid-template-columns: 1fr;
+  }
+
+  .manual-word-candidates-head,
+  .manual-word-candidate-card {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .lists-create-backdrop {

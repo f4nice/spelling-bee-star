@@ -92,8 +92,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-061"
-DEFAULT_PAGE_VERSION = "v20260722.61"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-062"
+DEFAULT_PAGE_VERSION = "v20260722.62"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -4787,10 +4787,29 @@ def vue_list_detail_api(word_list_id: int, db: Session = Depends(get_db)):
     }
 
 
+@app.get("/api/vue/lists/{word_list_id}/words/candidates")
+def vue_word_candidates_for_list(
+    word_list_id: int,
+    q: str = Query(default=""),
+    db: Session = Depends(get_db),
+):
+    word_list = db.get(WordList, word_list_id)
+    if not word_list:
+        raise HTTPException(status_code=404, detail="Word list not found")
+    word_text = clean_manual_word_text(q)
+    candidates = manual_word_candidates(db, word_text, word_list.id)
+    return {
+        "ok": True,
+        "query": word_text,
+        "candidates": candidates,
+    }
+
+
 @app.post("/api/vue/lists/{word_list_id}/words")
 def vue_create_word_in_list(
     word_list_id: int,
-    word: str = Form(...),
+    word: str = Form(default=""),
+    existing_word_id: int | None = Form(default=None),
     phonetic: str = Form(default=""),
     part_of_speech: str = Form(default=""),
     english_definition: str = Form(default=""),
@@ -4802,6 +4821,19 @@ def vue_create_word_in_list(
     word_list = db.get(WordList, word_list_id)
     if not word_list:
         raise HTTPException(status_code=404, detail="Word list not found")
+    if existing_word_id:
+        existing_word = db.get(Word, existing_word_id)
+        if not existing_word:
+            raise HTTPException(status_code=404, detail="Word not found")
+        link_word_to_list(db, word_list.id, existing_word.id)
+        return {
+            "ok": True,
+            "source": "existing",
+            "word": serialize_word(existing_word),
+            "word_list_id": word_list.id,
+            "word_list_name": word_list.name,
+            "detail_url": f"/words/{existing_word.id}?edit=1&list_id={word_list.id}",
+        }
     word_text = clean_manual_word_text(word)
     row = {
         "word": word_text,
@@ -10082,6 +10114,67 @@ def clean_manual_word_text(value: str | None) -> str:
     if re.search(r"[^A-Za-z0-9\s'’`.\-‐‑–—/&+(),]", text):
         raise HTTPException(status_code=400, detail="单词只能包含英文、数字、空格和常见英文符号。")
     return text
+
+
+def manual_word_lookup_key(value: str | None) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").casefold())
+
+
+def serialize_manual_word_candidate(db: Session, word: Word, word_list_id: int) -> dict[str, Any]:
+    payload = serialize_word(word)
+    payload["in_current_list"] = bool(
+        db.scalar(
+            select(WordListItem.id)
+            .where(WordListItem.word_list_id == word_list_id)
+            .where(WordListItem.word_id == word.id)
+            .limit(1)
+        )
+    )
+    return payload
+
+
+def manual_word_candidates(db: Session, word_text: str, word_list_id: int, limit: int = 8) -> list[dict[str, Any]]:
+    exact_key = word_text.casefold()
+    compact_key = manual_word_lookup_key(word_text)
+    candidates_by_id: dict[int, Word] = {}
+
+    exact_words = db.scalars(
+        select(Word)
+        .where(func.lower(Word.word) == word_text.lower())
+        .order_by(Word.id.asc())
+        .limit(limit)
+    ).all()
+    for word in exact_words:
+        candidates_by_id[word.id] = word
+
+    if compact_key and len(candidates_by_id) < limit:
+        first = compact_key[0]
+        possible_words = db.scalars(
+            select(Word)
+            .where(func.lower(Word.word).like(f"{first}%"))
+            .order_by(func.length(Word.word).asc(), Word.word.asc())
+            .limit(2000)
+        ).all()
+        for word in possible_words:
+            if len(candidates_by_id) >= limit:
+                break
+            if word.id in candidates_by_id:
+                continue
+            if manual_word_lookup_key(word.word) == compact_key:
+                candidates_by_id[word.id] = word
+
+    def sort_key(word: Word) -> tuple[int, int, str]:
+        word_value = word.word or ""
+        word_exact = word_value.casefold() == exact_key
+        word_compact = manual_word_lookup_key(word_value) == compact_key
+        return (
+            0 if word_exact else 1 if word_compact else 2,
+            len(word_value),
+            word_value.casefold(),
+        )
+
+    candidates = sorted(candidates_by_id.values(), key=sort_key)[:limit]
+    return [serialize_manual_word_candidate(db, word, word_list_id) for word in candidates]
 
 
 def optional_manual_word_text(value: str | None) -> str | None:

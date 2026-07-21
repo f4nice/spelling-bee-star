@@ -12,6 +12,7 @@ export function buildListToolsContext(listTools) {
     syncListImages: listTools.syncListImages,
     moveListToGroup: listTools.moveListToGroup,
     createWordInList: listTools.createWordInList,
+    findWordCandidates: listTools.findWordCandidates,
     generateListAiImages: listTools.generateListAiImages,
   };
 }

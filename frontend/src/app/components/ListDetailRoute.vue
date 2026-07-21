@@ -24,6 +24,7 @@ defineProps({
     :delete-list="ctx.deleteList"
     :move-list-to-group="ctx.moveListToGroup"
     :create-word-in-list="ctx.createWordInList"
+    :find-word-candidates="ctx.findWordCandidates"
     :generate-list-ai-images="ctx.generateListAiImages"
     :word-detail-url="ctx.wordDetailUrl"
     :image-for-word="ctx.imageForWord"

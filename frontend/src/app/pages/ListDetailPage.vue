@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from "vue";
+import { ref, watch } from "vue";
 
 import ListDetailHeader from "../components/ListDetailHeader.vue";
 import ListDetailWordGrid from "../components/ListDetailWordGrid.vue";
@@ -17,6 +17,7 @@ const props = defineProps([
   "deleteList",
   "moveListToGroup",
   "createWordInList",
+  "findWordCandidates",
   "generateListAiImages",
   "wordDetailUrl",
   "imageForWord",
@@ -29,6 +30,8 @@ const isCreateWordModalOpen = ref(false);
 const isCreatingWord = ref(false);
 const createWordNotice = ref("");
 const createdWordResult = ref(null);
+const wordCandidates = ref([]);
+const candidateQuery = ref("");
 const newWord = ref(createEmptyWordForm());
 
 function createEmptyWordForm() {
@@ -46,6 +49,7 @@ function createEmptyWordForm() {
 function openCreateWordModal() {
   newWord.value = createEmptyWordForm();
   createdWordResult.value = null;
+  clearWordCandidates();
   createWordNotice.value = "";
   isCreateWordModalOpen.value = true;
 }
@@ -54,10 +58,30 @@ function closeCreateWordModal() {
   if (isCreatingWord.value) return;
   isCreateWordModalOpen.value = false;
   createdWordResult.value = null;
+  clearWordCandidates();
   createWordNotice.value = "";
 }
 
-async function submitNewWord() {
+watch(
+  () => newWord.value.word,
+  (nextWord, previousWord) => {
+    clearWordCandidates();
+    if (previousWord && nextWord) {
+      createWordNotice.value = "";
+    }
+  },
+);
+
+function clearWordCandidates() {
+  wordCandidates.value = [];
+  candidateQuery.value = "";
+}
+
+function wordCandidateSummary(candidate) {
+  return candidate.chinese_definition || candidate.english_definition || candidate.part_of_speech || "已有词条";
+}
+
+async function submitNewWord({ skipCandidateCheck = false } = {}) {
   if (isCreatingWord.value) return;
   if (!newWord.value.word.trim()) {
     createWordNotice.value = "请输入英文单词。";
@@ -66,12 +90,42 @@ async function submitNewWord() {
   isCreatingWord.value = true;
   createWordNotice.value = "";
   try {
+    if (!skipCandidateCheck && typeof props.findWordCandidates === "function") {
+      const candidates = await props.findWordCandidates(newWord.value.word);
+      if (candidates.length) {
+        wordCandidates.value = candidates;
+        candidateQuery.value = newWord.value.word.trim();
+        createWordNotice.value = `数据库里找到 ${candidates.length} 个可能匹配的词，先选择一个，或继续按当前输入保存。`;
+        return;
+      }
+    }
     const result = await props.createWordInList(newWord.value);
     createdWordResult.value = result;
     createWordNotice.value = `已添加 ${result.word?.word || newWord.value.word}`;
     newWord.value = createEmptyWordForm();
+    clearWordCandidates();
   } catch (error) {
     createWordNotice.value = error.message || "单词保存失败，请稍后再试。";
+  } finally {
+    isCreatingWord.value = false;
+  }
+}
+
+async function chooseExistingWord(candidate) {
+  if (isCreatingWord.value || !candidate?.id) return;
+  isCreatingWord.value = true;
+  createWordNotice.value = "";
+  try {
+    const result = await props.createWordInList({
+      ...newWord.value,
+      existing_word_id: candidate.id,
+    });
+    createdWordResult.value = result;
+    createWordNotice.value = `${candidate.in_current_list ? "这个词已在当前单词表：" : "已添加已有词："}${result.word?.word || candidate.word}`;
+    newWord.value = createEmptyWordForm();
+    clearWordCandidates();
+  } catch (error) {
+    createWordNotice.value = error.message || "选择已有词失败，请稍后再试。";
   } finally {
     isCreatingWord.value = false;
   }
@@ -111,7 +165,7 @@ function openImportModal() {
     :description="`添加到「${data.word_list.name}」`"
     @close="closeCreateWordModal"
   >
-    <form class="manual-word-form" @submit.prevent="submitNewWord">
+    <form class="manual-word-form" @submit.prevent="submitNewWord({ skipCandidateCheck: wordCandidates.length > 0 })">
       <label class="manual-word-field manual-word-field-wide">
         <span>英文单词</span>
         <input
@@ -148,6 +202,27 @@ function openImportModal() {
         <span>备注</span>
         <input v-model.trim="newWord.note" type="text" placeholder="可选" :disabled="isCreatingWord">
       </label>
+      <section v-if="wordCandidates.length" class="manual-word-candidates" aria-label="数据库候选单词">
+        <div class="manual-word-candidates-head">
+          <strong>数据库里有相近词</strong>
+          <span>输入：{{ candidateQuery }}</span>
+        </div>
+        <article v-for="candidate in wordCandidates" :key="candidate.id" class="manual-word-candidate-card">
+          <div>
+            <strong>{{ candidate.word }}</strong>
+            <span>{{ wordCandidateSummary(candidate) }}</span>
+            <em v-if="candidate.in_current_list">已在当前单词表</em>
+          </div>
+          <button
+            class="secondary-button compact-button"
+            type="button"
+            :disabled="isCreatingWord"
+            @click="chooseExistingWord(candidate)"
+          >
+            {{ candidate.in_current_list ? "使用这个" : "选择这个" }}
+          </button>
+        </article>
+      </section>
       <p v-if="createWordNotice" class="manual-word-notice">{{ createWordNotice }}</p>
       <div class="manual-word-actions">
         <button class="secondary-button" type="button" :disabled="isCreatingWord" @click="closeCreateWordModal">关闭</button>
@@ -161,7 +236,7 @@ function openImportModal() {
           打开详情
         </button>
         <button class="primary-action-button" type="submit" :disabled="isCreatingWord">
-          {{ isCreatingWord ? "保存中..." : "保存单词" }}
+          {{ isCreatingWord ? "保存中..." : wordCandidates.length ? "按当前输入保存" : "保存单词" }}
         </button>
       </div>
     </form>
