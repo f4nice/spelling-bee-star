@@ -92,8 +92,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260721-060"
-DEFAULT_PAGE_VERSION = "v20260721.60"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-061"
+DEFAULT_PAGE_VERSION = "v20260722.61"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -10077,8 +10077,10 @@ def clean_manual_word_text(value: str | None) -> str:
         raise HTTPException(status_code=400, detail="请输入英文单词。")
     if len(text) > 128:
         raise HTTPException(status_code=400, detail="单词不能超过 128 个字符。")
-    if not re.fullmatch(r"[A-Za-z][A-Za-z' -]*", text):
-        raise HTTPException(status_code=400, detail="单词只能包含英文字母、空格、连字符或撇号。")
+    if not re.search(r"[A-Za-z]", text):
+        raise HTTPException(status_code=400, detail="请输入包含英文字母的单词或词组。")
+    if re.search(r"[^A-Za-z0-9\s'’`.\-‐‑–—/&+(),]", text):
+        raise HTTPException(status_code=400, detail="单词只能包含英文、数字、空格和常见英文符号。")
     return text
 
 

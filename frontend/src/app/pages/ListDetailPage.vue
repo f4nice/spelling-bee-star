@@ -118,7 +118,7 @@ function openImportModal() {
           v-model.trim="newWord.word"
           type="text"
           autocomplete="off"
-          placeholder="例如：vacation"
+          placeholder="例如：vacation / a.m."
           required
           autofocus
           :disabled="isCreatingWord"
