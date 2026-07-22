@@ -20,7 +20,7 @@ let isApplyingDraft = false;
 const titleMaxChars = computed(() => Number(props.data?.limits?.titleMaxChars || 120));
 const bodyMaxChars = computed(() => Number(props.data?.limits?.bodyMaxChars || 30000));
 const currentWordCount = computed(() => countEssayWords(draft.body));
-const hasEssayInput = computed(() => Boolean(draft.title.trim() && draft.body.trim()));
+const hasEssayInput = computed(() => Boolean(draft.body.trim()));
 const aiVersionText = computed(() => {
   if (busyAction.value === "optimize") return "AI 正在优化这篇作文，完成后会显示在这里。";
   return draft.optimizedBody || "AI 优化后会显示在这里。";
@@ -138,7 +138,7 @@ function applyResponse(payload) {
 
 async function persistEssay({ silent = false } = {}) {
   if (!hasEssayInput.value) {
-    notice.value = "标题和正文都写好后再保存。";
+    notice.value = "正文写好后再保存。";
     return null;
   }
   if (busyAction.value) return null;
@@ -165,7 +165,7 @@ async function ensureSavedEssay() {
 
 async function optimizeEssay() {
   if (!hasEssayInput.value) {
-    notice.value = "标题和正文都写好后再优化。";
+    notice.value = "正文写好后再优化。";
     return;
   }
   if (busyAction.value) return;
@@ -186,7 +186,7 @@ async function optimizeEssay() {
 
 async function generateCover() {
   if (!hasEssayInput.value) {
-    notice.value = "标题和正文都写好后再生成封面。";
+    notice.value = "正文写好后再生成封面。";
     return;
   }
   if (busyAction.value) return;

@@ -92,8 +92,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-067"
-DEFAULT_PAGE_VERSION = "v20260722.67"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-068"
+DEFAULT_PAGE_VERSION = "v20260722.68"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -4779,6 +4779,7 @@ async def optimize_essay_with_openai(*, title: str, body: str) -> tuple[str, str
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not configured on the server.")
     model = (settings.openai_text_model or "gpt-4o-mini").strip()
+    student_context = f"Title: {title}\n\nStudent composition:\n{body}" if title else f"Student composition:\n{body}"
     payload = {
         "model": model,
         "messages": [
@@ -4792,7 +4793,7 @@ async def optimize_essay_with_openai(*, title: str, body: str) -> tuple[str, str
             },
             {
                 "role": "user",
-                "content": f"Title: {title}\n\nStudent composition:\n{body}",
+                "content": student_context,
             },
         ],
         "temperature": 0.35,
@@ -4843,8 +4844,6 @@ def apply_essay_payload(
 ) -> bool:
     title = clean_essay_title(payload.get("title"))
     body = clean_essay_body(payload.get("body"))
-    if not title:
-        raise HTTPException(status_code=400, detail="请输入作文标题。")
     if not body:
         raise HTTPException(status_code=400, detail="请输入作文正文。")
     content_changed = bool(essay.id) and (essay.title != title or essay.body != body)
