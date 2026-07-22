@@ -11729,6 +11729,52 @@ select {
   margin-bottom: 10px;
 }
 
+.cat-world-scene-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  border-bottom: 3px solid #2c2f3a;
+  padding-bottom: 10px;
+}
+
+.cat-world-scene-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  border: 3px solid #2c2f3a;
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: #263047;
+  background: #fff8df;
+  box-shadow: 3px 3px 0 #2c2f3a;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.cat-world-scene-tabs button.active {
+  color: #fff;
+  background: #236b55;
+}
+
+.cat-world-scene-tabs button:disabled:not(.active) {
+  color: #676b73;
+  background: #ddd7c8;
+  box-shadow: 2px 2px 0 #2c2f3a;
+  cursor: default;
+}
+
+.cat-world-scene-tabs small {
+  border-radius: 3px;
+  padding: 2px 4px;
+  color: #704719;
+  background: #fff1a8;
+  font-size: 9px;
+}
+
 .cat-world-room-head h2,
 .cat-world-ledger h2,
 .cat-world-market-head h2 {

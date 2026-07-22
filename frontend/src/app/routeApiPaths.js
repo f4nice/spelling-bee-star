@@ -11,6 +11,7 @@ export const routeApiPaths = {
   catWorldRepair: () => "/api/vue/cat-world/repair",
   catWorldDecorStyle: () => "/api/vue/cat-world/decor-style",
   catWorldRoomLayout: () => "/api/vue/cat-world/room-layout",
+  catWorldSelectScene: () => "/api/vue/cat-world/scene/select",
   catWorldSelectCat: () => "/api/vue/cat-world/select-cat",
   catWorldPet: () => "/api/vue/cat-world/pet",
   admin: () => "/api/vue/admin",

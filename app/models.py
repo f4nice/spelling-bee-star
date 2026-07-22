@@ -215,6 +215,9 @@ class CatWorldState(Base):
     cats: Mapped[str | None] = mapped_column(Text)
     room_styles: Mapped[str | None] = mapped_column(Text)
     room_layout: Mapped[str | None] = mapped_column(Text)
+    current_scene_key: Mapped[str] = mapped_column(
+        String(80), default="main-room", server_default="main-room", nullable=False
+    )
     cat_bonds: Mapped[str | None] = mapped_column(Text)
     cat_care: Mapped[str | None] = mapped_column(Text)
     selected_cat: Mapped[str] = mapped_column(String(80), default="mimi", server_default="mimi", nullable=False)
@@ -231,6 +234,45 @@ class CatWorldState(Base):
     litter_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
     litter_started_at: Mapped[datetime | None] = mapped_column(DateTime)
     damaged_items: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class CatWorldScene(Base):
+    __tablename__ = "cat_world_scenes"
+    __table_args__ = (UniqueConstraint("scene_key", name="uq_cat_world_scenes_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    scene_key: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    english_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    scene_type: Mapped[str] = mapped_column(String(80), default="indoor", server_default="indoor", nullable=False)
+    world_width: Mapped[int] = mapped_column(Integer, default=1600, server_default="1600", nullable=False)
+    world_height: Mapped[int] = mapped_column(Integer, default=560, server_default="560", nullable=False)
+    viewport_width: Mapped[int] = mapped_column(Integer, default=1280, server_default="1280", nullable=False)
+    viewport_height: Mapped[int] = mapped_column(Integer, default=560, server_default="560", nullable=False)
+    floor_top: Mapped[int] = mapped_column(Integer, default=260, server_default="260", nullable=False)
+    floor_bottom: Mapped[int] = mapped_column(Integer, default=522, server_default="522", nullable=False)
+    config: Mapped[str | None] = mapped_column(Text)
+    default_layout: Mapped[str | None] = mapped_column(Text)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class CatWorldUserScene(Base):
+    __tablename__ = "cat_world_user_scenes"
+    __table_args__ = (UniqueConstraint("phone", "scene_key", name="uq_cat_world_user_scenes_phone_scene"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    scene_key: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    layout: Mapped[str | None] = mapped_column(Text)
+    room_styles: Mapped[str | None] = mapped_column(Text)
+    is_unlocked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    unlocked_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_visited_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

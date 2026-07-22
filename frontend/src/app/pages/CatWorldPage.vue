@@ -45,6 +45,7 @@ const energyModalOpen = ref(false);
 const petBusyCatId = ref("");
 const roomCanPan = ref(false);
 const roomPanActive = ref(false);
+const busySceneId = ref("");
 const ambientEventCooldowns = new Map();
 const foodNibbleCooldowns = new Map();
 
@@ -151,6 +152,10 @@ const catIconColors = {
 const energy = computed(() => payload.value.energy || {});
 const todayEnergy = computed(() => Math.max(Number(energy.value.today || 0), 0));
 const state = computed(() => payload.value.state || {});
+const scenes = computed(() => payload.value.scenes || []);
+const currentScene = computed(
+  () => state.value.currentScene || scenes.value.find((scene) => scene.id === state.value.currentSceneId) || {},
+);
 const inventory = computed(() => state.value.inventory || {});
 const usableInventory = computed(() => state.value.usableInventory || inventory.value);
 const damagedItems = computed(() => state.value.damagedItems || {});
@@ -468,6 +473,7 @@ const gameSnapshot = computed(() => ({
   roomStyles: roomStyles.value,
   selectedCatId: state.value.selectedCat,
   gameSettings: gameSettings.value,
+  scene: currentScene.value,
   editMode: roomEditMode.value,
 }));
 
@@ -789,12 +795,12 @@ function formatSeconds(seconds) {
 }
 
 async function saveRoomLayout() {
-  if (savingRoomLayout.value) return;
+  if (savingRoomLayout.value) return false;
   if (!layoutDirty.value) {
     roomEditMode.value = false;
     selectedDecorId.value = "";
     notice.value = "已退出编辑模式，猫咪回到活动室。";
-    return;
+    return true;
   }
   savingRoomLayout.value = true;
   notice.value = "";
@@ -804,7 +810,7 @@ async function saveRoomLayout() {
     const nextPayload = await fetchJson(routeApiPaths.catWorldRoomLayout(), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ layout: layoutDraft.value }),
+      body: JSON.stringify({ sceneId: currentScene.value.id, layout: layoutDraft.value }),
     });
     replacePayload(nextPayload);
     layoutDirty.value = false;
@@ -823,10 +829,38 @@ async function saveRoomLayout() {
     } else {
       notice.value = "房间布局已保存。";
     }
+    return true;
   } catch (error) {
     notice.value = error.message || "布局保存失败，请稍后再试。";
+    return false;
   } finally {
     savingRoomLayout.value = false;
+  }
+}
+
+async function selectScene(scene) {
+  if (!scene?.id || !scene.available || busySceneId.value || scene.id === currentScene.value.id) return;
+  if (roomEditMode.value || layoutDirty.value) {
+    const saved = await saveRoomLayout();
+    if (!saved) return;
+  }
+  busySceneId.value = scene.id;
+  notice.value = "";
+  try {
+    const nextPayload = await fetchJson(routeApiPaths.catWorldSelectScene(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sceneId: scene.id }),
+    });
+    replacePayload(nextPayload);
+    roomEditMode.value = false;
+    layoutDirty.value = false;
+    roomPanActive.value = false;
+    notice.value = `已进入${nextPayload.state?.currentScene?.label || scene.label}。`;
+  } catch (error) {
+    notice.value = error.message || "场景切换失败，请稍后再试。";
+  } finally {
+    busySceneId.value = "";
   }
 }
 
@@ -1121,7 +1155,7 @@ async function cycleDecorStyle(decorId) {
     const nextPayload = await fetchJson(routeApiPaths.catWorldDecorStyle(), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ decorId }),
+      body: JSON.stringify({ sceneId: currentScene.value.id, decorId }),
     });
     replacePayload(nextPayload);
     notice.value = nextPayload.style?.label ? `已切换为${nextPayload.style.label}。` : "装修颜色已切换。";
@@ -1141,7 +1175,7 @@ async function applyDecorStyle(decorId, option) {
     const nextPayload = await fetchJson(routeApiPaths.catWorldDecorStyle(), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ decorId, tone: option.tone }),
+      body: JSON.stringify({ sceneId: currentScene.value.id, decorId, tone: option.tone }),
     });
     replacePayload(nextPayload);
     notice.value = `${nextPayload.style?.label || option.label || "配色"} 已应用，拖动家具后可以保存布局。`;
@@ -1199,10 +1233,26 @@ async function selectCat(catId) {
 
     <section class="cat-world-layout">
       <section class="cat-world-room-panel panel">
+        <div v-if="scenes.length > 1" class="cat-world-scene-tabs" role="tablist" aria-label="猫咪世界场景">
+          <button
+            v-for="scene in scenes"
+            :key="scene.id"
+            type="button"
+            role="tab"
+            :aria-selected="scene.id === currentScene.id"
+            :class="{ active: scene.id === currentScene.id }"
+            :disabled="!scene.available || Boolean(busySceneId)"
+            :title="scene.available ? `进入${scene.label}` : `${scene.label}尚未开放`"
+            @click="selectScene(scene)"
+          >
+            <span>{{ scene.label }}</span>
+            <small v-if="!scene.available">规划中</small>
+          </button>
+        </div>
         <div class="cat-world-room-head">
           <div>
-            <p class="section-kicker">Room</p>
-            <h2>像素猫活动室</h2>
+            <p class="section-kicker">{{ currentScene.englishName || "Room" }}</p>
+            <h2>{{ currentScene.label || "像素猫活动室" }}</h2>
           </div>
           <div class="cat-world-room-actions">
             <button
@@ -1239,7 +1289,7 @@ async function selectCat(catId) {
           </ul>
         </div>
 
-        <div :class="['cat-world-room', { 'is-editing': roomEditMode, 'is-panning': roomPanActive, 'can-pan': roomCanPan }]" aria-label="猫咪房间场景">
+        <div :class="['cat-world-room', { 'is-editing': roomEditMode, 'is-panning': roomPanActive, 'can-pan': roomCanPan }]" :aria-label="`${currentScene.label || '猫咪房间'}场景`">
           <div
             class="cat-world-room-viewport"
             @wheel.capture="handleRoomWheel"

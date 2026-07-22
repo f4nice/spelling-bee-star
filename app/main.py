@@ -35,8 +35,10 @@ from app.models import (
     CacheEntry,
     CatWorldDailyLog,
     CatWorldGameSetting,
+    CatWorldScene,
     CatWorldShopSetting,
     CatWorldState,
+    CatWorldUserScene,
     ChallengeDailyStat,
     ChallengeDailyWord,
     ChallengeProgress,
@@ -92,8 +94,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260723-004"
-DEFAULT_PAGE_VERSION = "v20260723.4"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260723-005"
+DEFAULT_PAGE_VERSION = "v20260723.5"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -935,6 +937,135 @@ CAT_WORLD_ROOM_DEFAULT_LAYOUT = {
     **CAT_WORLD_DECOR_DEFAULT_LAYOUT,
     **CAT_WORLD_TOY_DEFAULT_LAYOUT,
 }
+CAT_WORLD_DEFAULT_SCENE_KEY = "main-room"
+CAT_WORLD_SCENE_SEEDS = [
+    {
+        "sceneKey": CAT_WORLD_DEFAULT_SCENE_KEY,
+        "label": "一楼活动室",
+        "englishName": "Main Room",
+        "sceneType": "indoor",
+        "isEnabled": True,
+        "sortOrder": 10,
+        "world": {
+            "width": 1600,
+            "height": 560,
+            "viewportWidth": 1280,
+            "viewportHeight": 560,
+            "floorTop": 260,
+            "floorBottom": 522,
+        },
+        "palette": {
+            "wallTopLeft": "#cff7ee",
+            "wallTopRight": "#fff0d0",
+            "wallBottomLeft": "#9be4ff",
+            "wallBottomRight": "#ffd7e7",
+            "floor": "#c29258",
+            "trim": "#6bc579",
+            "grid": "#2c2f3a",
+        },
+        "features": {"cats": True, "food": True, "care": True, "hygiene": True},
+        "itemRules": {"allowedCategories": ["decor", "toy"], "excludedItemIds": []},
+        "spawnPoints": {
+            "activeFood": {"x": 1340, "y": 408, "width": 118, "height": 46},
+            "activeCare": {"x": 590, "y": 426, "width": 68, "height": 70},
+            "readyLitter": {"x": 1134, "y": 352, "width": 112, "height": 82},
+            "attention": {"x": 754, "y": 444},
+            "litter": [
+                {"x": 1110, "y": 456},
+                {"x": 930, "y": 468},
+                {"x": 744, "y": 448},
+                {"x": 426, "y": 466},
+            ],
+        },
+        "portals": [
+            {"targetSceneKey": "yard", "label": "去外院", "x": 1510, "y": 250},
+            {"targetSceneKey": "second-floor", "label": "去二楼", "x": 82, "y": 250},
+        ],
+        "defaultLayout": CAT_WORLD_ROOM_DEFAULT_LAYOUT,
+    },
+    {
+        "sceneKey": "yard",
+        "label": "猫咪外院",
+        "englishName": "Garden Yard",
+        "sceneType": "outdoor",
+        "isEnabled": False,
+        "sortOrder": 20,
+        "world": {
+            "width": 2200,
+            "height": 560,
+            "viewportWidth": 1280,
+            "viewportHeight": 560,
+            "floorTop": 236,
+            "floorBottom": 522,
+        },
+        "palette": {
+            "wallTopLeft": "#8ed8ff",
+            "wallTopRight": "#fff1a8",
+            "wallBottomLeft": "#bff0ff",
+            "wallBottomRight": "#d9f6c2",
+            "floor": "#78b95a",
+            "trim": "#4c963f",
+            "grid": "#31544d",
+        },
+        "features": {"cats": True, "food": True, "care": True, "hygiene": True},
+        "itemRules": {"allowedCategories": ["decor", "toy"], "excludedItemIds": ["sun-window", "window-hammock"]},
+        "spawnPoints": {
+            "activeFood": {"x": 1920, "y": 408, "width": 118, "height": 46},
+            "activeCare": {"x": 760, "y": 426, "width": 68, "height": 70},
+            "readyLitter": {"x": 1560, "y": 352, "width": 112, "height": 82},
+            "attention": {"x": 1054, "y": 444},
+            "litter": [
+                {"x": 1710, "y": 456},
+                {"x": 1320, "y": 468},
+                {"x": 840, "y": 448},
+                {"x": 390, "y": 466},
+            ],
+        },
+        "portals": [{"targetSceneKey": CAT_WORLD_DEFAULT_SCENE_KEY, "label": "回一楼", "x": 80, "y": 238}],
+        "defaultLayout": CAT_WORLD_ROOM_DEFAULT_LAYOUT,
+    },
+    {
+        "sceneKey": "second-floor",
+        "label": "二楼阅读间",
+        "englishName": "Reading Loft",
+        "sceneType": "upper-floor",
+        "isEnabled": False,
+        "sortOrder": 30,
+        "world": {
+            "width": 1800,
+            "height": 560,
+            "viewportWidth": 1280,
+            "viewportHeight": 560,
+            "floorTop": 268,
+            "floorBottom": 522,
+        },
+        "palette": {
+            "wallTopLeft": "#e9ddff",
+            "wallTopRight": "#ffeab5",
+            "wallBottomLeft": "#c9e8ff",
+            "wallBottomRight": "#ffd4e5",
+            "floor": "#a97858",
+            "trim": "#8e70b8",
+            "grid": "#3d354d",
+        },
+        "features": {"cats": True, "food": True, "care": True, "hygiene": True},
+        "itemRules": {"allowedCategories": ["decor", "toy"], "excludedItemIds": []},
+        "spawnPoints": {
+            "activeFood": {"x": 1510, "y": 408, "width": 118, "height": 46},
+            "activeCare": {"x": 650, "y": 426, "width": 68, "height": 70},
+            "readyLitter": {"x": 1260, "y": 352, "width": 112, "height": 82},
+            "attention": {"x": 854, "y": 444},
+            "litter": [
+                {"x": 1430, "y": 456},
+                {"x": 1110, "y": 468},
+                {"x": 760, "y": 448},
+                {"x": 390, "y": 466},
+            ],
+        },
+        "portals": [{"targetSceneKey": CAT_WORLD_DEFAULT_SCENE_KEY, "label": "回一楼", "x": 80, "y": 268}],
+        "defaultLayout": CAT_WORLD_ROOM_DEFAULT_LAYOUT,
+    },
+]
 CAT_WORLD_PRICING_PLANS = [
     {
         "category": "food",
@@ -3281,6 +3412,7 @@ def startup() -> None:
     SCIENCE_DISCOVERY_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     ensure_version_matrix_file()
     with SessionLocal() as db:
+        seed_cat_world_scenes(db)
         seed_daily_quotes(db)
         ensure_default_word_list(db)
         seed_word_resource_pool(db)
@@ -3919,10 +4051,12 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
         if not target_decor or inventory.get(target_decor, 0) <= 0:
             target_label = item.get("targetDecorLabel") or "对应家具"
             raise HTTPException(status_code=400, detail=f"请先购买{target_label}，再解锁它的颜色。")
-        room_styles = parse_cat_world_room_styles(state.room_styles, inventory)
+        _, active_user_scene, _ = cat_world_active_scene_context(db, state)
+        room_styles = parse_cat_world_room_styles(active_user_scene.room_styles, inventory)
         if inventory.get(item_id, 0) > 0:
             room_styles[target_decor] = str(item.get("tone") or "default")
-            state.room_styles = encode_cat_world_room_styles(room_styles)
+            save_cat_world_active_scene_styles(state, active_user_scene, room_styles)
+            db.add(active_user_scene)
             db.add(state)
             db.commit()
             db.refresh(state)
@@ -3932,7 +4066,8 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
         inventory[item_id] = 1
         room_styles[target_decor] = str(item.get("tone") or "default")
         state.inventory = encode_cat_world_inventory(inventory)
-        state.room_styles = encode_cat_world_room_styles(room_styles)
+        save_cat_world_active_scene_styles(state, active_user_scene, room_styles)
+        db.add(active_user_scene)
     elif item["category"] in {"toy", "decor"}:
         if inventory.get(item_id, 0) > 0:
             return {"ok": True, **serialize_cat_world_payload(db, state)}
@@ -3984,7 +4119,7 @@ async def vue_cat_world_play_api(request: Request, db: Session = Depends(get_db)
         state.last_play_item = item_id
         state.last_played_at = datetime.utcnow()
     usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
-    room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
+    room_layout = cat_world_active_scene_layout(db, state, usable_inventory)
     effect = cat_world_apply_daily_effect(
         db,
         state,
@@ -4015,7 +4150,7 @@ async def vue_cat_world_food_nibble_api(request: Request, db: Session = Depends(
     inventory = parse_cat_world_inventory(state.inventory)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
-    room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
+    room_layout = cat_world_active_scene_layout(db, state, usable_inventory)
     effect = cat_world_apply_active_food_nibble(db, state, cat_id, usable_inventory, room_layout)
     return {"ok": True, "effect": effect, **serialize_cat_world_payload(db, state)}
 
@@ -4087,7 +4222,7 @@ async def vue_cat_world_use_consumable_api(request: Request, db: Session = Depen
         inventory.pop(item_id, None)
     state.inventory = encode_cat_world_inventory(inventory)
     usable_inventory = cat_world_usable_inventory(inventory, parse_cat_world_damaged_items(state.damaged_items))
-    room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
+    room_layout = cat_world_active_scene_layout(db, state, usable_inventory)
     owned_cats = parse_cat_world_cats(state.cats)
     if not owned_cats:
         raise HTTPException(status_code=400, detail="活动室里没有猫咪，请先去商店重新领养。")
@@ -4217,7 +4352,7 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
     inventory = parse_cat_world_inventory(state.inventory)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
-    room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
+    room_layout = cat_world_active_scene_layout(db, state, usable_inventory)
     item = CAT_WORLD_SHOP_BY_ID.get(item_id)
     label_hint = str(payload.get("label") or "").strip()
     if event_kind in {"favorite-toy", "favorite-decor"}:
@@ -4457,6 +4592,9 @@ async def vue_cat_world_decor_style_api(request: Request, db: Session = Depends(
     if decor_id not in CAT_WORLD_DECOR_LABELS:
         raise HTTPException(status_code=404, detail="没有找到这个装修。")
     state = get_or_create_cat_world_state(db, phone)
+    requested_scene_key = str((payload or {}).get("sceneId") or state.current_scene_key).strip()
+    if requested_scene_key != state.current_scene_key:
+        raise HTTPException(status_code=409, detail="场景已经切换，请重新选择装修。")
     inventory = parse_cat_world_inventory(state.inventory)
     if inventory.get(decor_id, 0) <= 0:
         raise HTTPException(status_code=400, detail="请先购买这个装修。")
@@ -4464,7 +4602,8 @@ async def vue_cat_world_decor_style_api(request: Request, db: Session = Depends(
     options = cat_world_owned_style_options(inventory, decor_id)
     if len(options) <= 1:
         raise HTTPException(status_code=400, detail="还没有解锁这个装修的颜色，先去配色商店购买。")
-    room_styles = parse_cat_world_room_styles(state.room_styles, inventory)
+    _, active_user_scene, _ = cat_world_active_scene_context(db, state)
+    room_styles = parse_cat_world_room_styles(active_user_scene.room_styles, inventory)
     current_tone = room_styles.get(decor_id, "default")
     if requested_tone:
         next_option = next((option for option in options if option["tone"] == requested_tone), None)
@@ -4474,7 +4613,8 @@ async def vue_cat_world_decor_style_api(request: Request, db: Session = Depends(
         current_index = next((index for index, option in enumerate(options) if option["tone"] == current_tone), 0)
         next_option = options[(current_index + 1) % len(options)]
     room_styles[decor_id] = next_option["tone"]
-    state.room_styles = encode_cat_world_room_styles(room_styles)
+    save_cat_world_active_scene_styles(state, active_user_scene, room_styles)
+    db.add(active_user_scene)
     db.add(state)
     db.commit()
     db.refresh(state)
@@ -4494,12 +4634,22 @@ async def vue_cat_world_room_layout_api(request: Request, db: Session = Depends(
     if not isinstance(incoming, dict):
         raise HTTPException(status_code=400, detail="请提交可保存的房间布局。")
     state = get_or_create_cat_world_state(db, phone)
+    requested_scene_key = str((payload or {}).get("sceneId") or state.current_scene_key).strip()
+    if requested_scene_key != state.current_scene_key:
+        raise HTTPException(status_code=409, detail="场景已经切换，请重新打开编辑模式后保存。")
     inventory = parse_cat_world_inventory(state.inventory)
-    current_layout = parse_cat_world_room_layout(state.room_layout, inventory)
+    _, active_user_scene, active_scene_config = cat_world_active_scene_context(db, state)
+    current_layout = parse_cat_world_room_layout(
+        active_user_scene.layout,
+        inventory,
+        active_scene_config.get("defaultLayout"),
+        active_scene_config.get("itemRules"),
+    )
     owned_layout_item_ids = {
         item_id
         for item_id, count in inventory.items()
         if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") in {"decor", "toy"}
+        and cat_world_layout_item_allowed(item_id, active_scene_config.get("itemRules"))
     }
     saved_layout = {**current_layout}
     for item_id, position in incoming.items():
@@ -4509,10 +4659,15 @@ async def vue_cat_world_room_layout_api(request: Request, db: Session = Depends(
         normalized = normalize_cat_world_room_position(position)
         if normalized:
             saved_layout[item_key] = normalized
-    state.room_layout = encode_cat_world_room_layout(saved_layout)
+    save_cat_world_active_scene_layout(state, active_user_scene, saved_layout)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
-    usable_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
+    usable_layout = parse_cat_world_room_layout(
+        active_user_scene.layout,
+        usable_inventory,
+        active_scene_config.get("defaultLayout"),
+        active_scene_config.get("itemRules"),
+    )
     rewards = cat_world_apply_favorite_decor_rewards(
         db,
         state,
@@ -4520,10 +4675,37 @@ async def vue_cat_world_room_layout_api(request: Request, db: Session = Depends(
         usable_layout,
         parse_cat_world_cats(state.cats),
     )
+    db.add(active_user_scene)
     db.add(state)
     db.commit()
     db.refresh(state)
     return {"ok": True, "layoutRewards": rewards, **serialize_cat_world_payload(db, state)}
+
+
+@app.post("/api/vue/cat-world/scene/select")
+async def vue_cat_world_select_scene_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="场景数据不是有效 JSON。") from exc
+    scene_key = str((payload or {}).get("sceneId") or "").strip()
+    scene = cat_world_scene_row(db, scene_key)
+    if not scene or scene.scene_key != scene_key:
+        raise HTTPException(status_code=404, detail="没有找到这个场景。")
+    if not scene.is_enabled:
+        raise HTTPException(status_code=403, detail="这个场景还在准备中。")
+    state = get_or_create_cat_world_state(db, phone)
+    user_scene, _ = get_or_create_cat_world_user_scene(db, state, scene)
+    if not user_scene.is_unlocked:
+        raise HTTPException(status_code=403, detail="这个场景还没有解锁。")
+    state.current_scene_key = scene.scene_key
+    user_scene.last_visited_at = datetime.utcnow()
+    db.add(user_scene)
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return {"ok": True, **serialize_cat_world_payload(db, state)}
 
 
 @app.post("/api/vue/cat-world/select-cat")
@@ -4560,7 +4742,7 @@ async def vue_cat_world_pet_api(request: Request, db: Session = Depends(get_db))
     inventory = parse_cat_world_inventory(state.inventory)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
-    room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
+    room_layout = cat_world_active_scene_layout(db, state, usable_inventory)
     effect = cat_world_apply_pet_effect(db, state, cat_id, usable_inventory, room_layout)
     db.add(state)
     db.commit()
@@ -4691,12 +4873,13 @@ async def vue_admin_cat_world_reset_api(request: Request, db: Session = Depends(
         raise HTTPException(status_code=400, detail="请先在用户中心给当前后台账号设置登录密码。")
     if not verify_login_password(password, current.login_password_hash):
         raise HTTPException(status_code=403, detail="后台登录密码不正确。")
+    deleted_scenes = db.execute(delete(CatWorldUserScene).where(CatWorldUserScene.phone == current.phone)).rowcount or 0
     deleted_state = db.execute(delete(CatWorldState).where(CatWorldState.phone == current.phone)).rowcount or 0
     deleted_logs = db.execute(delete(CatWorldDailyLog).where(CatWorldDailyLog.phone == current.phone)).rowcount or 0
     db.commit()
     return {
         "ok": True,
-        "deleted": {"state": deleted_state, "dailyLogs": deleted_logs},
+        "deleted": {"state": deleted_state, "scenes": deleted_scenes, "dailyLogs": deleted_logs},
         "catWorldPricing": admin_cat_world_pricing_payload(db),
     }
 
@@ -11609,7 +11792,26 @@ def normalize_cat_world_room_position(value: Any) -> dict[str, float] | None:
     }
 
 
-def parse_cat_world_room_layout(raw: str | None, inventory: dict[str, int] | None = None) -> dict[str, dict[str, float]]:
+def cat_world_layout_item_allowed(item_id: str, item_rules: dict[str, Any] | None = None) -> bool:
+    item = CAT_WORLD_SHOP_BY_ID.get(item_id, {})
+    category = str(item.get("category") or "")
+    rules = item_rules if isinstance(item_rules, dict) else {}
+    allowed_categories = {str(value) for value in rules.get("allowedCategories", []) if str(value).strip()}
+    allowed_item_ids = {str(value) for value in rules.get("allowedItemIds", []) if str(value).strip()}
+    excluded_item_ids = {str(value) for value in rules.get("excludedItemIds", []) if str(value).strip()}
+    if item_id in excluded_item_ids:
+        return False
+    if allowed_item_ids and item_id not in allowed_item_ids:
+        return False
+    return not allowed_categories or category in allowed_categories
+
+
+def parse_cat_world_room_layout(
+    raw: str | None,
+    inventory: dict[str, int] | None = None,
+    default_layout: dict[str, Any] | None = None,
+    item_rules: dict[str, Any] | None = None,
+) -> dict[str, dict[str, float]]:
     try:
         loaded = json.loads(raw or "{}")
     except json.JSONDecodeError:
@@ -11621,10 +11823,12 @@ def parse_cat_world_room_layout(raw: str | None, inventory: dict[str, int] | Non
         item_id
         for item_id, count in inventory.items()
         if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") in {"decor", "toy"}
+        and cat_world_layout_item_allowed(item_id, item_rules)
     ]
     layout: dict[str, dict[str, float]] = {}
+    scene_default_layout = default_layout if isinstance(default_layout, dict) else CAT_WORLD_ROOM_DEFAULT_LAYOUT
     for item_id in owned_layout_item_ids:
-        default_position = CAT_WORLD_ROOM_DEFAULT_LAYOUT.get(item_id, {"x": 8, "y": 58})
+        default_position = scene_default_layout.get(item_id, CAT_WORLD_ROOM_DEFAULT_LAYOUT.get(item_id, {"x": 8, "y": 58}))
         layout[item_id] = {
             "x": float(default_position["x"]),
             "y": float(default_position["y"]),
@@ -11644,6 +11848,200 @@ def encode_cat_world_room_layout(layout: dict[str, Any]) -> str:
         if normalized:
             clean[item_id] = normalized
     return json.dumps(clean, ensure_ascii=False, sort_keys=True)
+
+
+def parse_cat_world_scene_json(raw: str | None, fallback: Any) -> Any:
+    try:
+        loaded = json.loads(raw or "")
+    except (json.JSONDecodeError, TypeError):
+        return fallback
+    return loaded if isinstance(loaded, type(fallback)) else fallback
+
+
+def seed_cat_world_scenes(db: Session) -> None:
+    existing_keys = set(db.scalars(select(CatWorldScene.scene_key)).all())
+    changed = False
+    for seed in CAT_WORLD_SCENE_SEEDS:
+        scene_key = str(seed["sceneKey"])
+        if scene_key in existing_keys:
+            continue
+        world = seed["world"]
+        config = {
+            "palette": seed.get("palette") or {},
+            "features": seed.get("features") or {},
+            "itemRules": seed.get("itemRules") or {},
+            "spawnPoints": seed.get("spawnPoints") or {},
+            "portals": seed.get("portals") or [],
+            "unlockByDefault": bool(seed.get("unlockByDefault", True)),
+        }
+        db.add(
+            CatWorldScene(
+                scene_key=scene_key,
+                label=str(seed["label"]),
+                english_name=str(seed["englishName"]),
+                scene_type=str(seed.get("sceneType") or "indoor"),
+                world_width=int(world["width"]),
+                world_height=int(world["height"]),
+                viewport_width=int(world["viewportWidth"]),
+                viewport_height=int(world["viewportHeight"]),
+                floor_top=int(world["floorTop"]),
+                floor_bottom=int(world["floorBottom"]),
+                config=json.dumps(config, ensure_ascii=False, sort_keys=True),
+                default_layout=encode_cat_world_room_layout(seed.get("defaultLayout") or {}),
+                is_enabled=bool(seed.get("isEnabled")),
+                sort_order=int(seed.get("sortOrder") or 0),
+            )
+        )
+        changed = True
+    if changed:
+        db.commit()
+
+
+def cat_world_scene_row(db: Session, scene_key: str | None = None, enabled_only: bool = False) -> CatWorldScene | None:
+    normalized = str(scene_key or CAT_WORLD_DEFAULT_SCENE_KEY).strip() or CAT_WORLD_DEFAULT_SCENE_KEY
+    statement = select(CatWorldScene).where(CatWorldScene.scene_key == normalized)
+    if enabled_only:
+        statement = statement.where(CatWorldScene.is_enabled.is_(True))
+    row = db.scalar(statement)
+    if row or normalized == CAT_WORLD_DEFAULT_SCENE_KEY:
+        return row
+    fallback = select(CatWorldScene).where(CatWorldScene.scene_key == CAT_WORLD_DEFAULT_SCENE_KEY)
+    if enabled_only:
+        fallback = fallback.where(CatWorldScene.is_enabled.is_(True))
+    return db.scalar(fallback)
+
+
+def cat_world_scene_config(scene: CatWorldScene) -> dict[str, Any]:
+    extra = parse_cat_world_scene_json(scene.config, {})
+    default_layout = parse_cat_world_scene_json(scene.default_layout, {})
+    return {
+        "id": scene.scene_key,
+        "label": scene.label,
+        "englishName": scene.english_name,
+        "type": scene.scene_type,
+        "enabled": bool(scene.is_enabled),
+        "sortOrder": int(scene.sort_order or 0),
+        "world": {
+            "width": max(int(scene.world_width or 1600), 960),
+            "height": max(int(scene.world_height or 560), 420),
+            "viewportWidth": max(int(scene.viewport_width or 1280), 720),
+            "viewportHeight": max(int(scene.viewport_height or 560), 420),
+            "floorTop": max(int(scene.floor_top or 260), 120),
+            "floorBottom": max(int(scene.floor_bottom or 522), 240),
+        },
+        "palette": extra.get("palette") if isinstance(extra.get("palette"), dict) else {},
+        "features": extra.get("features") if isinstance(extra.get("features"), dict) else {},
+        "itemRules": extra.get("itemRules") if isinstance(extra.get("itemRules"), dict) else {},
+        "spawnPoints": extra.get("spawnPoints") if isinstance(extra.get("spawnPoints"), dict) else {},
+        "portals": extra.get("portals") if isinstance(extra.get("portals"), list) else [],
+        "unlockByDefault": bool(extra.get("unlockByDefault", True)),
+        "defaultLayout": default_layout,
+    }
+
+
+def get_or_create_cat_world_user_scene(
+    db: Session,
+    state: CatWorldState,
+    scene: CatWorldScene,
+) -> tuple[CatWorldUserScene, bool]:
+    row = db.scalar(
+        select(CatWorldUserScene).where(
+            CatWorldUserScene.phone == state.phone,
+            CatWorldUserScene.scene_key == scene.scene_key,
+        )
+    )
+    if row:
+        return row, False
+    is_default_scene = scene.scene_key == CAT_WORLD_DEFAULT_SCENE_KEY
+    config = cat_world_scene_config(scene)
+    row = CatWorldUserScene(
+        phone=state.phone,
+        scene_key=scene.scene_key,
+        layout=state.room_layout if is_default_scene else encode_cat_world_room_layout({}),
+        room_styles=state.room_styles if is_default_scene else encode_cat_world_room_styles({}),
+        is_unlocked=is_default_scene or bool(config.get("unlockByDefault")),
+        unlocked_at=datetime.utcnow() if is_default_scene or bool(config.get("unlockByDefault")) else None,
+        last_visited_at=datetime.utcnow() if is_default_scene else None,
+    )
+    db.add(row)
+    db.flush()
+    return row, True
+
+
+def cat_world_active_scene_context(
+    db: Session,
+    state: CatWorldState,
+) -> tuple[CatWorldScene, CatWorldUserScene, dict[str, Any]]:
+    scene = cat_world_scene_row(db, state.current_scene_key, enabled_only=True)
+    if not scene:
+        raise HTTPException(status_code=500, detail="猫咪世界还没有可用场景配置。")
+    if state.current_scene_key != scene.scene_key:
+        state.current_scene_key = scene.scene_key
+        db.add(state)
+    user_scene, _ = get_or_create_cat_world_user_scene(db, state, scene)
+    return scene, user_scene, cat_world_scene_config(scene)
+
+
+def cat_world_active_scene_layout(
+    db: Session,
+    state: CatWorldState,
+    inventory: dict[str, int],
+) -> dict[str, dict[str, float]]:
+    _, user_scene, config = cat_world_active_scene_context(db, state)
+    return parse_cat_world_room_layout(
+        user_scene.layout,
+        inventory,
+        config.get("defaultLayout"),
+        config.get("itemRules"),
+    )
+
+
+def cat_world_active_scene_styles(
+    db: Session,
+    state: CatWorldState,
+    inventory: dict[str, int],
+) -> dict[str, str]:
+    _, user_scene, _ = cat_world_active_scene_context(db, state)
+    return parse_cat_world_room_styles(user_scene.room_styles, inventory)
+
+
+def save_cat_world_active_scene_layout(
+    state: CatWorldState,
+    user_scene: CatWorldUserScene,
+    layout: dict[str, Any],
+) -> None:
+    encoded = encode_cat_world_room_layout(layout)
+    user_scene.layout = encoded
+    user_scene.last_visited_at = datetime.utcnow()
+    if user_scene.scene_key == CAT_WORLD_DEFAULT_SCENE_KEY:
+        state.room_layout = encoded
+
+
+def save_cat_world_active_scene_styles(
+    state: CatWorldState,
+    user_scene: CatWorldUserScene,
+    styles: dict[str, str],
+) -> None:
+    encoded = encode_cat_world_room_styles(styles)
+    user_scene.room_styles = encoded
+    user_scene.last_visited_at = datetime.utcnow()
+    if user_scene.scene_key == CAT_WORLD_DEFAULT_SCENE_KEY:
+        state.room_styles = encoded
+
+
+def cat_world_scene_catalog_payload(db: Session, state: CatWorldState) -> list[dict[str, Any]]:
+    rows = db.scalars(select(CatWorldScene).order_by(CatWorldScene.sort_order, CatWorldScene.id)).all()
+    user_rows = {
+        row.scene_key: row
+        for row in db.scalars(select(CatWorldUserScene).where(CatWorldUserScene.phone == state.phone)).all()
+    }
+    payload: list[dict[str, Any]] = []
+    for row in rows:
+        config = cat_world_scene_config(row)
+        user_row = user_rows.get(row.scene_key)
+        unlocked = bool(user_row.is_unlocked) if user_row else bool(config.get("unlockByDefault"))
+        payload.append({**config, "unlocked": unlocked, "available": bool(row.is_enabled and unlocked)})
+    return payload
 
 
 def cat_world_owned_style_options(inventory: dict[str, int], decor_id: str) -> list[dict[str, str]]:
@@ -13208,11 +13606,17 @@ def cat_world_apply_agent_damage_events(
     damaged_items: dict[str, dict[str, Any]],
     shop_by_id: dict[str, dict[str, Any]],
 ) -> tuple[dict[str, dict[str, Any]], bool]:
+    active_layout = cat_world_active_scene_layout(
+        db,
+        state,
+        cat_world_usable_inventory(inventory, damaged_items),
+    )
     candidates = [
         item_id
         for item_id, count in inventory.items()
         if count > 0
         and item_id not in damaged_items
+        and item_id in active_layout
         and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") in {"decor", "toy"}
     ]
     if not candidates:
@@ -13229,7 +13633,7 @@ def cat_world_apply_agent_damage_events(
         favorite_active_ids = cat_world_active_favorite_decor_ids(
             cat_id,
             usable_inventory,
-            parse_cat_world_room_layout(state.room_layout, usable_inventory),
+            active_layout,
         )
         log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, today, now)
         apply_cat_world_hourly_decay(
@@ -14559,6 +14963,20 @@ def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
     normalized = normalize_login_phone(phone)
     state = db.scalar(select(CatWorldState).where(CatWorldState.phone == normalized))
     if state:
+        scene = cat_world_scene_row(db, state.current_scene_key, enabled_only=True)
+        if not scene:
+            scene = cat_world_scene_row(db, CAT_WORLD_DEFAULT_SCENE_KEY, enabled_only=True)
+        if not scene:
+            raise HTTPException(status_code=500, detail="猫咪世界还没有可用场景配置。")
+        changed = False
+        if state.current_scene_key != scene.scene_key:
+            state.current_scene_key = scene.scene_key
+            db.add(state)
+            changed = True
+        _, created = get_or_create_cat_world_user_scene(db, state, scene)
+        if created or changed:
+            db.commit()
+            db.refresh(state)
         return state
     state = CatWorldState(
         phone=normalized,
@@ -14567,6 +14985,7 @@ def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
         cats=encode_cat_world_cats([CAT_WORLD_DEFAULT_CAT_ID]),
         room_styles=encode_cat_world_room_styles({}),
         room_layout=encode_cat_world_room_layout({}),
+        current_scene_key=CAT_WORLD_DEFAULT_SCENE_KEY,
         cat_bonds=encode_cat_world_bonds({}),
         cat_care=encode_cat_world_care({}),
         selected_cat=CAT_WORLD_DEFAULT_CAT_ID,
@@ -14574,6 +14993,10 @@ def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
     db.add(state)
     db.commit()
     db.refresh(state)
+    scene = cat_world_scene_row(db, CAT_WORLD_DEFAULT_SCENE_KEY, enabled_only=True)
+    if scene:
+        get_or_create_cat_world_user_scene(db, state, scene)
+        db.commit()
     return state
 
 
@@ -14816,9 +15239,20 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         inventory = parse_cat_world_inventory(state.inventory)
         damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
-    room_styles = parse_cat_world_room_styles(state.room_styles, inventory)
-    room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
-    visual_room_layout = parse_cat_world_room_layout(state.room_layout, inventory)
+    _, active_user_scene, active_scene = cat_world_active_scene_context(db, state)
+    room_styles = parse_cat_world_room_styles(active_user_scene.room_styles, inventory)
+    room_layout = parse_cat_world_room_layout(
+        active_user_scene.layout,
+        usable_inventory,
+        active_scene.get("defaultLayout"),
+        active_scene.get("itemRules"),
+    )
+    visual_room_layout = parse_cat_world_room_layout(
+        active_user_scene.layout,
+        inventory,
+        active_scene.get("defaultLayout"),
+        active_scene.get("itemRules"),
+    )
     active_food_effect = cat_world_apply_active_food_progress(db, state, usable_inventory, room_layout)
     if active_food_effect.get("changed"):
         db.refresh(state)
@@ -14826,9 +15260,20 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         damaged_items = parse_cat_world_damaged_items(state.damaged_items)
         cat_bonds = parse_cat_world_bonds(state.cat_bonds)
         usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
-        room_styles = parse_cat_world_room_styles(state.room_styles, inventory)
-        room_layout = parse_cat_world_room_layout(state.room_layout, usable_inventory)
-        visual_room_layout = parse_cat_world_room_layout(state.room_layout, inventory)
+        _, active_user_scene, active_scene = cat_world_active_scene_context(db, state)
+        room_styles = parse_cat_world_room_styles(active_user_scene.room_styles, inventory)
+        room_layout = parse_cat_world_room_layout(
+            active_user_scene.layout,
+            usable_inventory,
+            active_scene.get("defaultLayout"),
+            active_scene.get("itemRules"),
+        )
+        visual_room_layout = parse_cat_world_room_layout(
+            active_user_scene.layout,
+            inventory,
+            active_scene.get("defaultLayout"),
+            active_scene.get("itemRules"),
+        )
     if state.selected_cat not in owned_cats:
         state.selected_cat = owned_cats[0] if owned_cats else ""
         db.add(state)
@@ -14861,6 +15306,8 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "catBonds": cat_world_bond_payload(cat_bonds, owned_cats),
             "roomStyles": room_styles,
             "roomLayout": visual_room_layout,
+            "currentSceneId": active_scene["id"],
+            "currentScene": active_scene,
             "styleOptions": style_options,
             "selectedCat": state.selected_cat,
             "hygiene": litter_status,
@@ -14869,6 +15316,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "mood": cat_world_mood(state, usable_inventory, owned_cats, available_energy, room_layout, daily_logs),
         },
         "cats": [cat_world_cat_payload(cat) for cat in CAT_WORLD_CATS],
+        "scenes": cat_world_scene_catalog_payload(db, state),
         "decorFavorites": cat_world_decor_favorite_payload(),
         "shop": shop,
         "pricingPlans": CAT_WORLD_PRICING_PLANS,
@@ -15103,6 +15551,10 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN room_styles TEXT NULL"))
         if "cat_world_states" in table_names and "room_layout" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN room_layout TEXT NULL"))
+        if "cat_world_states" in table_names and "current_scene_key" not in cat_world_state_columns:
+            connection.execute(
+                text("ALTER TABLE cat_world_states ADD COLUMN current_scene_key VARCHAR(80) NOT NULL DEFAULT 'main-room'")
+            )
         if "cat_world_states" in table_names and "cat_bonds" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN cat_bonds TEXT NULL"))
         if "cat_world_states" in table_names and "cat_care" not in cat_world_state_columns:

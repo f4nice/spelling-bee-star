@@ -1,0 +1,46 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  normalizeCatWorldScene,
+  sceneAllowsItem,
+  sceneColor,
+} from "../src/app/catWorldSceneConfig.js";
+
+test("scene configuration clamps unsafe dimensions and keeps database metadata", () => {
+  const scene = normalizeCatWorldScene({
+    id: "yard",
+    label: "Cat Yard",
+    world: {
+      width: 2200,
+      height: 560,
+      viewportWidth: 1280,
+      viewportHeight: 560,
+      floorTop: 236,
+      floorBottom: 522,
+    },
+  });
+
+  assert.equal(scene.id, "yard");
+  assert.equal(scene.world.width, 2200);
+  assert.equal(scene.world.viewportWidth, 1280);
+  assert.equal(scene.world.floorTop, 236);
+});
+
+test("scene item rules can exclude indoor furniture without affecting toys", () => {
+  const scene = {
+    itemRules: {
+      allowedCategories: ["decor", "toy"],
+      excludedItemIds: ["sun-window"],
+    },
+  };
+
+  assert.equal(sceneAllowsItem(scene, "sun-window", "decor"), false);
+  assert.equal(sceneAllowsItem(scene, "rolling-ball", "toy"), true);
+  assert.equal(sceneAllowsItem(scene, "salmon-bowl", "food"), false);
+});
+
+test("scene colors only accept six-digit hex values", () => {
+  assert.equal(sceneColor("#12abef", 0), 0x12abef);
+  assert.equal(sceneColor("not-a-color", 0x123456), 0x123456);
+});

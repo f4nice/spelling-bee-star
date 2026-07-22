@@ -8,12 +8,18 @@ import {
   interactionMoveDuration,
   itemInteractionFor,
 } from "./catWorldItemInteractions.js";
+import {
+  normalizeCatWorldScene,
+  sceneAllowsItem,
+  sceneColor,
+} from "./catWorldSceneConfig.js";
 
-const VIEW_WIDTH = 1280;
-const GAME_WIDTH = 1600;
-const GAME_HEIGHT = 560;
-const FLOOR_TOP = 260;
-const FLOOR_BOTTOM = 522;
+let VIEW_WIDTH = 1280;
+let VIEW_HEIGHT = 560;
+let GAME_WIDTH = 1600;
+let GAME_HEIGHT = 560;
+let FLOOR_TOP = 260;
+let FLOOR_BOTTOM = 522;
 const ROOM_BORDER = 12;
 const INK = 0x2c2f3a;
 const CREAM = 0xfff8df;
@@ -83,6 +89,58 @@ const TEMPERAMENT_THOUGHTS = {
   clingy: "今天想多靠近你一点。",
 };
 
+function applySceneConfig(scene) {
+  const normalized = normalizeCatWorldScene(scene);
+  const world = normalized.world;
+  VIEW_WIDTH = world.viewportWidth;
+  VIEW_HEIGHT = world.viewportHeight;
+  GAME_WIDTH = world.width;
+  GAME_HEIGHT = world.height;
+  FLOOR_TOP = world.floorTop;
+  FLOOR_BOTTOM = world.floorBottom;
+
+  const spawns = normalized.spawnPoints || {};
+  const configuredNumber = (value, fallback) => (Number.isFinite(Number(value)) ? Number(value) : fallback);
+  Object.assign(ACTIVE_FOOD_SPOT, {
+    x: configuredNumber(spawns.activeFood?.x, GAME_WIDTH - 260),
+    y: configuredNumber(spawns.activeFood?.y, FLOOR_BOTTOM - 114),
+    width: configuredNumber(spawns.activeFood?.width, 118),
+    height: configuredNumber(spawns.activeFood?.height, 46),
+  });
+  Object.assign(ACTIVE_CARE_SPOT, {
+    x: configuredNumber(spawns.activeCare?.x, GAME_WIDTH * 0.37),
+    y: configuredNumber(spawns.activeCare?.y, FLOOR_BOTTOM - 96),
+    width: configuredNumber(spawns.activeCare?.width, 68),
+    height: configuredNumber(spawns.activeCare?.height, 70),
+  });
+  Object.assign(READY_LITTER_SPOT, {
+    x: configuredNumber(spawns.readyLitter?.x, GAME_WIDTH * 0.7),
+    y: configuredNumber(spawns.readyLitter?.y, FLOOR_BOTTOM - 170),
+    width: configuredNumber(spawns.readyLitter?.width, 112),
+    height: configuredNumber(spawns.readyLitter?.height, 82),
+  });
+  Object.assign(ATTENTION_SPOT, {
+    x: configuredNumber(spawns.attention?.x, GAME_WIDTH / 2 - 46),
+    y: configuredNumber(spawns.attention?.y, FLOOR_BOTTOM - 78),
+  });
+  const litter = Array.isArray(spawns.litter) && spawns.litter.length ? spawns.litter : [
+    { x: GAME_WIDTH * 0.7, y: FLOOR_BOTTOM - 66 },
+    { x: GAME_WIDTH * 0.58, y: FLOOR_BOTTOM - 54 },
+    { x: GAME_WIDTH * 0.46, y: FLOOR_BOTTOM - 74 },
+    { x: GAME_WIDTH * 0.27, y: FLOOR_BOTTOM - 56 },
+  ];
+  LITTER_SPOTS.splice(
+    0,
+    LITTER_SPOTS.length,
+    ...litter.map((spot, index) => ({
+      x: configuredNumber(spot.x, GAME_WIDTH * (0.7 - index * 0.14)),
+      y: configuredNumber(spot.y, FLOOR_BOTTOM - 58),
+    })),
+  );
+  ROOM_TOY_TARGETS["feather-wand"].defaultX = GAME_WIDTH - 208;
+  return normalized;
+}
+
 function clamp(value, min, max) {
   return Math.min(Math.max(Number(value) || 0, min), max);
 }
@@ -115,6 +173,7 @@ function normalizeSnapshot(snapshot = {}) {
     roomStyles: snapshot.roomStyles || {},
     selectedCatId: snapshot.selectedCatId || "",
     gameSettings: snapshot.gameSettings || {},
+    scene: normalizeCatWorldScene(snapshot.scene),
     editMode: Boolean(snapshot.editMode),
   };
 }
@@ -261,6 +320,8 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   create() {
+    applySceneConfig(this.owner.snapshot.scene);
+    this.scale.resize(VIEW_WIDTH, VIEW_HEIGHT);
     this.syncCamera();
     this.input.on("pointerdown", (pointer) => this.startCameraPan(pointer));
     this.input.on("pointermove", (pointer) => this.handleCameraPanMove(pointer));
@@ -440,7 +501,7 @@ class CatWorldScene extends Phaser.Scene {
     this.drawOwnedDecor(snapshot);
     if (snapshot.editMode) {
       this.drawEditModeHint();
-    } else {
+    } else if (snapshot.scene.features.cats) {
       this.drawCats(snapshot);
       this.restoreCatBubbles(snapshot);
       this.restoreActiveItemInteractions();
@@ -449,15 +510,22 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   drawRoom() {
+    const palette = this.owner.snapshot.scene?.palette || {};
     const bg = this.add.graphics();
-    bg.fillGradientStyle(0xcff7ee, 0xfff0d0, 0x9be4ff, 0xffd7e7, 1);
+    bg.fillGradientStyle(
+      sceneColor(palette.wallTopLeft, 0xcff7ee),
+      sceneColor(palette.wallTopRight, 0xfff0d0),
+      sceneColor(palette.wallBottomLeft, 0x9be4ff),
+      sceneColor(palette.wallBottomRight, 0xffd7e7),
+      1,
+    );
     bg.fillRect(0, 0, GAME_WIDTH, FLOOR_TOP);
-    bg.fillStyle(0x6bc579, 1);
+    bg.fillStyle(sceneColor(palette.trim, 0x6bc579), 1);
     bg.fillRect(0, FLOOR_TOP - 10, GAME_WIDTH, 10);
-    bg.fillStyle(0xc29258, 1);
+    bg.fillStyle(sceneColor(palette.floor, 0xc29258), 1);
     bg.fillRect(0, FLOOR_TOP, GAME_WIDTH, GAME_HEIGHT - FLOOR_TOP);
 
-    bg.lineStyle(1, 0x2c2f3a, 0.12);
+    bg.lineStyle(1, sceneColor(palette.grid, 0x2c2f3a), 0.12);
     for (let x = 0; x <= GAME_WIDTH; x += 12) bg.lineBetween(x, 0, x, GAME_HEIGHT);
     for (let y = 0; y <= GAME_HEIGHT; y += 12) bg.lineBetween(0, y, GAME_WIDTH, y);
 
@@ -471,6 +539,7 @@ class CatWorldScene extends Phaser.Scene {
     const editMode = Boolean(snapshot.editMode);
     for (const [decorId, spec] of Object.entries(DECOR_SPECS)) {
       if (!owned(snapshot.inventory, decorId)) continue;
+      if (!sceneAllowsItem(snapshot.scene, decorId, "decor")) continue;
       const damaged = isDamaged(snapshot, decorId);
       const tone = snapshot.roomStyles?.[decorId] || "default";
       const position = this.positionForDecor(decorId, spec);
@@ -537,7 +606,7 @@ class CatWorldScene extends Phaser.Scene {
 
   drawInventoryItems(snapshot) {
     const lastPlayItem = snapshot.mood?.lastPlayItem || "";
-    if (snapshot.activeFood?.active) {
+    if (snapshot.scene.features.food && snapshot.activeFood?.active) {
       const foodLabel = snapshot.activeFood.label || "食物";
       const targetLabel = snapshot.activeFood.targetCatLabel || "";
       const foodEnergy = Number(snapshot.activeFood.catEnergyEffective ?? snapshot.activeFood.catEnergy ?? 0);
@@ -566,17 +635,17 @@ class CatWorldScene extends Phaser.Scene {
       }
     }
     for (const itemId of Object.keys(ROOM_TOY_TARGETS)) {
-      if (owned(snapshot.inventory, itemId)) {
+      if (owned(snapshot.inventory, itemId) && sceneAllowsItem(snapshot.scene, itemId, "toy")) {
         this.drawOwnedToy(snapshot, itemId, lastPlayItem === itemId);
       }
     }
-    if (snapshot.activeCare?.active) {
+    if (snapshot.scene.features.care && snapshot.activeCare?.active) {
       this.drawActiveCare(snapshot);
     }
-    if (snapshot.hygiene?.hasPlacedCatLitter) {
+    if (snapshot.scene.features.hygiene && snapshot.hygiene?.hasPlacedCatLitter) {
       this.drawReadyCatLitter();
     }
-    this.drawLitter(snapshot);
+    if (snapshot.scene.features.hygiene) this.drawLitter(snapshot);
   }
 
   drawReadyCatLitter() {
@@ -1616,7 +1685,10 @@ class CatWorldScene extends Phaser.Scene {
     const preferred = Array.isArray(cat.favoriteDecorIds) ? cat.favoriteDecorIds : [];
     const decorIds = [...preferred, ...fallbackDecorIds].filter((decorId, decorIndex, all) => all.indexOf(decorId) === decorIndex);
     const decorId = decorIds.find(
-      (candidate) => owned(this.owner.snapshot.inventory, candidate) && DECOR_SPECS[candidate] && !isDamaged(this.owner.snapshot, candidate),
+      (candidate) => owned(this.owner.snapshot.inventory, candidate)
+        && this.owner.snapshot.layout?.[candidate]
+        && DECOR_SPECS[candidate]
+        && !isDamaged(this.owner.snapshot, candidate),
     );
     if (!decorId) return null;
     const position = this.nearDecorPosition(decorId, index);
@@ -1629,14 +1701,14 @@ class CatWorldScene extends Phaser.Scene {
     const targetItemId = goal.targetItemId || "";
     if (!targetItemId || isDamaged(this.owner.snapshot, targetItemId)) return null;
     const seed = `${cat.id || "cat"}:${targetItemId}:${goal.key || "goal"}:${index}`;
-    if (goal.targetType === "toy" && owned(this.owner.snapshot.inventory, targetItemId) && ROOM_TOY_TARGETS[targetItemId]) {
+    if (goal.targetType === "toy" && owned(this.owner.snapshot.inventory, targetItemId) && this.owner.snapshot.layout?.[targetItemId] && ROOM_TOY_TARGETS[targetItemId]) {
       const target = this.toyFocusPoint(targetItemId);
       return {
         x: clamp(target.x + seededOffset(`${seed}:x`, 38), 38, GAME_WIDTH - 132),
         y: clamp(target.y + seededOffset(`${seed}:y`, 20), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
       };
     }
-    if (owned(this.owner.snapshot.inventory, targetItemId) && DECOR_SPECS[targetItemId]) {
+    if (owned(this.owner.snapshot.inventory, targetItemId) && this.owner.snapshot.layout?.[targetItemId] && DECOR_SPECS[targetItemId]) {
       const spec = DECOR_SPECS[targetItemId];
       const position = this.positionForDecor(targetItemId, spec);
       return {
@@ -1661,11 +1733,11 @@ class CatWorldScene extends Phaser.Scene {
   roomItemFocusPoint(itemId, index = 0, options = {}) {
     const allowDamaged = Boolean(options.allowDamaged);
     if (!itemId || (!allowDamaged && isDamaged(this.owner.snapshot, itemId))) return null;
-    if (ROOM_TOY_TARGETS[itemId] && owned(this.owner.snapshot.inventory, itemId)) {
+    if (ROOM_TOY_TARGETS[itemId] && owned(this.owner.snapshot.inventory, itemId) && this.owner.snapshot.layout?.[itemId]) {
       const target = this.toyFocusPoint(itemId);
       return { ...target, itemKind: "toy" };
     }
-    if (DECOR_SPECS[itemId] && owned(this.owner.snapshot.inventory, itemId)) {
+    if (DECOR_SPECS[itemId] && owned(this.owner.snapshot.inventory, itemId) && this.owner.snapshot.layout?.[itemId]) {
       const position = this.nearDecorPosition(itemId, index);
       if (!position) return null;
       return { ...position, label: DECOR_SPECS[itemId].label, itemKind: "decor" };
@@ -2244,7 +2316,7 @@ class CatWorldScene extends Phaser.Scene {
     const targetItemId = goal.targetItemId || "";
     if (!targetItemId || isDamaged(this.owner.snapshot, targetItemId)) return null;
     const isMischiefWatch = goal.key === "mischief-watch";
-    if (goal.targetType === "toy" && owned(this.owner.snapshot.inventory, targetItemId) && ROOM_TOY_TARGETS[targetItemId]) {
+    if (goal.targetType === "toy" && owned(this.owner.snapshot.inventory, targetItemId) && this.owner.snapshot.layout?.[targetItemId] && ROOM_TOY_TARGETS[targetItemId]) {
       const target = this.toyFocusPoint(targetItemId);
       return {
         itemId: targetItemId,
@@ -2257,7 +2329,7 @@ class CatWorldScene extends Phaser.Scene {
         y: clamp(target.y + Phaser.Math.Between(-22, 24), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
       };
     }
-    if (owned(this.owner.snapshot.inventory, targetItemId) && DECOR_SPECS[targetItemId]) {
+    if (owned(this.owner.snapshot.inventory, targetItemId) && this.owner.snapshot.layout?.[targetItemId] && DECOR_SPECS[targetItemId]) {
       const spec = DECOR_SPECS[targetItemId];
       const position = this.positionForDecor(targetItemId, spec);
       return {
@@ -2365,7 +2437,10 @@ class CatWorldScene extends Phaser.Scene {
   favoriteToyTarget(cat = {}) {
     const favoriteToyIds = Array.isArray(cat.favoriteToyIds) ? cat.favoriteToyIds : [];
     const ownedFavorites = favoriteToyIds.filter(
-      (toyId) => owned(this.owner.snapshot.inventory, toyId) && ROOM_TOY_TARGETS[toyId] && !isDamaged(this.owner.snapshot, toyId),
+      (toyId) => owned(this.owner.snapshot.inventory, toyId)
+        && this.owner.snapshot.layout?.[toyId]
+        && ROOM_TOY_TARGETS[toyId]
+        && !isDamaged(this.owner.snapshot, toyId),
     );
     if (!ownedFavorites.length) return null;
     const itemId = ownedFavorites[Phaser.Math.Between(0, ownedFavorites.length - 1)];
@@ -2390,7 +2465,10 @@ class CatWorldScene extends Phaser.Scene {
   favoriteDecorTarget(cat = {}) {
     const favoriteDecorIds = Array.isArray(cat.favoriteDecorIds) ? cat.favoriteDecorIds : [];
     const ownedFavorites = favoriteDecorIds.filter(
-      (decorId) => owned(this.owner.snapshot.inventory, decorId) && DECOR_SPECS[decorId] && !isDamaged(this.owner.snapshot, decorId),
+      (decorId) => owned(this.owner.snapshot.inventory, decorId)
+        && this.owner.snapshot.layout?.[decorId]
+        && DECOR_SPECS[decorId]
+        && !isDamaged(this.owner.snapshot, decorId),
     );
     if (!ownedFavorites.length) return null;
     const decorId = ownedFavorites[Phaser.Math.Between(0, ownedFavorites.length - 1)];
@@ -2882,11 +2960,12 @@ export class CatWorldGame {
     this.lastWandMoveAt = 0;
     this.ready = false;
     this.snapshot = normalizeSnapshot();
+    applySceneConfig(this.snapshot.scene);
     this.game = new Phaser.Game({
       type: Phaser.AUTO,
       parent,
       width: VIEW_WIDTH,
-      height: GAME_HEIGHT,
+      height: VIEW_HEIGHT,
       backgroundColor: "#fff8df",
       pixelArt: true,
       render: {
@@ -2902,9 +2981,17 @@ export class CatWorldGame {
   }
 
   update(snapshot) {
-    this.snapshot = normalizeSnapshot(snapshot);
+    const nextSnapshot = normalizeSnapshot(snapshot);
+    const sceneChanged = nextSnapshot.scene.id !== this.snapshot.scene.id;
+    this.snapshot = nextSnapshot;
+    applySceneConfig(this.snapshot.scene);
     this.layout = cloneLayout(this.snapshot.layout);
+    if (sceneChanged) {
+      this.catPositions.clear();
+      this.cameraScrollX = Math.round(Math.max(GAME_WIDTH - VIEW_WIDTH, 0) / 2);
+    }
     if (this.ready) {
+      this.game.scale.resize(VIEW_WIDTH, VIEW_HEIGHT);
       this.game.scene.getScene("CatWorldScene")?.renderSnapshot();
       this.game.scene.getScene("CatWorldScene")?.syncCamera();
       this.game.scale.refresh();
