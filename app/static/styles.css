@@ -11689,9 +11689,13 @@ select {
 }
 
 .cat-world-wallet .cat-world-wallet-today {
+  position: absolute;
+  top: 8px;
+  right: 8px;
   justify-self: start;
   border: 2px solid #2c2f3a;
   border-radius: 4px;
+  margin-top: 0;
   padding: 2px 6px;
   color: #fff8d5;
   background: #1d7f5b;
