@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Cat as CatIcon, X as XIcon } from "lucide-vue-next";
+import { Cat as CatIcon, ChevronLeft, ChevronRight, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -32,7 +32,6 @@ const catReactionAnchored = ref(false);
 const catPetSequence = ref(0);
 const focusedCatId = ref("");
 const openCatDiaryId = ref("");
-const roomViewportRef = ref(null);
 const gameMountRef = ref(null);
 const catWorldGame = ref(null);
 const layoutDraft = ref({});
@@ -44,17 +43,10 @@ const activeToolCategory = ref("decor");
 const clockNow = ref(Date.now());
 const energyModalOpen = ref(false);
 const petBusyCatId = ref("");
+const roomCanPan = ref(false);
 const roomPanActive = ref(false);
 const ambientEventCooldowns = new Map();
 const foodNibbleCooldowns = new Map();
-const roomPan = {
-  pointerId: null,
-  startX: 0,
-  startY: 0,
-  startScrollLeft: 0,
-  active: false,
-  moved: false,
-};
 
 const catReactionTexts = [
   "收到摸摸指令，开心值上升",
@@ -112,6 +104,9 @@ onMounted(async () => {
     },
     onCatAmbient: recordCatAmbientEvent,
     onFoodVisit: recordCatFoodNibble,
+    onCameraPanState: (active) => {
+      roomPanActive.value = active;
+    },
   });
   updateCatWorldGame();
 });
@@ -502,53 +497,21 @@ function replacePayload(nextPayload) {
 
 function updateCatWorldGame() {
   catWorldGame.value?.update(gameSnapshot.value);
+  roomCanPan.value = Boolean(catWorldGame.value?.canPan?.());
 }
 
-function canPanRoom() {
-  const viewport = roomViewportRef.value;
-  return Boolean(!roomEditMode.value && viewport && viewport.scrollWidth > viewport.clientWidth + 4);
+function panRoomBy(delta) {
+  if (roomEditMode.value) return;
+  catWorldGame.value?.panBy?.(delta);
 }
 
-function startRoomPan(event) {
-  if (event.button !== 0 || !canPanRoom()) return;
-  roomPan.pointerId = event.pointerId;
-  roomPan.startX = event.clientX;
-  roomPan.startY = event.clientY;
-  roomPan.startScrollLeft = roomViewportRef.value.scrollLeft;
-  roomPan.active = true;
-  roomPan.moved = false;
-  roomPanActive.value = true;
-  roomViewportRef.value.setPointerCapture?.(event.pointerId);
-}
-
-function moveRoomPan(event) {
-  if (!roomPan.active || roomPan.pointerId !== event.pointerId || !roomViewportRef.value) return;
-  const deltaX = event.clientX - roomPan.startX;
-  const deltaY = event.clientY - roomPan.startY;
-  if (Math.abs(deltaX) > 4 && Math.abs(deltaX) > Math.abs(deltaY) * 0.7) {
-    roomPan.moved = true;
-  }
-  if (!roomPan.moved) return;
-  roomViewportRef.value.scrollLeft = roomPan.startScrollLeft - deltaX;
+function handleRoomWheel(event) {
+  if (roomEditMode.value || !catWorldGame.value?.canPan?.()) return;
+  const delta = Math.abs(event.deltaX) >= Math.abs(event.deltaY) ? event.deltaX : event.shiftKey ? event.deltaY : 0;
+  if (!delta) return;
+  catWorldGame.value.panBy(delta);
   event.preventDefault();
   event.stopPropagation();
-}
-
-function finishRoomPan(event) {
-  if (!roomPan.active || roomPan.pointerId !== event.pointerId) return;
-  const moved = roomPan.moved;
-  const viewport = roomViewportRef.value;
-  if (viewport?.hasPointerCapture?.(event.pointerId)) {
-    viewport.releasePointerCapture(event.pointerId);
-  }
-  roomPan.pointerId = null;
-  roomPan.active = false;
-  roomPan.moved = false;
-  roomPanActive.value = false;
-  if (moved) {
-    event.preventDefault();
-    event.stopPropagation();
-  }
 }
 
 function handleGameLayoutChange(nextLayout, itemId) {
@@ -1276,18 +1239,33 @@ async function selectCat(catId) {
           </ul>
         </div>
 
-        <div :class="['cat-world-room', { 'is-editing': roomEditMode, 'is-panning': roomPanActive }]" aria-label="猫咪房间场景">
+        <div :class="['cat-world-room', { 'is-editing': roomEditMode, 'is-panning': roomPanActive, 'can-pan': roomCanPan }]" aria-label="猫咪房间场景">
           <div
-            ref="roomViewportRef"
             class="cat-world-room-viewport"
-            @pointerdown.capture="startRoomPan"
-            @pointermove.capture="moveRoomPan"
-            @pointerup.capture="finishRoomPan"
-            @pointercancel.capture="finishRoomPan"
-            @lostpointercapture="finishRoomPan"
+            @wheel.capture="handleRoomWheel"
           >
             <div ref="gameMountRef" class="cat-world-game-stage"></div>
           </div>
+          <button
+            v-if="roomCanPan && !roomEditMode"
+            class="cat-world-room-pan-button left"
+            type="button"
+            title="向左查看"
+            aria-label="向左查看房间"
+            @click="panRoomBy(-360)"
+          >
+            <ChevronLeft :size="26" :stroke-width="3" aria-hidden="true" />
+          </button>
+          <button
+            v-if="roomCanPan && !roomEditMode"
+            class="cat-world-room-pan-button right"
+            type="button"
+            title="向右查看"
+            aria-label="向右查看房间"
+            @click="panRoomBy(360)"
+          >
+            <ChevronRight :size="26" :stroke-width="3" aria-hidden="true" />
+          </button>
           <div v-if="roomEditMode || layoutDirty" class="cat-world-layout-toolbar">
             <span>{{ roomEditMode ? (layoutDirty ? "编辑中 · 布局有改动" : "编辑中 · 猫咪暂时隐藏") : "点击编辑物品后可拖动" }}</span>
             <button

@@ -11889,28 +11889,9 @@ select {
   position: absolute;
   inset: 0;
   z-index: 1;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   cursor: grab;
-  scrollbar-width: thin;
-  scrollbar-color: #2c2f3a rgba(255, 248, 223, 0.72);
-  overscroll-behavior-x: contain;
-  touch-action: pan-x pan-y;
-}
-
-.cat-world-room-viewport::-webkit-scrollbar {
-  height: 10px;
-}
-
-.cat-world-room-viewport::-webkit-scrollbar-track {
-  border-top: 2px solid #2c2f3a;
-  background: rgba(255, 248, 223, 0.72);
-}
-
-.cat-world-room-viewport::-webkit-scrollbar-thumb {
-  border: 2px solid #2c2f3a;
-  border-radius: 0;
-  background: #75cfff;
+  touch-action: none;
 }
 
 .cat-world-room.is-panning .cat-world-room-viewport {
@@ -11918,16 +11899,44 @@ select {
   user-select: none;
 }
 
+.cat-world-room-pan-button {
+  position: absolute;
+  top: 50%;
+  z-index: 13;
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 4px solid #2c2f3a;
+  border-radius: 4px;
+  color: #263047;
+  background: #fff07d;
+  box-shadow: 4px 4px 0 #2c2f3a;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.cat-world-room-pan-button:hover,
+.cat-world-room-pan-button:focus-visible {
+  color: #fff8df;
+  background: #1d7f5b;
+}
+
+.cat-world-room-pan-button.left {
+  left: 12px;
+}
+
+.cat-world-room-pan-button.right {
+  right: 12px;
+}
+
 .cat-world-game-stage {
-  position: relative;
+  position: absolute;
+  inset: 0;
   z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: max(100%, 1280px);
-  min-width: 1280px;
-  height: 100%;
-  min-height: 100%;
   overflow: hidden;
   background: #fff8df;
 }

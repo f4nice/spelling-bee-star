@@ -9,7 +9,8 @@ import {
   itemInteractionFor,
 } from "./catWorldItemInteractions.js";
 
-const GAME_WIDTH = 1280;
+const VIEW_WIDTH = 1280;
+const GAME_WIDTH = 1600;
 const GAME_HEIGHT = 560;
 const FLOOR_TOP = 260;
 const FLOOR_BOTTOM = 522;
@@ -17,6 +18,7 @@ const ROOM_BORDER = 12;
 const INK = 0x2c2f3a;
 const CREAM = 0xfff8df;
 const CAT_INTERACTION_DEPTH = 980;
+const CAMERA_DRAG_THRESHOLD = 6;
 const CAT_HITBOX = { x: -58, y: -74, width: 232, height: 184 };
 const FEATHER_WAND_CURSOR = 'url("/static/cursors/feather-wand-cursor.svg") 4 28, crosshair';
 const ACTIVE_FOOD_SPOT = { x: GAME_WIDTH - 260, y: 408, width: 118, height: 46 };
@@ -248,9 +250,21 @@ class CatWorldScene extends Phaser.Scene {
     this.decorContainers = new Map();
     this.catContainers = new Map();
     this.catBubbles = new Map();
+    this.cameraDrag = {
+      active: false,
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+      startScrollX: 0,
+      moved: false,
+    };
   }
 
   create() {
+    this.syncCamera();
+    this.input.on("pointerdown", (pointer) => this.startCameraPan(pointer));
+    this.input.on("pointermove", (pointer) => this.handleCameraPanMove(pointer));
+    this.input.on("pointerup", (pointer) => this.finishCameraPan(pointer));
     this.input.on("dragstart", (_pointer, gameObject) => {
       if (!gameObject.getData("layoutItem")) return;
       this.children.bringToTop(gameObject);
@@ -290,7 +304,10 @@ class CatWorldScene extends Phaser.Scene {
     });
 
     this.input.on("pointermove", (pointer) => this.handleFeatherWandPointer(pointer));
-    this.input.on("gameout", () => this.stopFeatherWandMode({ notify: true }));
+    this.input.on("gameout", (pointer) => {
+      this.finishCameraPan(pointer || this.input.activePointer);
+      this.stopFeatherWandMode({ notify: true });
+    });
 
     this.renderSnapshot();
     this.owner.ready = true;
@@ -298,6 +315,91 @@ class CatWorldScene extends Phaser.Scene {
 
   isEditMode() {
     return Boolean(this.owner.snapshot?.editMode);
+  }
+
+  syncCamera() {
+    this.cameras.main.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    const nextScroll = Number.isFinite(this.owner.cameraScrollX)
+      ? this.owner.cameraScrollX
+      : this.maxCameraScrollX() / 2;
+    this.setCameraScrollX(nextScroll);
+  }
+
+  maxCameraScrollX() {
+    return Math.max(GAME_WIDTH - (this.cameras.main?.width || VIEW_WIDTH), 0);
+  }
+
+  setCameraScrollX(value) {
+    const nextScroll = clamp(value, 0, this.maxCameraScrollX());
+    this.cameras.main.setScroll(nextScroll, 0);
+    this.owner.cameraScrollX = nextScroll;
+    return nextScroll;
+  }
+
+  panCameraBy(delta, options = {}) {
+    if (!this.owner.canPan()) return;
+    const camera = this.cameras.main;
+    const nextScroll = clamp(camera.scrollX + Number(delta || 0), 0, this.maxCameraScrollX());
+    this.owner.cameraScrollX = nextScroll;
+    if (options.smooth) {
+      this.tweens.killTweensOf(camera);
+      this.tweens.add({
+        targets: camera,
+        scrollX: nextScroll,
+        duration: 220,
+        ease: "Sine.easeOut",
+      });
+      return;
+    }
+    camera.setScroll(nextScroll, 0);
+  }
+
+  startCameraPan(pointer) {
+    if (this.isEditMode() || this.owner.wandMode || !this.owner.canPan()) return false;
+    if (pointer?.event?.button != null && pointer.event.button !== 0) return false;
+    this.tweens.killTweensOf(this.cameras.main);
+    this.cameraDrag = {
+      active: true,
+      pointerId: pointer?.id ?? 0,
+      startX: pointer?.x ?? 0,
+      startY: pointer?.y ?? 0,
+      startScrollX: this.cameras.main.scrollX,
+      moved: false,
+    };
+    this.owner.cameraDragMoved = false;
+    this.owner.setCameraPanActive(true);
+    return true;
+  }
+
+  handleCameraPanMove(pointer) {
+    if (!this.cameraDrag.active || (pointer?.id ?? 0) !== this.cameraDrag.pointerId) return;
+    const deltaX = (pointer?.x ?? 0) - this.cameraDrag.startX;
+    const deltaY = (pointer?.y ?? 0) - this.cameraDrag.startY;
+    if (Math.abs(deltaX) > CAMERA_DRAG_THRESHOLD && Math.abs(deltaX) >= Math.abs(deltaY) * 0.6) {
+      this.cameraDrag.moved = true;
+      this.owner.cameraDragMoved = true;
+    }
+    if (!this.cameraDrag.moved) return;
+    this.setCameraScrollX(this.cameraDrag.startScrollX - deltaX);
+    pointer?.event?.preventDefault?.();
+  }
+
+  finishCameraPan(pointer) {
+    if (!this.cameraDrag.active || (pointer?.id ?? 0) !== this.cameraDrag.pointerId) {
+      return Boolean(this.owner.cameraDragMoved);
+    }
+    const moved = this.cameraDrag.moved;
+    this.cameraDrag.active = false;
+    this.owner.setCameraPanActive(false);
+    if (moved) {
+      this.owner.cameraDragMoved = true;
+      this.time.delayedCall(0, () => {
+        this.owner.cameraDragMoved = false;
+      });
+    } else {
+      this.owner.cameraDragMoved = false;
+    }
+    return moved;
   }
 
   clearCatInteractions() {
@@ -343,6 +445,7 @@ class CatWorldScene extends Phaser.Scene {
       this.restoreCatBubbles(snapshot);
       this.restoreActiveItemInteractions();
     }
+    this.syncCamera();
   }
 
   drawRoom() {
@@ -385,11 +488,14 @@ class CatWorldScene extends Phaser.Scene {
       if (!damaged && editMode) {
         this.input.setDraggable(container);
       }
-      container.on("pointerdown", (_pointer, _localX, _localY, event) => {
+      container.on("pointerdown", (pointer, _localX, _localY, event) => {
+        this.startCameraPan(pointer);
         this.stopPointerEvent(event);
       });
-      container.on("pointerup", (_pointer, _localX, _localY, event) => {
+      container.on("pointerup", (pointer, _localX, _localY, event) => {
+        const wasPanning = this.finishCameraPan(pointer);
         this.stopPointerEvent(event);
+        if (wasPanning) return;
         if (!container.getData("dragMoved")) {
           const interaction = !editMode && !damaged ? this.interactWithDecor(decorId) : null;
           this.owner.handlers.onDecorClick?.(decorId, interaction);
@@ -405,9 +511,14 @@ class CatWorldScene extends Phaser.Scene {
         bathHitZone.setDepth(CAT_INTERACTION_DEPTH + 210);
         bathHitZone.setData("kind", "bathtub-hit-zone");
         bathHitZone.setInteractive({ cursor: "pointer" });
-        bathHitZone.on("pointerdown", (_pointer, _localX, _localY, event) => this.stopPointerEvent(event));
-        bathHitZone.on("pointerup", (_pointer, _localX, _localY, event) => {
+        bathHitZone.on("pointerdown", (pointer, _localX, _localY, event) => {
+          this.startCameraPan(pointer);
           this.stopPointerEvent(event);
+        });
+        bathHitZone.on("pointerup", (pointer, _localX, _localY, event) => {
+          const wasPanning = this.finishCameraPan(pointer);
+          this.stopPointerEvent(event);
+          if (wasPanning) return;
           const interaction = this.interactWithDecor(decorId);
           this.owner.handlers.onDecorClick?.(decorId, interaction);
         });
@@ -573,9 +684,14 @@ class CatWorldScene extends Phaser.Scene {
       if (!snapshot.editMode) {
         container.setInteractive(new Phaser.Geom.Rectangle(0, 0, 86, 76), Phaser.Geom.Rectangle.Contains);
         if (container.input) container.input.cursor = "pointer";
-        container.on("pointerdown", (_pointer, _localX, _localY, event) => this.stopPointerEvent(event));
-        container.on("pointerup", (_pointer, _localX, _localY, event) => {
+        container.on("pointerdown", (pointer, _localX, _localY, event) => {
+          this.startCameraPan(pointer);
           this.stopPointerEvent(event);
+        });
+        container.on("pointerup", (pointer, _localX, _localY, event) => {
+          const wasPanning = this.finishCameraPan(pointer);
+          this.stopPointerEvent(event);
+          if (wasPanning) return;
           this.owner.handlers.onLitterClick?.(index);
         });
       } else {
@@ -603,11 +719,14 @@ class CatWorldScene extends Phaser.Scene {
     if (!damaged && editMode) {
       this.input.setDraggable(container);
     }
-    container.on("pointerdown", (_pointer, _localX, _localY, event) => {
+    container.on("pointerdown", (pointer, _localX, _localY, event) => {
+      this.startCameraPan(pointer);
       this.stopPointerEvent(event);
     });
-    container.on("pointerup", (_pointer, _localX, _localY, event) => {
+    container.on("pointerup", (pointer, _localX, _localY, event) => {
+      const wasPanning = this.finishCameraPan(pointer);
       this.stopPointerEvent(event);
+      if (wasPanning) return;
       if (!container.getData("dragMoved")) {
         const interaction = !editMode && !damaged ? this.interactWithToy(itemId) : null;
         this.owner.handlers.onToyClick?.(itemId, interaction);
@@ -913,21 +1032,24 @@ class CatWorldScene extends Phaser.Scene {
         Phaser.Geom.Rectangle.Contains,
       );
       if (container.input) container.input.cursor = "pointer";
-      container.on("pointerdown", (_pointer, _localX, _localY, event) => {
+      container.on("pointerdown", (pointer, _localX, _localY, event) => {
         if (this.isEditMode()) {
           this.stopPointerEvent(event);
           return;
         }
+        this.startCameraPan(pointer);
         this.children.bringToTop(container);
         this.stopPointerEvent(event);
       });
-      container.on("pointerup", (_pointer, _localX, _localY, event) => {
+      container.on("pointerup", (pointer, _localX, _localY, event) => {
         if (this.isEditMode()) {
           this.stopPointerEvent(event);
           return;
         }
+        const wasPanning = this.finishCameraPan(pointer);
         this.children.bringToTop(container);
         this.stopPointerEvent(event);
+        if (wasPanning) return;
         const message = this.spawnCatBubble(container, cat);
         this.owner.handlers.onCatPet?.(cat, message);
       });
@@ -1784,11 +1906,14 @@ class CatWorldScene extends Phaser.Scene {
     zone.setData("kind", "room-item");
     zone.setData("id", itemId);
     zone.setInteractive(new Phaser.Geom.Rectangle(0, 0, width, height), Phaser.Geom.Rectangle.Contains);
-    zone.on("pointerdown", (_pointer, _localX, _localY, event) => {
+    zone.on("pointerdown", (pointer, _localX, _localY, event) => {
+      this.startCameraPan(pointer);
       this.stopPointerEvent(event);
     });
-    zone.on("pointerup", (_pointer, _localX, _localY, event) => {
+    zone.on("pointerup", (pointer, _localX, _localY, event) => {
+      const wasPanning = this.finishCameraPan(pointer);
       this.stopPointerEvent(event);
+      if (wasPanning) return;
       this.owner.handlers.onToyClick?.(itemId);
     });
   }
@@ -2748,6 +2873,9 @@ export class CatWorldGame {
     this.catReactions = new Map();
     this.catItemActions = new Map();
     this.itemInteractionStates = new Map();
+    this.cameraScrollX = Math.round((GAME_WIDTH - VIEW_WIDTH) / 2);
+    this.cameraDragMoved = false;
+    this.cameraPanActive = false;
     this.wandMode = false;
     this.wandCatIds = new Set();
     this.wandTarget = null;
@@ -2757,7 +2885,7 @@ export class CatWorldGame {
     this.game = new Phaser.Game({
       type: Phaser.AUTO,
       parent,
-      width: GAME_WIDTH,
+      width: VIEW_WIDTH,
       height: GAME_HEIGHT,
       backgroundColor: "#fff8df",
       pixelArt: true,
@@ -2778,6 +2906,7 @@ export class CatWorldGame {
     this.layout = cloneLayout(this.snapshot.layout);
     if (this.ready) {
       this.game.scene.getScene("CatWorldScene")?.renderSnapshot();
+      this.game.scene.getScene("CatWorldScene")?.syncCamera();
       this.game.scale.refresh();
     }
   }
@@ -2788,6 +2917,20 @@ export class CatWorldGame {
 
   showCatReaction(catId, message) {
     return Boolean(this.game.scene.getScene("CatWorldScene")?.showCatReaction(catId, message));
+  }
+
+  canPan() {
+    return GAME_WIDTH > VIEW_WIDTH + 4;
+  }
+
+  panBy(delta) {
+    this.game.scene.getScene("CatWorldScene")?.panCameraBy(delta, { smooth: true });
+  }
+
+  setCameraPanActive(active) {
+    if (this.cameraPanActive === active) return;
+    this.cameraPanActive = active;
+    this.handlers.onCameraPanState?.(active);
   }
 
   destroy() {
