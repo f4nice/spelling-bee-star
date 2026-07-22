@@ -144,6 +144,7 @@ const catIconColors = {
 };
 
 const energy = computed(() => payload.value.energy || {});
+const todayEnergy = computed(() => Math.max(Number(energy.value.today || 0), 0));
 const state = computed(() => payload.value.state || {});
 const inventory = computed(() => state.value.inventory || {});
 const usableInventory = computed(() => state.value.usableInventory || inventory.value);
@@ -1164,6 +1165,7 @@ async function selectCat(catId) {
       <button class="cat-world-wallet" type="button" aria-label="猫咪世界能量" @click="energyModalOpen = true">
         <span>可用能量</span>
         <strong>{{ energy.available || 0 }}</strong>
+        <em class="cat-world-wallet-today">今日 +{{ todayEnergy }}</em>
         <small>累计 {{ energy.earned || 0 }} · 已用 {{ energy.spent || 0 }}</small>
       </button>
     </section>
@@ -1610,6 +1612,7 @@ async function selectCat(catId) {
         </header>
         <div class="cat-world-modal-summary">
           <span>可用 {{ energy.available || 0 }}</span>
+          <span>今日 +{{ todayEnergy }}</span>
           <span>累计 {{ energy.earned || 0 }}</span>
           <span>已用 {{ energy.spent || 0 }}</span>
         </div>

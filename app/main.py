@@ -92,8 +92,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-071"
-DEFAULT_PAGE_VERSION = "v20260722.71"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260723-001"
+DEFAULT_PAGE_VERSION = "v20260723.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -11130,6 +11130,14 @@ def cat_world_growth_source_rows(growth: dict[str, Any]) -> list[dict[str, Any]]
     return rows
 
 
+def cat_world_today_energy(growth: dict[str, Any]) -> int:
+    rules = {item["key"]: item for item in growth.get("scoreRules", []) if isinstance(item, dict)}
+    missions = {item["key"]: item for item in growth.get("dailyMissions", []) if isinstance(item, dict)}
+    spelling_count = int(missions.get("today_spelling", {}).get("value") or 0)
+    spelling_points = int(rules.get("spelling_words", {}).get("points") or 0)
+    return max(spelling_count * spelling_points, 0)
+
+
 def parse_cat_world_inventory(raw: str | None) -> dict[str, int]:
     try:
         loaded = json.loads(raw or "{}")
@@ -14767,6 +14775,7 @@ def cat_world_mood(
 def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, Any]:
     growth = learning_growth_summary(db)
     earned_energy = int(growth.get("points") or 0)
+    today_energy = cat_world_today_energy(growth)
     spent_energy = max(int(state.energy_spent or 0), 0)
     available_energy = max(earned_energy - spent_energy, 0)
     inventory = parse_cat_world_inventory(state.inventory)
@@ -14839,6 +14848,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "earned": earned_energy,
             "spent": spent_energy,
             "available": available_energy,
+            "today": today_energy,
             "sources": cat_world_growth_source_rows(growth),
         },
         "state": {

@@ -3588,6 +3588,21 @@ a:focus-visible {
   line-height: 1;
 }
 
+.cat-world-wallet-today {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  margin-top: 6px;
+  padding: 3px 9px;
+  color: #fff;
+  background: rgba(29, 127, 91, 0.82);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
 .cat-world-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.55fr);
@@ -4120,6 +4135,11 @@ a:focus-visible {
   color: #7c4f04;
   font-size: 48px;
   text-shadow: 0 3px 0 rgba(255, 255, 255, 0.76);
+}
+
+.cat-world-wallet .cat-world-wallet-today {
+  color: #fff7d0;
+  background: #187e5c;
 }
 
 .cat-world-room-panel,
@@ -11668,6 +11688,17 @@ select {
   text-shadow: 2px 2px 0 #fff1a8;
 }
 
+.cat-world-wallet .cat-world-wallet-today {
+  justify-self: start;
+  border: 2px solid #2c2f3a;
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: #fff8d5;
+  background: #1d7f5b;
+  box-shadow: 2px 2px 0 #2c2f3a;
+  font-size: 11px;
+}
+
 .cat-world-wallet span,
 .cat-world-wallet small {
   color: #5e4815;
@@ -14024,7 +14055,7 @@ select {
 
 .cat-world-modal-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
