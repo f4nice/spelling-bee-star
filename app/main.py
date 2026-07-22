@@ -92,8 +92,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-066"
-DEFAULT_PAGE_VERSION = "v20260722.66"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-067"
+DEFAULT_PAGE_VERSION = "v20260722.67"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -4835,16 +4835,29 @@ async def generate_essay_cover_image(*, title: str, body: str, optimized_body: s
     return store_essay_cover_image(title, content), selected_model
 
 
-def apply_essay_payload(essay: EssayEntry, payload: dict[str, Any]) -> None:
+def apply_essay_payload(
+    essay: EssayEntry,
+    payload: dict[str, Any],
+    *,
+    clear_generated_on_change: bool = False,
+) -> bool:
     title = clean_essay_title(payload.get("title"))
     body = clean_essay_body(payload.get("body"))
     if not title:
         raise HTTPException(status_code=400, detail="请输入作文标题。")
     if not body:
         raise HTTPException(status_code=400, detail="请输入作文正文。")
+    content_changed = bool(essay.id) and (essay.title != title or essay.body != body)
     essay.title = title
     essay.body = body
     essay.word_count = essay_word_count(body)
+    if clear_generated_on_change and content_changed:
+        essay.optimized_body = None
+        essay.optimized_word_count = 0
+        essay.ai_model = None
+        essay.cover_url = None
+        essay.cover_model = None
+    return content_changed
 
 
 @app.get("/api/vue/essays")
@@ -4878,7 +4891,7 @@ async def vue_update_essay_api(essay_id: int, request: Request, db: Session = De
         raise HTTPException(status_code=400, detail="作文数据不是有效 JSON。") from exc
 
     essay = get_owned_essay(db, request, essay_id)
-    apply_essay_payload(essay, payload or {})
+    apply_essay_payload(essay, payload or {}, clear_generated_on_change=True)
     db.add(essay)
     db.commit()
     db.refresh(essay)
@@ -4895,7 +4908,7 @@ async def vue_optimize_essay_api(essay_id: int, request: Request, db: Session = 
         raise HTTPException(status_code=400, detail="作文数据不是有效 JSON。") from exc
 
     essay = get_owned_essay(db, request, essay_id)
-    apply_essay_payload(essay, payload or {})
+    apply_essay_payload(essay, payload or {}, clear_generated_on_change=True)
     try:
         optimized_body, model = await optimize_essay_with_openai(title=essay.title, body=essay.body)
     except RuntimeError as exc:
@@ -4930,7 +4943,7 @@ async def vue_generate_essay_cover_api(essay_id: int, request: Request, db: Sess
         raise HTTPException(status_code=400, detail="作文数据不是有效 JSON。") from exc
 
     essay = get_owned_essay(db, request, essay_id)
-    apply_essay_payload(essay, payload or {})
+    apply_essay_payload(essay, payload or {}, clear_generated_on_change=True)
     try:
         cover_url, model = await generate_essay_cover_image(
             title=essay.title,

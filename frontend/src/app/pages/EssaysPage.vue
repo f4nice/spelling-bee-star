@@ -15,11 +15,17 @@ const selectedId = ref(0);
 const notice = ref("");
 const busyAction = ref("");
 const draft = reactive(emptyDraft());
+let isApplyingDraft = false;
 
 const titleMaxChars = computed(() => Number(props.data?.limits?.titleMaxChars || 120));
 const bodyMaxChars = computed(() => Number(props.data?.limits?.bodyMaxChars || 30000));
 const currentWordCount = computed(() => countEssayWords(draft.body));
-const canSubmit = computed(() => draft.title.trim() && draft.body.trim() && !busyAction.value);
+const hasEssayInput = computed(() => Boolean(draft.title.trim() && draft.body.trim()));
+const aiVersionText = computed(() => {
+  if (busyAction.value === "optimize") return "AI 正在优化这篇作文，完成后会显示在这里。";
+  return draft.optimizedBody || "AI 优化后会显示在这里。";
+});
+const aiVersionWordCount = computed(() => (busyAction.value === "optimize" ? 0 : draft.optimizedWordCount || countEssayWords(draft.optimizedBody)));
 const selectedEssay = computed(() => essays.value.find((item) => Number(item.id) === Number(selectedId.value)) || null);
 const hasEssays = computed(() => essays.value.length > 0);
 
@@ -52,7 +58,9 @@ function emptyDraft() {
 }
 
 function assignDraft(value) {
+  isApplyingDraft = true;
   Object.assign(draft, value);
+  isApplyingDraft = false;
 }
 
 function loadDraft(essay) {
@@ -90,6 +98,23 @@ function startNewEssay() {
   loadDraft(null);
 }
 
+watch(
+  () => [draft.title, draft.body],
+  ([nextTitle, nextBody], [previousTitle, previousBody]) => {
+    if (isApplyingDraft || (nextTitle === previousTitle && nextBody === previousBody)) return;
+    if (draft.optimizedBody || draft.optimizedWordCount || draft.aiModel) {
+      draft.optimizedBody = "";
+      draft.optimizedWordCount = 0;
+      draft.aiModel = "";
+    }
+    if (draft.coverUrl || draft.coverModel) {
+      draft.coverUrl = "";
+      draft.coverModel = "";
+    }
+  },
+  { flush: "sync" },
+);
+
 function requestPayload() {
   return {
     title: draft.title,
@@ -112,10 +137,11 @@ function applyResponse(payload) {
 }
 
 async function persistEssay({ silent = false } = {}) {
-  if (!canSubmit.value) {
+  if (!hasEssayInput.value) {
     notice.value = "标题和正文都写好后再保存。";
     return null;
   }
+  if (busyAction.value) return null;
   busyAction.value = "save";
   notice.value = "";
   try {
@@ -138,10 +164,11 @@ async function ensureSavedEssay() {
 }
 
 async function optimizeEssay() {
-  if (!canSubmit.value) {
+  if (!hasEssayInput.value) {
     notice.value = "标题和正文都写好后再优化。";
     return;
   }
+  if (busyAction.value) return;
   const essay = await ensureSavedEssay();
   if (!essay?.id) return;
   busyAction.value = "optimize";
@@ -158,10 +185,11 @@ async function optimizeEssay() {
 }
 
 async function generateCover() {
-  if (!canSubmit.value) {
+  if (!hasEssayInput.value) {
     notice.value = "标题和正文都写好后再生成封面。";
     return;
   }
+  if (busyAction.value) return;
   const essay = await ensureSavedEssay();
   if (!essay?.id) return;
   busyAction.value = "cover";
@@ -248,13 +276,13 @@ async function deleteEssay() {
         ></textarea>
 
         <div class="essay-actions">
-          <button type="button" class="secondary-button" :disabled="!canSubmit || busyAction === 'save'" @click="persistEssay()">
+          <button type="button" class="secondary-button" :disabled="!hasEssayInput || Boolean(busyAction)" @click="persistEssay()">
             {{ busyAction === "save" ? "保存中..." : "保存" }}
           </button>
-          <button type="button" class="challenge-button" :disabled="!canSubmit || Boolean(busyAction)" @click="optimizeEssay">
+          <button type="button" class="challenge-button" :disabled="!hasEssayInput || Boolean(busyAction)" @click="optimizeEssay">
             {{ busyAction === "optimize" ? "优化中..." : "AI 优化" }}
           </button>
-          <button type="button" class="secondary-button" :disabled="!canSubmit || Boolean(busyAction)" @click="generateCover">
+          <button type="button" class="secondary-button" :disabled="!hasEssayInput || Boolean(busyAction)" @click="generateCover">
             {{ busyAction === "cover" ? "生成中..." : "生成封面" }}
           </button>
           <button v-if="draft.id" type="button" class="secondary-button danger-button" :disabled="Boolean(busyAction)" @click="deleteEssay">
@@ -284,9 +312,9 @@ async function deleteEssay() {
             <article class="essay-text-panel">
               <div class="essay-section-title">
                 <span class="eyebrow">AI VERSION</span>
-                <strong>{{ draft.optimizedWordCount || countEssayWords(draft.optimizedBody) }} 字</strong>
+                <strong>{{ aiVersionWordCount }} 字</strong>
               </div>
-              <p>{{ draft.optimizedBody || "AI 优化后会显示在这里。" }}</p>
+              <p>{{ aiVersionText }}</p>
             </article>
           </section>
         </div>
