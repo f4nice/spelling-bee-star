@@ -58,3 +58,18 @@ test("scene paging moves by one viewport-sized page", () => {
   assert.equal(scenePageTarget(scene, 1280, -1), 0);
   assert.equal(scenePageTarget(scene, 1280, 1), 1280);
 });
+
+test("scene purchase metadata survives normalization", () => {
+  const scene = normalizeCatWorldScene({
+    id: "kitchen",
+    description: "A bright kitchen",
+    purchasable: true,
+    purchaseCost: 50000,
+    unlocked: false,
+  });
+
+  assert.equal(scene.description, "A bright kitchen");
+  assert.equal(scene.purchasable, true);
+  assert.equal(scene.purchaseCost, 50000);
+  assert.equal(scene.unlocked, false);
+});

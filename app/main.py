@@ -33,8 +33,10 @@ from app.config import get_settings
 from app.database import Base, SessionLocal, engine, get_db
 from app.models import (
     CacheEntry,
+    CatWorldBlindBoxDraw,
     CatWorldDailyLog,
     CatWorldGameSetting,
+    CatWorldLimitedCatStock,
     CatWorldScene,
     CatWorldShopSetting,
     CatWorldState,
@@ -94,8 +96,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260723-006"
-DEFAULT_PAGE_VERSION = "v20260723.6"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260723-007"
+DEFAULT_PAGE_VERSION = "v20260723.7"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -682,6 +684,36 @@ CAT_WORLD_SHOP = [
         "tone": "mint",
     },
     {
+        "id": "limited-cat-blind-box",
+        "category": "blind-box",
+        "label": "限定猫咪盲盒",
+        "englishName": "Limited Cat Mystery Box",
+        "cost": 10000,
+        "mood": 0,
+        "seriesKey": "china-heritage-2026-01",
+        "description": "中国地区第一期限定盲盒，每个账号本期只能开启一次，一次必得一只猫。",
+    },
+    {
+        "id": "cat-collection-handbook",
+        "category": "handbook",
+        "handbookType": "cats",
+        "label": "猫咪收集手册",
+        "englishName": "Cat Collection Handbook",
+        "cost": 10000,
+        "mood": 0,
+        "description": "永久解锁猫咪卡册，查看地区分期、R/SR/SSR 稀有度和自己的收集进度。",
+    },
+    {
+        "id": "cat-food-handbook",
+        "category": "handbook",
+        "handbookType": "food",
+        "label": "猫咪食物手册",
+        "englishName": "Cat Food Handbook",
+        "cost": 10000,
+        "mood": 0,
+        "description": "永久解锁食物图鉴，集中查看食物效果、偏爱猫咪和背包数量。",
+    },
+    {
         "id": CAT_WORLD_DEFAULT_CAT_ID,
         "category": "cat",
         "label": "咪咪",
@@ -869,6 +901,56 @@ CAT_WORLD_CATS = [
         ],
     },
 ]
+CAT_WORLD_BLIND_BOX_SERIES = [
+    {
+        "key": "china-heritage-2026-01",
+        "label": "东方猫韵 · 中国站",
+        "region": "中国",
+        "issue": "第一期",
+        "description": "本期只收录 3 种中国地区代表猫咪，每个账号限开一次。",
+        "shopItemId": "limited-cat-blind-box",
+        "cats": [
+            {
+                "totalStock": 120,
+                "cat": {
+                    "id": "china-lihua", "label": "中华狸花猫", "englishName": "Chinese Li Hua",
+                    "rarity": "R", "limited": True, "region": "中国",
+                    "description": "灵活、机敏的中国本土猫，擅长巡视宽阔场景。", "personality": "可靠的院落巡查员",
+                    "traits": {"activity": "adventurous", "movement": 1.18, "energyDrain": 1.0, "moodDrain": 0.82, "playMoodGain": 1.18, "foodEnergyGain": 1.0, "restThreshold": 36, "sleepStart": 23, "sleepEnd": 7, "nightOwl": False, "routine": "从院子到书桌快速巡查", "temperament": "guardian", "label": "行动敏捷、状态均衡，适合探索多场景。"},
+                    "thoughts": ["院子和房间都检查好了。", "再学一个词，我就继续巡逻。", "今天的目标要稳稳拿下。"],
+                },
+            },
+            {
+                "totalStock": 45,
+                "cat": {
+                    "id": "linqing-lion", "label": "临清狮猫", "englishName": "Linqing Lion Cat",
+                    "rarity": "SR", "limited": True, "region": "中国",
+                    "description": "来自山东临清的长毛猫，安静从容，喜欢陪你读长故事。", "personality": "温和的长篇陪读员",
+                    "traits": {"activity": "gentle", "movement": 0.8, "energyDrain": 0.72, "moodDrain": 0.62, "playMoodGain": 0.98, "foodEnergyGain": 1.16, "restThreshold": 28, "sleepStart": 22, "sleepEnd": 8, "nightOwl": False, "routine": "在软垫和书架附近安静陪读", "temperament": "gentle", "label": "消耗较低、陪读稳定，吃东西恢复更明显。"},
+                    "thoughts": ["慢慢读，我会一直在旁边。", "长句子也可以分成几小段。", "书架旁边很适合听故事。"],
+                },
+            },
+            {
+                "totalStock": 15,
+                "cat": {
+                    "id": "jianzhou-cat", "label": "简州猫", "englishName": "Jianzhou Cat",
+                    "rarity": "SSR", "limited": True, "region": "中国",
+                    "description": "来自四川简州的珍稀限定猫，聪明活跃，对朗读声格外敏感。", "personality": "敏锐的语音探索家",
+                    "traits": {"activity": "chatty", "movement": 1.12, "energyDrain": 0.9, "moodDrain": 0.76, "playMoodGain": 1.35, "foodEnergyGain": 1.08, "restThreshold": 34, "sleepStart": 1, "sleepEnd": 8, "nightOwl": True, "routine": "循着朗读声探索每一层房间", "temperament": "chatty", "label": "稀有且敏锐，互动心情收益最高。"},
+                    "thoughts": ["我听见了一个很漂亮的发音。", "二楼还有新的句子等着探索。", "再读一遍，我会记住这个声音。"],
+                },
+            },
+        ],
+    },
+]
+CAT_WORLD_CURRENT_BLIND_BOX_SERIES_KEY = CAT_WORLD_BLIND_BOX_SERIES[0]["key"]
+CAT_WORLD_BLIND_BOX_SERIES_BY_KEY = {series["key"]: series for series in CAT_WORLD_BLIND_BOX_SERIES}
+CAT_WORLD_LIMITED_CAT_SEEDS = [
+    {**cat_seed, "seriesKey": series["key"]}
+    for series in CAT_WORLD_BLIND_BOX_SERIES
+    for cat_seed in series["cats"]
+]
+CAT_WORLD_CATS.extend(seed["cat"] for seed in CAT_WORLD_LIMITED_CAT_SEEDS)
 CAT_WORLD_SHOP_BY_ID = {item["id"]: item for item in CAT_WORLD_SHOP}
 CAT_WORLD_CAT_BY_ID = {item["id"]: item for item in CAT_WORLD_CATS}
 CAT_WORLD_DECOR_LABELS = {
@@ -946,6 +1028,10 @@ CAT_WORLD_SCENE_SEEDS = [
         "sceneType": "indoor",
         "isEnabled": True,
         "sortOrder": 10,
+        "description": "默认的一楼活动室。",
+        "purchasable": False,
+        "purchaseCost": 0,
+        "unlockByDefault": True,
         "world": {
             "width": 2560,
             "height": 560,
@@ -989,10 +1075,14 @@ CAT_WORLD_SCENE_SEEDS = [
         "label": "猫咪外院",
         "englishName": "Garden Yard",
         "sceneType": "outdoor",
-        "isEnabled": False,
+        "isEnabled": True,
         "sortOrder": 20,
+        "description": "可以晒太阳、追风和摆放户外玩具的猫咪外院。",
+        "purchasable": True,
+        "purchaseCost": 50000,
+        "unlockByDefault": False,
         "world": {
-            "width": 2200,
+            "width": 2560,
             "height": 560,
             "viewportWidth": 1280,
             "viewportHeight": 560,
@@ -1031,10 +1121,14 @@ CAT_WORLD_SCENE_SEEDS = [
         "label": "二楼阅读间",
         "englishName": "Reading Loft",
         "sceneType": "upper-floor",
-        "isEnabled": False,
+        "isEnabled": True,
         "sortOrder": 30,
+        "description": "适合安静陪读和布置书架的二楼阅读间。",
+        "purchasable": True,
+        "purchaseCost": 50000,
+        "unlockByDefault": False,
         "world": {
-            "width": 1800,
+            "width": 2560,
             "height": 560,
             "viewportWidth": 1280,
             "viewportHeight": 560,
@@ -1066,6 +1160,80 @@ CAT_WORLD_SCENE_SEEDS = [
             ],
         },
         "portals": [{"targetSceneKey": CAT_WORLD_DEFAULT_SCENE_KEY, "label": "回一楼", "x": 80, "y": 268}],
+        "defaultLayout": CAT_WORLD_ROOM_DEFAULT_LAYOUT,
+    },
+    {
+        "sceneKey": "kitchen",
+        "label": "猫咪厨房",
+        "englishName": "Cat Kitchen",
+        "sceneType": "kitchen",
+        "isEnabled": True,
+        "sortOrder": 40,
+        "description": "摆放食盆、饮水机和餐桌的明亮猫咪厨房。",
+        "purchasable": True,
+        "purchaseCost": 50000,
+        "unlockByDefault": False,
+        "world": {
+            "width": 2560,
+            "height": 560,
+            "viewportWidth": 1280,
+            "viewportHeight": 560,
+            "floorTop": 252,
+            "floorBottom": 522,
+        },
+        "camera": {"pageWidth": 1280, "initialPage": 0, "snapPaging": True},
+        "palette": {
+            "wallTopLeft": "#c9f5ff", "wallTopRight": "#fff1a8",
+            "wallBottomLeft": "#e5fbff", "wallBottomRight": "#ffd6c9",
+            "floor": "#78ad92", "trim": "#e4686f", "grid": "#2c3f46",
+        },
+        "features": {"cats": True, "food": True, "care": True, "hygiene": True},
+        "itemRules": {"allowedCategories": ["decor", "toy"], "excludedItemIds": ["window-hammock"]},
+        "spawnPoints": {
+            "activeFood": {"x": 2210, "y": 408, "width": 118, "height": 46},
+            "activeCare": {"x": 680, "y": 426, "width": 68, "height": 70},
+            "readyLitter": {"x": 1820, "y": 352, "width": 112, "height": 82},
+            "attention": {"x": 1234, "y": 444},
+            "litter": [{"x": 2180, "y": 456}, {"x": 1680, "y": 468}, {"x": 920, "y": 448}, {"x": 390, "y": 466}],
+        },
+        "portals": [{"targetSceneKey": CAT_WORLD_DEFAULT_SCENE_KEY, "label": "回一楼", "x": 80, "y": 252}],
+        "defaultLayout": CAT_WORLD_ROOM_DEFAULT_LAYOUT,
+    },
+    {
+        "sceneKey": "master-bedroom",
+        "label": "猫咪主卧",
+        "englishName": "Master Bedroom",
+        "sceneType": "bedroom",
+        "isEnabled": True,
+        "sortOrder": 50,
+        "description": "适合猫窝、软垫和夜间休息的安静主卧。",
+        "purchasable": True,
+        "purchaseCost": 50000,
+        "unlockByDefault": False,
+        "world": {
+            "width": 2560,
+            "height": 560,
+            "viewportWidth": 1280,
+            "viewportHeight": 560,
+            "floorTop": 270,
+            "floorBottom": 522,
+        },
+        "camera": {"pageWidth": 1280, "initialPage": 0, "snapPaging": True},
+        "palette": {
+            "wallTopLeft": "#d7e6ff", "wallTopRight": "#ffd7e7",
+            "wallBottomLeft": "#bdebd7", "wallBottomRight": "#ffe9ad",
+            "floor": "#8b739d", "trim": "#55a891", "grid": "#34334b",
+        },
+        "features": {"cats": True, "food": True, "care": True, "hygiene": True},
+        "itemRules": {"allowedCategories": ["decor", "toy"], "excludedItemIds": []},
+        "spawnPoints": {
+            "activeFood": {"x": 2190, "y": 408, "width": 118, "height": 46},
+            "activeCare": {"x": 720, "y": 426, "width": 68, "height": 70},
+            "readyLitter": {"x": 1840, "y": 352, "width": 112, "height": 82},
+            "attention": {"x": 1234, "y": 444},
+            "litter": [{"x": 2160, "y": 456}, {"x": 1650, "y": 468}, {"x": 900, "y": 448}, {"x": 380, "y": 466}],
+        },
+        "portals": [{"targetSceneKey": CAT_WORLD_DEFAULT_SCENE_KEY, "label": "回一楼", "x": 80, "y": 270}],
         "defaultLayout": CAT_WORLD_ROOM_DEFAULT_LAYOUT,
     },
 ]
@@ -1105,6 +1273,18 @@ CAT_WORLD_PRICING_PLANS = [
         "label": "名猫",
         "range": "420-800",
         "strategy": "高价长期目标；猫咪离家后需要重新购买，领养后恢复基础状态。",
+    },
+    {
+        "category": "blind-box",
+        "label": "限定盲盒",
+        "range": "10000",
+        "strategy": "全站限量库存；随机解锁一只尚未拥有的限定猫咪，库存扣减后不会补回。",
+    },
+    {
+        "category": "handbook",
+        "label": "收藏手册",
+        "range": "10000",
+        "strategy": "一次购买永久拥有；猫咪手册解锁分期卡册，食物手册解锁食物图鉴。",
     },
 ]
 
@@ -3416,6 +3596,7 @@ def startup() -> None:
     ensure_version_matrix_file()
     with SessionLocal() as db:
         seed_cat_world_scenes(db)
+        seed_cat_world_limited_cat_stock(db)
         seed_daily_quotes(db)
         ensure_default_word_list(db)
         seed_word_resource_pool(db)
@@ -4010,6 +4191,7 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
     current = serialize_cat_world_payload(db, state)
     inventory = parse_cat_world_inventory(state.inventory)
     owned_cats = parse_cat_world_cats(state.cats)
+    blind_box_result: dict[str, Any] | None = None
     if item["category"] == "cat":
         if item_id in owned_cats:
             state.selected_cat = item_id
@@ -4049,6 +4231,93 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
             log.agent_state = None
             log.damaged_item_id = None
             db.add(log)
+    elif item["category"] == "blind-box":
+        state = db.scalar(
+            select(CatWorldState).where(CatWorldState.id == state.id).with_for_update()
+        ) or state
+        owned_cats = parse_cat_world_cats(state.cats)
+        available_energy = max(int(current["energy"]["earned"]) - max(int(state.energy_spent or 0), 0), 0)
+        if available_energy < int(item["cost"]):
+            raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点。")
+        series_key = str(item.get("seriesKey") or CAT_WORLD_CURRENT_BLIND_BOX_SERIES_KEY)
+        series = CAT_WORLD_BLIND_BOX_SERIES_BY_KEY.get(series_key)
+        if not series:
+            raise HTTPException(status_code=404, detail="没有找到这一期猫咪盲盒。")
+        existing_draw = db.scalar(
+            select(CatWorldBlindBoxDraw).where(
+                CatWorldBlindBoxDraw.phone == state.phone,
+                CatWorldBlindBoxDraw.series_key == series_key,
+            ).with_for_update()
+        )
+        if existing_draw:
+            raise HTTPException(status_code=409, detail="本期盲盒每个账号只能开启一次，你已经抽取过了。")
+        limited_ids = {str(seed["cat"]["id"]) for seed in series["cats"]}
+        stock_rows = db.scalars(
+            select(CatWorldLimitedCatStock)
+            .where(
+                CatWorldLimitedCatStock.series_key == series_key,
+                CatWorldLimitedCatStock.cat_id.in_(limited_ids),
+            )
+            .with_for_update()
+        ).all()
+        eligible_rows = [
+            row
+            for row in stock_rows
+            if row.is_active
+            and row.cat_id not in owned_cats
+            and max(int(row.total_stock or 0) - int(row.claimed_count or 0), 0) > 0
+        ]
+        if not eligible_rows:
+            raise HTTPException(status_code=409, detail="本期可抽取的限定猫咪已经售罄。")
+        remaining_total = sum(max(int(row.total_stock or 0) - int(row.claimed_count or 0), 0) for row in eligible_rows)
+        ticket = secrets.randbelow(remaining_total)
+        selected_stock = eligible_rows[-1]
+        for row in eligible_rows:
+            remaining = max(int(row.total_stock or 0) - int(row.claimed_count or 0), 0)
+            if ticket < remaining:
+                selected_stock = row
+                break
+            ticket -= remaining
+        selected_stock.claimed_count = max(int(selected_stock.claimed_count or 0), 0) + 1
+        selected_cat = CAT_WORLD_CAT_BY_ID[selected_stock.cat_id]
+        owned_cats.append(selected_stock.cat_id)
+        state.cats = encode_cat_world_cats(owned_cats)
+        state.selected_cat = selected_stock.cat_id
+        now = datetime.utcnow()
+        cat_care = parse_cat_world_care(state.cat_care)
+        cat_care[selected_stock.cat_id] = {
+            **cat_care.get(selected_stock.cat_id, {}),
+            "lastBathAt": now.replace(microsecond=0).isoformat() + "Z",
+            "hungerSince": "",
+            "lowMoodSince": "",
+            "escapedAt": "",
+            "escapeReason": "",
+            "escapeLabel": "",
+            "adoptionCount": max(int(cat_care.get(selected_stock.cat_id, {}).get("adoptionCount") or 0), 0) + 1,
+        }
+        state.cat_care = encode_cat_world_care(cat_care)
+        db.add(
+            CatWorldBlindBoxDraw(
+                phone=state.phone,
+                series_key=series_key,
+                cat_id=selected_stock.cat_id,
+                energy_cost=int(item["cost"]),
+            )
+        )
+        db.add(selected_stock)
+        blind_box_result = {
+            "cat": cat_world_cat_payload(selected_cat),
+            "seriesKey": series_key,
+            "seriesLabel": series["label"],
+            "remainingStock": max(int(selected_stock.total_stock or 0) - int(selected_stock.claimed_count or 0), 0),
+        }
+    elif item["category"] == "handbook":
+        if inventory.get(item_id, 0) > 0:
+            return {"ok": True, **serialize_cat_world_payload(db, state)}
+        if current["energy"]["available"] < int(item["cost"]):
+            raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点。")
+        inventory[item_id] = 1
+        state.inventory = encode_cat_world_inventory(inventory)
     elif item["category"] == "color":
         target_decor = str(item.get("targetDecor") or "")
         if not target_decor or inventory.get(target_decor, 0) <= 0:
@@ -4087,7 +4356,10 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
     db.add(state)
     db.commit()
     db.refresh(state)
-    return {"ok": True, **serialize_cat_world_payload(db, state)}
+    response = {"ok": True, **serialize_cat_world_payload(db, state)}
+    if blind_box_result:
+        response["blindBoxResult"] = blind_box_result
+    return response
 
 
 @app.post("/api/vue/cat-world/play")
@@ -4728,6 +5000,54 @@ async def vue_cat_world_select_cat_api(request: Request, db: Session = Depends(g
     db.commit()
     db.refresh(state)
     return {"ok": True, **serialize_cat_world_payload(db, state)}
+
+
+@app.post("/api/vue/cat-world/scene/purchase")
+async def vue_cat_world_purchase_scene_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="场景购买数据不是有效 JSON。") from exc
+    scene_key = str((payload or {}).get("sceneId") or "").strip()
+    scene = cat_world_scene_row(db, scene_key)
+    if not scene or scene.scene_key != scene_key:
+        raise HTTPException(status_code=404, detail="没有找到这个场景。")
+    config = cat_world_scene_config(scene)
+    if not scene.is_enabled or not config.get("purchasable"):
+        raise HTTPException(status_code=403, detail="这个场景暂时不能购买。")
+    state = get_or_create_cat_world_state(db, phone)
+    current = serialize_cat_world_payload(db, state)
+    state = db.scalar(
+        select(CatWorldState).where(CatWorldState.id == state.id).with_for_update()
+    ) or state
+    user_scene, _ = get_or_create_cat_world_user_scene(db, state, scene)
+    if user_scene.is_unlocked:
+        state.current_scene_key = scene.scene_key
+        user_scene.last_visited_at = datetime.utcnow()
+        db.add(user_scene)
+        db.add(state)
+        db.commit()
+        db.refresh(state)
+        return {"ok": True, "alreadyOwned": True, **serialize_cat_world_payload(db, state)}
+    cost = max(int(config.get("purchaseCost") or 0), 0)
+    available_energy = max(int(current["energy"]["earned"]) - max(int(state.energy_spent or 0), 0), 0)
+    if available_energy < cost:
+        raise HTTPException(status_code=400, detail=f"购买{scene.label}需要 {cost} 能量，当前能量还不够。")
+    state.energy_spent = max(int(state.energy_spent or 0), 0) + cost
+    state.current_scene_key = scene.scene_key
+    user_scene.is_unlocked = True
+    user_scene.unlocked_at = datetime.utcnow()
+    user_scene.last_visited_at = datetime.utcnow()
+    db.add(user_scene)
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return {
+        "ok": True,
+        "scenePurchase": {"sceneId": scene.scene_key, "label": scene.label, "cost": cost},
+        **serialize_cat_world_payload(db, state),
+    }
 
 
 @app.post("/api/vue/cat-world/pet")
@@ -11869,12 +12189,27 @@ def seed_cat_world_scenes(db: Session) -> None:
         existing_row = existing_rows.get(scene_key)
         if existing_row:
             existing_config = parse_cat_world_scene_json(existing_row.config, {})
+            config_changed = False
             if seed.get("camera") and not isinstance(existing_config.get("camera"), dict):
                 existing_config["camera"] = seed["camera"]
+                config_changed = True
+            if "purchasable" not in existing_config:
+                existing_config.update(
+                    {
+                        "description": str(seed.get("description") or ""),
+                        "purchasable": bool(seed.get("purchasable")),
+                        "purchaseCost": max(int(seed.get("purchaseCost") or 0), 0),
+                        "unlockByDefault": bool(seed.get("unlockByDefault", scene_key == CAT_WORLD_DEFAULT_SCENE_KEY)),
+                    }
+                )
+                if seed.get("purchasable"):
+                    existing_row.is_enabled = bool(seed.get("isEnabled"))
+                config_changed = True
+            if config_changed:
                 existing_row.config = json.dumps(existing_config, ensure_ascii=False, sort_keys=True)
                 changed = True
             target_width = int(seed["world"]["width"])
-            if scene_key == CAT_WORLD_DEFAULT_SCENE_KEY and int(existing_row.world_width or 0) < target_width:
+            if int(existing_row.world_width or 0) < target_width:
                 existing_row.world_width = target_width
                 changed = True
             continue
@@ -11886,6 +12221,9 @@ def seed_cat_world_scenes(db: Session) -> None:
             "spawnPoints": seed.get("spawnPoints") or {},
             "portals": seed.get("portals") or [],
             "camera": seed.get("camera") or {},
+            "description": str(seed.get("description") or ""),
+            "purchasable": bool(seed.get("purchasable")),
+            "purchaseCost": max(int(seed.get("purchaseCost") or 0), 0),
             "unlockByDefault": bool(seed.get("unlockByDefault", True)),
         }
         db.add(
@@ -11904,6 +12242,31 @@ def seed_cat_world_scenes(db: Session) -> None:
                 default_layout=encode_cat_world_room_layout(seed.get("defaultLayout") or {}),
                 is_enabled=bool(seed.get("isEnabled")),
                 sort_order=int(seed.get("sortOrder") or 0),
+            )
+        )
+        changed = True
+    if changed:
+        db.commit()
+
+
+def seed_cat_world_limited_cat_stock(db: Session) -> None:
+    existing = {
+        (row.series_key, row.cat_id): row
+        for row in db.scalars(select(CatWorldLimitedCatStock)).all()
+    }
+    changed = False
+    for seed in CAT_WORLD_LIMITED_CAT_SEEDS:
+        series_key = str(seed["seriesKey"])
+        cat_id = str(seed["cat"]["id"])
+        if (series_key, cat_id) in existing:
+            continue
+        db.add(
+            CatWorldLimitedCatStock(
+                series_key=series_key,
+                cat_id=cat_id,
+                total_stock=max(int(seed.get("totalStock") or 0), 0),
+                claimed_count=0,
+                is_active=True,
             )
         )
         changed = True
@@ -11949,6 +12312,9 @@ def cat_world_scene_config(scene: CatWorldScene) -> dict[str, Any]:
         "spawnPoints": extra.get("spawnPoints") if isinstance(extra.get("spawnPoints"), dict) else {},
         "portals": extra.get("portals") if isinstance(extra.get("portals"), list) else [],
         "camera": extra.get("camera") if isinstance(extra.get("camera"), dict) else {},
+        "description": str(extra.get("description") or ""),
+        "purchasable": bool(extra.get("purchasable")),
+        "purchaseCost": max(int(extra.get("purchaseCost") or 0), 0),
         "unlockByDefault": bool(extra.get("unlockByDefault", True)),
         "defaultLayout": default_layout,
     }
@@ -12057,6 +12423,64 @@ def cat_world_scene_catalog_payload(db: Session, state: CatWorldState) -> list[d
         unlocked = bool(user_row.is_unlocked) if user_row else bool(config.get("unlockByDefault"))
         payload.append({**config, "unlocked": unlocked, "available": bool(row.is_enabled and unlocked)})
     return payload
+
+
+def cat_world_blind_box_catalog_payload(
+    db: Session,
+    state: CatWorldState,
+    owned_cat_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    owned = set(owned_cat_ids or [])
+    stock_rows = {
+        (row.series_key, row.cat_id): row
+        for row in db.scalars(select(CatWorldLimitedCatStock)).all()
+    }
+    draws = {
+        row.series_key: row
+        for row in db.scalars(
+            select(CatWorldBlindBoxDraw).where(CatWorldBlindBoxDraw.phone == state.phone)
+        ).all()
+    }
+    series_payload = []
+    for series in CAT_WORLD_BLIND_BOX_SERIES:
+        cat_rows = []
+        for seed in series["cats"]:
+            cat = seed["cat"]
+            stock = stock_rows.get((series["key"], cat["id"]))
+            total = max(int(stock.total_stock if stock else seed.get("totalStock") or 0), 0)
+            claimed = min(max(int(stock.claimed_count if stock else 0), 0), total)
+            remaining = max(total - claimed, 0) if stock is None or stock.is_active else 0
+            cat_rows.append(
+                {
+                    **cat_world_cat_payload(cat),
+                    "total": total,
+                    "claimed": claimed,
+                    "remaining": remaining,
+                    "owned": cat["id"] in owned,
+                    "oddsPercent": round((int(seed.get("totalStock") or 0) / max(sum(int(item.get("totalStock") or 0) for item in series["cats"]), 1)) * 100, 1),
+                }
+            )
+        draw = draws.get(series["key"])
+        series_payload.append(
+            {
+                "key": series["key"],
+                "label": series["label"],
+                "region": series["region"],
+                "issue": series["issue"],
+                "description": series["description"],
+                "shopItemId": series["shopItemId"],
+                "drawn": bool(draw),
+                "drawnCatId": draw.cat_id if draw else "",
+                "drawnAt": draw.created_at.isoformat() if draw and draw.created_at else "",
+                "totalStock": sum(row["total"] for row in cat_rows),
+                "remainingStock": sum(row["remaining"] for row in cat_rows),
+                "cats": cat_rows,
+            }
+        )
+    return {
+        "currentSeriesKey": CAT_WORLD_CURRENT_BLIND_BOX_SERIES_KEY,
+        "series": series_payload,
+    }
 
 
 def cat_world_owned_style_options(inventory: dict[str, int], decor_id: str) -> list[dict[str, str]]:
@@ -14117,7 +14541,8 @@ def cat_world_update_neglect_status(
     low_mood_critical = bool(row.get("lowMoodSince")) and low_mood_hours >= CAT_WORLD_LOW_MOOD_CRITICAL_HOURS
     hunger_escape = bool(row.get("hungerSince")) and hunger_hours >= CAT_WORLD_HUNGER_ESCAPE_HOURS
     low_mood_escape = bool(row.get("lowMoodSince")) and low_mood_hours >= CAT_WORLD_LOW_MOOD_ESCAPE_HOURS
-    escaped = hunger_escape or low_mood_escape
+    limited_cat = bool(CAT_WORLD_CAT_BY_ID.get(cat_id, {}).get("limited"))
+    escaped = (hunger_escape or low_mood_escape) and not limited_cat
     escape_reason = "hunger" if hunger_escape else ("low-mood" if low_mood_escape else "")
     escape_label = "连续 3 天挨饿" if escape_reason == "hunger" else ("连续 5 天心情跌至谷底" if escape_reason else "")
     if escaped and not row.get("escapedAt"):
@@ -14984,6 +15409,19 @@ def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
         if not scene:
             raise HTTPException(status_code=500, detail="猫咪世界还没有可用场景配置。")
         changed = False
+        drawn_limited_cats = [
+            cat_id
+            for cat_id in db.scalars(
+                select(CatWorldBlindBoxDraw.cat_id).where(CatWorldBlindBoxDraw.phone == normalized)
+            ).all()
+            if cat_id in CAT_WORLD_CAT_BY_ID
+        ]
+        owned_cats = parse_cat_world_cats(state.cats)
+        restored_cats = list(dict.fromkeys([*owned_cats, *drawn_limited_cats]))
+        if restored_cats != owned_cats:
+            state.cats = encode_cat_world_cats(restored_cats)
+            db.add(state)
+            changed = True
         if state.current_scene_key != scene.scene_key:
             state.current_scene_key = scene.scene_key
             db.add(state)
@@ -14993,17 +15431,25 @@ def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
             db.commit()
             db.refresh(state)
         return state
+    drawn_limited_cats = [
+        cat_id
+        for cat_id in db.scalars(
+            select(CatWorldBlindBoxDraw.cat_id).where(CatWorldBlindBoxDraw.phone == normalized)
+        ).all()
+        if cat_id in CAT_WORLD_CAT_BY_ID
+    ]
+    initial_cats = list(dict.fromkeys([CAT_WORLD_DEFAULT_CAT_ID, *drawn_limited_cats]))
     state = CatWorldState(
         phone=normalized,
         energy_spent=0,
         inventory=encode_cat_world_inventory({}),
-        cats=encode_cat_world_cats([CAT_WORLD_DEFAULT_CAT_ID]),
+        cats=encode_cat_world_cats(initial_cats),
         room_styles=encode_cat_world_room_styles({}),
         room_layout=encode_cat_world_room_layout({}),
         current_scene_key=CAT_WORLD_DEFAULT_SCENE_KEY,
         cat_bonds=encode_cat_world_bonds({}),
         cat_care=encode_cat_world_care({}),
-        selected_cat=CAT_WORLD_DEFAULT_CAT_ID,
+        selected_cat=drawn_limited_cats[-1] if drawn_limited_cats else CAT_WORLD_DEFAULT_CAT_ID,
     )
     db.add(state)
     db.commit()
@@ -15222,6 +15668,27 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     shop = cat_world_effective_shop(db)
     shop_by_id = {item["id"]: item for item in shop}
     owned_cats = parse_cat_world_cats(state.cats)
+    blind_box_catalog = cat_world_blind_box_catalog_payload(db, state, owned_cats)
+    current_blind_series = next(
+        (
+            series
+            for series in blind_box_catalog["series"]
+            if series["key"] == blind_box_catalog["currentSeriesKey"]
+        ),
+        {},
+    )
+    blind_box_item = shop_by_id.get("limited-cat-blind-box")
+    if blind_box_item is not None:
+        blind_box_item.update(
+            {
+                "seriesLabel": current_blind_series.get("label") or "限定猫咪盲盒",
+                "region": current_blind_series.get("region") or "",
+                "issue": current_blind_series.get("issue") or "",
+                "remainingStock": int(current_blind_series.get("remainingStock") or 0),
+                "drawn": bool(current_blind_series.get("drawn")),
+                "drawnCatId": current_blind_series.get("drawnCatId") or "",
+            }
+        )
     cat_care, cat_care_changed = cat_world_ensure_care_records(state, owned_cats)
     litter_status = cat_world_refresh_litter(state, inventory, owned_cats)
     active_care = cat_world_active_care_payload(state)
@@ -15332,6 +15799,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         },
         "cats": [cat_world_cat_payload(cat) for cat in CAT_WORLD_CATS],
         "scenes": cat_world_scene_catalog_payload(db, state),
+        "blindBoxCatalog": blind_box_catalog,
         "decorFavorites": cat_world_decor_favorite_payload(),
         "shop": shop,
         "pricingPlans": CAT_WORLD_PRICING_PLANS,

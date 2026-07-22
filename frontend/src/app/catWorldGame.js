@@ -70,6 +70,9 @@ const CAT_COLORS = {
   ragdoll: { body: 0xf4e5cf, shade: 0xb88663, stripe: 0x79523f, belly: 0xfff4df, nose: 0xf38ca7 },
   "maine-coon": { body: 0xae7c4f, shade: 0x754926, stripe: 0xf1c17f, belly: 0xd6a06b, nose: 0xf08a7c },
   siamese: { body: 0xf1ddbd, shade: 0x5c433e, stripe: 0x382c2d, belly: 0xffefd2, nose: 0xf1a2b2 },
+  "china-lihua": { body: 0x8b765f, shade: 0x594739, stripe: 0x2f2926, belly: 0xc7b59d, nose: 0xd98b8b },
+  "linqing-lion": { body: 0xf2eee5, shade: 0xaab7c8, stripe: 0x6f7f93, belly: 0xffffff, nose: 0xf19ab2 },
+  "jianzhou-cat": { body: 0xd6a06b, shade: 0x79523f, stripe: 0x382c2d, belly: 0xf4d3a4, nose: 0xf08a7c },
 };
 
 const TONE_PALETTES = {

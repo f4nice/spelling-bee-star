@@ -277,6 +277,32 @@ class CatWorldUserScene(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class CatWorldLimitedCatStock(Base):
+    __tablename__ = "cat_world_limited_cat_stocks"
+    __table_args__ = (UniqueConstraint("series_key", "cat_id", name="uq_cat_world_limited_cat_stocks_series_cat"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    series_key: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    cat_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    total_stock: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    claimed_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class CatWorldBlindBoxDraw(Base):
+    __tablename__ = "cat_world_blind_box_draws"
+    __table_args__ = (UniqueConstraint("phone", "series_key", name="uq_cat_world_blind_box_draws_phone_series"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    series_key: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    cat_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    energy_cost: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class CatWorldShopSetting(Base):
     __tablename__ = "cat_world_shop_settings"
     __table_args__ = (UniqueConstraint("item_id", name="uq_cat_world_shop_settings_item"),)

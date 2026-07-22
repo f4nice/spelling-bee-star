@@ -42,6 +42,8 @@ const roomEditMode = ref(false);
 const activeToolCategory = ref("decor");
 const clockNow = ref(Date.now());
 const energyModalOpen = ref(false);
+const scenePurchaseTarget = ref(null);
+const openedBlindBox = ref(null);
 const petBusyCatId = ref("");
 const roomCanPan = ref(false);
 const roomPanActive = ref(false);
@@ -120,6 +122,8 @@ const categories = [
   { key: "decor", label: "装修" },
   { key: "color", label: "配色" },
   { key: "cat", label: "名猫" },
+  { key: "blind-box", label: "限定盲盒" },
+  { key: "handbook", label: "收藏手册" },
 ];
 
 const toolCategories = [
@@ -148,6 +152,9 @@ const catIconColors = {
   ragdoll: "#f4e5cf",
   "maine-coon": "#ae7c4f",
   siamese: "#f1ddbd",
+  "china-lihua": "#8b765f",
+  "linqing-lion": "#f2eee5",
+  "jianzhou-cat": "#d6a06b",
 };
 
 const energy = computed(() => payload.value.energy || {});
@@ -173,6 +180,10 @@ const litterBathAccelerationText = computed(() => litterBathAccelerationLabel(hy
 const ownedCats = computed(() => state.value.ownedCats || []);
 const cats = computed(() => payload.value.cats || []);
 const shop = computed(() => payload.value.shop || []);
+const blindBoxCatalog = computed(() => payload.value.blindBoxCatalog || { series: [] });
+const currentBlindSeries = computed(
+  () => blindBoxCatalog.value.series?.find((series) => series.key === blindBoxCatalog.value.currentSeriesKey) || {},
+);
 const gameSettings = computed(() => payload.value.gameSettings || {});
 const shopById = computed(() => Object.fromEntries(shop.value.map((item) => [item.id, item])));
 const selectedCat = computed(() => cats.value.find((cat) => cat.id === state.value.selectedCat && ownedCats.value.includes(cat.id)) || {});
@@ -235,6 +246,9 @@ const activeCare = computed(() => ({
 const catEnergyScore = computed(() => Number(mood.value.catEnergy ?? 0));
 const moodScore = computed(() => Number(mood.value.score ?? 0));
 const selectedItems = computed(() => shop.value.filter((item) => item.category === activeCategory.value));
+const ownsCatHandbook = computed(() => itemCount("cat-collection-handbook") > 0);
+const ownsFoodHandbook = computed(() => itemCount("cat-food-handbook") > 0);
+const foodHandbookItems = computed(() => shop.value.filter((item) => item.category === "food"));
 const ownedDecor = computed(() =>
   Object.entries(inventory.value)
     .filter(([itemId, count]) => count > 0 && shopById.value[itemId]?.category === "decor")
@@ -344,7 +358,7 @@ function signedHourlyValue(value) {
 }
 
 const catAgentCards = computed(() =>
-  cats.value.map((cat) => {
+  cats.value.filter((cat) => !cat.limited || ownsCat(cat.id)).map((cat) => {
     const owned = ownsCat(cat.id);
     const log = dailyLogs.value[cat.id] || {};
     const agent = log.agentState || {};
@@ -893,6 +907,43 @@ async function selectScene(scene) {
   }
 }
 
+function handleSceneAction(scene) {
+  if (!scene?.id || busySceneId.value || scene.id === currentScene.value.id) return;
+  if (scene.available) {
+    selectScene(scene);
+    return;
+  }
+  if (scene.enabled && scene.purchasable && !scene.unlocked) {
+    scenePurchaseTarget.value = scene;
+  }
+}
+
+async function purchaseScene() {
+  const scene = scenePurchaseTarget.value;
+  if (!scene?.id || busySceneId.value) return;
+  if (roomEditMode.value || layoutDirty.value) {
+    const saved = await saveRoomLayout();
+    if (!saved) return;
+  }
+  busySceneId.value = scene.id;
+  notice.value = "";
+  try {
+    const nextPayload = await fetchJson(routeApiPaths.catWorldPurchaseScene(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sceneId: scene.id }),
+    });
+    replacePayload(nextPayload);
+    scenePurchaseTarget.value = null;
+    roomPanActive.value = false;
+    notice.value = `${scene.label} 已永久解锁，消耗 ${Number(scene.purchaseCost || 0).toLocaleString()} 能量。`;
+  } catch (error) {
+    notice.value = error.message || "场景购买失败，请稍后再试。";
+  } finally {
+    busySceneId.value = "";
+  }
+}
+
 function startRoomEditMode() {
   if (savingRoomLayout.value) return;
   roomEditMode.value = true;
@@ -937,13 +988,15 @@ function colorApplied(item) {
 }
 
 function isOneTimeOwned(item) {
-  return ["toy", "decor", "color"].includes(item?.category) && itemCount(item.id) > 0;
+  return ["toy", "decor", "color", "handbook"].includes(item?.category) && itemCount(item.id) > 0;
 }
 
 function canPurchase(item) {
   if (!item?.id) return false;
+  if (item.category === "blind-box") return !item.drawn && Number(item.remainingStock || 0) > 0 && canAfford(item);
   if (item.category === "cat") return ownsCat(item.id) ? state.value.selectedCat !== item.id : canAfford(item);
   if (item.category === "color") return targetDecorOwned(item) && (itemCount(item.id) > 0 || canAfford(item));
+  if (item.category === "handbook") return !isOneTimeOwned(item) && canAfford(item);
   if (["toy", "decor"].includes(item.category)) return !isOneTimeOwned(item) && canAfford(item);
   return canAfford(item);
 }
@@ -962,6 +1015,14 @@ function purchaseHint(item) {
   }
   if (item.category === "color" && itemCount(item.id) > 0) {
     return colorApplied(item) ? "当前正在使用" : "已拥有，点击应用";
+  }
+  if (item.category === "blind-box") {
+    if (item.drawn) return `本期已开启，获得了 ${currentBlindSeries.value.cats?.find((cat) => cat.id === item.drawnCatId)?.label || "限定猫咪"}`;
+    if (Number(item.remainingStock || 0) <= 0) return "本期限定猫咪已经售罄";
+    return `${item.region || "地区"} ${item.issue || "限定"} · 全站剩余 ${item.remainingStock} 只 · 本期每个账号限开一次`;
+  }
+  if (item.category === "handbook") {
+    return isOneTimeOwned(item) ? "已永久拥有" : `扣 ${item.cost} 能量 · 购买后永久解锁`;
   }
   const remaining = Math.max(Number(energy.value.available || 0) - Number(item.cost || 0), 0);
   if (item.category === "food") {
@@ -991,11 +1052,14 @@ function purchaseButtonText(item) {
   if (item.category === "cat" && ownsCat(item.id)) return "已选择";
   if (item.category === "cat" && lostCats.value[item.id]) return canAfford(item) ? `扣 ${item.cost} 能量重新领养` : "能量不足";
   if (item.category === "color" && !targetDecorOwned(item)) return "先买家具";
+  if (item.category === "blind-box" && item.drawn) return "本期已开启";
+  if (item.category === "blind-box" && Number(item.remainingStock || 0) <= 0) return "本期已售罄";
   if (item.category === "color" && colorApplied(item)) return "已应用";
   if (item.category === "color" && itemCount(item.id) > 0) return "应用配色";
   if (isDamagedItem(item)) return "去右侧维修";
   if (isOneTimeOwned(item)) return "已拥有";
-  return canAfford(item) ? `扣 ${item.cost} 积分购买` : "能量不足";
+  if (item.category === "blind-box") return canAfford(item) ? `消耗 ${item.cost} 能量开启` : "能量不足";
+  return canAfford(item) ? `扣 ${item.cost} 能量购买` : "能量不足";
 }
 
 function showCatReaction(cat = selectedCat.value, message = "", options = {}) {
@@ -1055,6 +1119,11 @@ async function purchase(item) {
       body: JSON.stringify({ itemId: item.id }),
     });
     replacePayload(nextPayload);
+    if (nextPayload.blindBoxResult?.cat) {
+      openedBlindBox.value = nextPayload.blindBoxResult;
+      notice.value = `抽中了 ${nextPayload.blindBoxResult.cat.rarity} · ${nextPayload.blindBoxResult.cat.label}！`;
+      return;
+    }
     notice.value = wasLost
       ? `${item.label} 已重新回到活动室，体力和心情恢复到安全状态。`
       : `${item.label} 已加入猫咪世界。`;
@@ -1269,13 +1338,15 @@ async function selectCat(catId) {
             type="button"
             role="tab"
             :aria-selected="scene.id === currentScene.id"
-            :class="{ active: scene.id === currentScene.id }"
-            :disabled="!scene.available || Boolean(busySceneId)"
-            :title="scene.available ? `进入${scene.label}` : `${scene.label}尚未开放`"
-            @click="selectScene(scene)"
+            :class="{ active: scene.id === currentScene.id, locked: scene.enabled && !scene.unlocked }"
+            :disabled="!scene.enabled || Boolean(busySceneId)"
+            :title="scene.available ? `进入${scene.label}` : scene.enabled ? `购买${scene.label}` : `${scene.label}尚未开放`"
+            @click="handleSceneAction(scene)"
           >
             <span>{{ scene.label }}</span>
-            <small v-if="!scene.available">规划中</small>
+            <small v-if="scene.enabled && !scene.unlocked">{{ Number(scene.purchaseCost || 0).toLocaleString() }} 能量</small>
+            <small v-else-if="!scene.enabled">规划中</small>
+            <small v-else-if="scene.id !== currentScene.id">已拥有</small>
           </button>
         </div>
         <div class="cat-world-room-head">
@@ -1655,6 +1726,15 @@ async function selectCat(catId) {
               <span v-else-if="item.useType === 'cat-bath'">当前档案猫咪使用</span>
               <span v-else>点击背包使用</span>
             </div>
+            <div v-else-if="item.category === 'blind-box'" class="cat-world-food-tags cat-world-blind-box-tags">
+              <span>{{ item.region }}地区</span>
+              <span>{{ item.issue }}</span>
+              <span>R / SR / SSR</span>
+            </div>
+            <div v-else-if="item.category === 'handbook'" class="cat-world-food-tags cat-world-handbook-tags">
+              <span>永久道具</span>
+              <span>{{ item.handbookType === 'cats' ? '猫咪卡册' : '食物图鉴' }}</span>
+            </div>
             <p>{{ item.description }}</p>
           </div>
           <div class="cat-world-shop-meta">
@@ -1668,6 +1748,8 @@ async function selectCat(catId) {
               {{ colorApplied(item) ? "已应用" : "已解锁" }}
             </span>
             <span v-else-if="item.category === 'color' && item.targetDecorLabel">用于 {{ item.targetDecorLabel }}</span>
+            <span v-else-if="item.category === 'blind-box'">全站剩余 {{ item.remainingStock || 0 }}</span>
+            <span v-else-if="item.category === 'handbook' && itemCount(item.id)">已永久解锁</span>
             <span v-else-if="item.category !== 'cat' && itemCount(item.id)">已有 {{ itemCount(item.id) }}</span>
             <span v-else>心情 +{{ item.mood }}</span>
           </div>
@@ -1680,6 +1762,64 @@ async function selectCat(catId) {
           >
             {{ purchaseButtonText(item) }}
           </button>
+        </article>
+      </div>
+    </section>
+
+    <section v-if="ownsCatHandbook" class="cat-world-handbook" aria-labelledby="cat-collection-title">
+      <header class="cat-world-handbook-head">
+        <div>
+          <p class="section-kicker">Collection</p>
+          <h2 id="cat-collection-title">猫咪收集手册</h2>
+        </div>
+        <span>{{ blindBoxCatalog.series?.reduce((total, series) => total + series.cats.filter((cat) => cat.owned).length, 0) || 0 }} 张限定卡</span>
+      </header>
+      <article v-for="series in blindBoxCatalog.series" :key="series.key" class="cat-world-series-album">
+        <header>
+          <div>
+            <strong>{{ series.label }}</strong>
+            <small>{{ series.region }} · {{ series.issue }}</small>
+          </div>
+          <span>{{ series.drawn ? "本期已抽取" : `剩余 ${series.remainingStock}` }}</span>
+        </header>
+        <div class="cat-world-card-album">
+          <article
+            v-for="cat in series.cats"
+            :key="cat.id"
+            :class="['cat-world-collection-card', `rarity-${String(cat.rarity || 'r').toLowerCase()}`, { owned: cat.owned }]"
+          >
+            <div class="cat-world-collection-art" :style="{ '--collection-color': catIconColor(cat.id) }">
+              <CatIcon :size="48" :stroke-width="2.2" aria-hidden="true" />
+              <b>{{ cat.rarity }}</b>
+            </div>
+            <span>{{ cat.region }}限定</span>
+            <h3>{{ cat.label }}</h3>
+            <p>{{ cat.description }}</p>
+            <small>{{ cat.owned ? "已收集" : `未收集 · 初始概率 ${cat.oddsPercent}%` }}</small>
+          </article>
+        </div>
+      </article>
+    </section>
+
+    <section v-if="ownsFoodHandbook" class="cat-world-handbook" aria-labelledby="cat-food-handbook-title">
+      <header class="cat-world-handbook-head">
+        <div>
+          <p class="section-kicker">Food Guide</p>
+          <h2 id="cat-food-handbook-title">猫咪食物手册</h2>
+        </div>
+        <span>{{ foodHandbookItems.length }} 种食物</span>
+      </header>
+      <div class="cat-world-food-album">
+        <article v-for="food in foodHandbookItems" :key="food.id" class="cat-world-food-guide-card">
+          <span>{{ foodTypeLabel(food) }}</span>
+          <h3>{{ food.label }}</h3>
+          <p>{{ food.description }}</p>
+          <dl>
+            <div><dt>基础体力</dt><dd>+{{ food.catEnergy || 0 }}</dd></div>
+            <div><dt>基础心情</dt><dd>+{{ food.mood || 0 }}</dd></div>
+            <div><dt>偏爱猫咪</dt><dd>{{ food.favoriteCatLabel || "通用" }}</dd></div>
+            <div><dt>背包数量</dt><dd>{{ itemCount(food.id) }}</dd></div>
+          </dl>
         </article>
       </div>
     </section>
@@ -1723,6 +1863,53 @@ async function selectCat(catId) {
         </button>
       </div>
     </section>
+
+    <div v-if="scenePurchaseTarget" class="cat-world-modal-backdrop" @click.self="scenePurchaseTarget = null">
+      <section class="cat-world-scene-purchase-modal panel" role="dialog" aria-modal="true" aria-labelledby="cat-world-scene-purchase-title">
+        <header>
+          <div>
+            <p class="section-kicker">New Scene</p>
+            <h2 id="cat-world-scene-purchase-title">解锁{{ scenePurchaseTarget.label }}</h2>
+          </div>
+          <button class="secondary-button compact-button" type="button" aria-label="关闭" @click="scenePurchaseTarget = null">
+            <XIcon :size="18" aria-hidden="true" />
+          </button>
+        </header>
+        <p>{{ scenePurchaseTarget.description }}</p>
+        <div class="cat-world-scene-purchase-summary">
+          <span>场景价格</span>
+          <strong>{{ Number(scenePurchaseTarget.purchaseCost || 0).toLocaleString() }} 能量</strong>
+          <small>购买后剩余 {{ Math.max(Number(energy.available || 0) - Number(scenePurchaseTarget.purchaseCost || 0), 0).toLocaleString() }}</small>
+        </div>
+        <div class="cat-world-modal-actions">
+          <button class="secondary-button" type="button" @click="scenePurchaseTarget = null">取消</button>
+          <button
+            class="primary-action-button"
+            type="button"
+            :disabled="Boolean(busySceneId) || Number(energy.available || 0) < Number(scenePurchaseTarget.purchaseCost || 0)"
+            @click="purchaseScene"
+          >
+            {{ busySceneId ? "解锁中..." : Number(energy.available || 0) >= Number(scenePurchaseTarget.purchaseCost || 0) ? "确认解锁" : "能量不足" }}
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="openedBlindBox" class="cat-world-modal-backdrop" @click.self="openedBlindBox = null">
+      <section class="cat-world-blind-result-modal panel" role="dialog" aria-modal="true" aria-labelledby="cat-world-blind-result-title">
+        <button class="secondary-button compact-button cat-world-modal-close" type="button" aria-label="关闭" @click="openedBlindBox = null">
+          <XIcon :size="18" aria-hidden="true" />
+        </button>
+        <p class="section-kicker">{{ openedBlindBox.seriesLabel }}</p>
+        <div class="cat-world-blind-result-art" :style="{ '--collection-color': catIconColor(openedBlindBox.cat.id) }">
+          <CatIcon :size="72" :stroke-width="2" aria-hidden="true" />
+          <b>{{ openedBlindBox.cat.rarity }}</b>
+        </div>
+        <h2 id="cat-world-blind-result-title">{{ openedBlindBox.cat.label }}</h2>
+        <p>{{ openedBlindBox.cat.description }}</p>
+        <button class="primary-action-button" type="button" @click="openedBlindBox = null">收入猫咪卡册</button>
+      </section>
+    </div>
 
     <div v-if="energyModalOpen" class="cat-world-modal-backdrop" @click.self="energyModalOpen = false">
       <section class="cat-world-energy-modal panel" role="dialog" aria-modal="true" aria-labelledby="cat-world-energy-title">

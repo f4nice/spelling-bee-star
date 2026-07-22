@@ -45,9 +45,12 @@ export function normalizeCatWorldScene(scene = {}) {
     label: String(scene?.label || "一楼活动室"),
     englishName: String(scene?.englishName || "Main Room"),
     type: String(scene?.type || "indoor"),
+    description: String(scene?.description || ""),
     enabled: scene?.enabled !== false,
     available: scene?.available !== false,
     unlocked: scene?.unlocked !== false,
+    purchasable: Boolean(scene?.purchasable),
+    purchaseCost: Math.max(Number(scene?.purchaseCost) || 0, 0),
     world: { width, height, viewportWidth, viewportHeight, floorTop, floorBottom },
     camera: {
       pageWidth,
