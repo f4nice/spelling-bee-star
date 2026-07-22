@@ -39,3 +39,20 @@ export function interactionMoveDuration(from = {}, to = {}, walkSpeed = 1, limit
   const maxMs = Number(limits.maxMs || 9000);
   return Math.min(Math.max(Math.round((distance / (72 * speed)) * 1000), minMs), maxMs);
 }
+
+export function floorDropPosition(pointer = {}, spec = {}, world = {}) {
+  const width = Math.max(Number(spec.width) || 0, 0);
+  const height = Math.max(Number(spec.height) || 0, 0);
+  const worldWidth = Math.max(Number(world.width) || width, width);
+  const floorTop = Number(world.floorTop) || 0;
+  const floorBottom = Math.max(Number(world.floorBottom) || floorTop + height, floorTop + height);
+  const border = Math.max(Number(world.border) || 0, 0);
+  const focusX = Number(spec.focusX) || width / 2;
+  const focusY = Number(spec.focusY) || height / 2;
+  const minY = Math.max(floorTop - height, border);
+  const maxY = Math.max(floorBottom - height, minY);
+  return {
+    x: Math.min(Math.max((Number(pointer.x) || 0) - focusX, border), Math.max(worldWidth - width - border, border)),
+    y: Math.min(Math.max((Number(pointer.y) || 0) - focusY, minY), maxY),
+  };
+}

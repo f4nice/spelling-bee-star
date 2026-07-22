@@ -5,6 +5,8 @@ import {
   normalizeCatWorldScene,
   sceneAllowsItem,
   sceneColor,
+  sceneInitialScroll,
+  scenePageTarget,
 } from "../src/app/catWorldSceneConfig.js";
 
 test("scene configuration clamps unsafe dimensions and keeps database metadata", () => {
@@ -43,4 +45,16 @@ test("scene item rules can exclude indoor furniture without affecting toys", () 
 test("scene colors only accept six-digit hex values", () => {
   assert.equal(sceneColor("#12abef", 0), 0x12abef);
   assert.equal(sceneColor("not-a-color", 0x123456), 0x123456);
+});
+
+test("scene paging moves by one viewport-sized page", () => {
+  const scene = {
+    world: { width: 2560, viewportWidth: 1280 },
+    camera: { pageWidth: 1280, initialPage: 0 },
+  };
+
+  assert.equal(sceneInitialScroll(scene), 0);
+  assert.equal(scenePageTarget(scene, 0, 1), 1280);
+  assert.equal(scenePageTarget(scene, 1280, -1), 0);
+  assert.equal(scenePageTarget(scene, 1280, 1), 1280);
 });

@@ -95,6 +95,7 @@ onMounted(async () => {
     },
     onLayoutChange: handleGameLayoutChange,
     onToyClick: handleRoomToyClick,
+    onToyDrop: handleRoomToyDrop,
     onLitterClick: cleanLitter,
     onBathtubBath: (bath) => useConsumable(shopById.value["cat-bath-kit"], { targetCatId: bath?.catId }),
     onItemInteractionEnd: (interaction) => {
@@ -511,6 +512,11 @@ function panRoomBy(delta) {
   catWorldGame.value?.panBy?.(delta);
 }
 
+function panRoomPage(direction) {
+  if (roomEditMode.value) return;
+  catWorldGame.value?.panPage?.(direction);
+}
+
 function handleRoomWheel(event) {
   if (roomEditMode.value || !catWorldGame.value?.canPan?.()) return;
   const delta = Math.abs(event.deltaX) >= Math.abs(event.deltaY) ? event.deltaX : event.shiftKey ? event.deltaY : 0;
@@ -524,6 +530,29 @@ function handleGameLayoutChange(nextLayout, itemId) {
   selectedDecorId.value = itemId || selectedDecorId.value;
   layoutDraft.value = normalizeLayoutDraft(nextLayout);
   layoutDirty.value = true;
+}
+
+async function handleRoomToyDrop(itemId, nextLayout, interaction = {}) {
+  if (!itemId || savingRoomLayout.value) return;
+  selectedDecorId.value = itemId;
+  layoutDraft.value = normalizeLayoutDraft(nextLayout);
+  savingRoomLayout.value = true;
+  notice.value = interaction.message || "玩具已放下，正在保存位置。";
+  try {
+    const nextPayload = await fetchJson(routeApiPaths.catWorldRoomLayout(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sceneId: currentScene.value.id, layout: layoutDraft.value }),
+    });
+    replacePayload(nextPayload);
+    layoutDirty.value = false;
+    notice.value = interaction.message || "玩具位置已保存。";
+  } catch (error) {
+    layoutDirty.value = true;
+    notice.value = error.message || "玩具已经放下，但位置保存失败，请点击保存重试。";
+  } finally {
+    savingRoomLayout.value = false;
+  }
 }
 
 function itemCount(itemId) {
@@ -1300,9 +1329,9 @@ async function selectCat(catId) {
             v-if="roomCanPan && !roomEditMode"
             class="cat-world-room-pan-button left"
             type="button"
-            title="向左查看"
-            aria-label="向左查看房间"
-            @click="panRoomBy(-360)"
+            title="查看上一屏"
+            aria-label="查看房间上一屏"
+            @click="panRoomPage(-1)"
           >
             <ChevronLeft :size="26" :stroke-width="3" aria-hidden="true" />
           </button>
@@ -1310,9 +1339,9 @@ async function selectCat(catId) {
             v-if="roomCanPan && !roomEditMode"
             class="cat-world-room-pan-button right"
             type="button"
-            title="向右查看"
-            aria-label="向右查看房间"
-            @click="panRoomBy(360)"
+            title="查看下一屏"
+            aria-label="查看房间下一屏"
+            @click="panRoomPage(1)"
           >
             <ChevronRight :size="26" :stroke-width="3" aria-hidden="true" />
           </button>

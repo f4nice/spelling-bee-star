@@ -36,6 +36,9 @@ export function normalizeCatWorldScene(scene = {}) {
   const floorTop = finiteNumber(world.floorTop, DEFAULT_WORLD.floorTop, 100, height - 140);
   const floorBottom = finiteNumber(world.floorBottom, DEFAULT_WORLD.floorBottom, floorTop + 120, height - 20);
   const itemRules = scene?.itemRules || {};
+  const camera = scene?.camera || {};
+  const pageWidth = finiteNumber(camera.pageWidth, viewportWidth, 320, width);
+  const initialPage = Math.max(Math.floor(Number(camera.initialPage) || 0), 0);
 
   return {
     id: String(scene?.id || "main-room"),
@@ -46,6 +49,11 @@ export function normalizeCatWorldScene(scene = {}) {
     available: scene?.available !== false,
     unlocked: scene?.unlocked !== false,
     world: { width, height, viewportWidth, viewportHeight, floorTop, floorBottom },
+    camera: {
+      pageWidth,
+      initialPage,
+      snapPaging: camera.snapPaging !== false,
+    },
     palette: { ...DEFAULT_PALETTE, ...(scene?.palette || {}) },
     features: {
       cats: scene?.features?.cats !== false,
@@ -61,6 +69,21 @@ export function normalizeCatWorldScene(scene = {}) {
     spawnPoints: scene?.spawnPoints && typeof scene.spawnPoints === "object" ? scene.spawnPoints : {},
     portals: Array.isArray(scene?.portals) ? scene.portals : [],
   };
+}
+
+export function sceneInitialScroll(scene) {
+  const normalized = normalizeCatWorldScene(scene);
+  const maxScroll = Math.max(normalized.world.width - normalized.world.viewportWidth, 0);
+  return Math.min(normalized.camera.initialPage * normalized.camera.pageWidth, maxScroll);
+}
+
+export function scenePageTarget(scene, currentScroll = 0, direction = 1) {
+  const normalized = normalizeCatWorldScene(scene);
+  const maxScroll = Math.max(normalized.world.width - normalized.world.viewportWidth, 0);
+  const scroll = finiteNumber(currentScroll, 0, 0, maxScroll);
+  const currentPage = Math.round(scroll / normalized.camera.pageWidth);
+  const nextPage = Math.max(currentPage + Math.sign(Number(direction) || 0), 0);
+  return Math.min(nextPage * normalized.camera.pageWidth, maxScroll);
 }
 
 export function sceneAllowsItem(scene, itemId, category) {

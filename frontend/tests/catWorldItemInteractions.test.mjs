@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   catLikesItem,
+  floorDropPosition,
   interactionMoveDuration,
   itemInteractionFor,
 } from "../src/app/catWorldItemInteractions.js";
@@ -13,6 +14,17 @@ test("interactive room items use the expected controlled behavior", () => {
   assert.equal(itemInteractionFor("bubble-bathtub", "decor")?.behavior, "walk-and-bathe");
   assert.equal(itemInteractionFor("feather-wand", "toy")?.behavior, "pointer-follow");
   assert.equal(itemInteractionFor("feather-wand", "decor"), null);
+});
+
+test("floor drop positions a held toy around the clicked floor point", () => {
+  assert.deepEqual(
+    floorDropPosition(
+      { x: 1500, y: 400 },
+      { width: 172, height: 70, focusX: 88, focusY: 52 },
+      { width: 2560, floorTop: 260, floorBottom: 522, border: 12 },
+    ),
+    { x: 1412, y: 348 },
+  );
 });
 
 test("favorite matching keeps toy and decor preferences separate", () => {

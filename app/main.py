@@ -94,8 +94,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260723-005"
-DEFAULT_PAGE_VERSION = "v20260723.5"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260723-006"
+DEFAULT_PAGE_VERSION = "v20260723.6"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -947,13 +947,14 @@ CAT_WORLD_SCENE_SEEDS = [
         "isEnabled": True,
         "sortOrder": 10,
         "world": {
-            "width": 1600,
+            "width": 2560,
             "height": 560,
             "viewportWidth": 1280,
             "viewportHeight": 560,
             "floorTop": 260,
             "floorBottom": 522,
         },
+        "camera": {"pageWidth": 1280, "initialPage": 0, "snapPaging": True},
         "palette": {
             "wallTopLeft": "#cff7ee",
             "wallTopRight": "#fff0d0",
@@ -998,6 +999,7 @@ CAT_WORLD_SCENE_SEEDS = [
             "floorTop": 236,
             "floorBottom": 522,
         },
+        "camera": {"pageWidth": 1280, "initialPage": 0, "snapPaging": True},
         "palette": {
             "wallTopLeft": "#8ed8ff",
             "wallTopRight": "#fff1a8",
@@ -1039,6 +1041,7 @@ CAT_WORLD_SCENE_SEEDS = [
             "floorTop": 268,
             "floorBottom": 522,
         },
+        "camera": {"pageWidth": 1280, "initialPage": 0, "snapPaging": True},
         "palette": {
             "wallTopLeft": "#e9ddff",
             "wallTopRight": "#ffeab5",
@@ -11859,11 +11862,21 @@ def parse_cat_world_scene_json(raw: str | None, fallback: Any) -> Any:
 
 
 def seed_cat_world_scenes(db: Session) -> None:
-    existing_keys = set(db.scalars(select(CatWorldScene.scene_key)).all())
+    existing_rows = {row.scene_key: row for row in db.scalars(select(CatWorldScene)).all()}
     changed = False
     for seed in CAT_WORLD_SCENE_SEEDS:
         scene_key = str(seed["sceneKey"])
-        if scene_key in existing_keys:
+        existing_row = existing_rows.get(scene_key)
+        if existing_row:
+            existing_config = parse_cat_world_scene_json(existing_row.config, {})
+            if seed.get("camera") and not isinstance(existing_config.get("camera"), dict):
+                existing_config["camera"] = seed["camera"]
+                existing_row.config = json.dumps(existing_config, ensure_ascii=False, sort_keys=True)
+                changed = True
+            target_width = int(seed["world"]["width"])
+            if scene_key == CAT_WORLD_DEFAULT_SCENE_KEY and int(existing_row.world_width or 0) < target_width:
+                existing_row.world_width = target_width
+                changed = True
             continue
         world = seed["world"]
         config = {
@@ -11872,6 +11885,7 @@ def seed_cat_world_scenes(db: Session) -> None:
             "itemRules": seed.get("itemRules") or {},
             "spawnPoints": seed.get("spawnPoints") or {},
             "portals": seed.get("portals") or [],
+            "camera": seed.get("camera") or {},
             "unlockByDefault": bool(seed.get("unlockByDefault", True)),
         }
         db.add(
@@ -11934,6 +11948,7 @@ def cat_world_scene_config(scene: CatWorldScene) -> dict[str, Any]:
         "itemRules": extra.get("itemRules") if isinstance(extra.get("itemRules"), dict) else {},
         "spawnPoints": extra.get("spawnPoints") if isinstance(extra.get("spawnPoints"), dict) else {},
         "portals": extra.get("portals") if isinstance(extra.get("portals"), list) else [],
+        "camera": extra.get("camera") if isinstance(extra.get("camera"), dict) else {},
         "unlockByDefault": bool(extra.get("unlockByDefault", True)),
         "defaultLayout": default_layout,
     }
