@@ -14,10 +14,13 @@ class Settings(BaseSettings):
     image_provider: str = "wikimedia"
     list_delete_password: str = "841108"
     ai_image_provider: str = "dashscope"
+    ai_text_provider: str = "dashscope"
     openai_api_key: str = ""
     openai_image_model: str = "gpt-image-1"
     openai_text_model: str = "gpt-4o-mini"
     dashscope_api_key: str = ""
+    dashscope_text_model: str = "qwen-plus"
+    dashscope_text_endpoint: str = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
     dashscope_image_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
     dashscope_task_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/tasks"
     dashscope_image_poll_seconds: float = 2.0

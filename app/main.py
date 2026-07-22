@@ -92,8 +92,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-068"
-DEFAULT_PAGE_VERSION = "v20260722.68"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-069"
+DEFAULT_PAGE_VERSION = "v20260722.69"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -4774,39 +4774,88 @@ def get_owned_essay(db: Session, request: Request, essay_id: int) -> EssayEntry:
     return essay
 
 
+ESSAY_OPTIMIZATION_SYSTEM_PROMPT = (
+    "You are a supportive English writing coach for a student. "
+    "Improve grammar, clarity, story flow, vocabulary, and sentence variety while preserving the student's meaning, events, and voice. "
+    "Return only the polished composition, with no heading, explanation, markdown, or score."
+)
+
+
+def essay_optimization_messages(*, title: str, body: str) -> list[dict[str, str]]:
+    student_context = f"Title: {title}\n\nStudent composition:\n{body}" if title else f"Student composition:\n{body}"
+    return [
+        {
+            "role": "system",
+            "content": ESSAY_OPTIMIZATION_SYSTEM_PROMPT,
+        },
+        {
+            "role": "user",
+            "content": student_context,
+        },
+    ]
+
+
+def chat_completion_text(data: dict[str, Any]) -> str:
+    return str(((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+
+
+async def optimize_essay_with_dashscope(*, title: str, body: str) -> tuple[str, str]:
+    api_key = settings.dashscope_api_key.strip()
+    if not api_key:
+        raise RuntimeError("DASHSCOPE_API_KEY is not configured on the server.")
+    model = (settings.dashscope_text_model or "qwen-plus").strip()
+    endpoint = (settings.dashscope_text_endpoint or "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions").strip()
+    payload = {
+        "model": model,
+        "messages": essay_optimization_messages(title=title, body=body),
+        "temperature": 0.35,
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=90) as client:
+        response = await client.post(endpoint, headers=headers, json=payload)
+        response.raise_for_status()
+    text_value = chat_completion_text(response.json())
+    if not text_value:
+        raise RuntimeError("AI 没有返回优化后的作文。")
+    return text_value, f"dashscope:{model}"
+
+
 async def optimize_essay_with_openai(*, title: str, body: str) -> tuple[str, str]:
     api_key = settings.openai_api_key.strip()
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not configured on the server.")
     model = (settings.openai_text_model or "gpt-4o-mini").strip()
-    student_context = f"Title: {title}\n\nStudent composition:\n{body}" if title else f"Student composition:\n{body}"
     payload = {
         "model": model,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are a supportive English writing coach for a student. "
-                    "Improve grammar, clarity, story flow, vocabulary, and sentence variety while preserving the student's meaning, events, and voice. "
-                    "Return only the polished composition, with no heading, explanation, markdown, or score."
-                ),
-            },
-            {
-                "role": "user",
-                "content": student_context,
-            },
-        ],
+        "messages": essay_optimization_messages(title=title, body=body),
         "temperature": 0.35,
     }
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=90) as client:
         response = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
         response.raise_for_status()
-    data = response.json()
-    text_value = str(((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+    text_value = chat_completion_text(response.json())
     if not text_value:
         raise RuntimeError("AI 没有返回优化后的作文。")
-    return text_value, model
+    return text_value, f"openai:{model}"
+
+
+async def optimize_essay_with_ai(*, title: str, body: str) -> tuple[str, str]:
+    provider = (settings.ai_text_provider or "dashscope").strip().lower()
+    providers = ["openai", "dashscope"] if provider == "openai" else ["dashscope", "openai"]
+    configuration_errors: list[str] = []
+    for candidate in providers:
+        try:
+            if candidate == "dashscope":
+                return await optimize_essay_with_dashscope(title=title, body=body)
+            return await optimize_essay_with_openai(title=title, body=body)
+        except RuntimeError as exc:
+            detail = str(exc)
+            if "not configured" in detail:
+                configuration_errors.append(detail)
+                continue
+            raise
+    raise RuntimeError("；".join(configuration_errors) or "没有可用的 AI 文本模型。")
 
 
 async def generate_essay_cover_image(*, title: str, body: str, optimized_body: str | None = None) -> tuple[str, str]:
@@ -4909,7 +4958,7 @@ async def vue_optimize_essay_api(essay_id: int, request: Request, db: Session = 
     essay = get_owned_essay(db, request, essay_id)
     apply_essay_payload(essay, payload or {}, clear_generated_on_change=True)
     try:
-        optimized_body, model = await optimize_essay_with_openai(title=essay.title, body=essay.body)
+        optimized_body, model = await optimize_essay_with_ai(title=essay.title, body=essay.body)
     except RuntimeError as exc:
         detail = str(exc)
         if "not configured" in detail:
