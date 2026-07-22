@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
 
@@ -14,6 +14,9 @@ const essays = ref([]);
 const selectedId = ref(0);
 const notice = ref("");
 const busyAction = ref("");
+const deletePassword = ref("");
+const deletePasswordInput = ref(null);
+const isDeleteConfirmOpen = ref(false);
 const draft = reactive(emptyDraft());
 let isApplyingDraft = false;
 
@@ -88,13 +91,31 @@ function countEssayWords(value) {
   return (String(value || "").match(/[A-Za-z]+(?:[-'][A-Za-z]+)*|\d+(?:\.\d+)?|[\u4e00-\u9fff]/g) || []).length;
 }
 
+function formatEssayCreatedAt(value) {
+  if (!value) return "创建时间未知";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "创建时间未知";
+  const now = new Date();
+  const sameYear = date.getFullYear() === now.getFullYear();
+  const formatter = new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+  return `创建 ${formatter.format(date)}`;
+}
+
 function selectEssay(essay) {
   notice.value = "";
+  resetDeleteConfirm();
   loadDraft(essay);
 }
 
 function startNewEssay() {
   notice.value = "";
+  resetDeleteConfirm();
   loadDraft(null);
 }
 
@@ -205,12 +226,40 @@ async function generateCover() {
   }
 }
 
+function resetDeleteConfirm() {
+  isDeleteConfirmOpen.value = false;
+  deletePassword.value = "";
+}
+
+async function openDeleteConfirm() {
+  if (!draft.id || busyAction.value) return;
+  notice.value = "";
+  isDeleteConfirmOpen.value = true;
+  await nextTick();
+  deletePasswordInput.value?.focus();
+}
+
+function cancelDeleteConfirm() {
+  if (busyAction.value === "delete") return;
+  resetDeleteConfirm();
+}
+
 async function deleteEssay() {
-  if (!draft.id || !window.confirm(`删除《${draft.title || "未命名作文"}》？`)) return;
+  if (!draft.id || busyAction.value) return;
+  const password = deletePassword.value.trim();
+  if (!password) {
+    notice.value = "请输入当前登录密码。";
+    return;
+  }
   busyAction.value = "delete";
   notice.value = "";
   try {
-    const payload = await fetchJson(routeApiPaths.essayDelete(draft.id), { method: "POST" });
+    const payload = await fetchJson(routeApiPaths.essayDelete(draft.id), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    resetDeleteConfirm();
     applyResponse(payload);
     notice.value = "已删除。";
   } catch (error) {
@@ -249,7 +298,8 @@ async function deleteEssay() {
             <img v-if="essay.coverUrl" :src="essay.coverUrl" :alt="essay.title">
             <span v-else>{{ (essay.title || "作").slice(0, 1).toUpperCase() }}</span>
             <strong>{{ essay.title || "未命名作文" }}</strong>
-            <small>{{ essay.wordCount || 0 }} 字</small>
+            <small class="essay-list-word-count">{{ essay.wordCount || 0 }} 字</small>
+            <small class="essay-list-created-at">{{ formatEssayCreatedAt(essay.createdAt) }}</small>
           </button>
         </div>
         <p v-else class="notice">还没有作文。</p>
@@ -275,30 +325,26 @@ async function deleteEssay() {
           placeholder="在这里输入作文正文..."
         ></textarea>
 
-        <div class="essay-actions">
-          <button type="button" class="secondary-button" :disabled="!hasEssayInput || Boolean(busyAction)" @click="persistEssay()">
-            {{ busyAction === "save" ? "保存中..." : "保存" }}
-          </button>
+        <div class="essay-actions essay-primary-actions">
           <button type="button" class="challenge-button" :disabled="!hasEssayInput || Boolean(busyAction)" @click="optimizeEssay">
             {{ busyAction === "optimize" ? "优化中..." : "AI 优化" }}
-          </button>
-          <button type="button" class="secondary-button" :disabled="!hasEssayInput || Boolean(busyAction)" @click="generateCover">
-            {{ busyAction === "cover" ? "生成中..." : "生成封面" }}
-          </button>
-          <button v-if="draft.id" type="button" class="secondary-button danger-button" :disabled="Boolean(busyAction)" @click="deleteEssay">
-            删除
           </button>
         </div>
 
         <p v-if="notice" class="notice essay-notice">{{ notice }}</p>
 
         <div class="essay-workspace">
-          <section class="essay-cover-panel">
-            <img v-if="draft.coverUrl" :src="draft.coverUrl" :alt="draft.title">
-            <div v-else class="essay-cover-fallback">
-              <span>作文封面</span>
-              <strong>{{ (draft.title || "E").slice(0, 1).toUpperCase() }}</strong>
+          <section class="essay-cover-column">
+            <div class="essay-cover-panel">
+              <img v-if="draft.coverUrl" :src="draft.coverUrl" :alt="draft.title">
+              <div v-else class="essay-cover-fallback">
+                <span>作文封面</span>
+                <strong>{{ (draft.title || "E").slice(0, 1).toUpperCase() }}</strong>
+              </div>
             </div>
+            <button type="button" class="secondary-button essay-cover-button" :disabled="!hasEssayInput || Boolean(busyAction)" @click="generateCover">
+              {{ busyAction === "cover" ? "生成中..." : "生成封面" }}
+            </button>
           </section>
 
           <section class="essay-comparison">
@@ -317,6 +363,39 @@ async function deleteEssay() {
               <p>{{ aiVersionText }}</p>
             </article>
           </section>
+        </div>
+
+        <div v-if="isDeleteConfirmOpen" class="essay-delete-confirm" role="dialog" aria-label="删除作文确认">
+          <div>
+            <strong>删除《{{ draft.title || "未命名作文" }}》</strong>
+            <span>请输入当前登录密码后删除。</span>
+          </div>
+          <input
+            ref="deletePasswordInput"
+            v-model="deletePassword"
+            type="password"
+            autocomplete="current-password"
+            placeholder="登录密码"
+            :disabled="busyAction === 'delete'"
+            @keydown.enter.prevent="deleteEssay"
+          >
+          <div class="essay-delete-confirm-actions">
+            <button type="button" class="secondary-button" :disabled="busyAction === 'delete'" @click="cancelDeleteConfirm">
+              取消
+            </button>
+            <button type="button" class="secondary-button danger-button" :disabled="busyAction === 'delete'" @click="deleteEssay">
+              {{ busyAction === "delete" ? "删除中..." : "确认删除" }}
+            </button>
+          </div>
+        </div>
+
+        <div class="essay-bottom-actions">
+          <button v-if="draft.id" type="button" class="secondary-button danger-button" :disabled="Boolean(busyAction)" @click="openDeleteConfirm">
+            删除
+          </button>
+          <button type="button" class="primary-action-button essay-save-button" :disabled="!hasEssayInput || Boolean(busyAction)" @click="persistEssay()">
+            {{ busyAction === "save" ? "保存中..." : "保存" }}
+          </button>
         </div>
       </article>
     </div>

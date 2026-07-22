@@ -7108,18 +7108,20 @@ button.calendar-day {
   text-align: left;
   box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, color 0.16s ease;
 }
 
 .essay-list-item:hover,
 .essay-list-item.active {
-  border-color: rgba(29, 127, 91, 0.42);
-  box-shadow: 0 14px 30px rgba(29, 127, 91, 0.1);
+  color: #fff;
+  border-color: rgba(29, 127, 91, 0.72);
+  background: linear-gradient(135deg, #1d7f5b, #0d6b4b);
+  box-shadow: 0 14px 30px rgba(29, 127, 91, 0.18);
 }
 
 .essay-list-item img,
 .essay-list-item > span {
-  grid-row: span 2;
+  grid-row: span 3;
   width: 58px;
   height: 72px;
   border-radius: 8px;
@@ -7135,6 +7137,12 @@ button.calendar-day {
   font-weight: 900;
 }
 
+.essay-list-item:hover > span,
+.essay-list-item.active > span {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+}
+
 .essay-list-item strong {
   overflow: hidden;
   color: var(--ink);
@@ -7147,6 +7155,18 @@ button.calendar-day {
 .essay-list-item small {
   color: var(--muted);
   font-weight: 800;
+}
+
+.essay-list-created-at {
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.essay-list-item:hover strong,
+.essay-list-item.active strong,
+.essay-list-item:hover small,
+.essay-list-item.active small {
+  color: #fff;
 }
 
 .essay-editor-head {
@@ -7214,8 +7234,65 @@ button.calendar-day {
   gap: 10px;
 }
 
+.essay-primary-actions {
+  align-items: center;
+  justify-content: flex-start;
+}
+
 .essay-notice {
   margin: 0;
+}
+
+.essay-delete-confirm {
+  justify-self: end;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 240px) auto;
+  gap: 10px;
+  align-items: center;
+  max-width: 720px;
+  border: 1px solid rgba(209, 73, 73, 0.22);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  background: #fff7f7;
+}
+
+.essay-delete-confirm > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.essay-delete-confirm strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.essay-delete-confirm span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.essay-delete-confirm input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid rgba(18, 35, 47, 0.16);
+  border-radius: var(--radius-md);
+  padding: 0 11px;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+}
+
+.essay-delete-confirm-actions,
+.essay-bottom-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.essay-save-button {
+  min-width: 110px;
 }
 
 .essay-workspace {
@@ -7225,12 +7302,21 @@ button.calendar-day {
   align-items: start;
 }
 
+.essay-cover-column {
+  display: grid;
+  gap: 10px;
+}
+
 .essay-cover-panel {
   overflow: hidden;
   border: 1px solid rgba(18, 35, 47, 0.1);
   border-radius: var(--radius-lg);
   background: #edf7f2;
   box-shadow: var(--shadow-sm);
+}
+
+.essay-cover-button {
+  width: 100%;
 }
 
 .essay-cover-panel img,
@@ -7271,7 +7357,9 @@ button.calendar-day {
 
 .essay-text-panel {
   display: grid;
+  grid-template-rows: auto auto;
   gap: 10px;
+  align-content: start;
   border: 1px solid rgba(18, 35, 47, 0.1);
   border-radius: var(--radius-lg);
   padding: 14px;
@@ -7292,6 +7380,7 @@ button.calendar-day {
 }
 
 .essay-text-panel p {
+  align-self: start;
   min-height: 180px;
   margin: 0;
   color: var(--ink);
@@ -8234,7 +8323,7 @@ button.calendar-day {
     max-height: none;
   }
 
-  .essay-cover-panel {
+  .essay-cover-column {
     max-width: 260px;
   }
 
@@ -11070,8 +11159,22 @@ select {
     grid-template-columns: 1fr;
   }
 
-  .essay-actions button {
+  .essay-actions button,
+  .essay-bottom-actions button,
+  .essay-delete-confirm-actions button {
     width: 100%;
+  }
+
+  .essay-bottom-actions,
+  .essay-delete-confirm-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .essay-delete-confirm {
+    grid-template-columns: 1fr;
+    justify-self: stretch;
+    max-width: none;
   }
 
   .home-hero {

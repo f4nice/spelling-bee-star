@@ -92,8 +92,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-069"
-DEFAULT_PAGE_VERSION = "v20260722.69"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-070"
+DEFAULT_PAGE_VERSION = "v20260722.70"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -5024,8 +5024,24 @@ async def vue_generate_essay_cover_api(essay_id: int, request: Request, db: Sess
 
 
 @app.post("/api/vue/essays/{essay_id}/delete")
-def vue_delete_essay_api(essay_id: int, request: Request, db: Session = Depends(get_db)):
-    essay = get_owned_essay(db, request, essay_id)
+async def vue_delete_essay_api(essay_id: int, request: Request, db: Session = Depends(get_db)):
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="删除作文数据不是有效 JSON。") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="删除作文数据不是有效 JSON。")
+
+    user = current_admin_user(request, db)
+    password = normalize_login_password(payload.get("password"))
+    if not user.login_password_hash:
+        raise HTTPException(status_code=400, detail="请先给当前账号设置登录密码。")
+    if not password or not verify_login_password(password, user.login_password_hash):
+        raise HTTPException(status_code=403, detail="登录密码不正确。")
+
+    essay = db.scalar(select(EssayEntry).where(EssayEntry.id == essay_id, EssayEntry.phone == user.phone))
+    if not essay:
+        raise HTTPException(status_code=404, detail="没有找到这篇作文。")
     db.delete(essay)
     db.commit()
     return essays_payload(db, request)
