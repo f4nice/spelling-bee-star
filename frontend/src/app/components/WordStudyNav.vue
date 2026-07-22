@@ -3,6 +3,9 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { fetchJson } from "../utils.js";
 
 const STORAGE_KEY = "speakeasy.wordAutoStudy";
+const AUTO_STUDY_READ_COUNT = 2;
+const AUTO_STUDY_REPLAY_GAP_MS = 350;
+const AUTO_STUDY_FALLBACK_READ_MS = 1800;
 
 const props = defineProps({
   data: {
@@ -22,6 +25,8 @@ const props = defineProps({
 const intervalSeconds = ref(6);
 const isAutoStudying = ref(false);
 const remainingSeconds = ref(0);
+const currentReadCount = ref(0);
+const isCountingDown = ref(false);
 let timerId = null;
 let countdownId = null;
 let audioReplayIds = [];
@@ -30,7 +35,8 @@ const previousWordUrl = computed(() => props.wordNavUrl(props.data.navigation.pr
 const nextWordUrl = computed(() => props.wordNavUrl(props.data.navigation.next_word_id));
 const statusText = computed(() => {
   if (!isAutoStudying.value) return "未开始";
-  return `${remainingSeconds.value || intervalSeconds.value} 秒后下一个`;
+  if (!isCountingDown.value) return `朗读 ${Math.max(currentReadCount.value, 1)} / ${AUTO_STUDY_READ_COUNT}`;
+  return `已读 ${AUTO_STUDY_READ_COUNT} 次，${remainingSeconds.value || intervalSeconds.value} 秒后下一个`;
 });
 
 function readStoredState() {
@@ -52,6 +58,11 @@ function writeStoredState(active) {
 }
 
 function clearTimers() {
+  clearCountdownTimers();
+  clearAudioReplayTimers();
+}
+
+function clearCountdownTimers() {
   if (timerId) {
     window.clearTimeout(timerId);
     timerId = null;
@@ -60,6 +71,10 @@ function clearTimers() {
     window.clearInterval(countdownId);
     countdownId = null;
   }
+  isCountingDown.value = false;
+}
+
+function clearAudioReplayTimers() {
   audioReplayIds.forEach((id) => window.clearTimeout(id));
   audioReplayIds = [];
 }
@@ -90,44 +105,93 @@ async function prefetchNextWord() {
 }
 
 function scheduleNext() {
-  clearTimers();
+  clearCountdownTimers();
   const seconds = Math.max(Number(intervalSeconds.value) || 1, 1);
   remainingSeconds.value = seconds;
+  isCountingDown.value = true;
   countdownId = window.setInterval(() => {
     remainingSeconds.value = Math.max(remainingSeconds.value - 1, 0);
   }, 1000);
   timerId = window.setTimeout(goNext, seconds * 1000);
 }
 
-function playCurrentWord() {
+function currentAudioTarget() {
   const audioSources = props.data.audio_sources || {};
   const word = props.data.word?.word || "";
   if (audioSources.us) {
-    props.playAudio("audio-us", word, "en-US");
-    return;
+    return { audioId: "audio-us", text: word, lang: "en-US" };
   }
   if (audioSources.gb) {
-    props.playAudio("audio-gb", word, "en-GB");
-    return;
+    return { audioId: "audio-gb", text: word, lang: "en-GB" };
   }
-  props.playAudio("audio-us", word, "en-US");
+  return { audioId: "audio-us", text: word, lang: "en-US" };
 }
 
-function playCurrentWordTwice() {
-  playCurrentWord();
-  audioReplayIds.push(window.setTimeout(playCurrentWord, 1200));
+function playCurrentWord() {
+  const target = currentAudioTarget();
+  props.playAudio(target.audioId, target.text, target.lang);
+  return target;
+}
+
+function waitForAudioToFinish(audioId) {
+  const audio = document.getElementById(audioId);
+  if (!audio) {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, AUTO_STUDY_FALLBACK_READ_MS);
+    });
+  }
+  const durationMs = Number.isFinite(audio.duration) && audio.duration > 0
+    ? Math.min(Math.max((audio.duration + 0.35) * 1000, AUTO_STUDY_FALLBACK_READ_MS), 6000)
+    : AUTO_STUDY_FALLBACK_READ_MS;
+  return new Promise((resolve) => {
+    let finished = false;
+    let fallbackId = null;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      if (fallbackId) window.clearTimeout(fallbackId);
+      audio.removeEventListener("ended", finish);
+      audio.removeEventListener("error", finish);
+      resolve();
+    };
+    audio.addEventListener("ended", finish, { once: true });
+    audio.addEventListener("error", finish, { once: true });
+    fallbackId = window.setTimeout(finish, durationMs);
+  });
+}
+
+async function playAutoStudyRead(readCount = 1) {
+  if (!isAutoStudying.value) return;
+  currentReadCount.value = readCount;
+  const target = playCurrentWord();
+  await waitForAudioToFinish(target.audioId);
+  if (!isAutoStudying.value) return;
+  if (readCount >= AUTO_STUDY_READ_COUNT) {
+    scheduleNext();
+    return;
+  }
+  audioReplayIds.push(window.setTimeout(() => playAutoStudyRead(readCount + 1), AUTO_STUDY_REPLAY_GAP_MS));
+}
+
+function playCurrentWordTwiceThenSchedule() {
+  clearCountdownTimers();
+  clearAudioReplayTimers();
+  remainingSeconds.value = 0;
+  currentReadCount.value = 0;
+  playAutoStudyRead(1);
 }
 
 function startAutoStudy() {
   isAutoStudying.value = true;
   writeStoredState(true);
-  scheduleNext();
-  playCurrentWordTwice();
+  playCurrentWordTwiceThenSchedule();
 }
 
 function stopAutoStudy() {
   isAutoStudying.value = false;
   remainingSeconds.value = 0;
+  currentReadCount.value = 0;
+  isCountingDown.value = false;
   writeStoredState(false);
   clearTimers();
 }
@@ -138,12 +202,14 @@ onMounted(() => {
   prefetchNextWord();
   if (stored.active) {
     isAutoStudying.value = true;
-    scheduleNext();
-    playCurrentWordTwice();
+    playCurrentWordTwiceThenSchedule();
   }
 });
 
-onBeforeUnmount(clearTimers);
+onBeforeUnmount(() => {
+  isAutoStudying.value = false;
+  clearTimers();
+});
 </script>
 
 <template>
