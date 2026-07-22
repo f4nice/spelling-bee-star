@@ -227,6 +227,7 @@ class CatWorldState(Base):
     active_care_cat_id: Mapped[str | None] = mapped_column(String(80))
     active_care_at: Mapped[datetime | None] = mapped_column(DateTime)
     litter_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    litter_ready_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     litter_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
     litter_started_at: Mapped[datetime | None] = mapped_column(DateTime)
     damaged_items: Mapped[str | None] = mapped_column(Text)

@@ -10,7 +10,7 @@ export function litterUseHint(item = {}, count = 0) {
   if (item.useType === "litter-clean") {
     return Number(count) > 0 ? "点击房间里的猫屎清理" : "有猫屎时点击使用";
   }
-  if (item.useType === "litter-prevent") return "猫咪拉屎时自动使用";
+  if (item.useType === "litter-prevent") return "点击放进活动室，猫咪使用后消失";
   return "点击背包使用";
 }
 

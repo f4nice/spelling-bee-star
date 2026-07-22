@@ -92,8 +92,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-065"
-DEFAULT_PAGE_VERSION = "v20260722.65"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-066"
+DEFAULT_PAGE_VERSION = "v20260722.66"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -367,7 +367,7 @@ CAT_WORLD_SHOP = [
         "englishName": "Tofu Cat Litter",
         "cost": 55,
         "mood": 0,
-        "description": "猫咪拉屎时自动消耗 1 包，猫屎会留在猫砂里并自动处理。",
+        "description": "点击后放进活动室，猫咪下次排泄时自动使用并处理，随后从房间消失。",
     },
     {
         "id": "grooming-brush",
@@ -559,6 +559,15 @@ CAT_WORLD_SHOP = [
         "cost": 300,
         "mood": 9,
         "description": "持续冒出清水的小饮水机，让房间听起来更安静。",
+    },
+    {
+        "id": "bubble-bathtub",
+        "category": "decor",
+        "label": "泡泡浴缸",
+        "englishName": "Bubble Bathtub",
+        "cost": 340,
+        "mood": 11,
+        "description": "点击浴缸后，猫咪会慢慢走进去，用一套泡泡浴用品洗干净。",
     },
     {
         "id": "rug-candy",
@@ -882,6 +891,7 @@ CAT_WORLD_DECOR_FAVORITE_CAT = {
     "moon-cushion": CAT_WORLD_DEFAULT_CAT_ID,
     "cat-climbing-tree": "maine-coon",
     "mini-fountain": "siamese",
+    "bubble-bathtub": "ragdoll",
 }
 CAT_WORLD_TOY_FAVORITE_CAT = {
     "rolling-ball": "siamese",
@@ -913,6 +923,7 @@ CAT_WORLD_DECOR_DEFAULT_LAYOUT = {
     "moon-cushion": {"x": 31, "y": 80},
     "cat-climbing-tree": {"x": 86, "y": 48},
     "mini-fountain": {"x": 54, "y": 76},
+    "bubble-bathtub": {"x": 77, "y": 58},
 }
 CAT_WORLD_TOY_DEFAULT_LAYOUT = {
     "rolling-ball": {"x": 24, "y": 70},
@@ -935,7 +946,7 @@ CAT_WORLD_PRICING_PLANS = [
         "category": "consumable",
         "label": "消耗品",
         "range": "35-150",
-        "strategy": "可重复购买；猫砂自动预防，铲子负责清理，洗澡和护理用品使用一次消耗一个。",
+        "strategy": "可重复购买；猫砂先放进房间再自动预防，铲子负责清理，洗澡和护理用品使用一次消耗一个。",
     },
     {
         "category": "toy",
@@ -4065,12 +4076,12 @@ async def vue_cat_world_use_consumable_api(request: Request, db: Session = Depen
     use_type = str(item.get("useType") or "")
     if use_type == "litter-clean":
         raise HTTPException(status_code=400, detail="请直接点击活动室里的猫屎来使用铲子。")
-    if use_type == "litter-prevent":
-        raise HTTPException(status_code=400, detail="猫砂会在猫咪拉屎时自动消耗，不需要手动使用。")
     state = get_or_create_cat_world_state(db, phone)
     inventory = parse_cat_world_inventory(state.inventory)
     if inventory.get(item_id, 0) <= 0:
         raise HTTPException(status_code=400, detail="这个消耗品已经用完了，请先购买。")
+    if use_type == "litter-prevent" and int(state.litter_ready_count or 0) > 0:
+        raise HTTPException(status_code=400, detail="活动室里已经放好一份豆腐猫砂，等猫咪使用后再放新的。")
     inventory[item_id] = max(inventory.get(item_id, 0) - 1, 0)
     if inventory[item_id] <= 0:
         inventory.pop(item_id, None)
@@ -4084,6 +4095,26 @@ async def vue_cat_world_use_consumable_api(request: Request, db: Session = Depen
     target_cat_id = str(payload.get("catId") or state.selected_cat or CAT_WORLD_DEFAULT_CAT_ID)
     if target_cat_id not in owned_cats:
         target_cat_id = state.selected_cat if state.selected_cat in owned_cats else owned_cats[0]
+    if use_type == "litter-prevent":
+        state.litter_ready_count = 1
+        if not state.litter_updated_at:
+            state.litter_updated_at = now
+        db.add(state)
+        db.commit()
+        db.refresh(state)
+        return {
+            "ok": True,
+            "effect": {
+                "itemId": item_id,
+                "itemLabel": item.get("label") or item_id,
+                "useType": use_type,
+                "remaining": max(int(inventory.get(item_id, 0) or 0), 0),
+                "catId": target_cat_id,
+                "effects": [],
+                "message": "豆腐猫砂已经放进活动室，猫咪下次排泄时会自动使用，然后从房间消失。",
+            },
+            **serialize_cat_world_payload(db, state),
+        }
     target_ids = owned_cats if use_type == "room-care" else [target_cat_id]
     effects = []
     for cat_id in target_ids:
@@ -13693,6 +13724,8 @@ def cat_world_refresh_litter(
             "nextAt": "",
             "scoopCount": max(int(inventory.get(CAT_WORLD_LITTER_SCOOP_ITEM_ID, 0) or 0), 0),
             "catLitterCount": max(int(inventory.get(CAT_WORLD_LITTER_ITEM_ID, 0) or 0), 0),
+            "placedCatLitterCount": max(int(state.litter_ready_count or 0), 0),
+            "hasPlacedCatLitter": int(state.litter_ready_count or 0) > 0,
             "autoUsed": 0,
             "addedCount": 0,
             "oldestAt": (
@@ -13714,15 +13747,10 @@ def cat_world_refresh_litter(
     auto_used = 0
     added_count = 0
     if due_count > 0:
-        available_litter = max(int(inventory.get(CAT_WORLD_LITTER_ITEM_ID, 0) or 0), 0)
-        auto_used = min(int(due_count), available_litter)
+        ready_litter = max(int(state.litter_ready_count or 0), 0)
+        auto_used = min(int(due_count), ready_litter)
         if auto_used:
-            remaining = available_litter - auto_used
-            if remaining:
-                inventory[CAT_WORLD_LITTER_ITEM_ID] = remaining
-            else:
-                inventory.pop(CAT_WORLD_LITTER_ITEM_ID, None)
-            state.inventory = encode_cat_world_inventory(inventory)
+            state.litter_ready_count = max(ready_litter - auto_used, 0)
         unprotected_count = int(due_count) - auto_used
         current_count = min(max(int(state.litter_count or 0), 0), CAT_WORLD_LITTER_MAX)
         next_count = min(current_count + unprotected_count, CAT_WORLD_LITTER_MAX)
@@ -13745,6 +13773,8 @@ def cat_world_refresh_litter(
         "nextAt": next_at.replace(microsecond=0).isoformat() + "Z",
         "scoopCount": max(int(inventory.get(CAT_WORLD_LITTER_SCOOP_ITEM_ID, 0) or 0), 0),
         "catLitterCount": max(int(inventory.get(CAT_WORLD_LITTER_ITEM_ID, 0) or 0), 0),
+        "placedCatLitterCount": max(int(state.litter_ready_count or 0), 0),
+        "hasPlacedCatLitter": int(state.litter_ready_count or 0) > 0,
         "autoUsed": auto_used,
         "addedCount": added_count,
         "oldestAt": (
@@ -15004,6 +15034,8 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_care_at DATETIME NULL"))
         if "cat_world_states" in table_names and "litter_count" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN litter_count INTEGER NOT NULL DEFAULT 0"))
+        if "cat_world_states" in table_names and "litter_ready_count" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN litter_ready_count INTEGER NOT NULL DEFAULT 0"))
         if "cat_world_states" in table_names and "litter_updated_at" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN litter_updated_at DATETIME NULL"))
         if "cat_world_states" in table_names and "litter_started_at" not in cat_world_state_columns:

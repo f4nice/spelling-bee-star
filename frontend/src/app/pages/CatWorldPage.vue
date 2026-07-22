@@ -93,6 +93,7 @@ onMounted(async () => {
     onLayoutChange: handleGameLayoutChange,
     onToyClick: handleRoomToyClick,
     onLitterClick: cleanLitter,
+    onBathtubBath: (bath) => useConsumable(shopById.value["cat-bath-kit"], { targetCatId: bath?.catId }),
     onItemInteractionEnd: (interaction) => {
       if (interaction?.message) notice.value = interaction.message;
     },
@@ -667,7 +668,7 @@ function ownedToolSubtext(item) {
   if (item.category === "food") return `拥有 ${item.count} · ${foodTypeLabel(item)}${suffix}`;
   if (item.category === "consumable") {
     if (item.useType === "litter-clean") return `拥有 ${item.count} · 点击猫屎时消耗`;
-    if (item.useType === "litter-prevent") return `拥有 ${item.count} · 拉屎时自动消耗`;
+    if (item.useType === "litter-prevent") return `拥有 ${item.count} · 点击放进活动室`;
     if (item.useType === "cat-bath") return `拥有 ${item.count} · 给当前档案猫咪洗澡`;
     return `拥有 ${item.count} · 使用一次消耗 1 个`;
   }
@@ -747,7 +748,7 @@ function handleOwnedToolClick(item) {
       return;
     }
     if (item.useType === "litter-prevent") {
-      notice.value = `还有 ${item.count} 包猫砂，猫咪下次拉屎时会自动消耗一包并处理干净。`;
+      useConsumable(item);
       return;
     }
     useConsumable(item);
@@ -887,7 +888,7 @@ function purchaseHint(item) {
   }
   if (item.category === "consumable") {
     const effect = item.useType === "litter-prevent"
-      ? "自动抵消一堆猫屎"
+      ? "放进活动室，猫咪使用后自动消失"
       : item.useType === "litter-clean"
         ? "可清理一堆猫屎"
         : item.useType === "cat-bath"
@@ -1042,11 +1043,11 @@ async function cleanLitter() {
   }
 }
 
-async function useConsumable(item) {
+async function useConsumable(item, options = {}) {
   if (!item?.id || busyItemId.value || roomEditMode.value) return;
   busyItemId.value = item.id;
   notice.value = "";
-  const targetCatId = openCatDiaryId.value || focusedCat.value.id || state.value.selectedCat;
+  const targetCatId = options.targetCatId || openCatDiaryId.value || focusedCat.value.id || state.value.selectedCat;
   try {
     const nextPayload = await fetchJson(routeApiPaths.catWorldUseConsumable(), {
       method: "POST",
@@ -1291,6 +1292,7 @@ async function selectCat(catId) {
           <small v-if="hygiene.count">每只猫每小时心情额外 -{{ hygieneMoodPenalty }} · 点击房间里的猫屎清理</small>
           <small v-if="litterBathAccelerationText">{{ litterBathAccelerationText }}</small>
           <small v-else>猫砂 {{ hygiene.catLitterCount || 0 }} 包 · 铲子 {{ hygiene.scoopCount || 0 }} 把</small>
+          <small v-if="hygiene.hasPlacedCatLitter">已放好豆腐猫砂，等待猫咪使用</small>
         </div>
 
         <div v-if="activeCare.active" class="cat-world-active-food cat-world-active-care">
@@ -1522,7 +1524,7 @@ async function selectCat(catId) {
             </div>
             <div v-else-if="item.category === 'consumable'" class="cat-world-food-tags cat-world-consumable-tags">
               <span>一次性</span>
-              <span v-if="item.useType === 'litter-prevent'">自动使用</span>
+              <span v-if="item.useType === 'litter-prevent'">点击放置</span>
               <span v-else-if="item.useType === 'litter-clean'">点击猫屎使用</span>
               <span v-else-if="item.useType === 'cat-bath'">当前档案猫咪使用</span>
               <span v-else>点击背包使用</span>

@@ -10,6 +10,7 @@ import {
 test("interactive room items use the expected controlled behavior", () => {
   assert.equal(itemInteractionFor("reading-lamp", "decor")?.behavior, "toggle-attract");
   assert.equal(itemInteractionFor("study-desk", "decor")?.behavior, "walk-and-jump");
+  assert.equal(itemInteractionFor("bubble-bathtub", "decor")?.behavior, "walk-and-bathe");
   assert.equal(itemInteractionFor("feather-wand", "toy")?.behavior, "pointer-follow");
   assert.equal(itemInteractionFor("feather-wand", "decor"), null);
 });

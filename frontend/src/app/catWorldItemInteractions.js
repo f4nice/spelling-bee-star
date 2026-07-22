@@ -9,6 +9,11 @@ export const CAT_WORLD_ITEM_INTERACTIONS = Object.freeze({
     behavior: "walk-and-jump",
     label: "英文书桌",
   }),
+  "bubble-bathtub": Object.freeze({
+    itemKind: "decor",
+    behavior: "walk-and-bathe",
+    label: "泡泡浴缸",
+  }),
   "feather-wand": Object.freeze({
     itemKind: "toy",
     behavior: "pointer-follow",

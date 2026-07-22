@@ -21,6 +21,7 @@ const CAT_HITBOX = { x: -58, y: -74, width: 232, height: 184 };
 const FEATHER_WAND_CURSOR = 'url("/static/cursors/feather-wand-cursor.svg") 4 28, crosshair';
 const ACTIVE_FOOD_SPOT = { x: GAME_WIDTH - 260, y: 408, width: 118, height: 46 };
 const ACTIVE_CARE_SPOT = { x: 590, y: 426, width: 68, height: 70 };
+const READY_LITTER_SPOT = { x: 1134, y: 352, width: 112, height: 82 };
 const LITTER_SPOTS = [
   { x: 1110, y: 456 },
   { x: 930, y: 468 },
@@ -47,6 +48,7 @@ const DECOR_SPECS = {
   "moon-cushion": { label: "月亮软垫", width: 134, height: 64, defaultX: 390, defaultY: 446 },
   "cat-climbing-tree": { label: "原木猫爬架", width: 132, height: 184, defaultX: 1090, defaultY: 292 },
   "mini-fountain": { label: "循环饮水机", width: 100, height: 82, defaultX: 694, defaultY: 432 },
+  "bubble-bathtub": { label: "泡泡浴缸", width: 180, height: 108, defaultX: 940, defaultY: 332 },
 };
 
 const CAT_PIXEL_SIZE = 2;
@@ -379,6 +381,7 @@ class CatWorldScene extends Phaser.Scene {
       container.setData("height", spec.height);
       container.setDepth(position.y + 20);
       container.setInteractive(new Phaser.Geom.Rectangle(0, 0, spec.width, spec.height), Phaser.Geom.Rectangle.Contains);
+      if (container.input) container.input.cursor = editMode ? "grab" : "pointer";
       if (!damaged && editMode) {
         this.input.setDraggable(container);
       }
@@ -392,6 +395,23 @@ class CatWorldScene extends Phaser.Scene {
           this.owner.handlers.onDecorClick?.(decorId, interaction);
         }
       });
+      if (decorId === "bubble-bathtub" && !editMode && !damaged) {
+        const bathHitZone = this.add.zone(
+          position.x + spec.width / 2,
+          position.y + spec.height / 2,
+          spec.width + 24,
+          spec.height + 20,
+        );
+        bathHitZone.setDepth(CAT_INTERACTION_DEPTH + 210);
+        bathHitZone.setData("kind", "bathtub-hit-zone");
+        bathHitZone.setInteractive({ cursor: "pointer" });
+        bathHitZone.on("pointerdown", (_pointer, _localX, _localY, event) => this.stopPointerEvent(event));
+        bathHitZone.on("pointerup", (_pointer, _localX, _localY, event) => {
+          this.stopPointerEvent(event);
+          const interaction = this.interactWithDecor(decorId);
+          this.owner.handlers.onDecorClick?.(decorId, interaction);
+        });
+      }
       this.drawDecorShape(container, decorId, spec, palette(tone));
       if (decorId === "reading-lamp" && this.owner.itemInteractionStates.get(decorId)?.active && !damaged) {
         this.applyLampVisual(container, true);
@@ -442,7 +462,39 @@ class CatWorldScene extends Phaser.Scene {
     if (snapshot.activeCare?.active) {
       this.drawActiveCare(snapshot);
     }
+    if (snapshot.hygiene?.hasPlacedCatLitter) {
+      this.drawReadyCatLitter();
+    }
     this.drawLitter(snapshot);
+  }
+
+  drawReadyCatLitter() {
+    const spot = READY_LITTER_SPOT;
+    const container = this.add.container(spot.x, spot.y);
+    container.setDepth(spot.y + 120);
+    const graphics = makeLocalGraphics(this, container);
+    graphics.fillStyle(0x2c2f3a, 0.2);
+    graphics.fillEllipse(56, 73, 106, 14);
+    drawPixelRect(graphics, 2, 42, 108, 31, 0x77d7b2);
+    drawPixelRect(graphics, 10, 34, 92, 23, 0xfff8df, INK, 3);
+    graphics.fillStyle(0xe7d8bd, 1);
+    for (let x = 17; x <= 91; x += 12) {
+      graphics.fillRect(x, 40 + (x % 3), 7, 5);
+    }
+    drawPixelRect(graphics, 72, 2, 35, 40, 0xd6fff0, INK, 3);
+    graphics.fillStyle(0x236b55, 1);
+    graphics.fillRect(79, 13, 21, 5);
+    graphics.fillRect(83, 23, 13, 5);
+    const label = this.add.text(56, -6, "豆腐猫砂 · 已放好\n使用后自动消失", {
+      color: "#263047",
+      backgroundColor: "#fff8df",
+      fontFamily: "Consolas, monospace",
+      fontSize: "10px",
+      fontStyle: "bold",
+      padding: { x: 4, y: 2 },
+      align: "center",
+    }).setOrigin(0.5, 1);
+    container.add(label);
   }
 
   drawActiveCare(snapshot) {
@@ -792,6 +844,25 @@ class CatWorldScene extends Phaser.Scene {
       drawPixelRect(graphics, 43, 16, 14, 31, colors.main);
       graphics.fillStyle(0x87d9ff, 0.8);
       graphics.fillCircle(50, 16, 12);
+    } else if (decorId === "bubble-bathtub") {
+      graphics.fillStyle(0x2c2f3a, 0.2);
+      graphics.fillEllipse(spec.width / 2, spec.height - 5, spec.width - 10, 15);
+      drawPixelRect(graphics, 8, 31, spec.width - 16, 65, colors.main);
+      drawPixelRect(graphics, 17, 20, spec.width - 34, 49, 0xd9f6ff, INK, 3);
+      graphics.fillStyle(0x87d9ff, 1);
+      graphics.fillRect(23, 42, spec.width - 46, 22);
+      drawPixelRect(graphics, 20, 91, 20, 14, colors.alt, INK, 3);
+      drawPixelRect(graphics, spec.width - 40, 91, 20, 14, colors.alt, INK, 3);
+      graphics.lineStyle(7, INK, 1);
+      graphics.lineBetween(139, 22, 139, 2);
+      graphics.lineBetween(139, 3, 163, 3);
+      graphics.lineBetween(163, 3, 163, 24);
+      graphics.fillStyle(0xfff8df, 1);
+      [[38, 34, 9], [62, 27, 12], [91, 35, 8], [119, 25, 10]].forEach(([x, y, radius]) => {
+        graphics.fillCircle(x, y, radius);
+        graphics.lineStyle(3, INK, 0.8);
+        graphics.strokeCircle(x, y, radius);
+      });
     }
   }
 
@@ -894,6 +965,7 @@ class CatWorldScene extends Phaser.Scene {
     if (this.owner.wandMode) this.stopFeatherWandMode({ notify: false });
     if (interaction.behavior === "toggle-attract") return this.toggleReadingLamp(decorId);
     if (interaction.behavior === "walk-and-jump") return this.startDeskFavoriteInteraction(decorId);
+    if (interaction.behavior === "walk-and-bathe") return this.startBathtubInteraction(decorId);
     return null;
   }
 
@@ -1010,6 +1082,118 @@ class CatWorldScene extends Phaser.Scene {
         },
       });
     });
+  }
+
+  startBathtubInteraction(decorId) {
+    if (Number(this.owner.snapshot.inventory?.["cat-bath-kit"] || 0) <= 0) {
+      return { handled: true, message: "浴缸已经准备好了，但背包里没有泡泡浴套装。" };
+    }
+    const activeEntry = this.roomCatEntries().find(
+      (entry) => this.owner.catItemActions.get(entry.cat.id)?.itemId === decorId,
+    );
+    if (activeEntry) {
+      return { handled: true, message: `${activeEntry.cat.label}正在浴缸里洗澡，稍等一下。` };
+    }
+    const entries = this.roomCatEntries();
+    const ranked = entries
+      .map((entry) => {
+        const hygiene = this.owner.snapshot.dailyLogs?.[entry.cat.id]?.hygiene || {};
+        const urgency = (hygiene.needsBath ? 10000 : 0)
+          + Number(hygiene.bathAccelerationHours || 0)
+          + Number(hygiene.daysSinceBath || 0) * 24
+          + (entry.cat.id === this.owner.snapshot.selectedCatId ? 1 : 0);
+        return { entry, urgency };
+      })
+      .sort((left, right) => right.urgency - left.urgency);
+    const target = ranked[0]?.entry;
+    if (!target) return { handled: true, message: "活动室里还没有猫咪可以使用浴缸。" };
+    if (!target.behavior.canWalk) {
+      return { handled: true, message: `${target.cat.label}现在正在休息，醒来后再来洗澡。` };
+    }
+    const action = {
+      kind: "bathtub",
+      itemId: decorId,
+      expiresAt: Date.now() + 18000,
+    };
+    this.owner.catItemActions.set(target.cat.id, action);
+    this.startBathtubAction(target, decorId, action);
+    return {
+      handled: true,
+      message: `${target.cat.label}正在慢慢走向泡泡浴缸，洗澡会消耗 1 套泡泡浴用品。`,
+    };
+  }
+
+  startBathtubAction(entry, decorId, action) {
+    const approach = this.nearDecorPosition(decorId, entry.index);
+    const spec = DECOR_SPECS[decorId];
+    if (!approach || !spec) return;
+    this.moveCatForInteraction(entry, approach, decorId, () => {
+      if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
+      const bathtub = this.positionForDecor(decorId, spec);
+      const bathX = clamp(bathtub.x + spec.width / 2 - 48, 38, GAME_WIDTH - 132);
+      const bathY = clamp(bathtub.y + 66, FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
+      this.turnCat(entry.container, bathX);
+      this.tweens.add({
+        targets: entry.container,
+        x: bathX,
+        y: bathY - 24,
+        duration: 430,
+        ease: "Quad.easeOut",
+        onUpdate: () => entry.container.setDepth(CAT_INTERACTION_DEPTH + entry.index),
+        onComplete: () => {
+          if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
+          this.tweens.add({
+            targets: entry.container,
+            y: bathY,
+            duration: 260,
+            ease: "Bounce.easeOut",
+            onComplete: () => {
+              if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
+              const overlay = this.createBathtubBubbleOverlay(bathtub, spec, entry.index);
+              this.spawnCatBubble(entry.container, entry.cat, "泡泡好多，洗得香香的。");
+              const timer = this.time.delayedCall(2800, () => {
+                overlay?.destroy?.();
+                const result = this.owner.handlers.onBathtubBath?.({
+                  catId: entry.cat.id,
+                  catLabel: entry.cat.label,
+                  decorId,
+                });
+                Promise.resolve(result).finally(() => {
+                  if (entry.container?.active) this.resumeCatAutonomy(entry, decorId);
+                });
+              });
+              entry.container.setData("interactionTimer", timer);
+            },
+          });
+        },
+      });
+    });
+  }
+
+  createBathtubBubbleOverlay(position, spec, catIndex) {
+    const overlay = this.add.container(position.x, position.y);
+    overlay.setDepth(CAT_INTERACTION_DEPTH + catIndex + 1);
+    const graphics = makeLocalGraphics(this, overlay);
+    graphics.fillStyle(0x87d9ff, 0.92);
+    graphics.fillRect(18, 56, spec.width - 36, 22);
+    drawPixelRect(graphics, 8, 72, spec.width - 16, 26, 0xffbfd7);
+    [[31, 53, 10], [57, 43, 13], [91, 51, 9], [122, 42, 12], [148, 54, 8]].forEach(
+      ([x, y, radius], bubbleIndex) => {
+        const bubble = this.add.circle(x, y, radius, 0xfff8df, 0.9);
+        bubble.setStrokeStyle(3, 0x2c2f3a, 0.72);
+        overlay.add(bubble);
+        this.tweens.add({
+          targets: bubble,
+          y: y - 18 - bubbleIndex * 2,
+          alpha: 0.45,
+          yoyo: true,
+          repeat: -1,
+          duration: 620 + bubbleIndex * 90,
+          ease: "Sine.easeInOut",
+        });
+      },
+    );
+    return overlay;
   }
 
   jumpCatOffDesk(entry, decorId, target, action) {
@@ -1213,6 +1397,8 @@ class CatWorldScene extends Phaser.Scene {
         this.startLampFavoriteAction(entry, action.itemId, action);
       } else if (action.kind === "desk") {
         this.startDeskFavoriteAction(entry, action.itemId, action);
+      } else if (action.kind === "bathtub") {
+        this.startBathtubAction(entry, action.itemId, action);
       } else if (action.kind === "care" && activeCare.active && activeCare.targetCatId === catId) {
         this.startActiveCareAction(entry, action);
       } else {
