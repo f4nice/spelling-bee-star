@@ -92,8 +92,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-064"
-DEFAULT_PAGE_VERSION = "v20260722.64"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260722-065"
+DEFAULT_PAGE_VERSION = "v20260722.65"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -238,6 +238,9 @@ CAT_WORLD_BATH_ITEM_ID = "cat-bath-kit"
 CAT_WORLD_LITTER_MAX = 4
 CAT_WORLD_LITTER_MOOD_PENALTY_PER_PILE = 2
 CAT_WORLD_LITTER_MOOD_PENALTY_MAX = 8
+CAT_WORLD_LITTER_BATH_GRACE_HOURS = 6
+CAT_WORLD_LITTER_BATH_ACCELERATION_RATE = 2
+CAT_WORLD_LITTER_BATH_ACCELERATION_MAX_HOURS = 72
 CAT_WORLD_HUNGER_WARNING_SCORE = 8
 CAT_WORLD_HUNGER_CRITICAL_HOURS = 24
 CAT_WORLD_HUNGER_ESCAPE_HOURS = 72
@@ -4031,6 +4034,7 @@ async def vue_cat_world_clean_litter_api(request: Request, db: Session = Depends
     state.litter_count = max(int(state.litter_count or 0) - 1, 0)
     if state.litter_count <= 0:
         state.litter_updated_at = datetime.utcnow()
+        state.litter_started_at = None
     db.add(state)
     db.commit()
     db.refresh(state)
@@ -13415,6 +13419,31 @@ def cat_world_parse_utc_datetime(value: str | None) -> datetime | None:
         return None
 
 
+def cat_world_litter_age_hours(
+    state: CatWorldState,
+    now: datetime | None = None,
+) -> int:
+    if int(state.litter_count or 0) <= 0:
+        return 0
+    now = now or datetime.utcnow()
+    started_at = state.litter_started_at or state.litter_updated_at
+    if not started_at:
+        return 0
+    return max(int((now - started_at).total_seconds()) // (60 * 60), 0)
+
+
+def cat_world_litter_bath_acceleration_hours(
+    state: CatWorldState,
+    now: datetime | None = None,
+) -> int:
+    litter_age_hours = cat_world_litter_age_hours(state, now)
+    accelerated_hours = max(litter_age_hours - CAT_WORLD_LITTER_BATH_GRACE_HOURS, 0)
+    return min(
+        accelerated_hours * CAT_WORLD_LITTER_BATH_ACCELERATION_RATE,
+        CAT_WORLD_LITTER_BATH_ACCELERATION_MAX_HOURS,
+    )
+
+
 def cat_world_ensure_care_records(
     state: CatWorldState,
     owned_cats: list[str],
@@ -13460,11 +13489,18 @@ def cat_world_cat_hygiene_payload(
     last_bath_at = cat_world_parse_utc_datetime(row.get("lastBathAt")) or now
     interval_days = max(int(profile.get("bathIntervalDays") or 4), 2)
     elapsed_seconds = max(int((now - last_bath_at).total_seconds()), 0)
+    litter_age_hours = cat_world_litter_age_hours(state, now)
+    bath_acceleration_hours = cat_world_litter_bath_acceleration_hours(state, now)
+    effective_elapsed_seconds = elapsed_seconds + bath_acceleration_hours * 60 * 60
     due_seconds = interval_days * 24 * 60 * 60
-    needs_bath = elapsed_seconds >= due_seconds
-    overdue_days = max(int((elapsed_seconds - due_seconds) // (24 * 60 * 60)) + 1, 0) if needs_bath else 0
+    needs_bath = effective_elapsed_seconds >= due_seconds
+    overdue_days = (
+        max(int((effective_elapsed_seconds - due_seconds) // (24 * 60 * 60)) + 1, 0)
+        if needs_bath
+        else 0
+    )
     mood_decay_bonus = min(1 + overdue_days, 4) if needs_bath else 0
-    next_bath_at = last_bath_at + timedelta(days=interval_days)
+    next_bath_at = last_bath_at + timedelta(days=interval_days, hours=-bath_acceleration_hours)
     return {
         **profile,
         "lastBathAt": last_bath_at.replace(microsecond=0).isoformat() + "Z",
@@ -13473,12 +13509,26 @@ def cat_world_cat_hygiene_payload(
         "daysSinceBath": elapsed_seconds // (24 * 60 * 60),
         "nextBathAt": next_bath_at.replace(microsecond=0).isoformat() + "Z",
         "nextBathDate": next_bath_at.date().isoformat(),
-        "daysUntilBath": max((due_seconds - elapsed_seconds + 86399) // (24 * 60 * 60), 0),
+        "daysUntilBath": max((due_seconds - effective_elapsed_seconds + 86399) // (24 * 60 * 60), 0),
+        "litterAgeHours": litter_age_hours,
+        "bathAccelerationHours": bath_acceleration_hours,
+        "bathAccelerationActive": bath_acceleration_hours > 0,
+        "bathAccelerationLabel": (
+            f"猫屎已滞留 {litter_age_hours} 小时，洗澡进度额外 +{bath_acceleration_hours} 小时"
+            if bath_acceleration_hours > 0
+            else ""
+        ),
         "needsBath": needs_bath,
         "overdueDays": overdue_days,
         "moodDecayBonus": mood_decay_bonus,
         "furState": "frazzled" if needs_bath else "clean",
-        "statusLabel": "炸毛待洗澡" if needs_bath else "干净清爽",
+        "statusLabel": (
+            "炸毛待洗澡"
+            if needs_bath
+            else "猫屎久置 · 加速变脏"
+            if bath_acceleration_hours > 0
+            else "干净清爽"
+        ),
     }
 
 
@@ -13624,8 +13674,16 @@ def cat_world_refresh_litter(
     now = now or datetime.utcnow()
     interval_seconds = cat_world_litter_interval_seconds(len(owned_cats))
     changed = False
+    count = min(max(int(state.litter_count or 0), 0), CAT_WORLD_LITTER_MAX)
+    if count > 0 and not state.litter_started_at:
+        state.litter_started_at = state.litter_updated_at or now
+        changed = True
+    elif count <= 0 and state.litter_started_at:
+        state.litter_started_at = None
+        changed = True
     if not owned_cats:
-        count = min(max(int(state.litter_count or 0), 0), CAT_WORLD_LITTER_MAX)
+        litter_age_hours = cat_world_litter_age_hours(state, now)
+        bath_acceleration_hours = cat_world_litter_bath_acceleration_hours(state, now)
         return {
             "count": count,
             "hasLitter": count > 0,
@@ -13637,7 +13695,16 @@ def cat_world_refresh_litter(
             "catLitterCount": max(int(inventory.get(CAT_WORLD_LITTER_ITEM_ID, 0) or 0), 0),
             "autoUsed": 0,
             "addedCount": 0,
-            "changed": False,
+            "oldestAt": (
+                state.litter_started_at.replace(microsecond=0).isoformat() + "Z"
+                if state.litter_started_at
+                else ""
+            ),
+            "litterAgeHours": litter_age_hours,
+            "bathAccelerationHours": bath_acceleration_hours,
+            "bathAccelerationActive": bath_acceleration_hours > 0,
+            "bathGraceHours": CAT_WORLD_LITTER_BATH_GRACE_HOURS,
+            "changed": changed,
         }
     if not state.litter_updated_at:
         state.litter_updated_at = now - timedelta(seconds=interval_seconds)
@@ -13661,10 +13728,14 @@ def cat_world_refresh_litter(
         next_count = min(current_count + unprotected_count, CAT_WORLD_LITTER_MAX)
         added_count = max(next_count - current_count, 0)
         state.litter_count = next_count
+        if added_count > 0 and current_count <= 0:
+            state.litter_started_at = now
         state.litter_updated_at = now
         changed = True
     count = min(max(int(state.litter_count or 0), 0), CAT_WORLD_LITTER_MAX)
     next_at = (state.litter_updated_at or now) + timedelta(seconds=interval_seconds)
+    litter_age_hours = cat_world_litter_age_hours(state, now)
+    bath_acceleration_hours = cat_world_litter_bath_acceleration_hours(state, now)
     return {
         "count": count,
         "hasLitter": count > 0,
@@ -13676,6 +13747,15 @@ def cat_world_refresh_litter(
         "catLitterCount": max(int(inventory.get(CAT_WORLD_LITTER_ITEM_ID, 0) or 0), 0),
         "autoUsed": auto_used,
         "addedCount": added_count,
+        "oldestAt": (
+            state.litter_started_at.replace(microsecond=0).isoformat() + "Z"
+            if state.litter_started_at
+            else ""
+        ),
+        "litterAgeHours": litter_age_hours,
+        "bathAccelerationHours": bath_acceleration_hours,
+        "bathAccelerationActive": bath_acceleration_hours > 0,
+        "bathGraceHours": CAT_WORLD_LITTER_BATH_GRACE_HOURS,
         "changed": changed,
     }
 
@@ -13727,18 +13807,26 @@ def cat_world_apply_daily_decay(
         agent_state["hygiene"] = hygiene
         agent_state["neglect"] = neglect
         if hygiene.get("needsBath"):
+            litter_bath_reason = (
+                f"；猫屎久置让洗澡进度额外增加了 {hygiene.get('bathAccelerationHours') or 0} 小时"
+                if hygiene.get("bathAccelerationActive")
+                else ""
+            )
             agent_state["careNeed"] = {
                 "key": "bath",
                 "label": "炸毛了",
                 "actionLabel": "使用洗澡用品",
-                "message": f"{cat['label']}已经 {hygiene.get('daysSinceBath') or 0} 天没洗澡，毛发炸开了，心情每小时额外 -{hygiene.get('moodDecayBonus') or 0}。",
+                "message": f"{cat['label']}已经 {hygiene.get('daysSinceBath') or 0} 天没洗澡，毛发炸开了{litter_bath_reason}，心情每小时额外 -{hygiene.get('moodDecayBonus') or 0}。",
                 "status": "urgent",
                 "priority": 92,
                 "targetType": "consumable",
                 "targetItemId": CAT_WORLD_BATH_ITEM_ID,
                 "targetLabel": "泡泡浴套装",
             }
-            agent_state["careTip"] = f"使用猫咪泡泡浴套装，洗澡后恢复整洁；这只猫每 {hygiene.get('bathIntervalDays') or 4} 天需要洗一次。"
+            agent_state["careTip"] = (
+                f"使用猫咪泡泡浴套装，洗澡后恢复整洁；这只猫每 {hygiene.get('bathIntervalDays') or 4} 天需要洗一次。"
+                + (" 铲净猫屎可以立刻停止变脏加速。" if hygiene.get("bathAccelerationActive") else "")
+            )
         if neglect.get("isWarning"):
             hunger_risk = str(neglect.get("statusKey") or "") in {"starving", "near-death"}
             agent_state["careNeed"] = {
@@ -14918,6 +15006,8 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN litter_count INTEGER NOT NULL DEFAULT 0"))
         if "cat_world_states" in table_names and "litter_updated_at" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN litter_updated_at DATETIME NULL"))
+        if "cat_world_states" in table_names and "litter_started_at" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN litter_started_at DATETIME NULL"))
         if "cat_world_states" in table_names and "damaged_items" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN damaged_items TEXT NULL"))
         if "cat_world_daily_logs" in table_names and "agent_state" not in cat_world_daily_log_columns:

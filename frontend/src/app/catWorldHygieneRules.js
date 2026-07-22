@@ -15,9 +15,22 @@ export function litterUseHint(item = {}, count = 0) {
 }
 
 export function bathStatusLabel(hygiene = {}) {
-  if (hygiene.needsBath) return `${Number(hygiene.daysSinceBath || 0)} 天没洗 · 已炸毛`;
+  const accelerationHours = Math.max(Number(hygiene.bathAccelerationHours || 0), 0);
+  const accelerationLabel = accelerationHours ? ` · 猫屎久置加速 ${accelerationHours} 小时` : "";
+  if (hygiene.needsBath) return `${Number(hygiene.daysSinceBath || 0)} 天没洗 · 已炸毛${accelerationLabel}`;
   const daysUntilBath = Math.max(Number(hygiene.daysUntilBath || 0), 0);
-  return `${Number(hygiene.daysSinceBath || 0)} 天前洗过 · ${daysUntilBath} 天后再洗`;
+  return `${Number(hygiene.daysSinceBath || 0)} 天前洗过 · ${daysUntilBath} 天后再洗${accelerationLabel}`;
+}
+
+export function litterBathAccelerationLabel(hygiene = {}) {
+  if (Number(hygiene.count || 0) <= 0) return "";
+  const litterAgeHours = Math.max(Number(hygiene.litterAgeHours || 0), 0);
+  const accelerationHours = Math.max(Number(hygiene.bathAccelerationHours || 0), 0);
+  if (accelerationHours) {
+    return `最久已放 ${litterAgeHours} 小时 · 洗澡进度额外 +${accelerationHours} 小时`;
+  }
+  const graceHours = Math.max(Number(hygiene.bathGraceHours || 6), 1);
+  return `最久已放 ${litterAgeHours} 小时 · 超过 ${graceHours} 小时会加速变脏`;
 }
 
 export function neglectCountdownLabel(neglect = {}) {

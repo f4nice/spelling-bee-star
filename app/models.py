@@ -228,6 +228,7 @@ class CatWorldState(Base):
     active_care_at: Mapped[datetime | None] = mapped_column(DateTime)
     litter_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     litter_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    litter_started_at: Mapped[datetime | None] = mapped_column(DateTime)
     damaged_items: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

@@ -7,7 +7,12 @@ import {
   foodMoodGainForCat,
   foodTypeLabel,
 } from "../catWorldFoodRules.js";
-import { bathStatusLabel, litterMoodPenalty, neglectCountdownLabel } from "../catWorldHygieneRules.js";
+import {
+  bathStatusLabel,
+  litterBathAccelerationLabel,
+  litterMoodPenalty,
+  neglectCountdownLabel,
+} from "../catWorldHygieneRules.js";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
 
@@ -151,6 +156,7 @@ const lostCats = computed(() => state.value.lostCats || {});
 const lostCatRows = computed(() => Object.values(lostCats.value));
 const hygiene = computed(() => state.value.hygiene || {});
 const hygieneMoodPenalty = computed(() => Number(hygiene.value.moodDecayBonus ?? litterMoodPenalty(hygiene.value.count)));
+const litterBathAccelerationText = computed(() => litterBathAccelerationLabel(hygiene.value));
 const ownedCats = computed(() => state.value.ownedCats || []);
 const cats = computed(() => payload.value.cats || []);
 const shop = computed(() => payload.value.shop || []);
@@ -1283,6 +1289,7 @@ async function selectCat(catId) {
           <span>房间卫生</span>
           <strong>{{ hygiene.count ? `${hygiene.count} 堆猫屎` : "干净" }}</strong>
           <small v-if="hygiene.count">每只猫每小时心情额外 -{{ hygieneMoodPenalty }} · 点击房间里的猫屎清理</small>
+          <small v-if="litterBathAccelerationText">{{ litterBathAccelerationText }}</small>
           <small v-else>猫砂 {{ hygiene.catLitterCount || 0 }} 包 · 铲子 {{ hygiene.scoopCount || 0 }} 把</small>
         </div>
 

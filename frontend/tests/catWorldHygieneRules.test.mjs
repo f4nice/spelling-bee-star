@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   bathStatusLabel,
+  litterBathAccelerationLabel,
   litterMoodPenalty,
   litterUseHint,
   neglectCountdownLabel,
@@ -24,6 +25,22 @@ test("litter supplies explain automatic and click use", () => {
 test("bath status distinguishes clean fur from overdue frazzled fur", () => {
   assert.equal(bathStatusLabel({ needsBath: true, daysSinceBath: 5 }), "5 天没洗 · 已炸毛");
   assert.equal(bathStatusLabel({ needsBath: false, daysSinceBath: 1, daysUntilBath: 2 }), "1 天前洗过 · 2 天后再洗");
+  assert.equal(
+    bathStatusLabel({ needsBath: false, daysSinceBath: 1, daysUntilBath: 1, bathAccelerationHours: 12 }),
+    "1 天前洗过 · 1 天后再洗 · 猫屎久置加速 12 小时",
+  );
+});
+
+test("litter age explains when bathing acceleration starts", () => {
+  assert.equal(litterBathAccelerationLabel({ count: 0 }), "");
+  assert.equal(
+    litterBathAccelerationLabel({ count: 1, litterAgeHours: 4, bathGraceHours: 6 }),
+    "最久已放 4 小时 · 超过 6 小时会加速变脏",
+  );
+  assert.equal(
+    litterBathAccelerationLabel({ count: 2, litterAgeHours: 12, bathAccelerationHours: 12 }),
+    "最久已放 12 小时 · 洗澡进度额外 +12 小时",
+  );
 });
 
 test("neglect countdown explains warning and escape timing", () => {
