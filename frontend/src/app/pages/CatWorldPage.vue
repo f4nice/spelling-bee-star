@@ -44,6 +44,7 @@ const clockNow = ref(Date.now());
 const energyModalOpen = ref(false);
 const scenePurchaseTarget = ref(null);
 const openedBlindBox = ref(null);
+const activeHandbook = ref("");
 const petBusyCatId = ref("");
 const roomCanPan = ref(false);
 const roomPanActive = ref(false);
@@ -1008,6 +1009,9 @@ function canPurchase(item) {
 
 function purchaseHint(item) {
   if (!item?.id) return "";
+  if (item.category === "handbook" && isOneTimeOwned(item)) {
+    return "已永久拥有，点击打开手册";
+  }
   if (item.category === "cat" && lostCats.value[item.id]) {
     return `${lostCats.value[item.id].escapeLabel || "长期缺少照护"}后离家 · 重新领养会恢复基础状态`;
   }
@@ -1053,6 +1057,7 @@ function purchaseHint(item) {
 
 function purchaseButtonText(item) {
   if (busyItemId.value === item.id) return "处理中...";
+  if (item.category === "handbook" && isOneTimeOwned(item)) return "打开手册";
   if (item.category === "cat" && ownsCat(item.id) && state.value.selectedCat !== item.id) return "设为主猫";
   if (item.category === "cat" && ownsCat(item.id)) return "已选择";
   if (item.category === "cat" && lostCats.value[item.id]) return canAfford(item) ? `扣 ${item.cost} 能量重新领养` : "能量不足";
@@ -1065,6 +1070,22 @@ function purchaseButtonText(item) {
   if (isOneTimeOwned(item)) return "已拥有";
   if (item.category === "blind-box") return canAfford(item) ? `消耗 ${item.cost} 能量开启` : "能量不足";
   return canAfford(item) ? `扣 ${item.cost} 能量购买` : "能量不足";
+}
+
+function handbookType(item) {
+  return item?.handbookType === "food" ? "food" : "cats";
+}
+
+function shopItemActionAvailable(item) {
+  return item?.category === "handbook" && isOneTimeOwned(item) ? true : canPurchase(item);
+}
+
+function handleShopItemAction(item) {
+  if (item?.category === "handbook" && isOneTimeOwned(item)) {
+    activeHandbook.value = handbookType(item);
+    return;
+  }
+  purchase(item);
 }
 
 function showCatReaction(cat = selectedCat.value, message = "", options = {}) {
@@ -1127,6 +1148,11 @@ async function purchase(item) {
     if (nextPayload.blindBoxResult?.cat) {
       openedBlindBox.value = nextPayload.blindBoxResult;
       notice.value = `抽中了 ${nextPayload.blindBoxResult.cat.rarity} · ${nextPayload.blindBoxResult.cat.label}！`;
+      return;
+    }
+    if (item.category === "handbook") {
+      activeHandbook.value = handbookType(item);
+      notice.value = `${item.label} 已永久解锁。`;
       return;
     }
     notice.value = wasLost
@@ -1762,8 +1788,8 @@ async function selectCat(catId) {
           <button
             class="primary-action-button"
             type="button"
-            :disabled="busyItemId === item.id || !canPurchase(item) || (item.category === 'color' && colorApplied(item))"
-            @click="purchase(item)"
+            :disabled="busyItemId === item.id || !shopItemActionAvailable(item) || (item.category === 'color' && colorApplied(item))"
+            @click="handleShopItemAction(item)"
           >
             {{ purchaseButtonText(item) }}
           </button>
@@ -1771,13 +1797,28 @@ async function selectCat(catId) {
       </div>
     </section>
 
-    <section v-if="ownsCatHandbook" class="cat-world-handbook" aria-labelledby="cat-collection-title">
+    <div
+      v-if="activeHandbook === 'cats' && ownsCatHandbook"
+      class="cat-world-modal-backdrop"
+      @click.self="activeHandbook = ''"
+    >
+    <section
+      class="cat-world-handbook cat-world-handbook-modal panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cat-collection-title"
+    >
       <header class="cat-world-handbook-head">
         <div>
           <p class="section-kicker">Collection</p>
           <h2 id="cat-collection-title">猫咪收集手册</h2>
         </div>
-        <span>{{ catCollectionCatalog.ownedCount }} / {{ catCollectionCatalog.totalCount }} 只猫咪</span>
+        <div class="cat-world-handbook-actions">
+          <span>{{ catCollectionCatalog.ownedCount }} / {{ catCollectionCatalog.totalCount }} 只猫咪</span>
+          <button class="secondary-button compact-button" type="button" aria-label="关闭猫咪收集手册" @click="activeHandbook = ''">
+            <XIcon :size="18" aria-hidden="true" />
+          </button>
+        </div>
       </header>
       <article v-for="section in catCollectionCatalog.sections" :key="section.key" class="cat-world-series-album">
         <header>
@@ -1817,14 +1858,30 @@ async function selectCat(catId) {
         </div>
       </article>
     </section>
+    </div>
 
-    <section v-if="ownsFoodHandbook" class="cat-world-handbook" aria-labelledby="cat-food-handbook-title">
+    <div
+      v-if="activeHandbook === 'food' && ownsFoodHandbook"
+      class="cat-world-modal-backdrop"
+      @click.self="activeHandbook = ''"
+    >
+    <section
+      class="cat-world-handbook cat-world-handbook-modal panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cat-food-handbook-title"
+    >
       <header class="cat-world-handbook-head">
         <div>
           <p class="section-kicker">Food Guide</p>
           <h2 id="cat-food-handbook-title">猫咪食物手册</h2>
         </div>
-        <span>{{ foodHandbookItems.length }} 种食物</span>
+        <div class="cat-world-handbook-actions">
+          <span>{{ foodHandbookItems.length }} 种食物</span>
+          <button class="secondary-button compact-button" type="button" aria-label="关闭猫咪食物手册" @click="activeHandbook = ''">
+            <XIcon :size="18" aria-hidden="true" />
+          </button>
+        </div>
       </header>
       <div class="cat-world-food-album">
         <article v-for="food in foodHandbookItems" :key="food.id" class="cat-world-food-guide-card">
@@ -1840,6 +1897,7 @@ async function selectCat(catId) {
         </article>
       </div>
     </section>
+    </div>
 
     <section class="cat-world-cats panel">
       <div class="cat-world-market-head">
