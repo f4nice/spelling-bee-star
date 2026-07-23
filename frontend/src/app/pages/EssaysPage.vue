@@ -31,6 +31,20 @@ const aiVersionText = computed(() => {
 const aiVersionWordCount = computed(() => (busyAction.value === "optimize" ? 0 : draft.optimizedWordCount || countEssayWords(draft.optimizedBody)));
 const selectedEssay = computed(() => essays.value.find((item) => Number(item.id) === Number(selectedId.value)) || null);
 const hasEssays = computed(() => essays.value.length > 0);
+const scoreLabels = {
+  content: "内容表达",
+  length: "篇幅发展",
+  vocabulary: "词汇难度",
+  grammar: "语法准确",
+  structure: "结构连贯",
+};
+const scoreBreakdownRows = computed(() =>
+  Object.entries(scoreLabels).map(([key, label]) => ({
+    key,
+    label,
+    value: Math.min(Math.max(Number(draft.writingScoreBreakdown?.[key] || 0), 0), 20),
+  })),
+);
 
 watch(
   () => props.data,
@@ -54,6 +68,9 @@ function emptyDraft() {
     coverUrl: "",
     wordCount: 0,
     optimizedWordCount: 0,
+    writingScore: 0,
+    writingScoreBreakdown: {},
+    writingAdvice: [],
     aiModel: "",
     coverModel: "",
     updatedAt: "",
@@ -81,6 +98,9 @@ function loadDraft(essay) {
     coverUrl: essay.coverUrl || "",
     wordCount: Number(essay.wordCount || 0),
     optimizedWordCount: Number(essay.optimizedWordCount || 0),
+    writingScore: Number(essay.writingScore || 0),
+    writingScoreBreakdown: essay.writingScoreBreakdown || {},
+    writingAdvice: Array.isArray(essay.writingAdvice) ? essay.writingAdvice : [],
     aiModel: essay.aiModel || "",
     coverModel: essay.coverModel || "",
     updatedAt: essay.updatedAt || "",
@@ -123,9 +143,12 @@ watch(
   () => [draft.title, draft.body],
   ([nextTitle, nextBody], [previousTitle, previousBody]) => {
     if (isApplyingDraft || (nextTitle === previousTitle && nextBody === previousBody)) return;
-    if (draft.optimizedBody || draft.optimizedWordCount || draft.aiModel) {
+    if (draft.optimizedBody || draft.optimizedWordCount || draft.writingScore || draft.aiModel) {
       draft.optimizedBody = "";
       draft.optimizedWordCount = 0;
+      draft.writingScore = 0;
+      draft.writingScoreBreakdown = {};
+      draft.writingAdvice = [];
       draft.aiModel = "";
     }
     if (draft.coverUrl || draft.coverModel) {
@@ -197,7 +220,7 @@ async function optimizeEssay() {
   try {
     const payload = await fetchJson(routeApiPaths.essayOptimize(essay.id), requestOptions());
     applyResponse(payload);
-    notice.value = "AI 优化稿已生成。";
+    notice.value = `AI 优化稿与写作评估已生成，综合得分 ${payload?.essay?.writingScore || 0} 分。`;
   } catch (error) {
     notice.value = error?.message || "AI 优化失败，请稍后再试。";
   } finally {
@@ -336,6 +359,10 @@ async function deleteEssay() {
         <div class="essay-workspace">
           <section class="essay-cover-column">
             <div class="essay-cover-panel">
+              <div v-if="draft.writingScore > 0" class="essay-cover-score-badge" :aria-label="`作文综合得分 ${draft.writingScore} 分`">
+                <strong>{{ draft.writingScore }}</strong>
+                <span>综合分</span>
+              </div>
               <img v-if="draft.coverUrl" :src="draft.coverUrl" :alt="draft.title">
               <div v-else class="essay-cover-fallback">
                 <span>作文封面</span>
@@ -364,6 +391,29 @@ async function deleteEssay() {
             </article>
           </section>
         </div>
+
+        <section v-if="draft.writingScore > 0" class="essay-writing-feedback" aria-labelledby="essay-writing-feedback-title">
+          <header>
+            <div>
+              <span class="eyebrow">WRITING REVIEW</span>
+              <h2 id="essay-writing-feedback-title">写作评估与建议</h2>
+            </div>
+            <strong>{{ draft.writingScore }} / 100</strong>
+          </header>
+          <div class="essay-score-breakdown" aria-label="作文评分明细">
+            <div v-for="row in scoreBreakdownRows" :key="row.key">
+              <span>{{ row.label }}</span>
+              <i><b :style="{ width: `${row.value * 5}%` }"></b></i>
+              <strong>{{ row.value }} / 20</strong>
+            </div>
+          </div>
+          <div class="essay-writing-advice">
+            <h3>下一篇可以这样进步</h3>
+            <ol>
+              <li v-for="(advice, index) in draft.writingAdvice" :key="`${index}-${advice}`">{{ advice }}</li>
+            </ol>
+          </div>
+        </section>
 
         <div v-if="isDeleteConfirmOpen" class="essay-delete-confirm" role="dialog" aria-label="删除作文确认">
           <div>

@@ -96,8 +96,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260723-009"
-DEFAULT_PAGE_VERSION = "v20260723.9"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260723-010"
+DEFAULT_PAGE_VERSION = "v20260723.10"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -239,6 +239,7 @@ CAT_WORLD_LITTER_ITEM_ID = "tofu-cat-litter"
 CAT_WORLD_LITTER_SCOOP_ITEM_ID = "litter-scoop"
 CAT_WORLD_CAT_GRASS_ITEM_ID = "cat-grass-pot"
 CAT_WORLD_BATH_ITEM_ID = "cat-bath-kit"
+CAT_WORLD_REPAIR_HAMMER_ITEM_ID = "repair-hammer"
 CAT_WORLD_LITTER_MAX = 4
 CAT_WORLD_LITTER_MOOD_PENALTY_PER_PILE = 2
 CAT_WORLD_LITTER_MOOD_PENALTY_MAX = 8
@@ -428,6 +429,16 @@ CAT_WORLD_SHOP = [
         "durationMinutes": 20,
         "bond": 3,
         "description": "放进活动室 20 分钟，当前猫咪会慢慢靠近闻一闻并增加心情。",
+    },
+    {
+        "id": CAT_WORLD_REPAIR_HAMMER_ITEM_ID,
+        "category": "consumable",
+        "useType": "repair-tool",
+        "label": "一次性维修锤",
+        "englishName": "Repair Hammer",
+        "cost": 100,
+        "mood": 0,
+        "description": "维修损坏道具时自动消耗 1 把；只有维修成功后才会从背包扣除。",
     },
     {
         "id": "rolling-ball",
@@ -4486,6 +4497,8 @@ async def vue_cat_world_use_consumable_api(request: Request, db: Session = Depen
     use_type = str(item.get("useType") or "")
     if use_type == "litter-clean":
         raise HTTPException(status_code=400, detail="请直接点击活动室里的猫屎来使用铲子。")
+    if use_type == "repair-tool":
+        raise HTTPException(status_code=400, detail="维修锤会在维修损坏道具时自动消耗，请直接点击损坏的道具。")
     state = get_or_create_cat_world_state(db, phone)
     inventory = parse_cat_world_inventory(state.inventory)
     if inventory.get(item_id, 0) <= 0:
@@ -4804,11 +4817,18 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
         db.add(state)
         db.commit()
         return {"ok": True, **serialize_cat_world_payload(db, state)}
+    hammer_count = max(int(inventory.get(CAT_WORLD_REPAIR_HAMMER_ITEM_ID, 0) or 0), 0)
+    if hammer_count <= 0:
+        raise HTTPException(status_code=400, detail="维修需要 1 把一次性维修锤，请先去消耗品商店购买。")
     growth = learning_growth_summary(db)
     available_energy = max(int(growth.get("points") or 0) - max(int(state.energy_spent or 0), 0), 0)
     repair_cost = max(int(damaged.get("repairCost") or 0), 1)
     if available_energy < repair_cost:
         raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点再维修。")
+    inventory[CAT_WORLD_REPAIR_HAMMER_ITEM_ID] = hammer_count - 1
+    if inventory[CAT_WORLD_REPAIR_HAMMER_ITEM_ID] <= 0:
+        inventory.pop(CAT_WORLD_REPAIR_HAMMER_ITEM_ID, None)
+    state.inventory = encode_cat_world_inventory(inventory)
     damaged_items.pop(item_id, None)
     state.damaged_items = encode_cat_world_damaged_items(damaged_items)
     state.energy_spent = max(int(state.energy_spent or 0), 0) + repair_cost
@@ -4824,7 +4844,7 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
         repair_traits,
         "repair",
         "维修完成",
-        f"{repair_label}已经维修好，花费 {repair_cost} 能量。",
+        f"{repair_label}已经维修好，消耗 1 把维修锤和 {repair_cost} 能量。",
         now,
     )
     repair_agent_state["mischiefRepairedItemId"] = item_id
@@ -4848,6 +4868,8 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
             "itemId": item_id,
             "label": repair_label,
             "cost": repair_cost,
+            "hammerItemId": CAT_WORLD_REPAIR_HAMMER_ITEM_ID,
+            "hammerRemaining": max(int(inventory.get(CAT_WORLD_REPAIR_HAMMER_ITEM_ID, 0) or 0), 0),
             "catId": repair_cat["id"],
             "catLabel": repair_cat["label"],
             "bond": bond,
@@ -5237,6 +5259,18 @@ def clean_essay_body(value: str | None) -> str:
 
 
 def serialize_essay(essay: EssayEntry) -> dict[str, Any]:
+    try:
+        score_breakdown = json.loads(essay.writing_score_breakdown or "{}")
+    except (json.JSONDecodeError, TypeError):
+        score_breakdown = {}
+    if not isinstance(score_breakdown, dict):
+        score_breakdown = {}
+    try:
+        writing_advice = json.loads(essay.writing_advice or "[]")
+    except (json.JSONDecodeError, TypeError):
+        writing_advice = []
+    if not isinstance(writing_advice, list):
+        writing_advice = []
     return {
         "id": essay.id,
         "title": essay.title,
@@ -5245,6 +5279,9 @@ def serialize_essay(essay: EssayEntry) -> dict[str, Any]:
         "coverUrl": essay.cover_url or "",
         "wordCount": int(essay.word_count or 0),
         "optimizedWordCount": int(essay.optimized_word_count or 0),
+        "writingScore": min(max(int(essay.writing_score or 0), 0), 100),
+        "writingScoreBreakdown": score_breakdown,
+        "writingAdvice": [str(item) for item in writing_advice if str(item).strip()][:5],
         "aiModel": essay.ai_model or "",
         "coverModel": essay.cover_model or "",
         "createdAt": essay.created_at.isoformat() if essay.created_at else "",
@@ -5283,7 +5320,13 @@ def get_owned_essay(db: Session, request: Request, essay_id: int) -> EssayEntry:
 ESSAY_OPTIMIZATION_SYSTEM_PROMPT = (
     "You are a supportive English writing coach for a student. "
     "Improve grammar, clarity, story flow, vocabulary, and sentence variety while preserving the student's meaning, events, and voice. "
-    "Return only the polished composition, with no heading, explanation, markdown, or score."
+    "Evaluate the original student composition, not the polished rewrite. "
+    "Return only one valid JSON object with this exact shape: "
+    '{"optimizedBody":"polished English composition","assessment":{"content":0,"length":0,"vocabulary":0,'
+    '"grammar":0,"structure":0,"advice":["中文建议1","中文建议2","中文建议3"]}}. '
+    "Each score is an integer from 0 to 20. Content measures ideas and development; length measures whether the composition is sufficiently developed; "
+    "vocabulary measures variety, difficulty, and appropriate word choice; grammar measures correctness; structure measures organization and flow. "
+    "Give 3 to 5 concise, specific suggestions in Chinese. Do not include markdown or any text outside the JSON object."
 )
 
 
@@ -5301,11 +5344,125 @@ def essay_optimization_messages(*, title: str, body: str) -> list[dict[str, str]
     ]
 
 
+ESSAY_SCORE_KEYS = ("content", "length", "vocabulary", "grammar", "structure")
+
+
+def local_essay_assessment(body: str) -> dict[str, Any]:
+    words = re.findall(r"[A-Za-z]+(?:[-'][A-Za-z]+)*", body)
+    word_count = max(len(words), essay_word_count(body))
+    sentences = [part.strip() for part in re.split(r"[.!?]+", body) if part.strip()]
+    paragraphs = [part.strip() for part in body.splitlines() if part.strip()]
+    unique_ratio = len({word.lower() for word in words}) / max(len(words), 1)
+    long_word_ratio = sum(1 for word in words if len(word) >= 7) / max(len(words), 1)
+    average_sentence = word_count / max(len(sentences), 1)
+    capital_starts = sum(1 for sentence in sentences if sentence[:1].isupper()) / max(len(sentences), 1)
+    breakdown = {
+        "content": min(20, 8 + min(len(sentences), 6) + min(word_count // 30, 5)),
+        "length": min(20, max(4, round(word_count / 6))),
+        "vocabulary": min(20, max(5, round(6 + unique_ratio * 8 + long_word_ratio * 20))),
+        "grammar": min(
+            20,
+            max(
+                5,
+                round(
+                    8
+                    + capital_starts * 4
+                    + (4 if body.rstrip().endswith((".", "!", "?")) else 0)
+                    + (3 if 6 <= average_sentence <= 24 else 1)
+                ),
+            ),
+        ),
+        "structure": min(
+            20,
+            max(5, 7 + min(len(sentences), 5) * 2 + min(max(len(paragraphs) - 1, 0), 3)),
+        ),
+    }
+    advice: list[str] = []
+    if word_count < 80:
+        advice.append("可以补充一个更具体的场景、动作或感受，让内容发展得更完整。")
+    if average_sentence > 24:
+        advice.append("部分句子较长，建议拆成两个完整句，并检查逗号连接句。")
+    elif average_sentence < 7 and len(sentences) > 2:
+        advice.append("可以使用 because、while、although 等连接词组合部分短句，增强句式变化。")
+    if unique_ratio < 0.55:
+        advice.append("有些词重复较多，可以替换为更准确的动词、形容词或同义表达。")
+    if long_word_ratio < 0.08:
+        advice.append("可以加入少量更具体、更有难度的词汇，但要确保符合语境。")
+    advice.append("完成后朗读一遍，重点检查句首大写、标点和单复数是否一致。")
+    fallback_advice = (
+        "尝试让开头快速进入主题，并在结尾回应中心思想。",
+        "选出一两个关键句，用更准确的动作和感官细节进行改写。",
+        "检查每一段是否只围绕一个重点展开，段落之间是否自然衔接。",
+    )
+    for item in fallback_advice:
+        if len(advice) >= 3:
+            break
+        advice.append(item)
+    return {
+        "total": sum(breakdown.values()),
+        "breakdown": breakdown,
+        "advice": advice[:5],
+    }
+
+
+def normalize_essay_assessment(value: Any, body: str) -> dict[str, Any]:
+    fallback = local_essay_assessment(body)
+    source = value if isinstance(value, dict) else {}
+    breakdown: dict[str, int] = {}
+    for key in ESSAY_SCORE_KEYS:
+        try:
+            score = int(round(float(source.get(key, fallback["breakdown"][key]))))
+        except (TypeError, ValueError):
+            score = int(fallback["breakdown"][key])
+        breakdown[key] = min(max(score, 0), 20)
+    advice_source = source.get("advice")
+    advice = [
+        str(item).strip()[:300]
+        for item in advice_source
+        if str(item).strip()
+    ][:5] if isinstance(advice_source, list) else fallback["advice"]
+    if not advice:
+        advice = fallback["advice"]
+    return {
+        "total": sum(breakdown.values()),
+        "breakdown": breakdown,
+        "advice": advice,
+    }
+
+
+def parse_essay_optimization_result(text_value: str, body: str) -> tuple[str, dict[str, Any]]:
+    raw = str(text_value or "").strip()
+    json_text = raw
+    if raw.startswith("```"):
+        json_text = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.IGNORECASE | re.DOTALL).strip()
+    try:
+        parsed = json.loads(json_text)
+    except json.JSONDecodeError:
+        start = raw.find("{")
+        end = raw.rfind("}")
+        try:
+            parsed = json.loads(raw[start:end + 1]) if start >= 0 and end > start else None
+        except json.JSONDecodeError:
+            parsed = None
+    if isinstance(parsed, dict):
+        optimized_body = clean_essay_body(
+            parsed.get("optimizedBody")
+            or parsed.get("optimized_body")
+            or parsed.get("composition")
+        )
+        if optimized_body:
+            assessment = normalize_essay_assessment(parsed.get("assessment"), body)
+            return optimized_body, assessment
+    if not raw:
+        raise RuntimeError("AI 没有返回优化后的作文。")
+    return clean_essay_body(raw), local_essay_assessment(body)
+
+
 def chat_completion_text(data: dict[str, Any]) -> str:
     return str(((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
 
 
-async def optimize_essay_with_dashscope(*, title: str, body: str) -> tuple[str, str]:
+async def optimize_essay_with_dashscope(*, title: str, body: str) -> tuple[str, str, dict[str, Any]]:
     api_key = settings.dashscope_api_key.strip()
     if not api_key:
         raise RuntimeError("DASHSCOPE_API_KEY is not configured on the server.")
@@ -5314,19 +5471,17 @@ async def optimize_essay_with_dashscope(*, title: str, body: str) -> tuple[str, 
     payload = {
         "model": model,
         "messages": essay_optimization_messages(title=title, body=body),
-        "temperature": 0.35,
+        "temperature": 0.2,
     }
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=90) as client:
         response = await client.post(endpoint, headers=headers, json=payload)
         response.raise_for_status()
-    text_value = chat_completion_text(response.json())
-    if not text_value:
-        raise RuntimeError("AI 没有返回优化后的作文。")
-    return text_value, f"dashscope:{model}"
+    optimized_body, assessment = parse_essay_optimization_result(chat_completion_text(response.json()), body)
+    return optimized_body, f"dashscope:{model}", assessment
 
 
-async def optimize_essay_with_openai(*, title: str, body: str) -> tuple[str, str]:
+async def optimize_essay_with_openai(*, title: str, body: str) -> tuple[str, str, dict[str, Any]]:
     api_key = settings.openai_api_key.strip()
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not configured on the server.")
@@ -5334,19 +5489,17 @@ async def optimize_essay_with_openai(*, title: str, body: str) -> tuple[str, str
     payload = {
         "model": model,
         "messages": essay_optimization_messages(title=title, body=body),
-        "temperature": 0.35,
+        "temperature": 0.2,
     }
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=90) as client:
         response = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
         response.raise_for_status()
-    text_value = chat_completion_text(response.json())
-    if not text_value:
-        raise RuntimeError("AI 没有返回优化后的作文。")
-    return text_value, f"openai:{model}"
+    optimized_body, assessment = parse_essay_optimization_result(chat_completion_text(response.json()), body)
+    return optimized_body, f"openai:{model}", assessment
 
 
-async def optimize_essay_with_ai(*, title: str, body: str) -> tuple[str, str]:
+async def optimize_essay_with_ai(*, title: str, body: str) -> tuple[str, str, dict[str, Any]]:
     provider = (settings.ai_text_provider or "dashscope").strip().lower()
     providers = ["openai", "dashscope"] if provider == "openai" else ["dashscope", "openai"]
     configuration_errors: list[str] = []
@@ -5408,6 +5561,9 @@ def apply_essay_payload(
     if clear_generated_on_change and content_changed:
         essay.optimized_body = None
         essay.optimized_word_count = 0
+        essay.writing_score = 0
+        essay.writing_score_breakdown = None
+        essay.writing_advice = None
         essay.ai_model = None
         essay.cover_url = None
         essay.cover_model = None
@@ -5464,7 +5620,7 @@ async def vue_optimize_essay_api(essay_id: int, request: Request, db: Session = 
     essay = get_owned_essay(db, request, essay_id)
     apply_essay_payload(essay, payload or {}, clear_generated_on_change=True)
     try:
-        optimized_body, model = await optimize_essay_with_ai(title=essay.title, body=essay.body)
+        optimized_body, model, assessment = await optimize_essay_with_ai(title=essay.title, body=essay.body)
     except RuntimeError as exc:
         detail = str(exc)
         if "not configured" in detail:
@@ -5480,6 +5636,9 @@ async def vue_optimize_essay_api(essay_id: int, request: Request, db: Session = 
 
     essay.optimized_body = optimized_body
     essay.optimized_word_count = essay_word_count(optimized_body)
+    essay.writing_score = int(assessment["total"])
+    essay.writing_score_breakdown = json.dumps(assessment["breakdown"], ensure_ascii=False, sort_keys=True)
+    essay.writing_advice = json.dumps(assessment["advice"], ensure_ascii=False)
     essay.ai_model = model
     db.add(essay)
     db.commit()
@@ -16084,6 +16243,11 @@ def ensure_schema_columns() -> None:
         if "cat_world_daily_logs" in table_names
         else set()
     )
+    essay_entry_columns = (
+        {column["name"] for column in inspector.get_columns("essay_entries")}
+        if "essay_entries" in table_names
+        else set()
+    )
 
     with engine.begin() as connection:
         for column in missing_boolean_columns:
@@ -16151,6 +16315,12 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE cat_world_daily_logs ADD COLUMN agent_state TEXT NULL"))
         if "cat_world_daily_logs" in table_names and "damaged_item_id" not in cat_world_daily_log_columns:
             connection.execute(text("ALTER TABLE cat_world_daily_logs ADD COLUMN damaged_item_id VARCHAR(80) NULL"))
+        if "essay_entries" in table_names and "writing_score" not in essay_entry_columns:
+            connection.execute(text("ALTER TABLE essay_entries ADD COLUMN writing_score INTEGER NOT NULL DEFAULT 0"))
+        if "essay_entries" in table_names and "writing_score_breakdown" not in essay_entry_columns:
+            connection.execute(text("ALTER TABLE essay_entries ADD COLUMN writing_score_breakdown TEXT NULL"))
+        if "essay_entries" in table_names and "writing_advice" not in essay_entry_columns:
+            connection.execute(text("ALTER TABLE essay_entries ADD COLUMN writing_advice TEXT NULL"))
         if "wrong_words" in table_names and "wrong_date" not in wrong_columns:
             if dialect == "mysql":
                 connection.execute(text("ALTER TABLE wrong_words ADD COLUMN wrong_date DATE NULL"))

@@ -7328,11 +7328,43 @@ button.calendar-day {
 }
 
 .essay-cover-panel {
+  position: relative;
   overflow: hidden;
   border: 1px solid rgba(18, 35, 47, 0.1);
   border-radius: var(--radius-lg);
   background: #edf7f2;
   box-shadow: var(--shadow-sm);
+}
+
+.essay-cover-score-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  color: #fff;
+  background: #147b59;
+  box-shadow: 0 5px 0 rgba(18, 35, 47, 0.28);
+}
+
+.essay-cover-score-badge strong,
+.essay-cover-score-badge span {
+  display: block;
+  line-height: 1;
+}
+
+.essay-cover-score-badge strong {
+  font-size: 25px;
+}
+
+.essay-cover-score-badge span {
+  font-size: 10px;
+  font-weight: 900;
 }
 
 .essay-cover-button {
@@ -7406,6 +7438,87 @@ button.calendar-day {
   color: var(--ink);
   line-height: 1.68;
   white-space: pre-wrap;
+}
+
+.essay-writing-feedback {
+  display: grid;
+  gap: 16px;
+  border-top: 3px solid var(--accent);
+  border-bottom: 1px solid var(--line);
+  padding: 18px 2px;
+  background: #f6fbf8;
+}
+
+.essay-writing-feedback > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.essay-writing-feedback h2 {
+  margin: 5px 0 0;
+  color: var(--ink);
+  font-size: 22px;
+}
+
+.essay-writing-feedback > header > strong {
+  color: var(--accent-dark);
+  font-size: 24px;
+}
+
+.essay-score-breakdown {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.essay-score-breakdown > div {
+  display: grid;
+  gap: 6px;
+}
+
+.essay-score-breakdown span,
+.essay-score-breakdown strong {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.essay-score-breakdown i {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #dce9e2;
+}
+
+.essay-score-breakdown b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #1d7f5b;
+}
+
+.essay-writing-advice h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.essay-writing-advice ol {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding-left: 22px;
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+@media (max-width: 760px) {
+  .essay-score-breakdown {
+    grid-template-columns: 1fr;
+  }
 }
 
 .science-discovery-panel {

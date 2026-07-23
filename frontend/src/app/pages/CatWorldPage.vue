@@ -126,6 +126,7 @@ const categories = [
   { key: "blind-box", label: "限定盲盒" },
   { key: "handbook", label: "收藏手册" },
 ];
+const REPAIR_HAMMER_ITEM_ID = "repair-hammer";
 
 const toolCategories = [
   { key: "decor", label: "装饰" },
@@ -738,7 +739,7 @@ function ownedToolCount(categoryKey) {
 
 function ownedToolSubtext(item) {
   const damaged = damageInfo(item);
-  if (damaged) return `损坏 · ${damaged.reason || "需要维修后才能使用"}`;
+  if (damaged) return `损坏 · 维修需 1 把锤子 + ${damaged.repairCost || 0} 能量`;
   if (item.category === "cat") return item.personality || "正在陪读";
   const suffix = item.favoriteLabel ? ` · ${item.favoriteLabel}` : "";
   if (item.category === "food") return `拥有 ${item.count} · ${foodTypeLabel(item)}${suffix}`;
@@ -746,6 +747,7 @@ function ownedToolSubtext(item) {
     if (item.useType === "litter-clean") return `拥有 ${item.count} · 点击猫屎时消耗`;
     if (item.useType === "litter-prevent") return `拥有 ${item.count} · 点击放进活动室`;
     if (item.useType === "cat-bath") return `拥有 ${item.count} · 给当前档案猫咪洗澡`;
+    if (item.useType === "repair-tool") return `拥有 ${item.count} · 维修成功时自动消耗`;
     return `拥有 ${item.count} · 使用一次消耗 1 个`;
   }
   return `拥有 ${item.count}${suffix}`;
@@ -825,6 +827,10 @@ function handleOwnedToolClick(item) {
     }
     if (item.useType === "litter-prevent") {
       useConsumable(item);
+      return;
+    }
+    if (item.useType === "repair-tool") {
+      notice.value = "维修锤已放进背包；点击损坏的道具，维修成功时会自动消耗 1 把。";
       return;
     }
     useConsumable(item);
@@ -1045,6 +1051,8 @@ function purchaseHint(item) {
       ? "放进活动室，猫咪使用后自动消失"
       : item.useType === "litter-clean"
         ? "可清理一堆猫屎"
+        : item.useType === "repair-tool"
+          ? "维修损坏道具时自动消耗 1 把"
         : item.useType === "cat-bath"
           ? `给当前猫洗澡、解除炸毛并增加心情 +${item.mood || 0}`
         : item.useType === "room-care"
@@ -1255,6 +1263,11 @@ async function repairItem(item) {
   if (!item?.id || busyItemId.value) return;
   const damaged = damageInfo(item);
   if (!damaged) return;
+  if (itemCount(REPAIR_HAMMER_ITEM_ID) <= 0) {
+    activeCategory.value = "consumable";
+    notice.value = "维修需要 1 把一次性维修锤，请先在下方消耗品商店购买。";
+    return;
+  }
   busyItemId.value = item.id;
   notice.value = "";
   try {
@@ -1267,7 +1280,7 @@ async function repairItem(item) {
     const repair = nextPayload.repair || {};
     const cost = repair.cost ?? damaged.repairCost ?? 0;
     const targetCat = cats.value.find((cat) => cat.id === repair.catId) || focusedCat.value;
-    notice.value = `${repair.label || item.label} 已维修好，扣 ${cost} 能量，已记录到${repair.catLabel || targetCat.label || "猫咪"}今天的档案。`;
+    notice.value = `${repair.label || item.label} 已维修好，消耗 1 把维修锤和 ${cost} 能量，背包还剩 ${repair.hammerRemaining || 0} 把。`;
     showCatReaction(targetCat, `${repair.label || item.label}修好了，我会小心一点。`);
   } catch (error) {
     notice.value = error.message || "维修失败，请稍后再试。";
@@ -1755,6 +1768,7 @@ async function selectCat(catId) {
               <span v-if="item.useType === 'litter-prevent'">点击放置</span>
               <span v-else-if="item.useType === 'litter-clean'">点击猫屎使用</span>
               <span v-else-if="item.useType === 'cat-bath'">当前档案猫咪使用</span>
+              <span v-else-if="item.useType === 'repair-tool'">维修时自动消耗</span>
               <span v-else>点击背包使用</span>
             </div>
             <div v-else-if="item.category === 'blind-box'" class="cat-world-food-tags cat-world-blind-box-tags">
