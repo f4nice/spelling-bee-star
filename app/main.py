@@ -96,8 +96,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260723-010"
-DEFAULT_PAGE_VERSION = "v20260723.10"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260723-011"
+DEFAULT_PAGE_VERSION = "v20260723.11"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -4821,7 +4821,10 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
     if hammer_count <= 0:
         raise HTTPException(status_code=400, detail="维修需要 1 把一次性维修锤，请先去消耗品商店购买。")
     growth = learning_growth_summary(db)
-    available_energy = max(int(growth.get("points") or 0) - max(int(state.energy_spent or 0), 0), 0)
+    available_energy = max(
+        cat_world_earned_energy(db, state.phone, growth) - max(int(state.energy_spent or 0), 0),
+        0,
+    )
     repair_cost = max(int(damaged.get("repairCost") or 0), 1)
     if available_energy < repair_cost:
         raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点再维修。")
@@ -11795,6 +11798,32 @@ def cat_world_growth_source_rows(growth: dict[str, Any]) -> list[dict[str, Any]]
     return rows
 
 
+def cat_world_essay_energy_source(db: Session, phone: str) -> dict[str, Any]:
+    raw_scores = db.scalars(
+        select(EssayEntry.writing_score).where(
+            EssayEntry.phone == phone,
+            EssayEntry.writing_score > 0,
+        )
+    ).all()
+    scores = [min(max(int(score or 0), 0), 100) for score in raw_scores]
+    total_score = sum(scores)
+    return {
+        "key": "essay_scores",
+        "label": "作文评分",
+        "value": total_score,
+        "unit": "分",
+        "energyPerUnit": 1,
+        "energy": total_score,
+        "essayCount": len(scores),
+    }
+
+
+def cat_world_earned_energy(db: Session, phone: str, growth: dict[str, Any] | None = None) -> int:
+    growth = growth or learning_growth_summary(db)
+    essay_source = cat_world_essay_energy_source(db, phone)
+    return max(int(growth.get("points") or 0), 0) + int(essay_source["energy"])
+
+
 def cat_world_today_energy(growth: dict[str, Any]) -> int:
     rules = {item["key"]: item for item in growth.get("scoreRules", []) if isinstance(item, dict)}
     missions = {item["key"]: item for item in growth.get("dailyMissions", []) if isinstance(item, dict)}
@@ -15898,7 +15927,8 @@ def cat_world_mood(
 
 def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, Any]:
     growth = learning_growth_summary(db)
-    earned_energy = int(growth.get("points") or 0)
+    essay_energy_source = cat_world_essay_energy_source(db, state.phone)
+    earned_energy = max(int(growth.get("points") or 0), 0) + int(essay_energy_source["energy"])
     today_energy = cat_world_today_energy(growth)
     spent_energy = max(int(state.energy_spent or 0), 0)
     available_energy = max(earned_energy - spent_energy, 0)
@@ -16017,7 +16047,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "spent": spent_energy,
             "available": available_energy,
             "today": today_energy,
-            "sources": cat_world_growth_source_rows(growth),
+            "sources": [*cat_world_growth_source_rows(growth), essay_energy_source],
         },
         "state": {
             "inventory": inventory,
