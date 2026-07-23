@@ -96,8 +96,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260723-007"
-DEFAULT_PAGE_VERSION = "v20260723.7"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260723-008"
+DEFAULT_PAGE_VERSION = "v20260723.8"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -12483,6 +12483,87 @@ def cat_world_blind_box_catalog_payload(
     }
 
 
+def cat_world_collection_catalog_payload(
+    blind_box_catalog: dict[str, Any],
+    owned_cat_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    owned = set(owned_cat_ids or [])
+    resident_cats = [
+        {
+            **cat_world_cat_payload(cat),
+            "owned": cat["id"] in owned,
+            "collectionTag": "初始伙伴" if cat["id"] == CAT_WORLD_DEFAULT_CAT_ID else "常驻名猫",
+            "acquisitionHint": "进入猫咪世界即可获得"
+            if cat["id"] == CAT_WORLD_DEFAULT_CAT_ID
+            else "可在名猫商店领养",
+        }
+        for cat in CAT_WORLD_CATS
+        if not cat.get("limited")
+    ]
+    sections: list[dict[str, Any]] = [
+        {
+            "key": "resident-cats",
+            "label": "猫咪世界常驻伙伴",
+            "region": "猫咪世界",
+            "description": "初始伙伴和可以在名猫商店长期领养的猫咪。",
+            "ownedCount": sum(1 for cat in resident_cats if cat["owned"]),
+            "totalCount": len(resident_cats),
+            "completed": bool(resident_cats) and all(cat["owned"] for cat in resident_cats),
+            "badge": None,
+            "cats": resident_cats,
+        }
+    ]
+    region_sections: dict[str, dict[str, Any]] = {}
+    region_cat_ids: dict[str, set[str]] = {}
+    for series in blind_box_catalog.get("series") or []:
+        region = str(series.get("region") or "地区限定")
+        region_key = region.lower().replace(" ", "-")
+        section = region_sections.setdefault(
+            region,
+            {
+                "key": f"region-{region_key}",
+                "label": f"{region}限定猫咪",
+                "region": region,
+                "description": f"收集来自{region}各期盲盒的限定猫咪，集齐后点亮地区徽章。",
+                "cats": [],
+            },
+        )
+        seen_cat_ids = region_cat_ids.setdefault(region, set())
+        for cat in series.get("cats") or []:
+            cat_id = str(cat.get("id") or "")
+            if not cat_id or cat_id in seen_cat_ids:
+                continue
+            seen_cat_ids.add(cat_id)
+            section["cats"].append(
+                {
+                    **cat,
+                    "collectionTag": f"{region}限定",
+                    "acquisitionHint": f"{series.get('issue') or '限定期'}盲盒",
+                }
+            )
+    for section in region_sections.values():
+        section_cats = section["cats"]
+        completed = bool(section_cats) and all(bool(cat.get("owned")) for cat in section_cats)
+        section.update(
+            {
+                "ownedCount": sum(1 for cat in section_cats if cat.get("owned")),
+                "totalCount": len(section_cats),
+                "completed": completed,
+                "badge": {
+                    "label": f"{section['region']}猫咪收藏家",
+                    "unlocked": completed,
+                },
+            }
+        )
+        sections.append(section)
+    all_cat_ids = {str(cat["id"]) for cat in CAT_WORLD_CATS}
+    return {
+        "ownedCount": len(all_cat_ids.intersection(owned)),
+        "totalCount": len(all_cat_ids),
+        "sections": sections,
+    }
+
+
 def cat_world_owned_style_options(inventory: dict[str, int], decor_id: str) -> list[dict[str, str]]:
     options = [{"itemId": "default", "tone": "default", "label": "默认色"}]
     for item in CAT_WORLD_SHOP:
@@ -15669,6 +15750,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     shop_by_id = {item["id"]: item for item in shop}
     owned_cats = parse_cat_world_cats(state.cats)
     blind_box_catalog = cat_world_blind_box_catalog_payload(db, state, owned_cats)
+    collection_catalog = cat_world_collection_catalog_payload(blind_box_catalog, owned_cats)
     current_blind_series = next(
         (
             series
@@ -15800,6 +15882,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         "cats": [cat_world_cat_payload(cat) for cat in CAT_WORLD_CATS],
         "scenes": cat_world_scene_catalog_payload(db, state),
         "blindBoxCatalog": blind_box_catalog,
+        "catCollectionCatalog": collection_catalog,
         "decorFavorites": cat_world_decor_favorite_payload(),
         "shop": shop,
         "pricingPlans": CAT_WORLD_PRICING_PLANS,

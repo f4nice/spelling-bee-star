@@ -11804,7 +11804,8 @@ select {
 }
 
 .cat-world-handbook-head > span,
-.cat-world-series-album > header > span {
+.cat-world-series-album > header > span,
+.cat-world-collection-progress > span {
   border: 3px solid #2c2f3a;
   border-radius: 4px;
   padding: 6px 9px;
@@ -11813,6 +11814,20 @@ select {
   box-shadow: 3px 3px 0 #2c2f3a;
   font-size: 11px;
   font-weight: 900;
+}
+
+.cat-world-collection-progress {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.cat-world-collection-progress .cat-world-collection-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #fff;
+  background: #147b59;
 }
 
 .cat-world-series-album {
@@ -11858,8 +11873,7 @@ select {
 }
 
 .cat-world-collection-card:not(.owned) {
-  filter: grayscale(0.78);
-  opacity: 0.78;
+  opacity: 0.84;
 }
 
 .cat-world-collection-art,
@@ -11885,6 +11899,13 @@ select {
   font-size: 11px;
 }
 
+.cat-world-mystery-mark {
+  color: #f4f5f7;
+  font-size: 54px;
+  line-height: 1;
+  text-shadow: 3px 3px 0 #555b66;
+}
+
 .cat-world-collection-card.rarity-sr .cat-world-collection-art {
   background: #c9f1dd;
 }
@@ -11892,6 +11913,12 @@ select {
 .cat-world-collection-card.rarity-ssr .cat-world-collection-art,
 .cat-world-blind-result-art {
   background: #ffd7e7;
+}
+
+.cat-world-collection-card .cat-world-collection-art.mystery {
+  color: #4e5360;
+  background: #aeb3bc;
+  filter: grayscale(1);
 }
 
 .cat-world-collection-card > span,

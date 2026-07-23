@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Cat as CatIcon, ChevronLeft, ChevronRight, X as XIcon } from "lucide-vue-next";
+import { Award as AwardIcon, Cat as CatIcon, ChevronLeft, ChevronRight, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -181,6 +181,11 @@ const ownedCats = computed(() => state.value.ownedCats || []);
 const cats = computed(() => payload.value.cats || []);
 const shop = computed(() => payload.value.shop || []);
 const blindBoxCatalog = computed(() => payload.value.blindBoxCatalog || { series: [] });
+const catCollectionCatalog = computed(() => payload.value.catCollectionCatalog || {
+  ownedCount: 0,
+  totalCount: 0,
+  sections: [],
+});
 const currentBlindSeries = computed(
   () => blindBoxCatalog.value.series?.find((series) => series.key === blindBoxCatalog.value.currentSeriesKey) || {},
 );
@@ -1772,30 +1777,42 @@ async function selectCat(catId) {
           <p class="section-kicker">Collection</p>
           <h2 id="cat-collection-title">猫咪收集手册</h2>
         </div>
-        <span>{{ blindBoxCatalog.series?.reduce((total, series) => total + series.cats.filter((cat) => cat.owned).length, 0) || 0 }} 张限定卡</span>
+        <span>{{ catCollectionCatalog.ownedCount }} / {{ catCollectionCatalog.totalCount }} 只猫咪</span>
       </header>
-      <article v-for="series in blindBoxCatalog.series" :key="series.key" class="cat-world-series-album">
+      <article v-for="section in catCollectionCatalog.sections" :key="section.key" class="cat-world-series-album">
         <header>
           <div>
-            <strong>{{ series.label }}</strong>
-            <small>{{ series.region }} · {{ series.issue }}</small>
+            <strong>{{ section.label }}</strong>
+            <small>{{ section.description }}</small>
           </div>
-          <span>{{ series.drawn ? "本期已抽取" : `剩余 ${series.remainingStock}` }}</span>
+          <div class="cat-world-collection-progress">
+            <span v-if="section.badge?.unlocked" class="cat-world-collection-badge">
+              <AwardIcon :size="16" :stroke-width="2.6" aria-hidden="true" />
+              {{ section.badge.label }}
+            </span>
+            <span v-else>{{ section.ownedCount }} / {{ section.totalCount }} 已收集</span>
+          </div>
         </header>
         <div class="cat-world-card-album">
           <article
-            v-for="cat in series.cats"
+            v-for="cat in section.cats"
             :key="cat.id"
             :class="['cat-world-collection-card', `rarity-${String(cat.rarity || 'r').toLowerCase()}`, { owned: cat.owned }]"
           >
-            <div class="cat-world-collection-art" :style="{ '--collection-color': catIconColor(cat.id) }">
-              <CatIcon :size="48" :stroke-width="2.2" aria-hidden="true" />
-              <b>{{ cat.rarity }}</b>
+            <div
+              :class="['cat-world-collection-art', { mystery: cat.limited && !cat.owned }]"
+              :style="{ '--collection-color': catIconColor(cat.id) }"
+            >
+              <strong v-if="cat.limited && !cat.owned" class="cat-world-mystery-mark">?</strong>
+              <CatIcon v-else :size="48" :stroke-width="2.2" aria-hidden="true" />
+              <b>{{ cat.limited && !cat.owned ? "?" : cat.rarity }}</b>
             </div>
-            <span>{{ cat.region }}限定</span>
+            <span>{{ cat.collectionTag }}</span>
             <h3>{{ cat.label }}</h3>
             <p>{{ cat.description }}</p>
-            <small>{{ cat.owned ? "已收集" : `未收集 · 初始概率 ${cat.oddsPercent}%` }}</small>
+            <small v-if="cat.owned">已收集</small>
+            <small v-else-if="cat.limited">未收集 · {{ cat.acquisitionHint }} · 初始概率 {{ cat.oddsPercent }}%</small>
+            <small v-else>未收集 · {{ cat.acquisitionHint }}</small>
           </article>
         </div>
       </article>
