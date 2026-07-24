@@ -96,8 +96,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260724-013"
-DEFAULT_PAGE_VERSION = "v20260724.13"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260724-014"
+DEFAULT_PAGE_VERSION = "v20260724.14"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -3606,6 +3606,7 @@ def startup() -> None:
     SCIENCE_DISCOVERY_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     ensure_version_matrix_file()
     with SessionLocal() as db:
+        backfill_essay_best_writing_results(db)
         seed_cat_world_scenes(db)
         seed_cat_world_limited_cat_stock(db)
         seed_daily_quotes(db)
@@ -5287,6 +5288,73 @@ def normalize_essay_score_breakdown(value: Any) -> dict[str, int]:
     }
 
 
+def essay_writing_points_from_values(writing_score: Any, raw_breakdown: Any) -> int:
+    if isinstance(raw_breakdown, str):
+        try:
+            raw_breakdown = json.loads(raw_breakdown or "{}")
+        except (json.JSONDecodeError, TypeError):
+            raw_breakdown = {}
+    breakdown = normalize_essay_score_breakdown(raw_breakdown)
+    if len(breakdown) == len(ESSAY_SCORE_KEYS):
+        return min(max(sum(breakdown.values()), 0), 500)
+    return min(max(int(writing_score or 0), 0), 100)
+
+
+def current_essay_writing_points(essay: EssayEntry) -> int:
+    return essay_writing_points_from_values(essay.writing_score, essay.writing_score_breakdown)
+
+
+def effective_essay_best_writing_metrics(essay: EssayEntry) -> tuple[int, int]:
+    stored_points = min(max(int(essay.best_writing_points or 0), 0), 500)
+    stored_score = min(max(int(essay.best_writing_score or 0), 0), 100)
+    if stored_points > 0:
+        return stored_score or round(stored_points / 5), stored_points
+    return min(max(int(essay.writing_score or 0), 0), 100), current_essay_writing_points(essay)
+
+
+def preserve_essay_best_writing_result(essay: EssayEntry) -> None:
+    current_points = current_essay_writing_points(essay)
+    stored_points = min(max(int(essay.best_writing_points or 0), 0), 500)
+    if stored_points <= 0 and current_points > 0:
+        essay.best_writing_points = current_points
+        essay.best_writing_score = min(max(int(essay.writing_score or 0), 0), 100)
+
+
+def backfill_essay_best_writing_results(db: Session) -> int:
+    essays = db.scalars(
+        select(EssayEntry).where(
+            EssayEntry.best_writing_points <= 0,
+            EssayEntry.writing_score > 0,
+        )
+    ).all()
+    changed = 0
+    for essay in essays:
+        previous_points = int(essay.best_writing_points or 0)
+        preserve_essay_best_writing_result(essay)
+        if int(essay.best_writing_points or 0) > previous_points:
+            db.add(essay)
+            changed += 1
+    if changed:
+        db.commit()
+    return changed
+
+
+def award_essay_writing_improvement(
+    essay: EssayEntry,
+    *,
+    writing_score: int,
+    writing_points: int,
+    eligible: bool,
+) -> int:
+    best_points = min(max(int(essay.best_writing_points or 0), 0), 500)
+    writing_points = min(max(int(writing_points or 0), 0), 500)
+    if not eligible or writing_points <= best_points:
+        return 0
+    essay.best_writing_points = writing_points
+    essay.best_writing_score = min(max(int(writing_score or 0), 0), 100)
+    return writing_points - best_points
+
+
 def normalize_essay_advice_items(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
@@ -5348,8 +5416,8 @@ def normalize_essay_advice_items(value: Any) -> list[dict[str, Any]]:
             guidance = clean_essay_feedback_text(raw_item, 700)
             if guidance:
                 normalized.append({
-                    "kind": "老师建议",
-                    "title": f"具体建议 {len(normalized) + 1}",
+                    "kind": "",
+                    "title": f"AI老师建议{len(normalized) + 1}",
                     "observation": "",
                     "guidance": guidance,
                     "original": "",
@@ -5375,6 +5443,8 @@ def serialize_essay(essay: EssayEntry) -> dict[str, Any]:
         writing_advice = []
     if not isinstance(writing_advice, list):
         writing_advice = []
+    writing_points = essay_writing_points_from_values(essay.writing_score, score_breakdown)
+    best_writing_score, best_writing_points = effective_essay_best_writing_metrics(essay)
     return {
         "id": essay.id,
         "title": essay.title,
@@ -5385,7 +5455,9 @@ def serialize_essay(essay: EssayEntry) -> dict[str, Any]:
         "optimizedWordCount": int(essay.optimized_word_count or 0),
         "writingScore": min(max(int(essay.writing_score or 0), 0), 100),
         "writingScoreBreakdown": score_breakdown,
-        "writingPoints": sum(score_breakdown.values()),
+        "writingPoints": writing_points,
+        "bestWritingScore": best_writing_score,
+        "bestWritingPoints": best_writing_points,
         "writingAdvice": normalize_essay_advice_items(writing_advice),
         "aiModel": essay.ai_model or "",
         "coverModel": essay.cover_model or "",
@@ -5437,6 +5509,7 @@ ESSAY_OPTIMIZATION_SYSTEM_PROMPT = (
     "quote a relevant phrase or sentence from the original composition, and provide one correct English example that keeps the child's intended meaning. "
     "At least one suggestion must focus on vocabulary: compare actual words from the composition with more precise or more tactful alternatives, and explain "
     "their meaning, tone, and suitable context in Chinese. Include another suggestion about grammar or sentence expression and another about content or structure. "
+    'Set each advice "kind" to exactly one of: "词汇表达", "委婉表达", "语法修正", "句式表达", "内容描写", or "结构组织". '
     "When an expression sounds blunt or overly direct, explicitly teach a gentler alternative and explain why it is more appropriate. "
     "Do not use vague praise, do not invent unrelated story facts, and do not choose difficult words merely to sound advanced. "
     "Do not include markdown or any text outside the JSON object."
@@ -5734,6 +5807,8 @@ def apply_essay_payload(
     if not body:
         raise HTTPException(status_code=400, detail="请输入作文正文。")
     content_changed = bool(essay.id) and (essay.title != title or essay.body != body)
+    if clear_generated_on_change and content_changed:
+        preserve_essay_best_writing_result(essay)
     essay.title = title
     essay.body = body
     essay.word_count = essay_word_count(body)
@@ -5797,7 +5872,10 @@ async def vue_optimize_essay_api(essay_id: int, request: Request, db: Session = 
         raise HTTPException(status_code=400, detail="作文数据不是有效 JSON。") from exc
 
     essay = get_owned_essay(db, request, essay_id)
-    apply_essay_payload(essay, payload or {}, clear_generated_on_change=True)
+    previous_current_points = current_essay_writing_points(essay)
+    preserve_essay_best_writing_result(essay)
+    content_changed = apply_essay_payload(essay, payload or {}, clear_generated_on_change=True)
+    energy_gain_eligible = content_changed or previous_current_points <= 0
     try:
         optimized_body, model, assessment = await optimize_essay_with_ai(title=essay.title, body=essay.body)
     except RuntimeError as exc:
@@ -5823,11 +5901,20 @@ async def vue_optimize_essay_api(essay_id: int, request: Request, db: Session = 
     )
     essay.writing_advice = json.dumps(assessment["advice"], ensure_ascii=False)
     essay.ai_model = model
+    current_points = min(max(sum(int(value or 0) for value in assessment["breakdown"].values()), 0), 500)
+    energy_gain = award_essay_writing_improvement(
+        essay,
+        writing_score=int(assessment["total"]),
+        writing_points=current_points,
+        eligible=energy_gain_eligible,
+    )
     db.add(essay)
     db.commit()
     db.refresh(essay)
     response = essays_payload(db, request)
     response["essay"] = serialize_essay(essay)
+    response["energyGain"] = energy_gain
+    response["energyGainEligible"] = energy_gain_eligible
     return response
 
 
@@ -11980,23 +12067,18 @@ def cat_world_growth_source_rows(growth: dict[str, Any]) -> list[dict[str, Any]]
 
 def cat_world_essay_energy_source(db: Session, phone: str) -> dict[str, Any]:
     raw_rows = db.execute(
-        select(EssayEntry.writing_score, EssayEntry.writing_score_breakdown).where(
-            EssayEntry.phone == phone,
-            EssayEntry.writing_score > 0,
-        )
+        select(
+            EssayEntry.best_writing_points,
+            EssayEntry.writing_score,
+            EssayEntry.writing_score_breakdown,
+        ).where(EssayEntry.phone == phone)
     ).all()
     essay_points: list[int] = []
-    for writing_score, raw_breakdown in raw_rows:
-        try:
-            parsed_breakdown = json.loads(raw_breakdown or "{}")
-        except (json.JSONDecodeError, TypeError):
-            parsed_breakdown = {}
-        breakdown = normalize_essay_score_breakdown(parsed_breakdown)
-        essay_points.append(
-            sum(breakdown.values())
-            if len(breakdown) == len(ESSAY_SCORE_KEYS)
-            else min(max(int(writing_score or 0), 0), 100)
-        )
+    for best_writing_points, writing_score, raw_breakdown in raw_rows:
+        stored_best = min(max(int(best_writing_points or 0), 0), 500)
+        effective_points = stored_best or essay_writing_points_from_values(writing_score, raw_breakdown)
+        if effective_points > 0:
+            essay_points.append(effective_points)
     total_points = sum(essay_points)
     return {
         "key": "essay_scores",
@@ -16542,6 +16624,10 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE essay_entries ADD COLUMN writing_score_breakdown TEXT NULL"))
         if "essay_entries" in table_names and "writing_advice" not in essay_entry_columns:
             connection.execute(text("ALTER TABLE essay_entries ADD COLUMN writing_advice TEXT NULL"))
+        if "essay_entries" in table_names and "best_writing_score" not in essay_entry_columns:
+            connection.execute(text("ALTER TABLE essay_entries ADD COLUMN best_writing_score INTEGER NOT NULL DEFAULT 0"))
+        if "essay_entries" in table_names and "best_writing_points" not in essay_entry_columns:
+            connection.execute(text("ALTER TABLE essay_entries ADD COLUMN best_writing_points INTEGER NOT NULL DEFAULT 0"))
         if "wrong_words" in table_names and "wrong_date" not in wrong_columns:
             if dialect == "mysql":
                 connection.execute(text("ALTER TABLE wrong_words ADD COLUMN wrong_date DATE NULL"))

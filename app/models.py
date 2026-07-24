@@ -123,6 +123,8 @@ class EssayEntry(Base):
     writing_score: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     writing_score_breakdown: Mapped[str | None] = mapped_column(Text().with_variant(mysql.LONGTEXT, "mysql"))
     writing_advice: Mapped[str | None] = mapped_column(Text().with_variant(mysql.LONGTEXT, "mysql"))
+    best_writing_score: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    best_writing_points: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     ai_model: Mapped[str | None] = mapped_column(String(120))
     cover_model: Mapped[str | None] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

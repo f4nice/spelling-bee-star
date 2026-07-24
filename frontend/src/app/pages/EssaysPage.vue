@@ -77,6 +77,8 @@ function emptyDraft() {
     writingScore: 0,
     writingScoreBreakdown: {},
     writingAdvice: [],
+    bestWritingScore: 0,
+    bestWritingPoints: 0,
     aiModel: "",
     coverModel: "",
     updatedAt: "",
@@ -107,6 +109,8 @@ function loadDraft(essay) {
     writingScore: Number(essay.writingScore || 0),
     writingScoreBreakdown: essay.writingScoreBreakdown || {},
     writingAdvice: Array.isArray(essay.writingAdvice) ? essay.writingAdvice : [],
+    bestWritingScore: Number(essay.bestWritingScore || 0),
+    bestWritingPoints: Number(essay.bestWritingPoints || 0),
     aiModel: essay.aiModel || "",
     coverModel: essay.coverModel || "",
     updatedAt: essay.updatedAt || "",
@@ -122,20 +126,21 @@ function normalizeWritingAdvice(item, index) {
     const guidance = item.trim();
     return guidance
       ? {
-          kind: "老师建议",
-          title: `具体建议 ${index + 1}`,
+          kind: "",
+          title: `AI老师建议${index + 1}`,
           observation: "",
           guidance,
           original: "",
           example: "",
           wordChoices: [],
+          actionLabel: adviceActionLabel({ guidance }),
         }
       : null;
   }
   if (!item || typeof item !== "object") return null;
-  return {
-    kind: String(item.kind || "老师建议"),
-    title: String(item.title || `具体建议 ${index + 1}`),
+  const normalized = {
+    kind: String(item.kind || ""),
+    title: String(item.title || `AI老师建议${index + 1}`),
     observation: String(item.observation || ""),
     guidance: String(item.guidance || ""),
     original: String(item.original || ""),
@@ -144,6 +149,18 @@ function normalizeWritingAdvice(item, index) {
       .filter((choice) => choice && choice.original && choice.better)
       .slice(0, 3),
   };
+  return { ...normalized, actionLabel: adviceActionLabel(normalized) };
+}
+
+function adviceActionLabel(advice) {
+  const text = `${advice?.kind || ""} ${advice?.title || ""} ${advice?.observation || ""} ${advice?.guidance || ""}`;
+  if (/委婉|语气|礼貌|直接/.test(text)) return "委婉表达";
+  if (/语法|时态|大小写|标点|单复数|冠词/.test(text)) return "语法修正";
+  if (/句式|连接词|长句|短句|从句/.test(text)) return "句式优化";
+  if (/词汇|用词|名词|动词|形容词|副词|重复/.test(text)) return "词汇升级";
+  if (/内容|描写|细节|画面|动作|对话|心理|感官/.test(text)) return "细节扩写";
+  if (/结构|段落|开头|结尾|逻辑|衔接|顺序/.test(text)) return "结构调整";
+  return "改进方法";
 }
 
 function scoreAchievement(value) {
@@ -263,7 +280,16 @@ async function optimizeEssay() {
   try {
     const payload = await fetchJson(routeApiPaths.essayOptimize(essay.id), requestOptions());
     applyResponse(payload);
-    notice.value = `AI 优化稿与写作评估已生成，综合得分 ${payload?.essay?.writingScore || 0} 分。`;
+    const currentPoints = Number(payload?.essay?.writingPoints || 0);
+    const bestPoints = Number(payload?.essay?.bestWritingPoints || 0);
+    const energyGain = Number(payload?.energyGain || 0);
+    if (energyGain > 0) {
+      notice.value = `本次五项积分 ${currentPoints} 分，超过历史最高，新增 ${energyGain} 能量；当前最高 ${bestPoints} 分。`;
+    } else if (payload?.energyGainEligible === false) {
+      notice.value = `内容没有修改，本次不重复增加能量；历史最高保持 ${bestPoints} 分。`;
+    } else {
+      notice.value = `本次五项积分 ${currentPoints} 分，未超过历史最高 ${bestPoints} 分，能量保持不变。`;
+    }
   } catch (error) {
     notice.value = error?.message || "AI 优化失败，请稍后再试。";
   } finally {
@@ -454,16 +480,17 @@ async function deleteEssay() {
             </div>
           </div>
           <div class="essay-energy-reward">
-            <span>本篇作文五项积分</span>
-            <strong>+{{ writingPoints }} 能量</strong>
-            <small>已计入猫咪世界，可用于购买道具和场景。</small>
+            <span>本篇作文历史最高</span>
+            <strong>{{ draft.bestWritingPoints }} / 500 能量</strong>
+            <small v-if="writingPoints >= draft.bestWritingPoints">本次达到历史最高，已计入猫咪世界。</small>
+            <small v-else>本次 {{ writingPoints }} 分未超过最高值，已获得能量不会减少。</small>
           </div>
           <div class="essay-writing-advice">
             <h3>英语老师的具体建议</h3>
             <div class="essay-advice-list">
               <article v-for="(advice, index) in writingAdviceRows" :key="`${index}-${advice.title}`" class="essay-advice-item">
                 <header>
-                  <span>{{ advice.kind }}</span>
+                  <span v-if="advice.kind">{{ advice.kind }}</span>
                   <h4>{{ advice.title }}</h4>
                 </header>
                 <p v-if="advice.observation" class="essay-advice-copy">
@@ -471,7 +498,7 @@ async function deleteEssay() {
                   {{ advice.observation }}
                 </p>
                 <p v-if="advice.guidance" class="essay-advice-copy">
-                  <strong>怎么加强</strong>
+                  <strong>{{ advice.actionLabel }}</strong>
                   {{ advice.guidance }}
                 </p>
                 <div v-if="advice.original || advice.example" class="essay-advice-examples">
