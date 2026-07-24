@@ -7462,9 +7462,20 @@ button.calendar-day {
   font-size: 22px;
 }
 
-.essay-writing-feedback > header > strong {
+.essay-score-total {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+}
+
+.essay-score-total strong {
   color: var(--accent-dark);
   font-size: 24px;
+}
+
+.essay-score-total small {
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .essay-score-breakdown {

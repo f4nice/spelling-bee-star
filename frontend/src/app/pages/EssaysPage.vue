@@ -441,7 +441,10 @@ async function deleteEssay() {
               <span class="eyebrow">WRITING REVIEW</span>
               <h2 id="essay-writing-feedback-title">写作评估与建议</h2>
             </div>
-            <strong>{{ draft.writingScore }} / 100</strong>
+            <div class="essay-score-total">
+              <strong>{{ writingPoints }} / 500</strong>
+              <small>综合 {{ draft.writingScore }} / 100</small>
+            </div>
           </header>
           <div class="essay-score-breakdown" aria-label="作文评分明细">
             <div v-for="row in scoreBreakdownRows" :key="row.key">
