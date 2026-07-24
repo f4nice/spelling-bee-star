@@ -7503,20 +7503,166 @@ button.calendar-day {
 .essay-writing-advice h3 {
   margin: 0;
   color: var(--ink);
+  font-size: 18px;
+}
+
+.essay-energy-reward {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 14px;
+  border: 1px solid #aedbc4;
+  border-left: 5px solid #1d7f5b;
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: #fff;
+}
+
+.essay-energy-reward span,
+.essay-energy-reward strong {
+  font-weight: 900;
+}
+
+.essay-energy-reward strong {
+  color: #0b6c4b;
+  font-size: 20px;
+}
+
+.essay-energy-reward small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.essay-advice-list {
+  display: grid;
+  gap: 12px;
+  margin: 10px 0 0;
+}
+
+.essay-advice-item {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #cedbd4;
+  border-radius: 6px;
+  padding: 14px;
+  background: #fff;
+}
+
+.essay-advice-item > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.essay-advice-item > header span,
+.essay-advice-examples span {
+  display: inline-flex;
+  width: max-content;
+  border-radius: 4px;
+  padding: 4px 7px;
+  color: #0b6247;
+  background: #dff3e8;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.essay-advice-item h4 {
+  margin: 0;
+  color: var(--ink);
   font-size: 16px;
 }
 
-.essay-writing-advice ol {
-  display: grid;
-  gap: 7px;
-  margin: 10px 0 0;
-  padding-left: 22px;
+.essay-advice-copy {
+  margin: 0;
   color: var(--ink);
   line-height: 1.6;
 }
 
+.essay-advice-copy strong {
+  margin-right: 8px;
+  color: #0b6247;
+}
+
+.essay-advice-examples {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.essay-advice-examples > div {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  border-left: 3px solid #abcfc0;
+  padding: 10px 12px;
+  background: #f5f9f7;
+}
+
+.essay-advice-examples p {
+  margin: 0;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.55;
+}
+
+.essay-word-choice-list {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid #dce7e1;
+  padding-top: 12px;
+}
+
+.essay-word-choice-list > strong {
+  color: #0b6247;
+  font-size: 13px;
+}
+
+.essay-word-choice-list > div {
+  display: grid;
+  grid-template-columns: minmax(190px, auto) minmax(0, 1fr);
+  gap: 6px 14px;
+  align-items: start;
+}
+
+.essay-word-choice-list p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.essay-word-choice-list p b {
+  border-radius: 4px;
+  padding: 4px 7px;
+  color: #102a3a;
+  background: #e8f0ed;
+  font-size: 13px;
+}
+
+.essay-word-choice-list p b:last-child {
+  color: #075c42;
+  background: #dff3e8;
+}
+
+.essay-word-choice-list small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 @media (max-width: 760px) {
   .essay-score-breakdown {
+    grid-template-columns: 1fr;
+  }
+
+  .essay-energy-reward {
+    grid-template-columns: 1fr;
+  }
+
+  .essay-advice-examples {
+    grid-template-columns: 1fr;
+  }
+
+  .essay-word-choice-list > div {
     grid-template-columns: 1fr;
   }
 }

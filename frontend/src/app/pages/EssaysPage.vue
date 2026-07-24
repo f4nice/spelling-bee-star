@@ -42,8 +42,14 @@ const scoreBreakdownRows = computed(() =>
   Object.entries(scoreLabels).map(([key, label]) => ({
     key,
     label,
-    value: Math.min(Math.max(Number(draft.writingScoreBreakdown?.[key] || 0), 0), 20),
+    value: Math.min(Math.max(Number(draft.writingScoreBreakdown?.[key] || 0), 0), 100),
   })),
+);
+const writingPoints = computed(() => scoreBreakdownRows.value.reduce((total, row) => total + row.value, 0));
+const writingAdviceRows = computed(() =>
+  (Array.isArray(draft.writingAdvice) ? draft.writingAdvice : [])
+    .map((item, index) => normalizeWritingAdvice(item, index))
+    .filter(Boolean),
 );
 
 watch(
@@ -109,6 +115,43 @@ function loadDraft(essay) {
 
 function countEssayWords(value) {
   return (String(value || "").match(/[A-Za-z]+(?:[-'][A-Za-z]+)*|\d+(?:\.\d+)?|[\u4e00-\u9fff]/g) || []).length;
+}
+
+function normalizeWritingAdvice(item, index) {
+  if (typeof item === "string") {
+    const guidance = item.trim();
+    return guidance
+      ? {
+          kind: "老师建议",
+          title: `具体建议 ${index + 1}`,
+          observation: "",
+          guidance,
+          original: "",
+          example: "",
+          wordChoices: [],
+        }
+      : null;
+  }
+  if (!item || typeof item !== "object") return null;
+  return {
+    kind: String(item.kind || "老师建议"),
+    title: String(item.title || `具体建议 ${index + 1}`),
+    observation: String(item.observation || ""),
+    guidance: String(item.guidance || ""),
+    original: String(item.original || ""),
+    example: String(item.example || ""),
+    wordChoices: (Array.isArray(item.wordChoices) ? item.wordChoices : [])
+      .filter((choice) => choice && choice.original && choice.better)
+      .slice(0, 3),
+  };
+}
+
+function scoreAchievement(value) {
+  if (value >= 90) return "闪耀表现";
+  if (value >= 80) return "做得很棒";
+  if (value >= 70) return "稳步提升";
+  if (value >= 60) return "继续加油";
+  return "勇敢起步";
 }
 
 function formatEssayCreatedAt(value) {
@@ -402,16 +445,55 @@ async function deleteEssay() {
           </header>
           <div class="essay-score-breakdown" aria-label="作文评分明细">
             <div v-for="row in scoreBreakdownRows" :key="row.key">
-              <span>{{ row.label }}</span>
-              <i><b :style="{ width: `${row.value * 5}%` }"></b></i>
-              <strong>{{ row.value }} / 20</strong>
+              <span>{{ row.label }} · {{ scoreAchievement(row.value) }}</span>
+              <i><b :style="{ width: `${row.value}%` }"></b></i>
+              <strong>{{ row.value }} / 100</strong>
             </div>
           </div>
+          <div class="essay-energy-reward">
+            <span>本篇作文五项积分</span>
+            <strong>+{{ writingPoints }} 能量</strong>
+            <small>已计入猫咪世界，可用于购买道具和场景。</small>
+          </div>
           <div class="essay-writing-advice">
-            <h3>下一篇可以这样进步</h3>
-            <ol>
-              <li v-for="(advice, index) in draft.writingAdvice" :key="`${index}-${advice}`">{{ advice }}</li>
-            </ol>
+            <h3>英语老师的具体建议</h3>
+            <div class="essay-advice-list">
+              <article v-for="(advice, index) in writingAdviceRows" :key="`${index}-${advice.title}`" class="essay-advice-item">
+                <header>
+                  <span>{{ advice.kind }}</span>
+                  <h4>{{ advice.title }}</h4>
+                </header>
+                <p v-if="advice.observation" class="essay-advice-copy">
+                  <strong>老师观察</strong>
+                  {{ advice.observation }}
+                </p>
+                <p v-if="advice.guidance" class="essay-advice-copy">
+                  <strong>怎么加强</strong>
+                  {{ advice.guidance }}
+                </p>
+                <div v-if="advice.original || advice.example" class="essay-advice-examples">
+                  <div v-if="advice.original">
+                    <span>原句</span>
+                    <p>{{ advice.original }}</p>
+                  </div>
+                  <div v-if="advice.example">
+                    <span>参考改写</span>
+                    <p>{{ advice.example }}</p>
+                  </div>
+                </div>
+                <div v-if="advice.wordChoices.length" class="essay-word-choice-list">
+                  <strong>词汇升级</strong>
+                  <div v-for="choice in advice.wordChoices" :key="`${choice.original}-${choice.better}`">
+                    <p>
+                      <b>{{ choice.original }}</b>
+                      <span aria-hidden="true">→</span>
+                      <b>{{ choice.better }}</b>
+                    </p>
+                    <small v-if="choice.reason">{{ choice.reason }}</small>
+                  </div>
+                </div>
+              </article>
+            </div>
           </div>
         </section>
 

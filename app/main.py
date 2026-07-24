@@ -96,8 +96,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260723-011"
-DEFAULT_PAGE_VERSION = "v20260723.11"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260724-012"
+DEFAULT_PAGE_VERSION = "v20260724.12"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -5261,6 +5261,106 @@ def clean_essay_body(value: str | None) -> str:
     return str(value or "").replace("\r\n", "\n").replace("\r", "\n").strip()[:ESSAY_BODY_MAX_CHARS]
 
 
+ESSAY_SCORE_KEYS = ("content", "length", "vocabulary", "grammar", "structure")
+
+
+def clean_essay_feedback_text(value: Any, limit: int) -> str:
+    return " ".join(str(value or "").split())[:limit]
+
+
+def normalize_essay_score_breakdown(value: Any) -> dict[str, int]:
+    source = value if isinstance(value, dict) else {}
+    parsed: dict[str, int] = {}
+    for key in ESSAY_SCORE_KEYS:
+        try:
+            parsed[key] = int(round(float(source[key])))
+        except (KeyError, TypeError, ValueError):
+            continue
+    if not parsed:
+        return {}
+    declared_scale = source.get("_scale") or source.get("scale")
+    hundred_point_scale = str(declared_scale or "").strip() == "100"
+    legacy_twenty_point_scale = not hundred_point_scale and all(score <= 20 for score in parsed.values())
+    return {
+        key: min(max(score * 5 if legacy_twenty_point_scale else score, 0), 100)
+        for key, score in parsed.items()
+    }
+
+
+def normalize_essay_advice_items(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    for raw_item in value:
+        if isinstance(raw_item, dict):
+            raw_word_choices = raw_item.get("wordChoices") or raw_item.get("word_choices") or raw_item.get("vocabulary")
+            word_choices: list[dict[str, str]] = []
+            if isinstance(raw_word_choices, list):
+                for raw_choice in raw_word_choices:
+                    if not isinstance(raw_choice, dict):
+                        continue
+                    original = clean_essay_feedback_text(
+                        raw_choice.get("original") or raw_choice.get("from") or raw_choice.get("source"),
+                        100,
+                    )
+                    better = clean_essay_feedback_text(
+                        raw_choice.get("better") or raw_choice.get("to") or raw_choice.get("replacement"),
+                        160,
+                    )
+                    reason = clean_essay_feedback_text(
+                        raw_choice.get("reason") or raw_choice.get("explanation"),
+                        300,
+                    )
+                    if original and better:
+                        word_choices.append({
+                            "original": original,
+                            "better": better,
+                            "reason": reason,
+                        })
+                    if len(word_choices) >= 3:
+                        break
+            item = {
+                "kind": clean_essay_feedback_text(raw_item.get("kind") or raw_item.get("category"), 30) or "老师建议",
+                "title": clean_essay_feedback_text(raw_item.get("title"), 100),
+                "observation": clean_essay_feedback_text(
+                    raw_item.get("observation") or raw_item.get("issue"),
+                    500,
+                ),
+                "guidance": clean_essay_feedback_text(
+                    raw_item.get("guidance") or raw_item.get("suggestion") or raw_item.get("advice"),
+                    700,
+                ),
+                "original": clean_essay_feedback_text(
+                    raw_item.get("original") or raw_item.get("originalSentence"),
+                    500,
+                ),
+                "example": clean_essay_feedback_text(
+                    raw_item.get("example") or raw_item.get("improved") or raw_item.get("improvedSentence"),
+                    700,
+                ),
+                "wordChoices": word_choices,
+            }
+            if not item["title"]:
+                item["title"] = item["guidance"][:60] or f"老师建议 {len(normalized) + 1}"
+            if any((item["observation"], item["guidance"], item["original"], item["example"], item["wordChoices"])):
+                normalized.append(item)
+        else:
+            guidance = clean_essay_feedback_text(raw_item, 700)
+            if guidance:
+                normalized.append({
+                    "kind": "老师建议",
+                    "title": f"具体建议 {len(normalized) + 1}",
+                    "observation": "",
+                    "guidance": guidance,
+                    "original": "",
+                    "example": "",
+                    "wordChoices": [],
+                })
+        if len(normalized) >= 5:
+            break
+    return normalized
+
+
 def serialize_essay(essay: EssayEntry) -> dict[str, Any]:
     try:
         score_breakdown = json.loads(essay.writing_score_breakdown or "{}")
@@ -5268,6 +5368,7 @@ def serialize_essay(essay: EssayEntry) -> dict[str, Any]:
         score_breakdown = {}
     if not isinstance(score_breakdown, dict):
         score_breakdown = {}
+    score_breakdown = normalize_essay_score_breakdown(score_breakdown)
     try:
         writing_advice = json.loads(essay.writing_advice or "[]")
     except (json.JSONDecodeError, TypeError):
@@ -5284,7 +5385,8 @@ def serialize_essay(essay: EssayEntry) -> dict[str, Any]:
         "optimizedWordCount": int(essay.optimized_word_count or 0),
         "writingScore": min(max(int(essay.writing_score or 0), 0), 100),
         "writingScoreBreakdown": score_breakdown,
-        "writingAdvice": [str(item) for item in writing_advice if str(item).strip()][:5],
+        "writingPoints": sum(score_breakdown.values()),
+        "writingAdvice": normalize_essay_advice_items(writing_advice),
         "aiModel": essay.ai_model or "",
         "coverModel": essay.cover_model or "",
         "createdAt": essay.created_at.isoformat() if essay.created_at else "",
@@ -5325,11 +5427,19 @@ ESSAY_OPTIMIZATION_SYSTEM_PROMPT = (
     "Improve grammar, clarity, story flow, vocabulary, and sentence variety while preserving the student's meaning, events, and voice. "
     "Evaluate the original student composition, not the polished rewrite. "
     "Return only one valid JSON object with this exact shape: "
-    '{"optimizedBody":"polished English composition","assessment":{"content":0,"length":0,"vocabulary":0,'
-    '"grammar":0,"structure":0,"advice":["中文建议1","中文建议2","中文建议3"]}}. '
-    "Each score is an integer from 0 to 20. Content measures ideas and development; length measures whether the composition is sufficiently developed; "
+    '{"optimizedBody":"polished English composition","assessment":{"scale":100,"content":0,"length":0,"vocabulary":0,'
+    '"grammar":0,"structure":0,"advice":[{"kind":"词汇表达","title":"简短标题","observation":"中文老师观察",'
+    '"guidance":"中文具体改法","original":"学生原文中的英文短语或句子","example":"保留原意的英文参考改写",'
+    '"wordChoices":[{"original":"原词或短语","better":"更准确的词或短语","reason":"中文说明语气、含义或使用场景"}]}]}}. '
+    "Each of the five scores is an integer from 0 to 100. Content measures ideas and development; length measures whether the composition is sufficiently developed; "
     "vocabulary measures variety, difficulty, and appropriate word choice; grammar measures correctness; structure measures organization and flow. "
-    "Give 3 to 5 concise, specific suggestions in Chinese. Do not include markdown or any text outside the JSON object."
+    "Give 3 to 5 warm, age-appropriate, highly specific teaching suggestions. Every suggestion must explain what the child can improve and how to improve it, "
+    "quote a relevant phrase or sentence from the original composition, and provide one correct English example that keeps the child's intended meaning. "
+    "At least one suggestion must focus on vocabulary: compare actual words from the composition with more precise or more tactful alternatives, and explain "
+    "their meaning, tone, and suitable context in Chinese. Include another suggestion about grammar or sentence expression and another about content or structure. "
+    "When an expression sounds blunt or overly direct, explicitly teach a gentler alternative and explain why it is more appropriate. "
+    "Do not use vague praise, do not invent unrelated story facts, and do not choose difficult words merely to sound advanced. "
+    "Do not include markdown or any text outside the JSON object."
 )
 
 
@@ -5347,9 +5457,6 @@ def essay_optimization_messages(*, title: str, body: str) -> list[dict[str, str]
     ]
 
 
-ESSAY_SCORE_KEYS = ("content", "length", "vocabulary", "grammar", "structure")
-
-
 def local_essay_assessment(body: str) -> dict[str, Any]:
     words = re.findall(r"[A-Za-z]+(?:[-'][A-Za-z]+)*", body)
     word_count = max(len(words), essay_word_count(body))
@@ -5359,7 +5466,7 @@ def local_essay_assessment(body: str) -> dict[str, Any]:
     long_word_ratio = sum(1 for word in words if len(word) >= 7) / max(len(words), 1)
     average_sentence = word_count / max(len(sentences), 1)
     capital_starts = sum(1 for sentence in sentences if sentence[:1].isupper()) / max(len(sentences), 1)
-    breakdown = {
+    twenty_point_breakdown = {
         "content": min(20, 8 + min(len(sentences), 6) + min(word_count // 30, 5)),
         "length": min(20, max(4, round(word_count / 6))),
         "vocabulary": min(20, max(5, round(6 + unique_ratio * 8 + long_word_ratio * 20))),
@@ -5380,54 +5487,123 @@ def local_essay_assessment(body: str) -> dict[str, Any]:
             max(5, 7 + min(len(sentences), 5) * 2 + min(max(len(paragraphs) - 1, 0), 3)),
         ),
     }
-    advice: list[str] = []
-    if word_count < 80:
-        advice.append("可以补充一个更具体的场景、动作或感受，让内容发展得更完整。")
-    if average_sentence > 24:
-        advice.append("部分句子较长，建议拆成两个完整句，并检查逗号连接句。")
-    elif average_sentence < 7 and len(sentences) > 2:
-        advice.append("可以使用 because、while、although 等连接词组合部分短句，增强句式变化。")
-    if unique_ratio < 0.55:
-        advice.append("有些词重复较多，可以替换为更准确的动词、形容词或同义表达。")
-    if long_word_ratio < 0.08:
-        advice.append("可以加入少量更具体、更有难度的词汇，但要确保符合语境。")
-    advice.append("完成后朗读一遍，重点检查句首大写、标点和单复数是否一致。")
-    fallback_advice = (
-        "尝试让开头快速进入主题，并在结尾回应中心思想。",
-        "选出一两个关键句，用更准确的动作和感官细节进行改写。",
-        "检查每一段是否只围绕一个重点展开，段落之间是否自然衔接。",
+    breakdown = {key: score * 5 for key, score in twenty_point_breakdown.items()}
+    sentence_samples = [
+        part.strip()
+        for part in re.findall(r"[^.!?]+[.!?]?", body)
+        if part.strip()
+    ]
+    sample_sentence = (sentence_samples[0] if sentence_samples else body.strip())[:500]
+    vocabulary_options = (
+        ("mean", "harsh / difficult", "mean 常形容人刻薄；形容生活或处境时，harsh 或 difficult 更自然。"),
+        ("good", "memorable / effective", "good 含义较宽，可以根据“令人难忘”或“有效”选择更准确的词。"),
+        ("bad", "unpleasant / disappointing", "bad 比较笼统，换词后能说清楚究竟是令人不快还是令人失望。"),
+        ("nice", "kind / welcoming / pleasant", "nice 很常用；写人、环境和感受时可以分别选择更具体的词。"),
+        ("said", "explained / replied / whispered", "said 只表示“说”，更具体的动词还能告诉读者说话方式。"),
+        ("went", "walked / hurried / traveled", "went 没有动作画面，可以按速度和方式选择更具体的动词。"),
+        ("got", "received / became / reached", "got 的含义很多，明确是“获得、变得”还是“到达”会更准确。"),
+        ("thing", "object / idea / event", "thing 过于宽泛，直接写出事物、想法或事件更清楚。"),
+        ("big", "enormous / spacious / important", "big 可分别表示体积、空间或重要性，选词时要对应具体含义。"),
+        ("small", "tiny / narrow / minor", "small 可分别描述尺寸、空间或程度，准确词语能让画面更清楚。"),
     )
-    for item in fallback_advice:
-        if len(advice) >= 3:
+    vocabulary_match: tuple[str, str, str] | None = None
+    for option in vocabulary_options:
+        if re.search(rf"\b{re.escape(option[0])}\b", body, flags=re.IGNORECASE):
+            vocabulary_match = option
             break
-        advice.append(item)
+    if vocabulary_match:
+        original_word, better_words, reason = vocabulary_match
+        primary_replacement = better_words.split(" / ")[0]
+        vocabulary_example = re.sub(
+            rf"\b{re.escape(original_word)}\b",
+            primary_replacement,
+            sample_sentence,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+        vocabulary_original = sample_sentence
+        word_choices = [{
+            "original": original_word,
+            "better": better_words,
+            "reason": reason,
+        }]
+    else:
+        vocabulary_original = sample_sentence
+        vocabulary_example = "The room was nice. → The room felt warm and welcoming."
+        word_choices = [{
+            "original": "nice",
+            "better": "warm and welcoming",
+            "reason": "nice 比较笼统；warm and welcoming 能具体表现环境带给人的感受。",
+        }]
+    advice: list[dict[str, Any]] = [
+        {
+            "kind": "词汇表达",
+            "title": "把宽泛的词换成更准确的表达",
+            "observation": "文章意思已经能读懂，再把关键词说得更具体，读者会更容易看见画面和感受到语气。",
+            "guidance": "先问自己这个词是在写人物、动作、环境还是感受，再选择含义最贴近的词，不需要为了显得高级而使用生僻词。",
+            "original": vocabulary_original,
+            "example": vocabulary_example,
+            "wordChoices": word_choices,
+        },
+        {
+            "kind": "句式表达",
+            "title": "用连接词讲清句子之间的关系",
+            "observation": (
+                "部分句子较长，信息挤在一起，读者不容易分清先后和因果。"
+                if average_sentence > 24
+                else "可以让相邻句子之间的先后、原因或转折关系更明确。"
+            ),
+            "guidance": "两个意思关系紧密时，可以用 because、although、when 或 while 连接；信息太多时则拆成两个完整句。",
+            "original": sample_sentence,
+            "example": "The rain was heavy. We kept walking. → Although the rain was heavy, we kept walking.",
+            "wordChoices": [],
+        },
+        {
+            "kind": "内容描写",
+            "title": "补一个动作或感官细节",
+            "observation": (
+                f"全文约 {word_count} 词，故事主线已经出现，还可以把一个关键时刻写得更具体。"
+                if word_count < 80
+                else "内容已经有一定展开，可以选择最重要的一个瞬间增加动作、声音或感受。"
+            ),
+            "guidance": "不要一次增加很多新情节，只挑一个关键画面，补充人物做了什么、听见什么或心里有什么感觉。",
+            "original": sample_sentence,
+            "example": "I entered the room. → As I stepped into the quiet room, the cold air brushed my face.",
+            "wordChoices": [],
+        },
+    ]
     return {
-        "total": sum(breakdown.values()),
+        "total": round(sum(breakdown.values()) / len(ESSAY_SCORE_KEYS)),
         "breakdown": breakdown,
-        "advice": advice[:5],
+        "advice": normalize_essay_advice_items(advice),
     }
 
 
 def normalize_essay_assessment(value: Any, body: str) -> dict[str, Any]:
     fallback = local_essay_assessment(body)
     source = value if isinstance(value, dict) else {}
-    breakdown: dict[str, int] = {}
+    raw_scores: dict[str, int] = {}
     for key in ESSAY_SCORE_KEYS:
         try:
-            score = int(round(float(source.get(key, fallback["breakdown"][key]))))
-        except (TypeError, ValueError):
+            raw_scores[key] = int(round(float(source[key])))
+        except (KeyError, TypeError, ValueError):
+            continue
+    declared_scale = source.get("scale") or source.get("_scale")
+    hundred_point_scale = str(declared_scale or "").strip() == "100"
+    legacy_twenty_point_scale = not hundred_point_scale and raw_scores and all(score <= 20 for score in raw_scores.values())
+    breakdown: dict[str, int] = {}
+    for key in ESSAY_SCORE_KEYS:
+        score = raw_scores.get(key)
+        if score is None:
             score = int(fallback["breakdown"][key])
-        breakdown[key] = min(max(score, 0), 20)
-    advice_source = source.get("advice")
-    advice = [
-        str(item).strip()[:300]
-        for item in advice_source
-        if str(item).strip()
-    ][:5] if isinstance(advice_source, list) else fallback["advice"]
+        elif legacy_twenty_point_scale:
+            score *= 5
+        breakdown[key] = min(max(score, 0), 100)
+    advice = normalize_essay_advice_items(source.get("advice"))
     if not advice:
         advice = fallback["advice"]
     return {
-        "total": sum(breakdown.values()),
+        "total": round(sum(breakdown.values()) / len(ESSAY_SCORE_KEYS)),
         "breakdown": breakdown,
         "advice": advice,
     }
@@ -5640,7 +5816,11 @@ async def vue_optimize_essay_api(essay_id: int, request: Request, db: Session = 
     essay.optimized_body = optimized_body
     essay.optimized_word_count = essay_word_count(optimized_body)
     essay.writing_score = int(assessment["total"])
-    essay.writing_score_breakdown = json.dumps(assessment["breakdown"], ensure_ascii=False, sort_keys=True)
+    essay.writing_score_breakdown = json.dumps(
+        {**assessment["breakdown"], "_scale": 100},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
     essay.writing_advice = json.dumps(assessment["advice"], ensure_ascii=False)
     essay.ai_model = model
     db.add(essay)
@@ -11799,22 +11979,33 @@ def cat_world_growth_source_rows(growth: dict[str, Any]) -> list[dict[str, Any]]
 
 
 def cat_world_essay_energy_source(db: Session, phone: str) -> dict[str, Any]:
-    raw_scores = db.scalars(
-        select(EssayEntry.writing_score).where(
+    raw_rows = db.execute(
+        select(EssayEntry.writing_score, EssayEntry.writing_score_breakdown).where(
             EssayEntry.phone == phone,
             EssayEntry.writing_score > 0,
         )
     ).all()
-    scores = [min(max(int(score or 0), 0), 100) for score in raw_scores]
-    total_score = sum(scores)
+    essay_points: list[int] = []
+    for writing_score, raw_breakdown in raw_rows:
+        try:
+            parsed_breakdown = json.loads(raw_breakdown or "{}")
+        except (json.JSONDecodeError, TypeError):
+            parsed_breakdown = {}
+        breakdown = normalize_essay_score_breakdown(parsed_breakdown)
+        essay_points.append(
+            sum(breakdown.values())
+            if len(breakdown) == len(ESSAY_SCORE_KEYS)
+            else min(max(int(writing_score or 0), 0), 100)
+        )
+    total_points = sum(essay_points)
     return {
         "key": "essay_scores",
-        "label": "作文评分",
-        "value": total_score,
-        "unit": "分",
+        "label": "作文五项积分",
+        "value": total_points,
+        "unit": "积分",
         "energyPerUnit": 1,
-        "energy": total_score,
-        "essayCount": len(scores),
+        "energy": total_points,
+        "essayCount": len(essay_points),
     }
 
 
