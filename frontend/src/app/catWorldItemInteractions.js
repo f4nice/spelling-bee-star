@@ -32,6 +32,17 @@ export function catLikesItem(cat, itemId, itemKind) {
   return Array.isArray(cat?.[favoriteKey]) && cat[favoriteKey].includes(itemId);
 }
 
+export function wandChaseJoinDecision({
+  active = false,
+  alreadyFollowing = false,
+  canWalk = false,
+} = {}) {
+  if (!active) return "inactive";
+  if (alreadyFollowing) return "following";
+  if (!canWalk) return "resting";
+  return "join";
+}
+
 export function interactionMoveDuration(from = {}, to = {}, walkSpeed = 1, limits = {}) {
   const distance = Math.hypot(Number(to.x || 0) - Number(from.x || 0), Number(to.y || 0) - Number(from.y || 0));
   const speed = Math.max(Number(walkSpeed) || 1, 0.2);

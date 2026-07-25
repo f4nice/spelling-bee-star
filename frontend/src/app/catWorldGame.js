@@ -8,6 +8,7 @@ import {
   floorDropPosition,
   interactionMoveDuration,
   itemInteractionFor,
+  wandChaseJoinDecision,
 } from "./catWorldItemInteractions.js";
 import {
   normalizeCatWorldScene,
@@ -1156,6 +1157,16 @@ class CatWorldScene extends Phaser.Scene {
         this.children.bringToTop(container);
         this.stopPointerEvent(event);
         if (wasPanning) return;
+        if (this.owner.wandMode) {
+          const interaction = this.joinCatToFeatherWandChase(cat.id);
+          this.owner.handlers.onCatWandJoin?.(interaction);
+          return;
+        }
+        if (this.pointerHitsFeatherWand(pointer)) {
+          const interaction = this.interactWithToy("feather-wand");
+          this.owner.handlers.onToyClick?.("feather-wand", interaction);
+          return;
+        }
         const message = this.spawnCatBubble(container, cat);
         this.owner.handlers.onCatPet?.(cat, message);
       });
@@ -1476,6 +1487,48 @@ class CatWorldScene extends Phaser.Scene {
     };
   }
 
+  pointerHitsFeatherWand(pointer) {
+    const wand = this.toyContainers.get("feather-wand");
+    const spec = ROOM_TOY_TARGETS["feather-wand"];
+    if (!wand?.active || !wand.visible || !spec) return false;
+    const x = Number(pointer?.worldX);
+    const y = Number(pointer?.worldY);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    return x >= wand.x && x <= wand.x + spec.width && y >= wand.y && y <= wand.y + spec.height;
+  }
+
+  joinCatToFeatherWandChase(catId) {
+    const entry = this.roomCatEntries().find((candidate) => candidate.cat.id === catId);
+    const decision = wandChaseJoinDecision({
+      active: this.owner.wandMode,
+      alreadyFollowing: this.owner.wandCatIds.has(catId),
+      canWalk: Boolean(entry?.behavior.canWalk),
+    });
+    if (decision === "inactive" || !entry) return null;
+    if (decision === "following") {
+      const message = `${entry.cat.label}已经在追逗猫棒了。`;
+      this.spawnCatBubble(entry.container, entry.cat, "我已经在追啦！");
+      return { handled: true, joined: false, catId, message };
+    }
+    if (decision === "resting") {
+      const message = `${entry.cat.label}现在正在休息，等醒来后再一起追逗猫棒。`;
+      this.spawnCatBubble(entry.container, entry.cat, "我先休息一会儿。");
+      return { handled: true, joined: false, catId, message };
+    }
+    this.owner.wandCatIds.add(catId);
+    this.owner.catItemActions.delete(catId);
+    this.interruptCatAutonomy(entry, "feather-wand");
+    this.spawnCatBubble(entry.container, entry.cat, "等等我，我也来追！");
+    if (this.owner.wandTarget) this.moveFeatherWandFollowers(this.owner.wandTarget);
+    this.setFeatherWandCursor(true);
+    return {
+      handled: true,
+      joined: true,
+      catId,
+      message: `${entry.cat.label}加入追逐，现在会跟着逗猫棒一起跑。`,
+    };
+  }
+
   dropFeatherWand(pointer) {
     if (!this.owner.wandMode || this.isEditMode()) return false;
     const itemId = "feather-wand";
@@ -1507,6 +1560,11 @@ class CatWorldScene extends Phaser.Scene {
       y: clamp(pointer.worldY, FLOOR_TOP + 56, FLOOR_BOTTOM - 86),
     };
     this.owner.wandTarget = target;
+    this.moveFeatherWandFollowers(target);
+    this.setFeatherWandCursor(true);
+  }
+
+  moveFeatherWandFollowers(target) {
     const entries = new Map(this.roomCatEntries().map((entry) => [entry.cat.id, entry]));
     [...this.owner.wandCatIds].forEach((catId, followerIndex) => {
       const entry = entries.get(catId);
@@ -1529,7 +1587,6 @@ class CatWorldScene extends Phaser.Scene {
         onUpdate: () => entry.container.setDepth(CAT_INTERACTION_DEPTH + entry.index),
       });
     });
-    this.setFeatherWandCursor(true);
   }
 
   stopFeatherWandMode(options = {}) {

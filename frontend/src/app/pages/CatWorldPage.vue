@@ -99,6 +99,9 @@ onMounted(async () => {
     onLayoutChange: handleGameLayoutChange,
     onToyClick: handleRoomToyClick,
     onToyDrop: handleRoomToyDrop,
+    onCatWandJoin: (interaction) => {
+      if (interaction?.message) notice.value = interaction.message;
+    },
     onLitterClick: cleanLitter,
     onBathtubBath: (bath) => useConsumable(shopById.value["cat-bath-kit"], { targetCatId: bath?.catId }),
     onItemInteractionEnd: (interaction) => {

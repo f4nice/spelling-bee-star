@@ -6,6 +6,7 @@ import {
   floorDropPosition,
   interactionMoveDuration,
   itemInteractionFor,
+  wandChaseJoinDecision,
 } from "../src/app/catWorldItemInteractions.js";
 
 test("interactive room items use the expected controlled behavior", () => {
@@ -42,4 +43,11 @@ test("interaction movement stays slow but clamps very short and long trips", () 
   assert.equal(interactionMoveDuration({ x: 0, y: 0 }, { x: 1, y: 1 }, 1), 2600);
   assert.equal(interactionMoveDuration({ x: 0, y: 0 }, { x: 2000, y: 0 }, 0.2), 9000);
   assert.equal(interactionMoveDuration({ x: 0, y: 0 }, { x: 360, y: 0 }, 1), 5000);
+});
+
+test("cats can join an active feather wand chase without duplicate followers", () => {
+  assert.equal(wandChaseJoinDecision({ active: false, canWalk: true }), "inactive");
+  assert.equal(wandChaseJoinDecision({ active: true, alreadyFollowing: true, canWalk: true }), "following");
+  assert.equal(wandChaseJoinDecision({ active: true, alreadyFollowing: false, canWalk: false }), "resting");
+  assert.equal(wandChaseJoinDecision({ active: true, alreadyFollowing: false, canWalk: true }), "join");
 });

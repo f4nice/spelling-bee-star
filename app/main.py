@@ -96,8 +96,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260724-014"
-DEFAULT_PAGE_VERSION = "v20260724.14"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260725-015"
+DEFAULT_PAGE_VERSION = "v20260725.15"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -240,6 +240,7 @@ CAT_WORLD_LITTER_SCOOP_ITEM_ID = "litter-scoop"
 CAT_WORLD_CAT_GRASS_ITEM_ID = "cat-grass-pot"
 CAT_WORLD_BATH_ITEM_ID = "cat-bath-kit"
 CAT_WORLD_REPAIR_HAMMER_ITEM_ID = "repair-hammer"
+CAT_WORLD_PET_REWARD_COOLDOWN_SECONDS = 60 * 60
 CAT_WORLD_LITTER_MAX = 4
 CAT_WORLD_LITTER_MOOD_PENALTY_PER_PILE = 2
 CAT_WORLD_LITTER_MOOD_PENALTY_MAX = 8
@@ -5085,6 +5086,7 @@ async def vue_cat_world_pet_api(request: Request, db: Session = Depends(get_db))
         raise HTTPException(status_code=400, detail="猫咪互动数据不是有效 JSON。") from exc
     cat_id = str((payload or {}).get("catId") or "").strip()
     state = get_or_create_cat_world_state(db, phone)
+    db.refresh(state, with_for_update=True)
     owned_cats = parse_cat_world_cats(state.cats)
     if cat_id not in owned_cats:
         raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
@@ -14920,6 +14922,50 @@ def cat_world_parse_utc_datetime(value: str | None) -> datetime | None:
         return None
 
 
+def cat_world_pet_reward_cooldown(
+    last_pet_at: str | None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    now = now or datetime.utcnow()
+    parsed = cat_world_parse_utc_datetime(last_pet_at)
+    if parsed is None:
+        return {"active": False, "remainingSeconds": 0}
+    elapsed_seconds = max((now - parsed).total_seconds(), 0)
+    remaining_seconds = max(math.ceil(CAT_WORLD_PET_REWARD_COOLDOWN_SECONDS - elapsed_seconds), 0)
+    return {
+        "active": remaining_seconds > 0,
+        "remainingSeconds": remaining_seconds,
+    }
+
+
+def cat_world_latest_pet_at(
+    db: Session,
+    phone: str,
+    cat_id: str,
+    current_agent_state: dict[str, Any],
+) -> str:
+    candidates = [str(current_agent_state.get("lastPetAt") or "")]
+    recent_agent_states = db.scalars(
+        select(CatWorldDailyLog.agent_state)
+        .where(
+            CatWorldDailyLog.phone == normalize_login_phone(phone),
+            CatWorldDailyLog.cat_id == cat_id,
+        )
+        .order_by(CatWorldDailyLog.log_date.desc(), CatWorldDailyLog.id.desc())
+        .limit(2)
+    ).all()
+    for raw_state in recent_agent_states:
+        candidates.append(str(parse_cat_world_agent_state(raw_state).get("lastPetAt") or ""))
+    parsed_candidates = [
+        (parsed, raw)
+        for raw in candidates
+        if (parsed := cat_world_parse_utc_datetime(raw)) is not None
+    ]
+    if not parsed_candidates:
+        return ""
+    return max(parsed_candidates, key=lambda item: item[0])[1]
+
+
 def cat_world_litter_age_hours(
     state: CatWorldState,
     now: datetime | None = None,
@@ -15838,7 +15884,17 @@ def cat_world_apply_pet_effect(
     traits = cat_world_cat_traits(cat)
     now = datetime.utcnow()
     favorite_active_ids = cat_world_active_favorite_decor_ids(cat["id"], inventory, room_layout)
-    log = get_or_create_cat_world_daily_log(db, state.phone, cat["id"], date.today(), now)
+    log = db.scalar(
+        select(CatWorldDailyLog)
+        .where(
+            CatWorldDailyLog.phone == normalize_login_phone(state.phone),
+            CatWorldDailyLog.log_date == date.today(),
+            CatWorldDailyLog.cat_id == cat["id"],
+        )
+        .with_for_update()
+    )
+    if log is None:
+        log = get_or_create_cat_world_daily_log(db, state.phone, cat["id"], date.today(), now)
     apply_cat_world_hourly_decay(
         log,
         traits,
@@ -15849,6 +15905,32 @@ def cat_world_apply_pet_effect(
         cat_world_cat_bath_mood_penalty(state, cat["id"], now),
     )
     agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
+    pet_count = min(int(agent_state.get("petCount") or 0) + 1, 999)
+    cooldown = cat_world_pet_reward_cooldown(
+        cat_world_latest_pet_at(db, state.phone, cat["id"], agent_state),
+        now,
+    )
+    if cooldown["active"]:
+        remaining_minutes = max(math.ceil(int(cooldown["remainingSeconds"]) / 60), 1)
+        agent_state["petCount"] = pet_count
+        log.agent_state = encode_cat_world_agent_state(agent_state)
+        db.add(log)
+        current_bond = cat_world_bond_payload(parse_cat_world_bonds(state.cat_bonds), [cat["id"]])[cat["id"]]
+        return {
+            "catId": cat["id"],
+            "catLabel": cat["label"],
+            "moodGain": 0,
+            "bondGain": 0,
+            "petCount": pet_count,
+            "bond": current_bond,
+            "rewarded": False,
+            "cooldown": True,
+            "remainingSeconds": int(cooldown["remainingSeconds"]),
+            "message": (
+                f"{cat['label']}还在享受刚才的摸摸；这次不重复增加心情和亲密度，"
+                f"约 {remaining_minutes} 分钟后再撸会重新获得加成。"
+            ),
+        }
     temperament = str(traits.get("temperament") or "balanced")
     mood_gain = {
         "clingy": 4,
@@ -15860,7 +15942,6 @@ def cat_world_apply_pet_effect(
     if agent_state.get("dailyMoodKey") in {"quiet", "grumpy"}:
         mood_gain = max(1, mood_gain - 1)
     log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_gain)
-    pet_count = min(int(agent_state.get("petCount") or 0) + 1, 999)
     if agent_state.get("dailyMoodKey") == "grumpy":
         message = f"{cat['label']}今天不太高兴，但还是接受了摸摸，心情 +{mood_gain}。"
     elif temperament == "chatty":
@@ -15894,8 +15975,12 @@ def cat_world_apply_pet_effect(
         "catId": cat["id"],
         "catLabel": cat["label"],
         "moodGain": mood_gain,
+        "bondGain": int(bond.get("lastGain") or 0),
         "petCount": pet_count,
         "bond": bond,
+        "rewarded": True,
+        "cooldown": False,
+        "remainingSeconds": CAT_WORLD_PET_REWARD_COOLDOWN_SECONDS,
         "message": message,
     }
 
