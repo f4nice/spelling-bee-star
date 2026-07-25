@@ -4,7 +4,9 @@
 
 ## 当前状态
 
-- 线上地址：`http://47.116.28.2:8010/`
+- 线上地址：`https://www.newabby.com/`
+- 应用主机：本地 Ubuntu `192.168.1.186:8011`
+- 外网代理：`139.224.9.235`（仅反向代理，不部署应用代码）
 - 生产目录：`/opt/spelling-bee-star`
 - 当前主分支：`main`
 - 样式基线提交：`6f009f0 Polish global Vue styling`

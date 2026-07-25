@@ -14,7 +14,8 @@
 - Vue 源码：`frontend/src/app`；挑战页源码：`frontend/src/challenge`。
 - 构建产物：`app/static/vue/speakeasy-app.js`、`challenge-app.js` 和 Vite shared chunk。
 - 后端入口：`app/main.py` 返回统一 Vue shell，并通过 `/api/vue/*`、挑战 API、BookLearner API 提供数据。
-- 线上地址：`http://47.116.28.2:8010`。
+- 线上地址：`https://www.newabby.com/`，应用部署在本地 Ubuntu
+  `192.168.1.186:8011`，由 `139.224.9.235` 提供外网反向代理。
 - 部署目标：`caishenye-aliyun:/opt/spelling-bee-star`，服务 `spelling-bee-star.service`。
 
 ## 已完成结果

@@ -1,5 +1,5 @@
 param(
-    [string]$BaseUrl = "http://47.116.28.2:8010",
+    [string]$BaseUrl = "https://www.newabby.com",
     [switch]$SkipBuild,
     [switch]$SkipHttp
 )

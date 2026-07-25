@@ -74,13 +74,14 @@ journalctl -u speakeasy-local.service -f
 powershell -ExecutionPolicy Bypass -File scripts\check-vue-coverage.ps1
 ```
 
-生产部署同样需要先设置 `SPEAKEASY_SSH_PASSWORD`：
+生产发布会通过 SSH 密钥直接更新本地 Ubuntu 虚拟机
+`192.168.1.186`，外网代理机 `139.224.9.235` 不存放应用代码：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\deploy-production.ps1
 ```
 
-线上日志检查需要先设置 `SPEAKEASY_SSH_PASSWORD`，再运行：
+线上日志同样直接从 Ubuntu 的 systemd 服务读取：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\check-production-logs.ps1

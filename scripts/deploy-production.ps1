@@ -1,9 +1,10 @@
 param(
-    [string]$HostName = "47.116.28.2",
-    [string]$UserName = "root",
-    [string]$ServiceName = "spelling-bee-star.service",
-    [string]$RemoteProjectPath = "/opt/spelling-bee-star",
-    [string]$NodeModulesPath = "C:\Users\admin\AppData\Local\Temp\codex-node-ssh\node_modules",
+    [string]$HostName = "192.168.1.186",
+    [string]$UserName = "qradmin",
+    [string]$ServiceName = "speakeasy-local.service",
+    [string]$RemoteProjectPath = "/opt/speakeasy/current",
+    [string]$SshKey = "$HOME\.ssh\id_ed25519_quant_radar_local",
+    [string]$PublicBaseUrl = "https://www.newabby.com",
     [switch]$AllowDirty
 )
 
@@ -11,140 +12,139 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$password = $env:SPEAKEASY_SSH_PASSWORD
-if ([string]::IsNullOrWhiteSpace($password)) {
-    throw "Set SPEAKEASY_SSH_PASSWORD before running this script."
-}
 
-if (-not (Test-Path $NodeModulesPath)) {
-    throw "Node ssh dependencies not found at $NodeModulesPath"
+if (-not (Get-Command ssh -ErrorAction SilentlyContinue)) {
+    throw "OpenSSH client is unavailable."
+}
+if (-not (Get-Command scp -ErrorAction SilentlyContinue)) {
+    throw "OpenSSH scp client is unavailable."
+}
+if (-not (Test-Path -LiteralPath $SshKey)) {
+    throw "Ubuntu SSH key is missing: $SshKey"
+}
+if ($HostName -notmatch "^[A-Za-z0-9.-]+$") {
+    throw "Invalid Ubuntu host name."
+}
+if ($UserName -notmatch "^[A-Za-z0-9_-]+$") {
+    throw "Invalid Ubuntu user name."
+}
+if ($ServiceName -notmatch "^[A-Za-z0-9_.@-]+$") {
+    throw "Invalid systemd service name."
+}
+if ($RemoteProjectPath -notmatch "^/[A-Za-z0-9_./-]+$") {
+    throw "Invalid Ubuntu project path."
 }
 
 $status = git -C $RepoRoot status --short
 if (-not $AllowDirty -and -not [string]::IsNullOrWhiteSpace($status)) {
-    throw "Working tree is not clean. Commit or stash changes before deploying, or pass -AllowDirty deliberately."
+    throw "Working tree is not clean. Commit changes before deploying, or pass -AllowDirty deliberately."
 }
 
 $commit = (git -C $RepoRoot rev-parse --short HEAD).Trim()
-$archivePath = Join-Path $env:TEMP "spelling-bee-$commit.tar"
-$remoteArchivePath = "/tmp/spelling-bee-$commit.tar"
-
-Write-Host "==> Packaging $commit"
-git -C $RepoRoot archive --format=tar -o $archivePath HEAD
-
-$nodeScript = @'
-const { Client } = require("ssh2");
-
-const config = JSON.parse(process.env.SPEAKEASY_DEPLOY_CONFIG || "{}");
-const password = process.env.SPEAKEASY_SSH_PASSWORD || "";
-
-function sh(value) {
-  return "'" + String(value).replace(/'/g, "'\\''") + "'";
+if ($commit -notmatch "^[0-9a-f]+$") {
+    throw "Unable to resolve the Git commit."
 }
 
-function connect() {
-  const conn = new Client();
-  return new Promise((resolve, reject) => {
-    conn.on("ready", () => resolve(conn)).on("error", reject).connect({
-      host: config.hostName,
-      port: 22,
-      username: config.userName,
-      password,
-      readyTimeout: 20000,
-    });
-  });
+$archivePath = Join-Path $env:TEMP "speakeasy-ubuntu-$commit.tar"
+$remoteArchivePath = "/home/$UserName/speakeasy-staging/speakeasy-$commit.tar"
+$target = "$UserName@$HostName"
+$sshArguments = @(
+    "-i", $SshKey,
+    "-o", "BatchMode=yes",
+    "-o", "ConnectTimeout=8",
+    "-o", "StrictHostKeyChecking=accept-new"
+)
+
+$remoteScript = @'
+set -euo pipefail
+
+project="$1"
+service_name="$2"
+archive="$3"
+commit="$4"
+staging_root="$HOME/speakeasy-staging/deploy"
+backup_dir="$HOME/speakeasy-staging/code-backups/$(date +%Y%m%d-%H%M%S)-$commit"
+
+test -s "$archive"
+test -d "$project/.venv"
+test -f "$project/.env"
+
+mkdir -p "$staging_root" "$backup_dir"
+release_dir=$(mktemp -d "$staging_root/$commit.XXXXXX")
+
+cleanup() {
+  case "$release_dir" in
+    "$staging_root"/*) rm -rf -- "$release_dir" ;;
+  esac
 }
+trap cleanup EXIT
 
-async function upload(conn) {
-  await new Promise((resolve, reject) => {
-    conn.sftp((err, sftp) => {
-      if (err) return reject(err);
-      sftp.fastPut(config.localArchivePath, config.remoteArchivePath, (putErr) => {
-        if (putErr) return reject(putErr);
-        resolve();
-      });
-    });
-  });
-}
+tar --exclude=.venv --exclude=uploads --exclude=.env \
+  -czf "$backup_dir/code-before.tar.gz" -C "$project" .
+tar -xf "$archive" -C "$release_dir"
 
-async function exec(conn, command) {
-  return await new Promise((resolve, reject) => {
-    let stdout = "";
-    let stderr = "";
-    conn.exec(command, (err, stream) => {
-      if (err) return reject(err);
-      stream
-        .on("close", (code) => {
-          if (code !== 0) {
-            reject(new Error(`exit ${code}\n${stdout}\n${stderr}`));
-            return;
-          }
-          resolve(stdout + (stderr ? `\nSTDERR:\n${stderr}` : ""));
-        })
-        .on("data", (data) => {
-          stdout += data.toString();
-        });
-      stream.stderr.on("data", (data) => {
-        stderr += data.toString();
-      });
-    });
-  });
-}
+rsync -a --delete \
+  --exclude=.env \
+  --exclude=.venv \
+  --exclude=uploads \
+  "$release_dir/" "$project/"
 
-async function main() {
-  const deployCommand = [
-    "set -e",
-    `cd ${sh(config.remoteProjectPath)}`,
-    `backup_dir="${config.remoteProjectPath}/.codex-backups/$(date +%Y%m%d-%H%M%S)"`,
-    `mkdir -p "$backup_dir"`,
-    `tar --exclude='./.venv' --exclude='./uploads' --exclude='./.codex-backups' -czf "$backup_dir/code-before.tar.gz" .`,
-    `tar -xf ${sh(config.remoteArchivePath)} -C ${sh(config.remoteProjectPath)}`,
-    `chown -R root:root ${sh(config.remoteProjectPath)}`,
-    `chmod -R u+rwX,go+rX ${sh(config.remoteProjectPath)}`,
-    `service_user="$(systemctl show ${sh(config.serviceName)} -p User --value 2>/dev/null || true)"; if [ -f .env ]; then if [ -n "$service_user" ] && id "$service_user" >/dev/null 2>&1; then chown root:"$service_user" .env && chmod 640 .env; else chown root:root .env && chmod 600 .env; fi; fi`,
-    `if command -v apt-get >/dev/null 2>&1 && { ! command -v fc-list >/dev/null 2>&1 || ! fc-list :lang=zh 2>/dev/null | grep -q .; } && [ ! -f /usr/share/fonts/truetype/wqy/wqy-microhei.ttc ]; then apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fontconfig fonts-wqy-microhei; fi`,
-    `if id spellingbee >/dev/null 2>&1; then mkdir -p uploads/previews uploads/images uploads/audio uploads/book-covers && chown -R spellingbee:spellingbee uploads && chmod -R u+rwX,go+rX uploads; fi`,
-    `systemctl restart ${sh(config.serviceName)}`,
-    "sleep 1",
-    `printf 'status=' && systemctl is-active ${sh(config.serviceName)}`,
-    "printf '\\n'",
-    `printf 'backup=' && echo "$backup_dir/code-before.tar.gz"`,
-    `printf 'commit=${config.commit}\\n'`,
-    `printf 'project_status=' && test -f PROJECT_STATUS.md && echo ok`,
-    `printf 'deploy_script=' && test -f scripts/deploy-production.ps1 && echo ok`,
-  ].join("\n");
+cd "$project"
+.venv/bin/python -m pip install --disable-pip-version-check -q -r requirements.txt
+.venv/bin/python -m compileall -q app
 
-  const conn = await connect();
-  try {
-    await upload(conn);
-    const output = await exec(conn, deployCommand);
-    process.stdout.write(output);
-  } finally {
-    conn.end();
-  }
-}
+old_pid=$(systemctl show "$service_name" -p MainPID --value)
+old_command=$(tr '\0' ' ' < "/proc/$old_pid/cmdline")
+case "$old_command" in
+  *"uvicorn app.main:app"*"--port 8011"*) kill -TERM "$old_pid" ;;
+  *) echo "Refusing to stop unexpected service process: $old_command" >&2; exit 1 ;;
+esac
 
-main().catch((err) => {
-  console.error(err.message || String(err));
-  process.exit(1);
-});
+for _ in $(seq 1 60); do
+  new_pid=$(systemctl show "$service_name" -p MainPID --value)
+  state=$(systemctl is-active "$service_name" 2>/dev/null || true)
+  if [ "$state" = "active" ] &&
+     [ "$new_pid" != "0" ] &&
+     [ "$new_pid" != "$old_pid" ] &&
+     curl -fsS -o /dev/null http://127.0.0.1:8011/login; then
+    printf 'status=active\nold_pid=%s\nnew_pid=%s\nbackup=%s\ncommit=%s\n' \
+      "$old_pid" "$new_pid" "$backup_dir/code-before.tar.gz" "$commit"
+    exit 0
+  fi
+  sleep 1
+done
+
+journalctl -u "$service_name" -n 50 --no-pager
+exit 1
 '@
 
-$tempScript = Join-Path $env:TEMP "speakeasy-deploy-production.js"
-Set-Content -LiteralPath $tempScript -Value $nodeScript -Encoding UTF8
+try {
+    Write-Host "==> Packaging $commit"
+    git -C $RepoRoot archive --format=tar -o $archivePath HEAD
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to create the deployment archive."
+    }
 
-$config = @{
-    hostName = $HostName
-    userName = $UserName
-    serviceName = $ServiceName
-    remoteProjectPath = $RemoteProjectPath
-    localArchivePath = $archivePath
-    remoteArchivePath = $remoteArchivePath
-    commit = $commit
-} | ConvertTo-Json -Compress
+    Write-Host "==> Uploading $commit to Ubuntu $HostName"
+    & scp @sshArguments $archivePath "${target}:$remoteArchivePath"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to upload the deployment archive."
+    }
 
-$env:SPEAKEASY_DEPLOY_CONFIG = $config
-$env:NODE_PATH = $NodeModulesPath
+    Write-Host "==> Deploying and restarting $ServiceName"
+    $remoteCommand = "bash -s -- $RemoteProjectPath $ServiceName $remoteArchivePath $commit"
+    $remoteScript | & ssh @sshArguments $target $remoteCommand
+    if ($LASTEXITCODE -ne 0) {
+        throw "Ubuntu deployment failed."
+    }
 
-Write-Host "==> Uploading and deploying $commit"
-node $tempScript
+    Write-Host "==> Checking public site"
+    $response = Invoke-WebRequest -UseBasicParsing -Uri $PublicBaseUrl -TimeoutSec 20
+    if ($response.StatusCode -ne 200) {
+        throw "$PublicBaseUrl returned HTTP $($response.StatusCode)."
+    }
+    Write-Host "public_status=$($response.StatusCode)"
+}
+finally {
+    Remove-Item -LiteralPath $archivePath -Force -ErrorAction SilentlyContinue
+}
