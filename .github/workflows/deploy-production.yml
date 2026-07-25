@@ -1,0 +1,49 @@
+name: Deploy SpeakEasy production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: speakeasy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to internal Ubuntu
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - speakeasy-production
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the release commit
+        uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify the deployment script
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUNNER_NAME}" = "speakeasy-production"
+          bash -n scripts/deploy-production-linux.sh
+          test -f app/main.py
+          test -f requirements.txt
+
+      - name: Deploy on 192.168.1.186
+        shell: bash
+        env:
+          SPEAKEASY_PROJECT_PATH: /opt/speakeasy/current
+          SPEAKEASY_SERVICE_NAME: speakeasy-local.service
+          SPEAKEASY_PUBLIC_BASE_URL: https://www.newabby.com
+        run: bash scripts/deploy-production-linux.sh

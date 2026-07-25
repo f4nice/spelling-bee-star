@@ -87,6 +87,12 @@ powershell -ExecutionPolicy Bypass -File scripts\deploy-production.ps1
 powershell -ExecutionPolicy Bypass -File scripts\check-production-logs.ps1
 ```
 
+GitHub 自动发布使用内网 Ubuntu 上的独立 self-hosted Runner
+`speakeasy-production`。推送到 `main` 或在 Actions 页面手动运行
+`Deploy SpeakEasy production` 后，工作流会直接同步到
+`/opt/speakeasy/current` 并重启 `speakeasy-local.service`。
+`139.224.9.235` 仅转发公网请求，不运行 Runner，也不保存发布代码。
+
 ## 好词好句
 
 本项目已合并 BookLearner，二级目录为 `好词好句`。启动同一个服务后打开：
