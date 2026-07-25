@@ -44,6 +44,25 @@ powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
 
 HTTP 冒烟检查的路径维护在 `scripts/verification-urls.json`。
 
+## 本机离线运行
+
+本机同步数据保存在 `.local-sync/` 和 `uploads/`，不依赖生产服务器或线上
+RDS。启动脚本会显式覆盖当前进程继承的 `DATABASE_URL`，确保应用只连接
+`127.0.0.1:3306/spelling_bee`，并且 MySQL 与应用都只监听本机回环地址。
+
+```powershell
+# 启动 MySQL 和应用
+powershell -ExecutionPolicy Bypass -File scripts\local.ps1 start
+
+# 检查状态
+powershell -ExecutionPolicy Bypass -File scripts\local.ps1 status
+
+# 停止应用和 MySQL
+powershell -ExecutionPolicy Bypass -File scripts\local.ps1 stop
+```
+
+启动后打开 `http://127.0.0.1:8011/`。运行日志位于 `.local-sync/logs/`。
+
 只检查 Vue 页面/路由覆盖：
 
 ```powershell
