@@ -44,24 +44,29 @@ powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
 
 HTTP 冒烟检查的路径维护在 `scripts/verification-urls.json`。
 
-## 本机离线运行
+## 本机 Ubuntu 虚拟机运行
 
-本机同步数据保存在 `.local-sync/` 和 `uploads/`，不依赖生产服务器或线上
-RDS。启动脚本会显式覆盖当前进程继承的 `DATABASE_URL`，确保应用只连接
-`127.0.0.1:3306/spelling_bee`，并且 MySQL 与应用都只监听本机回环地址。
+本机开发环境部署在 Hyper-V 虚拟机 `QuantRadar-Ubuntu`
+（`192.168.1.186`）中，不依赖生产服务器或线上 RDS。应用由 Ubuntu
+systemd 服务 `speakeasy-local.service` 管理，监听局域网端口 `8011`；
+MySQL 只接受虚拟机本机连接。
 
 ```powershell
-# 启动 MySQL 和应用
+# 启动 Ubuntu 中的 MySQL 和应用（会提示输入 qradmin 的 sudo 密码）
 powershell -ExecutionPolicy Bypass -File scripts\local.ps1 start
 
-# 检查状态
+# 从 Windows 检查 Ubuntu 服务状态
 powershell -ExecutionPolicy Bypass -File scripts\local.ps1 status
 
-# 停止应用和 MySQL
+# 停止 Ubuntu 中的应用和 MySQL（会提示输入 sudo 密码）
 powershell -ExecutionPolicy Bypass -File scripts\local.ps1 stop
 ```
 
-启动后打开 `http://127.0.0.1:8011/`。运行日志位于 `.local-sync/logs/`。
+启动后打开 `http://192.168.1.186:8011/`。Ubuntu 上可用下面的命令查看日志：
+
+```bash
+journalctl -u speakeasy-local.service -f
+```
 
 只检查 Vue 页面/路由覆盖：
 
