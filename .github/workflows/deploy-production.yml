@@ -25,11 +25,31 @@ jobs:
 
     steps:
       - name: Check out the release commit
-        uses: actions/checkout@v6
-        with:
-          clean: true
-          fetch-depth: 0
-          persist-credentials: false
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "${GITHUB_SHA}" =~ ^[0-9a-f]{40}$ ]]
+
+          if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            git init .
+          fi
+
+          repository_url="https://github.com/${GITHUB_REPOSITORY}.git"
+          if git remote get-url origin >/dev/null 2>&1; then
+            git remote set-url origin "${repository_url}"
+          else
+            git remote add origin "${repository_url}"
+          fi
+
+          auth_header="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
+            fetch --no-tags --prune --depth=1 origin "${GITHUB_SHA}"
+          unset auth_header GH_TOKEN
+
+          git checkout --force --detach "${GITHUB_SHA}"
+          git clean -ffdx
 
       - name: Verify the deployment script
         shell: bash
