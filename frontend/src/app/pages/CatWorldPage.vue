@@ -184,6 +184,7 @@ const hygieneMoodPenalty = computed(() => Number(hygiene.value.moodDecayBonus ??
 const litterBathAccelerationText = computed(() => litterBathAccelerationLabel(hygiene.value));
 const ownedCats = computed(() => state.value.ownedCats || []);
 const cats = computed(() => payload.value.cats || []);
+const catProfiles = computed(() => payload.value.catProfiles || []);
 const shop = computed(() => payload.value.shop || []);
 const blindBoxCatalog = computed(() => payload.value.blindBoxCatalog || { series: [] });
 const catCollectionCatalog = computed(() => payload.value.catCollectionCatalog || {
@@ -196,8 +197,14 @@ const currentBlindSeries = computed(
 );
 const gameSettings = computed(() => payload.value.gameSettings || {});
 const shopById = computed(() => Object.fromEntries(shop.value.map((item) => [item.id, item])));
-const selectedCat = computed(() => cats.value.find((cat) => cat.id === state.value.selectedCat && ownedCats.value.includes(cat.id)) || {});
+const selectedCat = computed(() =>
+  catProfiles.value.find((cat) => cat.id === state.value.selectedCatProfile)
+  || catProfiles.value.find((cat) => cat.breedId === state.value.selectedCat)
+  || cats.value.find((cat) => cat.id === state.value.selectedCat && ownedCats.value.includes(cat.id))
+  || {},
+);
 const roomCats = computed(() => {
+  if (catProfiles.value.length) return catProfiles.value;
   const owned = new Set(ownedCats.value);
   const visibleCats = cats.value.filter((cat) => owned.has(cat.id));
   return visibleCats;
@@ -205,20 +212,21 @@ const roomCats = computed(() => {
 const focusedCat = computed(
   () =>
     roomCats.value.find((cat) => cat.id === focusedCatId.value) ||
-    roomCats.value.find((cat) => cat.id === state.value.selectedCat) ||
+    roomCats.value.find((cat) => cat.id === state.value.selectedCatProfile) ||
+    roomCats.value.find((cat) => (cat.breedId || cat.id) === state.value.selectedCat) ||
     roomCats.value[0] ||
     {},
 );
 const mood = computed(() => state.value.mood || {});
 const focusedDailyLog = computed(
   () =>
-    dailyLogs.value[focusedCat.value.id] ||
+    dailyLogs.value[focusedCat.value.breedId || focusedCat.value.id] ||
     dailyLogs.value[state.value.selectedCat] ||
     mood.value.dailyLog ||
     {},
 );
 const focusedAgentState = computed(() => focusedDailyLog.value.agentState || {});
-const focusedBond = computed(() => catBonds.value[focusedCat.value.id] || {});
+const focusedBond = computed(() => catBonds.value[focusedCat.value.breedId || focusedCat.value.id] || {});
 const rawActiveFood = computed(() => mood.value.activeFood || {});
 const activeFoodRemainingSeconds = computed(() => {
   const food = rawActiveFood.value || {};
@@ -277,8 +285,7 @@ const ownedFoodCount = computed(() =>
 const lastPlayLabel = computed(() => shopById.value[mood.value.lastPlayItem]?.label || "");
 const activeToolItems = computed(() => {
   if (activeToolCategory.value === "cat") {
-    return cats.value
-      .filter((cat) => ownsCat(cat.id))
+    return roomCats.value
       .map((cat) => ({
         ...cat,
         category: "cat",
@@ -367,15 +374,34 @@ function signedHourlyValue(value) {
   return numeric > 0 ? `+${numeric}` : `${numeric}`;
 }
 
+function catBreedId(cat) {
+  return cat?.breedId || cat?.id || "";
+}
+
+function catProfileCount(breedId) {
+  return catProfiles.value.filter((cat) => cat.breedId === breedId).length;
+}
+
+function catForId(catId) {
+  return catProfiles.value.find((cat) => cat.id === catId)
+    || catProfiles.value.find(
+      (cat) => cat.id === state.value.selectedCatProfile && cat.breedId === catId,
+    )
+    || catProfiles.value.find((cat) => cat.breedId === catId)
+    || cats.value.find((cat) => cat.id === catId)
+    || null;
+}
+
 const catAgentCards = computed(() =>
-  cats.value.filter((cat) => !cat.limited || ownsCat(cat.id)).map((cat) => {
-    const owned = ownsCat(cat.id);
-    const log = dailyLogs.value[cat.id] || {};
+  roomCats.value.map((cat) => {
+    const breedId = catBreedId(cat);
+    const owned = ownsCat(breedId);
+    const log = dailyLogs.value[breedId] || {};
     const agent = log.agentState || {};
     const behavior = agent.currentBehavior || {};
-    const bond = catBonds.value[cat.id] || {};
+    const bond = catBonds.value[breedId] || {};
     const careNeed = agent.careNeed || {};
-    const lostInfo = lostCats.value[cat.id] || null;
+    const lostInfo = lostCats.value[breedId] || null;
     const agentEvents = Array.isArray(agent.events) ? agent.events.filter((event) => event?.message) : [];
     const latestEvent = agentEvents.length ? agentEvents[agentEvents.length - 1] : null;
     return {
@@ -483,20 +509,46 @@ const catAgentDiaries = computed(() =>
 const activeCatDiary = computed(() =>
   catAgentDiaries.value.find((cat) => cat.id === openCatDiaryId.value) || null,
 );
+const gameDailyLogs = computed(() =>
+  Object.fromEntries(
+    roomCats.value.map((cat) => [cat.id, dailyLogs.value[catBreedId(cat)] || {}]),
+  ),
+);
+const selectedProfileId = computed(() =>
+  state.value.selectedCatProfile
+  || roomCats.value.find((cat) => catBreedId(cat) === state.value.selectedCat)?.id
+  || roomCats.value[0]?.id
+  || "",
+);
+function gameTargetProfileId(targetBreedId) {
+  if (!targetBreedId) return "";
+  const selected = roomCats.value.find(
+    (cat) => cat.id === selectedProfileId.value && catBreedId(cat) === targetBreedId,
+  );
+  return selected?.id || roomCats.value.find((cat) => catBreedId(cat) === targetBreedId)?.id || targetBreedId;
+}
+const gameActiveFood = computed(() => ({
+  ...activeFood.value,
+  targetCatId: gameTargetProfileId(activeFood.value.targetCatId),
+}));
+const gameActiveCare = computed(() => ({
+  ...activeCare.value,
+  targetCatId: gameTargetProfileId(activeCare.value.targetCatId),
+}));
 const gameSnapshot = computed(() => ({
-  cats: cats.value,
+  cats: roomCats.value,
   inventory: inventory.value,
   damagedItems: damagedItems.value,
   layout: roomLayout.value,
   mood: mood.value,
-  activeFood: activeFood.value,
-  activeCare: activeCare.value,
+  activeFood: gameActiveFood.value,
+  activeCare: gameActiveCare.value,
   hygiene: hygiene.value,
-  dailyLogs: dailyLogs.value,
-  ownedCats: ownedCats.value,
+  dailyLogs: gameDailyLogs.value,
+  ownedCats: roomCats.value.map((cat) => cat.id),
   ownedFoodCount: ownedFoodCount.value,
   roomStyles: roomStyles.value,
-  selectedCatId: state.value.selectedCat,
+  selectedCatId: selectedProfileId.value,
   gameSettings: gameSettings.value,
   scene: currentScene.value,
   editMode: roomEditMode.value,
@@ -584,7 +636,8 @@ function itemCount(itemId) {
 }
 
 function catIconColor(catId) {
-  return catIconColors[catId] || "#ffbfd7";
+  const profile = catProfiles.value.find((cat) => cat.id === catId);
+  return catIconColors[profile?.breedId || catId] || "#ffbfd7";
 }
 
 function toggleCatDiary(cat) {
@@ -668,7 +721,7 @@ function handleRoomToyClick(itemId, interaction = null) {
     }
     if (item.category === "food" && activeFood.value.active && activeFood.value.itemId === item.id) {
       notice.value = `${item.label} 正在房间里，优先给${activeFood.value.targetCatLabel || "体力最低的小猫"}慢慢吃，剩余可补体力 ${activeFood.value.remainingEnergy || 0}，还剩 ${formatSeconds(activeFood.value.remainingSeconds)}。`;
-      const targetCat = cats.value.find((cat) => cat.id === activeFood.value.targetCatId) || focusedCat.value;
+      const targetCat = catForId(activeFood.value.targetCatId) || focusedCat.value;
       showCatReaction(targetCat, `${item.label}还在房间里，我会慢慢吃完。`);
       return;
     }
@@ -687,7 +740,7 @@ function recordCatAmbientEvent(cat, event = {}) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      catId: cat.id,
+      catId: catBreedId(cat),
       kind: event.kind,
       itemId: event.itemId,
       label: event.label || "",
@@ -698,8 +751,7 @@ function recordCatAmbientEvent(cat, event = {}) {
       replacePayload(nextPayload);
     }
     if (event.kind === "rest-spot" && nextPayload?.recorded && nextPayload?.event?.message) {
-      const targetCat = cats.value.find((item) => item.id === nextPayload.effect?.catId) || cat;
-      showCatReaction(targetCat, nextPayload.event.message);
+      showCatReaction(cat, nextPayload.event.message);
     }
   }).catch(() => {
     ambientEventCooldowns.delete(key);
@@ -709,7 +761,7 @@ function recordCatAmbientEvent(cat, event = {}) {
 function recordCatFoodNibble(cat, event = {}) {
   if (roomEditMode.value) return;
   if (!cat?.id || !activeFood.value.active) return;
-  if (activeFood.value.targetCatId && activeFood.value.targetCatId !== cat.id) return;
+  if (activeFood.value.targetCatId && activeFood.value.targetCatId !== catBreedId(cat)) return;
   const token = rawActiveFood.value?.expiresAt || activeFood.value.itemId || "active-food";
   const key = `${cat.id}:${token}`;
   const now = Date.now();
@@ -719,7 +771,7 @@ function recordCatFoodNibble(cat, event = {}) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      catId: cat.id,
+      catId: catBreedId(cat),
       itemId: event.itemId || activeFood.value.itemId,
     }),
   }).then((nextPayload) => {
@@ -727,8 +779,7 @@ function recordCatFoodNibble(cat, event = {}) {
     replacePayload(nextPayload);
     const effect = nextPayload?.effect || {};
     if (effect.recorded && effect.message) {
-      const targetCat = cats.value.find((item) => item.id === effect.catId) || cat;
-      showCatReaction(targetCat, effect.message);
+      showCatReaction(cat, effect.message);
     }
   }).catch(() => {
     foodNibbleCooldowns.delete(key);
@@ -736,14 +787,18 @@ function recordCatFoodNibble(cat, event = {}) {
 }
 
 function ownedToolCount(categoryKey) {
-  if (categoryKey === "cat") return ownedCats.value.length;
+  if (categoryKey === "cat") return roomCats.value.length;
   return shop.value.filter((item) => item.category === categoryKey && itemCount(item.id) > 0).length;
 }
 
 function ownedToolSubtext(item) {
   const damaged = damageInfo(item);
   if (damaged) return `损坏 · 维修需 1 把锤子 + ${damaged.repairCost || 0} 能量`;
-  if (item.category === "cat") return item.personality || "正在陪读";
+  if (item.category === "cat") {
+    return [item.genderLabel, item.patternLabel, item.featureLabel].filter(Boolean).join(" · ")
+      || item.personality
+      || "正在陪读";
+  }
   const suffix = item.favoriteLabel ? ` · ${item.favoriteLabel}` : "";
   if (item.category === "food") return `拥有 ${item.count} · ${foodTypeLabel(item)}${suffix}`;
   if (item.category === "consumable") {
@@ -1009,7 +1064,7 @@ function isOneTimeOwned(item) {
 function canPurchase(item) {
   if (!item?.id) return false;
   if (item.category === "blind-box") return !item.drawn && Number(item.remainingStock || 0) > 0 && canAfford(item);
-  if (item.category === "cat") return ownsCat(item.id) ? state.value.selectedCat !== item.id : canAfford(item);
+  if (item.category === "cat") return canAfford(item);
   if (item.category === "color") return targetDecorOwned(item) && (itemCount(item.id) > 0 || canAfford(item));
   if (item.category === "handbook") return !isOneTimeOwned(item) && canAfford(item);
   if (["toy", "decor"].includes(item.category)) return !isOneTimeOwned(item) && canAfford(item);
@@ -1021,8 +1076,13 @@ function purchaseHint(item) {
   if (item.category === "handbook" && isOneTimeOwned(item)) {
     return "已永久拥有，点击打开手册";
   }
-  if (item.category === "cat" && lostCats.value[item.id]) {
-    return `${lostCats.value[item.id].escapeLabel || "长期缺少照护"}后离家 · 重新领养会恢复基础状态`;
+  if (item.category === "cat") {
+    const weights = gameSettings.value.genderDrawWeights || {};
+    const remaining = Math.max(Number(energy.value.available || 0) - Number(item.cost || 0), 0);
+    const returnText = lostCats.value[item.id]
+      ? `${lostCats.value[item.id].escapeLabel || "长期缺少照护"}后离家 · 本次会恢复品种状态 · `
+      : "";
+    return `${returnText}公猫 ${weights.malePercent ?? 50}% · 母猫 ${weights.femalePercent ?? 50}% · 随机花纹和特点 · 扣 ${item.cost} 能量 · 剩余 ${remaining}`;
   }
   if (item.category === "color" && !targetDecorOwned(item)) {
     return `需要先购买${item.targetDecorLabel || "对应家具"}`;
@@ -1069,9 +1129,8 @@ function purchaseHint(item) {
 function purchaseButtonText(item) {
   if (busyItemId.value === item.id) return "处理中...";
   if (item.category === "handbook" && isOneTimeOwned(item)) return "打开手册";
-  if (item.category === "cat" && ownsCat(item.id) && state.value.selectedCat !== item.id) return "设为主猫";
-  if (item.category === "cat" && ownsCat(item.id)) return "已选择";
   if (item.category === "cat" && lostCats.value[item.id]) return canAfford(item) ? `扣 ${item.cost} 能量重新领养` : "能量不足";
+  if (item.category === "cat" && ownsCat(item.id)) return canAfford(item) ? `再领养一只` : "能量不足";
   if (item.category === "color" && !targetDecorOwned(item)) return "先买家具";
   if (item.category === "blind-box" && item.drawn) return "本期已开启";
   if (item.category === "blind-box" && Number(item.remainingStock || 0) <= 0) return "本期已售罄";
@@ -1127,7 +1186,7 @@ async function petCat(cat = selectedCat.value, options = {}) {
     const nextPayload = await fetchJson(routeApiPaths.catWorldPet(), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ catId: cat.id }),
+      body: JSON.stringify({ catId: catBreedId(cat) }),
     });
     replacePayload(nextPayload);
     if (nextPayload.effect?.message) {
@@ -1142,10 +1201,6 @@ async function petCat(cat = selectedCat.value, options = {}) {
 
 async function purchase(item) {
   if (!item?.id || busyItemId.value) return;
-  if (item.category === "cat" && ownsCat(item.id)) {
-    await selectCat(item.id);
-    return;
-  }
   const wasLost = Boolean(lostCats.value[item.id]);
   busyItemId.value = item.id;
   notice.value = "";
@@ -1158,7 +1213,8 @@ async function purchase(item) {
     replacePayload(nextPayload);
     if (nextPayload.blindBoxResult?.cat) {
       openedBlindBox.value = nextPayload.blindBoxResult;
-      notice.value = `抽中了 ${nextPayload.blindBoxResult.cat.rarity} · ${nextPayload.blindBoxResult.cat.label}！`;
+      const profile = nextPayload.blindBoxResult.profile || nextPayload.adoptedCatProfile || {};
+      notice.value = `抽中了 ${nextPayload.blindBoxResult.cat.rarity} · ${nextPayload.blindBoxResult.cat.label}，${profile.genderLabel || "随机性别"} · ${profile.patternLabel || "随机花纹"} · ${profile.featureLabel || "随机特点"}！`;
       return;
     }
     if (item.category === "handbook") {
@@ -1166,9 +1222,11 @@ async function purchase(item) {
       notice.value = `${item.label} 已永久解锁。`;
       return;
     }
+    const adopted = nextPayload.adoptedCatProfile || {};
+    const profileText = [adopted.genderLabel, adopted.patternLabel, adopted.featureLabel].filter(Boolean).join(" · ");
     notice.value = wasLost
-      ? `${item.label} 已重新回到活动室，体力和心情恢复到安全状态。`
-      : `${item.label} 已加入猫咪世界。`;
+      ? `${item.label} 已重新回到活动室，${profileText}，体力和心情恢复到安全状态。`
+      : `${adopted.displayLabel || item.label} 已加入猫咪世界：${profileText}。`;
   } catch (error) {
     notice.value = error.message || "购买失败，请稍后再试。";
   } finally {
@@ -1194,7 +1252,7 @@ async function play(item) {
     if (item.category === "food") {
       const active = nextPayload.state?.mood?.activeFood;
       const effect = nextPayload.effect || {};
-      const targetCat = cats.value.find((cat) => cat.id === effect.catId) || focusedCat.value;
+      const targetCat = catForId(effect.catId) || focusedCat.value;
       const energyGain = Number(effect.energyGain ?? 0);
       const moodGain = Number(effect.moodGain ?? 0);
       const totalEnergyGain = Number(effect.totalEnergyGain ?? active?.catEnergyEffective ?? foodEnergyGainValue(item));
@@ -1210,7 +1268,7 @@ async function play(item) {
       showCatReaction(targetCat, `先吃了一口${item.label}${favoriteText}，体力 +${energyGain}，心情 +${moodGain}。`);
     } else {
       const effect = nextPayload.effect || {};
-      const targetCat = cats.value.find((cat) => cat.id === effect.catId) || selectedCat.value;
+      const targetCat = catForId(effect.catId) || selectedCat.value;
       const favoriteText = effect.favoriteMatch ? "最喜欢的" : "";
       notice.value = `${effect.catLabel || targetCat.label || "猫咪"} 和 ${favoriteText}${item.label} 玩了一会儿，心情 +${effect.moodGain ?? item.mood ?? 0}，体力 ${effect.energyGain ?? 0}。`;
       showCatReaction(targetCat, `玩了${favoriteText}${item.label}，心情 +${effect.moodGain ?? item.mood ?? 0}。`);
@@ -1242,7 +1300,8 @@ async function useConsumable(item, options = {}) {
   if (!item?.id || busyItemId.value || roomEditMode.value) return;
   busyItemId.value = item.id;
   notice.value = "";
-  const targetCatId = options.targetCatId || openCatDiaryId.value || focusedCat.value.id || state.value.selectedCat;
+  const targetProfileId = options.targetCatId || openCatDiaryId.value || focusedCat.value.id;
+  const targetCatId = catBreedId(catForId(targetProfileId)) || state.value.selectedCat;
   try {
     const nextPayload = await fetchJson(routeApiPaths.catWorldUseConsumable(), {
       method: "POST",
@@ -1252,8 +1311,10 @@ async function useConsumable(item, options = {}) {
     replacePayload(nextPayload);
     const effect = nextPayload.effect || {};
     notice.value = `${effect.message || `${item.label}已经使用。`} 剩余 ${effect.remaining || 0} 个。`;
-    const targetCat = cats.value.find((cat) => cat.id === effect.catId) || focusedCat.value;
-    const targetEffect = Array.isArray(effect.effects) ? effect.effects.find((row) => row.catId === targetCat.id) : null;
+    const targetCat = catForId(effect.catId) || focusedCat.value;
+    const targetEffect = Array.isArray(effect.effects)
+      ? effect.effects.find((row) => row.catId === catBreedId(targetCat))
+      : null;
     if (targetEffect?.message) showCatReaction(targetCat, targetEffect.message);
   } catch (error) {
     notice.value = error.message || "消耗品使用失败，请稍后再试。";
@@ -1331,20 +1392,23 @@ async function applyDecorStyle(decorId, option) {
   }
 }
 
-async function selectCat(catId) {
+async function selectCat(catOrId) {
+  const profile = typeof catOrId === "object" ? catOrId : catForId(catOrId);
+  const catId = catBreedId(profile) || String(catOrId || "");
+  const profileId = profile?.profileId || (profile?.breedId ? profile.id : "");
   if (!catId || busyItemId.value) return;
-  busyItemId.value = catId;
+  busyItemId.value = profileId || catId;
   notice.value = "";
   try {
     const nextPayload = await fetchJson(routeApiPaths.catWorldSelectCat(), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ catId }),
+      body: JSON.stringify({ catId, profileId }),
     });
     replacePayload(nextPayload);
-    const cat = cats.value.find((item) => item.id === catId);
-    focusedCatId.value = catId;
-    notice.value = `${cat?.label || "猫咪"} 正在房间里陪读。`;
+    const cat = profile || catForId(nextPayload.state?.selectedCatProfile) || catForId(catId);
+    focusedCatId.value = profileId || cat?.id || catId;
+    notice.value = `${cat?.displayLabel || cat?.label || "猫咪"} 正在房间里陪读。`;
   } catch (error) {
     notice.value = error.message || "切换猫咪失败，请稍后再试。";
   } finally {
@@ -1494,7 +1558,7 @@ async function selectCat(catId) {
         <div class="cat-world-room-status">
           <span>已拥有装饰 {{ ownedDecor.length }}</span>
           <span>食物 {{ ownedFoodCount }}</span>
-          <span>猫咪 {{ ownedCats.length }}</span>
+          <span>猫咪 {{ roomCats.length }}</span>
           <span :class="{ alert: hygiene.count > 0 }">卫生 {{ hygiene.count || 0 }} 堆猫屎</span>
           <span v-if="activeFood.active">食物剩余 {{ formatSeconds(activeFood.remainingSeconds) }}</span>
           <span v-if="activeCare.active">猫草剩余 {{ formatSeconds(activeCare.remainingSeconds) }}</span>
@@ -1565,7 +1629,7 @@ async function selectCat(catId) {
             :class="[
               'cat-world-owned-item',
               {
-                active: selectedDecorId === item.id || state.selectedCat === item.id,
+                active: selectedDecorId === item.id || state.selectedCatProfile === item.id,
                 damaged: item.damageInfo,
                 'has-color-swatches': item.category === 'decor' && item.styleOptions?.length,
               },
@@ -1615,15 +1679,15 @@ async function selectCat(catId) {
               :class="['cat-world-profile-icon-button', { active: openCatDiaryId === cat.id }]"
               aria-haspopup="dialog"
               :aria-expanded="openCatDiaryId === cat.id"
-              :aria-label="`查看${cat.label}的今日档案`"
+              :aria-label="`查看${cat.displayLabel || cat.label}的今日档案`"
               aria-controls="cat-world-active-diary"
               @click="toggleCatDiary(cat)"
             >
               <span class="cat-world-profile-icon" :style="{ '--cat-icon-color': catIconColor(cat.id) }">
                 <CatIcon :size="20" :stroke-width="2.5" aria-hidden="true" />
               </span>
-              <strong>{{ cat.label }}</strong>
-              <small>{{ cat.neglectCritical ? cat.neglectStatusLabel : cat.needsBath ? cat.hygieneStatusLabel : cat.dailyMoodLabel }}</small>
+              <strong>{{ cat.displayLabel || cat.label }}</strong>
+              <small>{{ cat.genderLabel }} · {{ cat.patternLabel }} · {{ cat.neglectCritical ? cat.neglectStatusLabel : cat.needsBath ? cat.hygieneStatusLabel : cat.dailyMoodLabel }}</small>
             </button>
           </div>
         </section>
@@ -1640,7 +1704,7 @@ async function selectCat(catId) {
         <header class="cat-world-profile-modal-head">
           <div>
             <p class="section-kicker">Agent Diary</p>
-            <h2 id="cat-world-profile-modal-title">{{ activeCatDiary.label }}的今日档案</h2>
+            <h2 id="cat-world-profile-modal-title">{{ activeCatDiary.displayLabel || activeCatDiary.label }}的今日档案</h2>
           </div>
           <button
             class="cat-world-profile-modal-close"
@@ -1659,7 +1723,7 @@ async function selectCat(catId) {
         class="cat-world-agent-card cat-world-agent-card-expanded"
       >
         <header>
-          <span>{{ activeCatDiary.label }}</span>
+          <span>{{ activeCatDiary.displayLabel || activeCatDiary.label }}</span>
           <strong>{{ activeCatDiary.dailyMoodLabel }}</strong>
         </header>
         <p>{{ activeCatDiary.behaviorLabel }} · {{ activeCatDiary.routineLabel }}</p>
@@ -1704,6 +1768,7 @@ async function selectCat(catId) {
           <small v-else>背包里没有泡泡浴套装，请到消耗品商店购买。</small>
         </div>
         <dl class="cat-world-agent-facts">
+          <div><dt>个体档案</dt><dd>{{ activeCatDiary.genderLabel }} · {{ activeCatDiary.patternLabel }} · {{ activeCatDiary.featureLabel }}</dd></div>
           <div><dt>作息</dt><dd>{{ activeCatDiary.sleepLabel }}</dd></div>
           <div><dt>消耗</dt><dd>{{ activeCatDiary.decayLabel }}</dd></div>
           <div><dt>亲密</dt><dd>{{ activeCatDiary.bondLabel }} · {{ activeCatDiary.bondDetailLabel }}</dd></div>
@@ -1783,13 +1848,19 @@ async function selectCat(catId) {
               <span>永久道具</span>
               <span>{{ item.handbookType === 'cats' ? '猫咪卡册' : '食物图鉴' }}</span>
             </div>
+            <div v-else-if="item.category === 'cat'" class="cat-world-food-tags cat-world-cat-draw-tags">
+              <span>公猫 {{ gameSettings.genderDrawWeights?.malePercent ?? 50 }}%</span>
+              <span>母猫 {{ gameSettings.genderDrawWeights?.femalePercent ?? 50 }}%</span>
+              <span>随机花纹</span>
+              <span>随机特点</span>
+            </div>
             <p>{{ item.description }}</p>
           </div>
           <div class="cat-world-shop-meta">
             <strong>{{ item.cost }} 能量</strong>
             <em v-if="item.hasCustomCost">后台价 · 默认 {{ item.defaultCost }}</em>
             <span v-if="item.category === 'cat' && ownsCat(item.id)">
-              {{ state.selectedCat === item.id ? "正在陪读" : "已拥有" }}
+              已领养 {{ catProfileCount(item.id) }} 只
             </span>
             <span v-else-if="item.category === 'cat' && lostCats[item.id]">已离家 · 可重新领养</span>
             <span v-else-if="item.category === 'color' && itemCount(item.id)">
@@ -1928,13 +1999,13 @@ async function selectCat(catId) {
           v-for="cat in catAgentCards"
           :key="cat.id"
           type="button"
-          :class="['cat-world-cat-chip', { active: state.selectedCat === cat.id, locked: !cat.owned }]"
+          :class="['cat-world-cat-chip', { active: state.selectedCatProfile === cat.id, locked: !cat.owned }]"
           :disabled="!cat.owned || busyItemId === cat.id"
-          @click="selectCat(cat.id)"
+          @click="selectCat(cat)"
         >
-          <span>{{ cat.owned ? cat.rarity || cat.englishName : cat.escaped ? "已离家" : "未解锁" }}</span>
-          <strong>{{ cat.label }}</strong>
-          <small>{{ cat.owned ? cat.personality || cat.englishName : cat.escaped ? `${cat.lostInfo.escapeLabel}，请去商店重新领养` : cat.description }}</small>
+          <span>{{ cat.owned ? `${cat.genderLabel || "性别待定"} · ${cat.profileCode || cat.rarity || cat.englishName}` : cat.escaped ? "已离家" : "未解锁" }}</span>
+          <strong>{{ cat.displayLabel || cat.label }}</strong>
+          <small>{{ cat.owned ? `${cat.patternLabel || "原生花纹"} · ${cat.featureLabel || "普通特点"} · ${cat.personality || cat.englishName}` : cat.escaped ? `${cat.lostInfo.escapeLabel}，请去商店重新领养` : cat.description }}</small>
           <div v-if="cat.owned" class="cat-world-cat-agent-status">
             <p>
               <b>{{ cat.dailyMoodLabel }}</b>
@@ -1998,6 +2069,9 @@ async function selectCat(catId) {
           <b>{{ openedBlindBox.cat.rarity }}</b>
         </div>
         <h2 id="cat-world-blind-result-title">{{ openedBlindBox.cat.label }}</h2>
+        <p v-if="openedBlindBox.profile" class="cat-world-blind-profile">
+          {{ openedBlindBox.profile.genderLabel }} · {{ openedBlindBox.profile.patternLabel }} · {{ openedBlindBox.profile.featureLabel }}
+        </p>
         <p>{{ openedBlindBox.cat.description }}</p>
         <button class="primary-action-button" type="button" @click="openedBlindBox = null">收入猫咪卡册</button>
       </section>
@@ -2009,7 +2083,7 @@ async function selectCat(catId) {
           <div>
             <p class="section-kicker">Energy</p>
             <h2 id="cat-world-energy-title">学习产能</h2>
-            <p>能量只通过学习获得，猫粮、玩具、装修和配色都会消耗这里的能量。</p>
+            <p>学习积分、作文成绩和运营活动都会形成能量，猫粮、玩具、装修和配色会消耗这里的能量。</p>
           </div>
           <button class="secondary-button compact-button" type="button" @click="energyModalOpen = false">关闭</button>
         </header>
@@ -2023,7 +2097,7 @@ async function selectCat(catId) {
           <div v-for="source in energy.sources || []" :key="source.key" class="cat-world-energy-row">
             <span>{{ source.label }}</span>
             <strong>{{ source.energy }}</strong>
-            <small>{{ source.value }}{{ source.unit }} x {{ source.energyPerUnit }}</small>
+            <small>{{ source.detail || `${source.value}${source.unit} x ${source.energyPerUnit}` }}</small>
           </div>
         </div>
       </section>

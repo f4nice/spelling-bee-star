@@ -226,6 +226,7 @@ class CatWorldState(Base):
     cat_bonds: Mapped[str | None] = mapped_column(Text)
     cat_care: Mapped[str | None] = mapped_column(Text)
     selected_cat: Mapped[str] = mapped_column(String(80), default="mimi", server_default="mimi", nullable=False)
+    selected_cat_profile: Mapped[str | None] = mapped_column(String(80))
     last_play_item: Mapped[str | None] = mapped_column(String(80))
     last_played_at: Mapped[datetime | None] = mapped_column(DateTime)
     active_food_item: Mapped[str | None] = mapped_column(String(80))
@@ -241,6 +242,34 @@ class CatWorldState(Base):
     damaged_items: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class CatWorldCatProfile(Base):
+    __tablename__ = "cat_world_cat_profiles"
+    __table_args__ = (UniqueConstraint("profile_id", name="uq_cat_world_cat_profiles_profile"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    profile_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    breed_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    gender: Mapped[str] = mapped_column(String(16), nullable=False)
+    pattern_key: Mapped[str] = mapped_column(String(40), nullable=False)
+    feature_key: Mapped[str] = mapped_column(String(40), nullable=False)
+    source: Mapped[str] = mapped_column(String(40), default="shop", server_default="shop", nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1", nullable=False)
+    adopted_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    escaped_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class CatWorldEnergyGrant(Base):
+    __tablename__ = "cat_world_energy_grants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    granted_by_phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
 
 class CatWorldScene(Base):

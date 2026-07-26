@@ -1878,7 +1878,7 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   drawCatShape(container, cat, selected, snapshot, behavior = {}) {
-    const colors = CAT_COLORS[cat.id] || CAT_COLORS.mimi;
+    const colors = CAT_COLORS[cat.breedId || cat.id] || CAT_COLORS.mimi;
     const graphics = makeLocalGraphics(this, container);
     const energyScore = catEnergyForSnapshot(snapshot, cat);
     const moodScore = catMoodForSnapshot(snapshot, cat);
@@ -2165,6 +2165,45 @@ class CatWorldScene extends Phaser.Scene {
     pixelBlock(graphics, 47, 14, 4, 1, INK);
     pixelBlock(graphics, 31, 17, 4, 1, INK);
     pixelBlock(graphics, 48, 17, 4, 1, INK);
+    this.drawCatProfileVariation(graphics, cat, colors);
+  }
+
+  drawCatProfileVariation(graphics, cat, colors) {
+    const pattern = String(cat.patternKey || "classic");
+    const feature = String(cat.featureKey || "");
+    if (pattern === "bold-stripes") {
+      pixelBlock(graphics, 18, 12, 3, 5, colors.stripe);
+      pixelBlock(graphics, 25, 12, 3, 5, colors.stripe);
+      pixelBlock(graphics, 32, 13, 2, 4, colors.stripe);
+    } else if (pattern === "soft-patches") {
+      pixelBlock(graphics, 17, 14, 6, 5, colors.shade);
+      pixelBlock(graphics, 27, 17, 6, 4, colors.shade);
+      pixelBlock(graphics, 39, 9, 4, 3, colors.shade);
+    } else if (pattern === "white-socks") {
+      pixelBlock(graphics, 14, 25, 3, 4, colors.belly);
+      pixelBlock(graphics, 29, 25, 3, 4, colors.belly);
+    } else if (pattern === "face-mask") {
+      pixelBlock(graphics, 36, 8, 10, 3, colors.shade);
+      pixelBlock(graphics, 37, 11, 3, 3, colors.shade);
+      pixelBlock(graphics, 44, 11, 2, 3, colors.shade);
+    }
+
+    if (feature === "bright-eyes") {
+      pixelBlock(graphics, 38, 12, 2, 2, 0x80f5df);
+      pixelBlock(graphics, 44, 12, 2, 2, 0x80f5df);
+    } else if (feature === "fluffy-tail") {
+      pixelBlock(graphics, 1, 10, 5, 6, INK);
+      pixelBlock(graphics, 2, 11, 4, 4, colors.body);
+      pixelBlock(graphics, 1, 12, 2, 2, colors.shade);
+    } else if (feature === "dark-ear-tips") {
+      pixelBlock(graphics, 36, 4, 4, 2, colors.stripe);
+      pixelBlock(graphics, 44, 4, 4, 2, colors.stripe);
+    } else if (feature === "white-bib") {
+      pixelBlock(graphics, 34, 18, 5, 4, colors.belly);
+    } else if (feature === "pink-paws") {
+      pixelBlock(graphics, 14, 28, 3, 1, 0xff9db7);
+      pixelBlock(graphics, 29, 28, 3, 1, 0xff9db7);
+    }
   }
 
   drawFrazzledFur(graphics, colors) {

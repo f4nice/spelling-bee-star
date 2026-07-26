@@ -34,7 +34,9 @@ from app.database import Base, SessionLocal, engine, get_db
 from app.models import (
     CacheEntry,
     CatWorldBlindBoxDraw,
+    CatWorldCatProfile,
     CatWorldDailyLog,
+    CatWorldEnergyGrant,
     CatWorldGameSetting,
     CatWorldLimitedCatStock,
     CatWorldScene,
@@ -96,8 +98,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260725-015"
-DEFAULT_PAGE_VERSION = "v20260725.15"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260726-016"
+DEFAULT_PAGE_VERSION = "v20260726.16"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -235,6 +237,12 @@ CAT_WORLD_DEFAULT_MOVEMENT_SPEED = 1.0
 CAT_WORLD_MIN_MOVEMENT_SPEED = 0.4
 CAT_WORLD_MAX_MOVEMENT_SPEED = 2.0
 CAT_WORLD_MOVEMENT_SPEED_STEP = 0.05
+CAT_WORLD_MALE_WEIGHT_SETTING_KEY = "male_cat_weight"
+CAT_WORLD_FEMALE_WEIGHT_SETTING_KEY = "female_cat_weight"
+CAT_WORLD_DEFAULT_GENDER_WEIGHT = 50
+CAT_WORLD_MIN_GENDER_WEIGHT = 0
+CAT_WORLD_MAX_GENDER_WEIGHT = 1000
+CAT_WORLD_GENDER_WEIGHT_STEP = 5
 CAT_WORLD_LITTER_ITEM_ID = "tofu-cat-litter"
 CAT_WORLD_LITTER_SCOOP_ITEM_ID = "litter-scoop"
 CAT_WORLD_CAT_GRASS_ITEM_ID = "cat-grass-pot"
@@ -253,6 +261,22 @@ CAT_WORLD_HUNGER_ESCAPE_HOURS = 72
 CAT_WORLD_LOW_MOOD_WARNING_SCORE = 10
 CAT_WORLD_LOW_MOOD_CRITICAL_HOURS = 48
 CAT_WORLD_LOW_MOOD_ESCAPE_HOURS = 120
+CAT_WORLD_CAT_PATTERNS = [
+    {"key": "classic", "label": "经典原生纹"},
+    {"key": "bold-stripes", "label": "深色条纹"},
+    {"key": "soft-patches", "label": "柔和斑块"},
+    {"key": "white-socks", "label": "白袜花纹"},
+    {"key": "face-mask", "label": "重点面罩"},
+]
+CAT_WORLD_CAT_FEATURES = [
+    {"key": "bright-eyes", "label": "圆亮眼睛"},
+    {"key": "fluffy-tail", "label": "蓬松尾巴"},
+    {"key": "dark-ear-tips", "label": "深色耳尖"},
+    {"key": "white-bib", "label": "浅色围脖"},
+    {"key": "pink-paws", "label": "粉色肉垫"},
+]
+CAT_WORLD_CAT_PATTERN_BY_KEY = {item["key"]: item for item in CAT_WORLD_CAT_PATTERNS}
+CAT_WORLD_CAT_FEATURE_BY_KEY = {item["key"]: item for item in CAT_WORLD_CAT_FEATURES}
 CAT_WORLD_SHOP = [
     {
         "id": "daily-kibble",
@@ -4205,13 +4229,8 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
     inventory = parse_cat_world_inventory(state.inventory)
     owned_cats = parse_cat_world_cats(state.cats)
     blind_box_result: dict[str, Any] | None = None
+    adopted_profile: CatWorldCatProfile | None = None
     if item["category"] == "cat":
-        if item_id in owned_cats:
-            state.selected_cat = item_id
-            db.add(state)
-            db.commit()
-            db.refresh(state)
-            return {"ok": True, **serialize_cat_world_payload(db, state)}
         if current["energy"]["available"] < int(item["cost"]):
             raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点。")
         now = datetime.utcnow()
@@ -4231,9 +4250,12 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
         )
         cat_care[item_id] = care_row
         state.cat_care = encode_cat_world_care(cat_care)
-        owned_cats.append(item_id)
+        if item_id not in owned_cats:
+            owned_cats.append(item_id)
         state.cats = encode_cat_world_cats(owned_cats)
         state.selected_cat = item_id
+        adopted_profile = create_cat_world_cat_profile(db, state, item_id, "shop")
+        state.selected_cat_profile = adopted_profile.profile_id
         if was_escaped:
             log = get_or_create_cat_world_daily_log(db, state.phone, item_id, date.today(), now)
             log.energy_score = 68
@@ -4293,9 +4315,12 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
             ticket -= remaining
         selected_stock.claimed_count = max(int(selected_stock.claimed_count or 0), 0) + 1
         selected_cat = CAT_WORLD_CAT_BY_ID[selected_stock.cat_id]
-        owned_cats.append(selected_stock.cat_id)
+        if selected_stock.cat_id not in owned_cats:
+            owned_cats.append(selected_stock.cat_id)
         state.cats = encode_cat_world_cats(owned_cats)
         state.selected_cat = selected_stock.cat_id
+        adopted_profile = create_cat_world_cat_profile(db, state, selected_stock.cat_id, "blind-box")
+        state.selected_cat_profile = adopted_profile.profile_id
         now = datetime.utcnow()
         cat_care = parse_cat_world_care(state.cat_care)
         cat_care[selected_stock.cat_id] = {
@@ -4320,6 +4345,7 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
         db.add(selected_stock)
         blind_box_result = {
             "cat": cat_world_cat_payload(selected_cat),
+            "profile": cat_world_cat_profile_payload(adopted_profile),
             "seriesKey": series_key,
             "seriesLabel": series["label"],
             "remainingStock": max(int(selected_stock.total_stock or 0) - int(selected_stock.claimed_count or 0), 0),
@@ -4370,6 +4396,8 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
     db.commit()
     db.refresh(state)
     response = {"ok": True, **serialize_cat_world_payload(db, state)}
+    if adopted_profile:
+        response["adoptedCatProfile"] = cat_world_cat_profile_payload(adopted_profile)
     if blind_box_result:
         response["blindBoxResult"] = blind_box_result
     return response
@@ -5018,10 +5046,34 @@ async def vue_cat_world_select_cat_api(request: Request, db: Session = Depends(g
     except Exception as exc:
         raise HTTPException(status_code=400, detail="猫咪数据不是有效 JSON。") from exc
     cat_id = str((payload or {}).get("catId") or "").strip()
+    profile_id = str((payload or {}).get("profileId") or "").strip()
     state = get_or_create_cat_world_state(db, phone)
     owned_cats = parse_cat_world_cats(state.cats)
     if cat_id not in owned_cats:
         raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
+    if profile_id:
+        profile = db.scalar(
+            select(CatWorldCatProfile).where(
+                CatWorldCatProfile.phone == state.phone,
+                CatWorldCatProfile.profile_id == profile_id,
+                CatWorldCatProfile.breed_id == cat_id,
+                CatWorldCatProfile.is_active.is_(True),
+            )
+        )
+        if not profile:
+            raise HTTPException(status_code=400, detail="没有找到这只猫咪个体。")
+        state.selected_cat_profile = profile.profile_id
+    else:
+        profile = db.scalar(
+            select(CatWorldCatProfile)
+            .where(
+                CatWorldCatProfile.phone == state.phone,
+                CatWorldCatProfile.breed_id == cat_id,
+                CatWorldCatProfile.is_active.is_(True),
+            )
+            .order_by(CatWorldCatProfile.adopted_at.desc(), CatWorldCatProfile.id.desc())
+        )
+        state.selected_cat_profile = profile.profile_id if profile else None
     state.selected_cat = cat_id
     db.add(state)
     db.commit()
@@ -5208,8 +5260,59 @@ async def vue_admin_cat_world_settings_api(request: Request, db: Session = Depen
     except Exception as exc:
         raise HTTPException(status_code=400, detail="猫咪世界设置不是有效 JSON。") from exc
     save_cat_world_movement_speed(db, (payload or {}).get("movementSpeed"))
+    gender_weights = (payload or {}).get("genderDrawWeights")
+    if isinstance(gender_weights, dict):
+        save_cat_world_gender_draw_weights(
+            db,
+            gender_weights.get("male"),
+            gender_weights.get("female"),
+        )
     db.commit()
     return {"ok": True, "catWorldPricing": admin_cat_world_pricing_payload(db)}
+
+
+@app.post("/api/vue/admin/cat-world/energy-grant")
+async def vue_admin_cat_world_energy_grant_api(request: Request, db: Session = Depends(get_db)):
+    current = require_admin_panel_access(request, db)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="运营能量数据不是有效 JSON。") from exc
+    reason = re.sub(r"\s+", " ", str((payload or {}).get("reason") or "").strip())[:120]
+    if len(reason) < 2:
+        raise HTTPException(status_code=400, detail="请填写至少 2 个字的发放理由。")
+    try:
+        amount = int((payload or {}).get("amount"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="请输入有效的能量值。") from exc
+    if amount < 1 or amount > 1000000:
+        raise HTTPException(status_code=400, detail="单次运营能量需要在 1 到 1000000 之间。")
+    password = normalize_login_password((payload or {}).get("password"))
+    if not current.login_password_hash:
+        raise HTTPException(status_code=400, detail="请先在用户中心给当前后台账号设置登录密码。")
+    if not verify_login_password(password, current.login_password_hash):
+        raise HTTPException(status_code=403, detail="后台登录密码不正确。")
+    grant = CatWorldEnergyGrant(
+        phone=current.phone,
+        amount=amount,
+        reason=reason,
+        granted_by_phone=current.phone,
+        created_at=datetime.utcnow(),
+    )
+    db.add(grant)
+    db.commit()
+    db.refresh(grant)
+    return {
+        "ok": True,
+        "grant": {
+            "id": grant.id,
+            "amount": grant.amount,
+            "reason": grant.reason,
+            "createdAt": grant.created_at.replace(microsecond=0).isoformat() + "Z",
+        },
+        "energySource": cat_world_operating_energy_source(db, current.phone),
+        "catWorldPricing": admin_cat_world_pricing_payload(db),
+    }
 
 
 @app.post("/api/vue/admin/cat-world/reset")
@@ -5225,12 +5328,20 @@ async def vue_admin_cat_world_reset_api(request: Request, db: Session = Depends(
     if not verify_login_password(password, current.login_password_hash):
         raise HTTPException(status_code=403, detail="后台登录密码不正确。")
     deleted_scenes = db.execute(delete(CatWorldUserScene).where(CatWorldUserScene.phone == current.phone)).rowcount or 0
+    deleted_profiles = db.execute(delete(CatWorldCatProfile).where(CatWorldCatProfile.phone == current.phone)).rowcount or 0
+    deleted_grants = db.execute(delete(CatWorldEnergyGrant).where(CatWorldEnergyGrant.phone == current.phone)).rowcount or 0
     deleted_state = db.execute(delete(CatWorldState).where(CatWorldState.phone == current.phone)).rowcount or 0
     deleted_logs = db.execute(delete(CatWorldDailyLog).where(CatWorldDailyLog.phone == current.phone)).rowcount or 0
     db.commit()
     return {
         "ok": True,
-        "deleted": {"state": deleted_state, "scenes": deleted_scenes, "dailyLogs": deleted_logs},
+        "deleted": {
+            "state": deleted_state,
+            "scenes": deleted_scenes,
+            "dailyLogs": deleted_logs,
+            "profiles": deleted_profiles,
+            "energyGrants": deleted_grants,
+        },
         "catWorldPricing": admin_cat_world_pricing_payload(db),
     }
 
@@ -12093,10 +12204,42 @@ def cat_world_essay_energy_source(db: Session, phone: str) -> dict[str, Any]:
     }
 
 
+def cat_world_operating_energy_source(db: Session, phone: str) -> dict[str, Any]:
+    grants = db.scalars(
+        select(CatWorldEnergyGrant)
+        .where(CatWorldEnergyGrant.phone == phone)
+        .order_by(CatWorldEnergyGrant.created_at.desc(), CatWorldEnergyGrant.id.desc())
+    ).all()
+    total_energy = sum(max(int(grant.amount or 0), 0) for grant in grants)
+    today = date.today()
+    today_energy = sum(
+        max(int(grant.amount or 0), 0)
+        for grant in grants
+        if grant.created_at and grant.created_at.date() == today
+    )
+    latest = grants[0] if grants else None
+    return {
+        "key": "operating_activity",
+        "label": "运营活动",
+        "value": total_energy,
+        "unit": "能量",
+        "energyPerUnit": 1,
+        "energy": total_energy,
+        "grantCount": len(grants),
+        "todayEnergy": today_energy,
+        "detail": f"最近：{latest.reason}" if latest else "暂无运营活动发放",
+    }
+
+
 def cat_world_earned_energy(db: Session, phone: str, growth: dict[str, Any] | None = None) -> int:
     growth = growth or learning_growth_summary(db)
     essay_source = cat_world_essay_energy_source(db, phone)
-    return max(int(growth.get("points") or 0), 0) + int(essay_source["energy"])
+    operating_source = cat_world_operating_energy_source(db, phone)
+    return (
+        max(int(growth.get("points") or 0), 0)
+        + int(essay_source["energy"])
+        + int(operating_source["energy"])
+    )
 
 
 def cat_world_today_energy(growth: dict[str, Any]) -> int:
@@ -12487,17 +12630,95 @@ def save_cat_world_movement_speed(db: Session, value: Any) -> float:
     return speed
 
 
+def cat_world_clamp_gender_weight(value: Any, fallback: int = CAT_WORLD_DEFAULT_GENDER_WEIGHT) -> int:
+    try:
+        weight = int(value)
+    except (TypeError, ValueError):
+        weight = fallback
+    return min(max(weight, CAT_WORLD_MIN_GENDER_WEIGHT), CAT_WORLD_MAX_GENDER_WEIGHT)
+
+
+def cat_world_game_setting_value(db: Session, setting_key: str, fallback: str) -> str:
+    row = db.scalar(
+        select(CatWorldGameSetting).where(CatWorldGameSetting.setting_key == setting_key)
+    )
+    return str(row.setting_value if row else fallback)
+
+
+def save_cat_world_game_setting(db: Session, setting_key: str, value: str) -> None:
+    row = db.scalar(
+        select(CatWorldGameSetting).where(CatWorldGameSetting.setting_key == setting_key)
+    )
+    if not row:
+        db.add(CatWorldGameSetting(setting_key=setting_key, setting_value=value))
+    else:
+        row.setting_value = value
+
+
+def cat_world_gender_draw_weights(db: Session) -> dict[str, Any]:
+    male = cat_world_clamp_gender_weight(
+        cat_world_game_setting_value(
+            db,
+            CAT_WORLD_MALE_WEIGHT_SETTING_KEY,
+            str(CAT_WORLD_DEFAULT_GENDER_WEIGHT),
+        )
+    )
+    female = cat_world_clamp_gender_weight(
+        cat_world_game_setting_value(
+            db,
+            CAT_WORLD_FEMALE_WEIGHT_SETTING_KEY,
+            str(CAT_WORLD_DEFAULT_GENDER_WEIGHT),
+        )
+    )
+    if male + female <= 0:
+        male = CAT_WORLD_DEFAULT_GENDER_WEIGHT
+        female = CAT_WORLD_DEFAULT_GENDER_WEIGHT
+    total = male + female
+    return {
+        "male": male,
+        "female": female,
+        "malePercent": round(male / total * 100, 1),
+        "femalePercent": round(female / total * 100, 1),
+    }
+
+
+def save_cat_world_gender_draw_weights(db: Session, male_value: Any, female_value: Any) -> dict[str, Any]:
+    male = cat_world_clamp_gender_weight(male_value)
+    female = cat_world_clamp_gender_weight(female_value)
+    if male + female <= 0:
+        raise HTTPException(status_code=400, detail="公猫和母猫的抽取系数不能同时为 0。")
+    save_cat_world_game_setting(db, CAT_WORLD_MALE_WEIGHT_SETTING_KEY, str(male))
+    save_cat_world_game_setting(db, CAT_WORLD_FEMALE_WEIGHT_SETTING_KEY, str(female))
+    total = male + female
+    return {
+        "male": male,
+        "female": female,
+        "malePercent": round(male / total * 100, 1),
+        "femalePercent": round(female / total * 100, 1),
+    }
+
+
 def cat_world_game_settings_payload(db: Session) -> dict[str, Any]:
     return {
         "movementSpeed": cat_world_movement_speed(db),
+        "genderDrawWeights": cat_world_gender_draw_weights(db),
         "defaults": {
             "movementSpeed": CAT_WORLD_DEFAULT_MOVEMENT_SPEED,
+            "genderDrawWeights": {
+                "male": CAT_WORLD_DEFAULT_GENDER_WEIGHT,
+                "female": CAT_WORLD_DEFAULT_GENDER_WEIGHT,
+            },
         },
         "limits": {
             "movementSpeed": {
                 "min": CAT_WORLD_MIN_MOVEMENT_SPEED,
                 "max": CAT_WORLD_MAX_MOVEMENT_SPEED,
                 "step": CAT_WORLD_MOVEMENT_SPEED_STEP,
+            },
+            "genderDrawWeight": {
+                "min": CAT_WORLD_MIN_GENDER_WEIGHT,
+                "max": CAT_WORLD_MAX_GENDER_WEIGHT,
+                "step": CAT_WORLD_GENDER_WEIGHT_STEP,
             },
         },
     }
@@ -14532,6 +14753,119 @@ def cat_world_cat_payload(cat: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def cat_world_random_gender(db: Session) -> str:
+    weights = cat_world_gender_draw_weights(db)
+    ticket = secrets.randbelow(int(weights["male"]) + int(weights["female"]))
+    return "male" if ticket < int(weights["male"]) else "female"
+
+
+def create_cat_world_cat_profile(
+    db: Session,
+    state: CatWorldState,
+    breed_id: str,
+    source: str = "shop",
+) -> CatWorldCatProfile:
+    if breed_id not in CAT_WORLD_CAT_BY_ID:
+        raise HTTPException(status_code=404, detail="没有找到这个猫咪品种。")
+    profile = CatWorldCatProfile(
+        profile_id=f"{breed_id}-{uuid4().hex[:10]}",
+        phone=state.phone,
+        breed_id=breed_id,
+        gender=cat_world_random_gender(db),
+        pattern_key=secrets.choice(CAT_WORLD_CAT_PATTERNS)["key"],
+        feature_key=secrets.choice(CAT_WORLD_CAT_FEATURES)["key"],
+        source=source,
+        is_active=True,
+        adopted_at=datetime.utcnow(),
+    )
+    db.add(profile)
+    db.flush()
+    return profile
+
+
+def cat_world_active_cat_profiles(db: Session, phone: str) -> list[CatWorldCatProfile]:
+    return db.scalars(
+        select(CatWorldCatProfile)
+        .where(
+            CatWorldCatProfile.phone == phone,
+            CatWorldCatProfile.is_active.is_(True),
+        )
+        .order_by(CatWorldCatProfile.adopted_at.asc(), CatWorldCatProfile.id.asc())
+    ).all()
+
+
+def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]:
+    breed = CAT_WORLD_CAT_BY_ID.get(profile.breed_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    pattern = CAT_WORLD_CAT_PATTERN_BY_KEY.get(profile.pattern_key, CAT_WORLD_CAT_PATTERNS[0])
+    feature = CAT_WORLD_CAT_FEATURE_BY_KEY.get(profile.feature_key, CAT_WORLD_CAT_FEATURES[0])
+    profile_code = str(profile.profile_id).rsplit("-", 1)[-1][:4].upper()
+    return {
+        **cat_world_cat_payload(breed),
+        "id": profile.profile_id,
+        "breedId": breed["id"],
+        "profileId": profile.profile_id,
+        "profileCode": profile_code,
+        "displayLabel": f"{breed['label']} · {profile_code}",
+        "gender": profile.gender,
+        "genderLabel": "公猫" if profile.gender == "male" else "母猫",
+        "patternKey": pattern["key"],
+        "patternLabel": pattern["label"],
+        "featureKey": feature["key"],
+        "featureLabel": feature["label"],
+        "source": profile.source,
+        "adoptedAt": profile.adopted_at.replace(microsecond=0).isoformat() + "Z",
+    }
+
+
+def ensure_cat_world_cat_profiles(
+    db: Session,
+    state: CatWorldState,
+    owned_cats: list[str],
+) -> tuple[list[CatWorldCatProfile], bool]:
+    profiles = cat_world_active_cat_profiles(db, state.phone)
+    profiled_breeds = {profile.breed_id for profile in profiles}
+    changed = False
+    for breed_id in owned_cats:
+        if breed_id in profiled_breeds:
+            continue
+        profile = create_cat_world_cat_profile(db, state, breed_id, "legacy")
+        profiles.append(profile)
+        profiled_breeds.add(breed_id)
+        changed = True
+    profiles_by_id = {profile.profile_id: profile for profile in profiles}
+    selected_profile = profiles_by_id.get(str(state.selected_cat_profile or ""))
+    if not selected_profile or selected_profile.breed_id != state.selected_cat:
+        selected = next(
+            (profile for profile in reversed(profiles) if profile.breed_id == state.selected_cat),
+            profiles[0] if profiles else None,
+        )
+        state.selected_cat_profile = selected.profile_id if selected else None
+        db.add(state)
+        changed = True
+    return profiles, changed
+
+
+def deactivate_cat_world_profiles(
+    db: Session,
+    phone: str,
+    breed_ids: list[str],
+    escaped_at: datetime,
+) -> None:
+    if not breed_ids:
+        return
+    profiles = db.scalars(
+        select(CatWorldCatProfile).where(
+            CatWorldCatProfile.phone == phone,
+            CatWorldCatProfile.breed_id.in_(set(breed_ids)),
+            CatWorldCatProfile.is_active.is_(True),
+        )
+    ).all()
+    for profile in profiles:
+        profile.is_active = False
+        profile.escaped_at = escaped_at
+        db.add(profile)
+
+
 def cat_world_decor_favorite_payload() -> list[dict[str, str]]:
     return [
         {
@@ -15399,8 +15733,10 @@ def cat_world_apply_daily_decay(
     if escaped_cat_ids:
         remaining_cats = [cat_id for cat_id in owned_cats if cat_id not in set(escaped_cat_ids)]
         state.cats = encode_cat_world_cats(remaining_cats)
+        deactivate_cat_world_profiles(db, state.phone, escaped_cat_ids, now)
         if state.selected_cat in escaped_cat_ids:
             state.selected_cat = remaining_cats[0] if remaining_cats else ""
+            state.selected_cat_profile = None
         if state.active_food_cat_id in escaped_cat_ids:
             state.active_food_item = None
             state.active_food_cat_id = None
@@ -16049,6 +16385,8 @@ def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
             state.cats = encode_cat_world_cats(restored_cats)
             db.add(state)
             changed = True
+        _, profiles_changed = ensure_cat_world_cat_profiles(db, state, restored_cats)
+        changed = changed or profiles_changed
         if state.current_scene_key != scene.scene_key:
             state.current_scene_key = scene.scene_key
             db.add(state)
@@ -16081,6 +16419,10 @@ def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
     db.add(state)
     db.commit()
     db.refresh(state)
+    _, profiles_changed = ensure_cat_world_cat_profiles(db, state, initial_cats)
+    if profiles_changed:
+        db.commit()
+        db.refresh(state)
     scene = cat_world_scene_row(db, CAT_WORLD_DEFAULT_SCENE_KEY, enabled_only=True)
     if scene:
         get_or_create_cat_world_user_scene(db, state, scene)
@@ -16286,8 +16628,13 @@ def cat_world_mood(
 def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, Any]:
     growth = learning_growth_summary(db)
     essay_energy_source = cat_world_essay_energy_source(db, state.phone)
-    earned_energy = max(int(growth.get("points") or 0), 0) + int(essay_energy_source["energy"])
-    today_energy = cat_world_today_energy(growth)
+    operating_energy_source = cat_world_operating_energy_source(db, state.phone)
+    earned_energy = (
+        max(int(growth.get("points") or 0), 0)
+        + int(essay_energy_source["energy"])
+        + int(operating_energy_source["energy"])
+    )
+    today_energy = cat_world_today_energy(growth) + int(operating_energy_source["todayEnergy"])
     spent_energy = max(int(state.energy_spent or 0), 0)
     available_energy = max(earned_energy - spent_energy, 0)
     inventory = parse_cat_world_inventory(state.inventory)
@@ -16392,6 +16739,10 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         db.refresh(state)
     daily_logs = cat_world_apply_daily_decay(db, state, usable_inventory, owned_cats, room_layout)
     owned_cats = parse_cat_world_cats(state.cats)
+    cat_profiles, cat_profiles_changed = ensure_cat_world_cat_profiles(db, state, owned_cats)
+    if cat_profiles_changed:
+        db.commit()
+        db.refresh(state)
     cat_care = parse_cat_world_care(state.cat_care)
     lost_cats = cat_world_lost_cats_payload(cat_care, owned_cats)
     style_options = {
@@ -16405,7 +16756,11 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "spent": spent_energy,
             "available": available_energy,
             "today": today_energy,
-            "sources": [*cat_world_growth_source_rows(growth), essay_energy_source],
+            "sources": [
+                *cat_world_growth_source_rows(growth),
+                essay_energy_source,
+                operating_energy_source,
+            ],
         },
         "state": {
             "inventory": inventory,
@@ -16421,12 +16776,14 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "currentScene": active_scene,
             "styleOptions": style_options,
             "selectedCat": state.selected_cat,
+            "selectedCatProfile": state.selected_cat_profile or "",
             "hygiene": litter_status,
             "activeCare": active_care,
             "dailyLogs": daily_logs,
             "mood": cat_world_mood(state, usable_inventory, owned_cats, available_energy, room_layout, daily_logs),
         },
         "cats": [cat_world_cat_payload(cat) for cat in CAT_WORLD_CATS],
+        "catProfiles": [cat_world_cat_profile_payload(profile) for profile in cat_profiles],
         "scenes": cat_world_scene_catalog_payload(db, state),
         "blindBoxCatalog": blind_box_catalog,
         "catCollectionCatalog": collection_catalog,
@@ -16677,6 +17034,8 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN cat_bonds TEXT NULL"))
         if "cat_world_states" in table_names and "cat_care" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN cat_care TEXT NULL"))
+        if "cat_world_states" in table_names and "selected_cat_profile" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN selected_cat_profile VARCHAR(80) NULL"))
         if "cat_world_states" in table_names and "active_food_item" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_food_item VARCHAR(80) NULL"))
         if "cat_world_states" in table_names and "active_food_cat_id" not in cat_world_state_columns:

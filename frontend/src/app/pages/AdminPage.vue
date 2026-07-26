@@ -23,6 +23,12 @@ const savingCatWorldSettings = ref(false);
 const catWorldResetPassword = ref("");
 const resettingCatWorld = ref(false);
 const catMovementSpeedDraft = ref(Number(catWorldPricing.value.settings?.movementSpeed || 1));
+const catGenderWeightDrafts = ref({
+  male: Number(catWorldPricing.value.settings?.genderDrawWeights?.male ?? 50),
+  female: Number(catWorldPricing.value.settings?.genderDrawWeights?.female ?? 50),
+});
+const energyGrantDraft = ref({ reason: "", amount: 100, password: "" });
+const grantingCatWorldEnergy = ref(false);
 const priceDrafts = ref(
   Object.fromEntries((catWorldPricing.value.items || []).map((item) => [item.id, Number(item.cost || 0)])),
 );
@@ -58,6 +64,22 @@ const catMovementSpeedLimits = computed(() => ({
   step: Number(catWorldPricing.value.settings?.limits?.movementSpeed?.step ?? 0.05),
 }));
 const catMovementSpeedLabel = computed(() => `${clampCatMovementSpeed(catMovementSpeedDraft.value).toFixed(2)}x`);
+const catGenderWeightLimits = computed(() => ({
+  min: Number(catWorldPricing.value.settings?.limits?.genderDrawWeight?.min ?? 0),
+  max: Number(catWorldPricing.value.settings?.limits?.genderDrawWeight?.max ?? 1000),
+  step: Number(catWorldPricing.value.settings?.limits?.genderDrawWeight?.step ?? 5),
+}));
+const catGenderWeightPreview = computed(() => {
+  const male = clampCatGenderWeight(catGenderWeightDrafts.value.male);
+  const female = clampCatGenderWeight(catGenderWeightDrafts.value.female);
+  const total = male + female;
+  return {
+    male,
+    female,
+    malePercent: total ? Math.round((male / total) * 1000) / 10 : 0,
+    femalePercent: total ? Math.round((female / total) * 1000) / 10 : 0,
+  };
+});
 const siteSummaryCards = computed(() => [
   { label: "登录方式", value: "手机号 + 密码", detail: "手机号仍是唯一登录标识，页面只展示昵称。" },
   { label: "图片 AI", value: `${props.data.imageAiOptions?.length || 0} 项`, detail: "在用户中心为不同用户选择默认图片 AI。" },
@@ -81,6 +103,7 @@ function normalizedSpeed(value, fallback = 1, min = 0.4, max = 2) {
 function normalizeCatWorldPricing(source = {}) {
   const rawSettings = source.settings || {};
   const rawLimits = rawSettings.limits?.movementSpeed || {};
+  const rawGenderLimits = rawSettings.limits?.genderDrawWeight || {};
   const speedLimits = {
     min: finiteNumber(rawLimits.min, 0.4),
     max: finiteNumber(rawLimits.max, 2),
@@ -92,6 +115,12 @@ function normalizeCatWorldPricing(source = {}) {
     settings: {
       ...rawSettings,
       movementSpeed: normalizedSpeed(rawSettings.movementSpeed, 1, speedLimits.min, speedLimits.max),
+      genderDrawWeights: {
+        male: Math.round(finiteNumber(rawSettings.genderDrawWeights?.male, 50)),
+        female: Math.round(finiteNumber(rawSettings.genderDrawWeights?.female, 50)),
+        malePercent: finiteNumber(rawSettings.genderDrawWeights?.malePercent, 50),
+        femalePercent: finiteNumber(rawSettings.genderDrawWeights?.femalePercent, 50),
+      },
       defaults: {
         movementSpeed: 1,
         ...(rawSettings.defaults || {}),
@@ -99,6 +128,11 @@ function normalizeCatWorldPricing(source = {}) {
       limits: {
         ...(rawSettings.limits || {}),
         movementSpeed: speedLimits,
+        genderDrawWeight: {
+          min: finiteNumber(rawGenderLimits.min, 0),
+          max: finiteNumber(rawGenderLimits.max, 1000),
+          step: finiteNumber(rawGenderLimits.step, 5),
+        },
       },
     },
   };
@@ -109,10 +143,19 @@ function clampCatMovementSpeed(value) {
   return normalizedSpeed(value, catWorldPricing.value.settings?.movementSpeed || 1, limits.min, limits.max);
 }
 
+function clampCatGenderWeight(value) {
+  const limits = catGenderWeightLimits.value;
+  return Math.round(Math.min(Math.max(finiteNumber(value, 50), limits.min), limits.max));
+}
+
 function applyCatWorldPricing(nextPricing) {
   catWorldPricing.value = normalizeCatWorldPricing(nextPricing || catWorldPricing.value);
   priceDrafts.value = Object.fromEntries((catWorldPricing.value.items || []).map((item) => [item.id, Number(item.cost || 0)]));
   catMovementSpeedDraft.value = Number(catWorldPricing.value.settings?.movementSpeed || 1);
+  catGenderWeightDrafts.value = {
+    male: Number(catWorldPricing.value.settings?.genderDrawWeights?.male ?? 50),
+    female: Number(catWorldPricing.value.settings?.genderDrawWeights?.female ?? 50),
+  };
   if (!(catWorldPricing.value.plans || []).some((plan) => plan.category === activePricingCategory.value)) {
     activePricingCategory.value = catWorldPricing.value.plans?.[0]?.category || "";
   }
@@ -239,21 +282,67 @@ async function savePrice(item) {
 
 async function saveCatWorldSettings() {
   const speed = clampCatMovementSpeed(catMovementSpeedDraft.value);
+  const genderWeights = catGenderWeightPreview.value;
+  if (genderWeights.male + genderWeights.female <= 0) {
+    notice.value = "公猫和母猫的抽取系数不能同时为 0。";
+    return;
+  }
   catMovementSpeedDraft.value = speed;
+  catGenderWeightDrafts.value = { male: genderWeights.male, female: genderWeights.female };
   savingCatWorldSettings.value = true;
   notice.value = "";
   try {
     const result = await fetchJson(routeApiPaths.adminCatWorldSettings(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ movementSpeed: speed }),
+      body: JSON.stringify({
+        movementSpeed: speed,
+        genderDrawWeights: {
+          male: genderWeights.male,
+          female: genderWeights.female,
+        },
+      }),
     });
     applyCatWorldPricing(result.catWorldPricing);
-    notice.value = `猫咪移动速度已更新为 ${speed.toFixed(2)}x。`;
+    notice.value = `猫咪设置已保存：速度 ${speed.toFixed(2)}x，公猫 ${genderWeights.malePercent}%，母猫 ${genderWeights.femalePercent}%。`;
   } catch (error) {
-    notice.value = error.message || "猫咪移动速度保存失败。";
+    notice.value = error.message || "猫咪世界设置保存失败。";
   } finally {
     savingCatWorldSettings.value = false;
+  }
+}
+
+async function grantCatWorldEnergy() {
+  const reason = energyGrantDraft.value.reason.trim();
+  const amount = Math.round(Number(energyGrantDraft.value.amount));
+  const password = energyGrantDraft.value.password.trim();
+  if (reason.length < 2) {
+    notice.value = "请填写至少 2 个字的运营活动理由。";
+    return;
+  }
+  if (!Number.isFinite(amount) || amount < 1 || amount > 1000000) {
+    notice.value = "运营能量需要在 1 到 1000000 之间。";
+    return;
+  }
+  if (!password) {
+    notice.value = "请输入当前后台账号的登录密码。";
+    return;
+  }
+  grantingCatWorldEnergy.value = true;
+  notice.value = "";
+  try {
+    const result = await fetchJson(routeApiPaths.adminCatWorldEnergyGrant(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason, amount, password }),
+    });
+    const grant = result.grant || {};
+    notice.value = `运营活动“${grant.reason || reason}”已增加 ${grant.amount || amount} 能量。`;
+    energyGrantDraft.value = { reason: "", amount: 100, password: "" };
+  } catch (error) {
+    notice.value = error.message || "运营能量发放失败。";
+  } finally {
+    grantingCatWorldEnergy.value = false;
   }
 }
 
@@ -273,7 +362,7 @@ async function resetCatWorldData() {
     });
     applyCatWorldPricing(result.catWorldPricing);
     const deleted = result.deleted || {};
-    notice.value = `猫咪世界测试数据已清零：状态 ${deleted.state || 0} 条，每日日志 ${deleted.dailyLogs || 0} 条。`;
+    notice.value = `猫咪世界测试数据已清零：状态 ${deleted.state || 0} 条，猫咪个体 ${deleted.profiles || 0} 只，每日日志 ${deleted.dailyLogs || 0} 条，运营能量 ${deleted.energyGrants || 0} 条。`;
     catWorldResetPassword.value = "";
   } catch (error) {
     notice.value = error.message || "猫咪世界清零失败。";
@@ -557,6 +646,67 @@ async function resetCatWorldData() {
             </label>
             <button class="challenge-button compact-button" type="button" :disabled="savingCatWorldSettings" @click="saveCatWorldSettings">
               {{ savingCatWorldSettings ? "保存中" : `保存 ${catMovementSpeedLabel}` }}
+            </button>
+          </section>
+
+          <section class="admin-cat-world-settings-panel admin-cat-gender-settings-panel">
+            <div>
+              <strong>领养性别抽取系数</strong>
+              <p>同一品种可重复领养；每只猫按系数随机为公猫或母猫，并随机生成花纹和特点。</p>
+            </div>
+            <label class="admin-cat-speed-number">
+              <span>公猫系数</span>
+              <input
+                v-model.number="catGenderWeightDrafts.male"
+                type="number"
+                :min="catGenderWeightLimits.min"
+                :max="catGenderWeightLimits.max"
+                :step="catGenderWeightLimits.step"
+              >
+            </label>
+            <label class="admin-cat-speed-number">
+              <span>母猫系数</span>
+              <input
+                v-model.number="catGenderWeightDrafts.female"
+                type="number"
+                :min="catGenderWeightLimits.min"
+                :max="catGenderWeightLimits.max"
+                :step="catGenderWeightLimits.step"
+              >
+            </label>
+            <div class="admin-cat-gender-preview">
+              <span>公猫 {{ catGenderWeightPreview.malePercent }}%</span>
+              <span>母猫 {{ catGenderWeightPreview.femalePercent }}%</span>
+            </div>
+            <button class="challenge-button compact-button" type="button" :disabled="savingCatWorldSettings" @click="saveCatWorldSettings">
+              {{ savingCatWorldSettings ? "保存中" : "保存抽取系数" }}
+            </button>
+          </section>
+
+          <section class="admin-energy-grant-panel">
+            <div>
+              <strong>运营活动加能量</strong>
+              <p>为当前账号增加猫咪世界可用能量；理由、数值、发放人和时间会保留记录。</p>
+            </div>
+            <label>
+              <span>活动理由</span>
+              <input v-model="energyGrantDraft.reason" type="text" maxlength="120" placeholder="例如：周末阅读活动奖励">
+            </label>
+            <label>
+              <span>增加能量</span>
+              <input v-model.number="energyGrantDraft.amount" type="number" min="1" max="1000000" step="10">
+            </label>
+            <label>
+              <span>登录密码</span>
+              <input
+                v-model="energyGrantDraft.password"
+                type="password"
+                autocomplete="current-password"
+                placeholder="输入后台登录密码"
+              >
+            </label>
+            <button class="challenge-button compact-button" type="button" :disabled="grantingCatWorldEnergy" @click="grantCatWorldEnergy">
+              {{ grantingCatWorldEnergy ? "发放中..." : "确认增加能量" }}
             </button>
           </section>
 

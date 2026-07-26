@@ -14799,6 +14799,72 @@ select {
   line-height: 1.45;
 }
 
+.admin-cat-gender-settings-panel {
+  grid-template-columns: minmax(260px, 1fr) minmax(118px, 150px) minmax(118px, 150px) minmax(170px, 210px) auto;
+}
+
+.admin-cat-gender-preview {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid rgba(29, 127, 91, 0.2);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  color: var(--accent-dark);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.admin-energy-grant-panel {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(190px, 280px) minmax(120px, 160px) minmax(180px, 240px) auto;
+  gap: 12px;
+  align-items: end;
+  border: 1px solid rgba(35, 107, 85, 0.2);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: #f5fbff;
+}
+
+.admin-energy-grant-panel > div,
+.admin-energy-grant-panel label {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-energy-grant-panel strong {
+  color: var(--accent-dark);
+  font-weight: 900;
+}
+
+.admin-energy-grant-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.admin-energy-grant-panel label span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.admin-energy-grant-panel input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-weight: 800;
+}
+
 .admin-cat-world-operations-panel {
   display: grid;
   gap: 14px;
@@ -14825,6 +14891,7 @@ select {
 @media (max-width: 1180px) {
   .shell[data-quant-radar-page-key="cat-world"] .cat-world-layout,
   .admin-cat-world-settings-panel,
+  .admin-energy-grant-panel,
   .admin-reset-panel {
     grid-template-columns: 1fr;
   }
