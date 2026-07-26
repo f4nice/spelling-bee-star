@@ -19,6 +19,7 @@ const notice = ref("");
 const newUser = ref({ phone: "", username: "", role: "viewer", loginPassword: "" });
 const catWorldPricing = ref(normalizeCatWorldPricing(props.data.catWorldPricing || {}));
 const savingPriceItemId = ref("");
+const savingScenePriceId = ref("");
 const savingCatWorldSettings = ref(false);
 const catWorldResetPassword = ref("");
 const resettingCatWorld = ref(false);
@@ -31,6 +32,9 @@ const energyGrantDraft = ref({ reason: "", amount: 100, password: "" });
 const grantingCatWorldEnergy = ref(false);
 const priceDrafts = ref(
   Object.fromEntries((catWorldPricing.value.items || []).map((item) => [item.id, Number(item.cost || 0)])),
+);
+const scenePriceDrafts = ref(
+  Object.fromEntries((catWorldPricing.value.scenes || []).map((scene) => [scene.id, Number(scene.cost || 0)])),
 );
 const adminSections = [
   { key: "planning", label: "规划", description: "登录、权限、AI 和积分体系的管理蓝图。" },
@@ -112,6 +116,7 @@ function normalizeCatWorldPricing(source = {}) {
   return {
     plans: Array.isArray(source.plans) ? source.plans : [],
     items: Array.isArray(source.items) ? source.items : [],
+    scenes: Array.isArray(source.scenes) ? source.scenes : [],
     settings: {
       ...rawSettings,
       movementSpeed: normalizedSpeed(rawSettings.movementSpeed, 1, speedLimits.min, speedLimits.max),
@@ -151,6 +156,9 @@ function clampCatGenderWeight(value) {
 function applyCatWorldPricing(nextPricing) {
   catWorldPricing.value = normalizeCatWorldPricing(nextPricing || catWorldPricing.value);
   priceDrafts.value = Object.fromEntries((catWorldPricing.value.items || []).map((item) => [item.id, Number(item.cost || 0)]));
+  scenePriceDrafts.value = Object.fromEntries(
+    (catWorldPricing.value.scenes || []).map((scene) => [scene.id, Number(scene.cost || 0)]),
+  );
   catMovementSpeedDraft.value = Number(catWorldPricing.value.settings?.movementSpeed || 1);
   catGenderWeightDrafts.value = {
     male: Number(catWorldPricing.value.settings?.genderDrawWeights?.male ?? 50),
@@ -277,6 +285,36 @@ async function savePrice(item) {
     notice.value = error.message || "价格保存失败。";
   } finally {
     savingPriceItemId.value = "";
+  }
+}
+
+function resetScenePrice(scene) {
+  scenePriceDrafts.value = {
+    ...scenePriceDrafts.value,
+    [scene.id]: Number(scene.defaultCost || scene.cost || 0),
+  };
+}
+
+async function saveScenePrice(scene) {
+  const cost = Number(scenePriceDrafts.value[scene.id]);
+  if (!Number.isFinite(cost) || cost < 0 || cost > 10000000) {
+    notice.value = "场景价格需要在 0 到 10000000 能量之间。";
+    return;
+  }
+  savingScenePriceId.value = scene.id;
+  notice.value = "";
+  try {
+    const result = await fetchJson(routeApiPaths.adminCatWorldScenePricing(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sceneId: scene.id, cost: Math.round(cost) }),
+    });
+    applyCatWorldPricing(result.catWorldPricing);
+    notice.value = `${scene.label}的解锁价格已更新为 ${Math.round(cost).toLocaleString()} 能量。`;
+  } catch (error) {
+    notice.value = error.message || "场景价格保存失败。";
+  } finally {
+    savingScenePriceId.value = "";
   }
 }
 
@@ -608,6 +646,44 @@ async function resetCatWorldData() {
             </section>
           </div>
           <p v-else class="empty-state compact-empty-state">还没有可配置的猫咪商品分类。</p>
+        </section>
+
+        <section v-if="activeAdminSection === 'catShop'" class="panel admin-pricing-panel admin-scene-pricing-panel">
+          <div class="admin-section-head">
+            <div>
+              <p class="section-kicker">CAT WORLD SCENES</p>
+              <h2>场景解锁价格</h2>
+              <p>设置外院、阅读间、厨房和主卧的永久解锁价格；已经解锁的账号不会再次扣费。</p>
+            </div>
+          </div>
+          <div class="admin-pricing-list">
+            <article v-for="scene in catWorldPricing.scenes || []" :key="scene.id" class="admin-price-row">
+              <div>
+                <strong>{{ scene.label }}</strong>
+                <span>{{ scene.englishName }} · 默认 {{ Number(scene.defaultCost || 0).toLocaleString() }} 能量</span>
+                <em>{{ scene.enabled ? "前台开放购买" : "当前未开放" }}</em>
+              </div>
+              <label>
+                <span>当前价格</span>
+                <input
+                  v-model.number="scenePriceDrafts[scene.id]"
+                  type="number"
+                  min="0"
+                  max="10000000"
+                  step="1000"
+                >
+              </label>
+              <button class="secondary-button compact-button" type="button" @click="resetScenePrice(scene)">默认价</button>
+              <button
+                class="challenge-button compact-button"
+                type="button"
+                :disabled="savingScenePriceId === scene.id"
+                @click="saveScenePrice(scene)"
+              >
+                {{ savingScenePriceId === scene.id ? "保存中" : "保存" }}
+              </button>
+            </article>
+          </div>
         </section>
 
         <section v-if="activeAdminSection === 'catShop'" class="panel admin-cat-world-operations-panel">

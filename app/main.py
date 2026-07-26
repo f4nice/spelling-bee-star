@@ -98,8 +98,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260726-016"
-DEFAULT_PAGE_VERSION = "v20260726.16"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260726-017"
+DEFAULT_PAGE_VERSION = "v20260726.17"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -1273,6 +1273,7 @@ CAT_WORLD_SCENE_SEEDS = [
         "defaultLayout": CAT_WORLD_ROOM_DEFAULT_LAYOUT,
     },
 ]
+CAT_WORLD_SCENE_SEED_BY_KEY = {scene["sceneKey"]: scene for scene in CAT_WORLD_SCENE_SEEDS}
 CAT_WORLD_PRICING_PLANS = [
     {
         "category": "food",
@@ -5248,6 +5249,33 @@ async def vue_admin_cat_world_pricing_api(request: Request, db: Session = Depend
         setting = CatWorldShopSetting(item_id=item_id)
         db.add(setting)
     setting.cost = cost
+    db.commit()
+    return {"ok": True, "catWorldPricing": admin_cat_world_pricing_payload(db)}
+
+
+@app.post("/api/vue/admin/cat-world/scene-pricing")
+async def vue_admin_cat_world_scene_pricing_api(request: Request, db: Session = Depends(get_db)):
+    require_admin_panel_access(request, db)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="场景价格数据不是有效 JSON。") from exc
+    scene_key = str((payload or {}).get("sceneId") or "").strip()
+    scene = db.scalar(select(CatWorldScene).where(CatWorldScene.scene_key == scene_key))
+    if not scene:
+        raise HTTPException(status_code=404, detail="没有找到这个猫咪场景。")
+    config = parse_cat_world_scene_json(scene.config, {})
+    if not bool(config.get("purchasable")):
+        raise HTTPException(status_code=400, detail="默认场景不需要设置解锁价格。")
+    try:
+        cost = int((payload or {}).get("cost"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="请输入有效的场景能量价格。") from exc
+    if cost < 0 or cost > 10000000:
+        raise HTTPException(status_code=400, detail="场景价格需要在 0 到 10000000 能量之间。")
+    config["purchaseCost"] = cost
+    scene.config = json.dumps(config, ensure_ascii=False, sort_keys=True)
+    db.add(scene)
     db.commit()
     return {"ok": True, "catWorldPricing": admin_cat_world_pricing_payload(db)}
 
@@ -16801,10 +16829,38 @@ def require_cat_world_phone(request: Request) -> str:
     return phone
 
 
+def admin_cat_world_scene_pricing_payload(db: Session) -> list[dict[str, Any]]:
+    rows = db.scalars(
+        select(CatWorldScene).order_by(CatWorldScene.sort_order, CatWorldScene.id)
+    ).all()
+    payload: list[dict[str, Any]] = []
+    for row in rows:
+        config = cat_world_scene_config(row)
+        if not config.get("purchasable"):
+            continue
+        seed = CAT_WORLD_SCENE_SEED_BY_KEY.get(row.scene_key, {})
+        default_cost = max(int(seed.get("purchaseCost") or 0), 0)
+        cost = max(int(config.get("purchaseCost") or 0), 0)
+        payload.append(
+            {
+                "id": row.scene_key,
+                "label": row.label,
+                "englishName": row.english_name,
+                "description": config.get("description") or "",
+                "cost": cost,
+                "defaultCost": default_cost,
+                "hasCustomCost": cost != default_cost,
+                "enabled": bool(row.is_enabled),
+            }
+        )
+    return payload
+
+
 def admin_cat_world_pricing_payload(db: Session) -> dict[str, Any]:
     return {
         "plans": CAT_WORLD_PRICING_PLANS,
         "items": cat_world_effective_shop(db),
+        "scenes": admin_cat_world_scene_pricing_payload(db),
         "settings": cat_world_game_settings_payload(db),
     }
 
