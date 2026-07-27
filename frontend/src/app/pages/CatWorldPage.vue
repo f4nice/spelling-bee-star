@@ -219,11 +219,13 @@ const focusedCat = computed(
 );
 const mood = computed(() => state.value.mood || {});
 const focusedDailyLog = computed(
-  () =>
-    dailyLogs.value[focusedCat.value.breedId || focusedCat.value.id] ||
-    dailyLogs.value[state.value.selectedCat] ||
-    mood.value.dailyLog ||
-    {},
+  () => individualizeCatLog(
+    focusedCat.value,
+    dailyLogs.value[focusedCat.value.breedId || focusedCat.value.id]
+      || dailyLogs.value[state.value.selectedCat]
+      || mood.value.dailyLog
+      || {},
+  ),
 );
 const focusedAgentState = computed(() => focusedDailyLog.value.agentState || {});
 const focusedBond = computed(() => catBonds.value[focusedCat.value.breedId || focusedCat.value.id] || {});
@@ -346,8 +348,8 @@ const focusedAgentEvents = computed(() => {
 });
 const focusedAgentProfileTags = computed(() => {
   const tags = focusedAgentState.value.profileTags;
-  if (Array.isArray(tags)) return tags.filter(Boolean).slice(0, 4);
-  return [focusedAgentState.value.personaLabel, focusedAgentState.value.playStyleLabel, focusedAgentState.value.socialStyleLabel]
+  if (Array.isArray(tags)) return [focusedCat.value.personality, ...tags].filter(Boolean).slice(0, 4);
+  return [focusedCat.value.personality, focusedAgentState.value.personaLabel, focusedAgentState.value.playStyleLabel, focusedAgentState.value.socialStyleLabel]
     .filter(Boolean)
     .slice(0, 4);
 });
@@ -392,11 +394,27 @@ function catForId(catId) {
     || null;
 }
 
+function individualizeCatLog(cat, sourceLog = {}) {
+  const traits = cat?.traits || {};
+  const sourceAgent = sourceLog?.agentState || {};
+  const sourceTags = Array.isArray(sourceAgent.profileTags) ? sourceAgent.profileTags : [];
+  return {
+    ...(sourceLog || {}),
+    agentState: {
+      ...sourceAgent,
+      temperament: traits.temperament || sourceAgent.temperament || "balanced",
+      routine: traits.routine || sourceAgent.routine || "观察房间里的学习节奏",
+      personaLabel: cat?.personality || sourceAgent.personaLabel || "学习陪伴型",
+      profileTags: [cat?.personality, ...sourceTags].filter(Boolean).slice(0, 4),
+    },
+  };
+}
+
 const catAgentCards = computed(() =>
   roomCats.value.map((cat) => {
     const breedId = catBreedId(cat);
     const owned = ownsCat(breedId);
-    const log = dailyLogs.value[breedId] || {};
+    const log = individualizeCatLog(cat, dailyLogs.value[breedId] || {});
     const agent = log.agentState || {};
     const behavior = agent.currentBehavior || {};
     const bond = catBonds.value[breedId] || {};
@@ -469,14 +487,14 @@ const catAgentDiaries = computed(() =>
         neglectWarning: Boolean(neglect.isWarning),
         neglectCritical: Boolean(neglect.isCritical),
         dailyProfileLabel: [agent.staminaLabel, agent.activityLabel, agent.socialNeedLabel].filter(Boolean).join(" · "),
-        personaLabel: agent.personaLabel || cat.personality || "学习陪伴型",
+        personaLabel: cat.personality || agent.personaLabel || "学习陪伴型",
         dailyWish: agent.dailyWish || dailyGoal.message || "",
         voiceLine: agent.voiceLine || "",
         playStyleLabel: agent.playStyleLabel || "玩耍节奏稳定",
         socialStyleLabel: agent.socialStyleLabel || "陪伴需求稳定",
-        carePreferenceLabel: agent.carePreferenceLabel || traits.label || "",
+        carePreferenceLabel: traits.label || agent.carePreferenceLabel || "",
         sleepLabel: traits.nightOwl ? `夜猫子 · ${sleepStart}-${sleepEnd}` : `${sleepStart}-${sleepEnd}`,
-        routineLabel: agent.routine || traits.routine || "观察房间里的学习节奏",
+        routineLabel: traits.routine || agent.routine || "观察房间里的学习节奏",
         goalLabel: dailyGoal.label || "自由散步",
         goalMessage: dailyGoal.message || "",
         careTip: agent.careTip || "",
@@ -511,7 +529,7 @@ const activeCatDiary = computed(() =>
 );
 const gameDailyLogs = computed(() =>
   Object.fromEntries(
-    roomCats.value.map((cat) => [cat.id, dailyLogs.value[catBreedId(cat)] || {}]),
+    roomCats.value.map((cat) => [cat.id, individualizeCatLog(cat, dailyLogs.value[catBreedId(cat)] || {})]),
   ),
 );
 const selectedProfileId = computed(() =>
@@ -1214,7 +1232,7 @@ async function purchase(item) {
     if (nextPayload.blindBoxResult?.cat) {
       openedBlindBox.value = nextPayload.blindBoxResult;
       const profile = nextPayload.blindBoxResult.profile || nextPayload.adoptedCatProfile || {};
-      notice.value = `抽中了 ${nextPayload.blindBoxResult.cat.rarity} · ${nextPayload.blindBoxResult.cat.label}，${profile.genderLabel || "随机性别"} · ${profile.patternLabel || "随机花纹"} · ${profile.featureLabel || "随机特点"}！`;
+      notice.value = `抽中了 ${nextPayload.blindBoxResult.cat.rarity} · ${nextPayload.blindBoxResult.cat.label}，${profile.genderLabel || "随机性别"} · ${profile.patternLabel || "随机花纹"} · ${profile.featureLabel || "随机特点"} · ${profile.personality || "独立个性"}！`;
       return;
     }
     if (item.category === "handbook") {
@@ -1223,7 +1241,7 @@ async function purchase(item) {
       return;
     }
     const adopted = nextPayload.adoptedCatProfile || {};
-    const profileText = [adopted.genderLabel, adopted.patternLabel, adopted.featureLabel].filter(Boolean).join(" · ");
+    const profileText = [adopted.genderLabel, adopted.patternLabel, adopted.featureLabel, adopted.personality].filter(Boolean).join(" · ");
     notice.value = wasLost
       ? `${item.label} 已重新回到活动室，${profileText}，体力和心情恢复到安全状态。`
       : `${adopted.displayLabel || item.label} 已加入猫咪世界：${profileText}。`;
@@ -1485,7 +1503,7 @@ async function selectCat(catOrId) {
 
         <div class="cat-world-ai-panel" aria-live="polite">
           <span>CAT-OS</span>
-          <strong>{{ focusedCat.label || "暂无猫咪" }} · {{ focusedCat.personality || "等待重新领养" }}</strong>
+          <strong>{{ focusedCat.displayLabel || focusedCat.label || "暂无猫咪" }} · {{ focusedCat.personality || "等待重新领养" }}</strong>
           <p>{{ focusedCatThought }}</p>
           <div v-if="focusedAgentProfileTags.length" class="cat-world-agent-profile-tags">
             <span v-for="tag in focusedAgentProfileTags" :key="tag">{{ tag }}</span>
@@ -1853,6 +1871,7 @@ async function selectCat(catOrId) {
               <span>母猫 {{ gameSettings.genderDrawWeights?.femalePercent ?? 50 }}%</span>
               <span>随机花纹</span>
               <span>随机特点</span>
+              <span>随机个性</span>
             </div>
             <p>{{ item.description }}</p>
           </div>
@@ -2005,7 +2024,7 @@ async function selectCat(catOrId) {
         >
           <span>{{ cat.owned ? `${cat.genderLabel || "性别待定"} · ${cat.profileCode || cat.rarity || cat.englishName}` : cat.escaped ? "已离家" : "未解锁" }}</span>
           <strong>{{ cat.displayLabel || cat.label }}</strong>
-          <small>{{ cat.owned ? `${cat.patternLabel || "原生花纹"} · ${cat.featureLabel || "普通特点"} · ${cat.personality || cat.englishName}` : cat.escaped ? `${cat.lostInfo.escapeLabel}，请去商店重新领养` : cat.description }}</small>
+          <small>{{ cat.owned ? `${cat.patternLabel || "原生花纹"} · ${cat.featureLabel || "普通特点"} · 个性：${cat.personality || cat.englishName}` : cat.escaped ? `${cat.lostInfo.escapeLabel}，请去商店重新领养` : cat.description }}</small>
           <div v-if="cat.owned" class="cat-world-cat-agent-status">
             <p>
               <b>{{ cat.dailyMoodLabel }}</b>

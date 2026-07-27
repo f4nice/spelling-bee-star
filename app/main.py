@@ -98,8 +98,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260726-017"
-DEFAULT_PAGE_VERSION = "v20260726.17"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260727-001"
+DEFAULT_PAGE_VERSION = "v20260727.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -275,8 +275,126 @@ CAT_WORLD_CAT_FEATURES = [
     {"key": "white-bib", "label": "浅色围脖"},
     {"key": "pink-paws", "label": "粉色肉垫"},
 ]
+CAT_WORLD_CAT_PERSONALITIES = [
+    {
+        "key": "quiet-observer",
+        "label": "安静的观察家",
+        "temperament": "calm",
+        "activity": "calm",
+        "routine": "先在安静角落观察，再慢慢靠近喜欢的东西",
+        "traitLabel": "慢热安静，体力消耗较低，喜欢稳定的陪伴。",
+        "multipliers": {"movement": 0.82, "energyDrain": 0.84, "moodDrain": 0.82, "playMoodGain": 0.92},
+        "restOffset": -5,
+        "sleepOffset": -1,
+        "thoughts": ["我先在这里看一会儿，熟悉以后再靠近。"],
+    },
+    {
+        "key": "clingy-shadow",
+        "label": "黏人的小跟班",
+        "temperament": "clingy",
+        "activity": "balanced",
+        "routine": "跟着你的学习位置移动，偶尔贴着家具停下来",
+        "traitLabel": "很需要陪伴，摸摸和互动带来的心情收益更高。",
+        "multipliers": {"movement": 0.94, "moodDrain": 1.08, "playMoodGain": 1.2},
+        "restOffset": -2,
+        "thoughts": ["你去哪里学习，我就想跟到哪里。"],
+    },
+    {
+        "key": "curious-scout",
+        "label": "好奇的探索员",
+        "temperament": "guardian",
+        "activity": "adventurous",
+        "routine": "在房间边缘和新道具之间来回探索",
+        "traitLabel": "好奇心旺盛，走动更多，也更容易发现新道具。",
+        "multipliers": {"movement": 1.16, "energyDrain": 1.08, "playMoodGain": 1.12},
+        "restOffset": 4,
+        "thoughts": ["那个新东西是什么？我想绕过去看看。"],
+    },
+    {
+        "key": "chatty-listener",
+        "label": "话多的倾听者",
+        "temperament": "chatty",
+        "activity": "chatty",
+        "routine": "听见朗读声就靠近，并用叫声回应",
+        "traitLabel": "喜欢声音和回应，互动收益高，独处时心情下降更快。",
+        "multipliers": {"movement": 1.08, "moodDrain": 1.18, "playMoodGain": 1.24},
+        "restOffset": 3,
+        "thoughts": ["我听见你读英文了，再读一句给我听吧。"],
+    },
+    {
+        "key": "gentle-dreamer",
+        "label": "温柔的做梦家",
+        "temperament": "gentle",
+        "activity": "gentle",
+        "routine": "在软垫、猫窝和书架旁慢慢换地方休息",
+        "traitLabel": "温柔省体力，休息充分，吃东西时恢复更明显。",
+        "multipliers": {"movement": 0.76, "energyDrain": 0.78, "moodDrain": 0.82, "foodEnergyGain": 1.12},
+        "restOffset": -6,
+        "sleepOffset": -1,
+        "wakeOffset": 1,
+        "thoughts": ["今天适合慢一点，我会在旁边陪着。"],
+    },
+    {
+        "key": "playful-spark",
+        "label": "贪玩的开心果",
+        "temperament": "chatty",
+        "activity": "playful",
+        "routine": "在玩具和家具之间寻找下一次互动",
+        "traitLabel": "精力活跃，玩耍心情收益很高，也会更快消耗体力。",
+        "multipliers": {"movement": 1.2, "energyDrain": 1.2, "playMoodGain": 1.3},
+        "restOffset": 7,
+        "thoughts": ["先玩一下，再陪你继续学习也来得及。"],
+    },
+    {
+        "key": "steady-guardian",
+        "label": "可靠的守护者",
+        "temperament": "guardian",
+        "activity": "adventurous",
+        "routine": "沿着入口和房间边界巡逻，确认一切正常",
+        "traitLabel": "行动稳定、心情坚韧，喜欢巡视宽阔场景。",
+        "multipliers": {"movement": 1.06, "energyDrain": 1.08, "moodDrain": 0.82},
+        "restOffset": 3,
+        "thoughts": ["房间交给我巡视，你安心完成今天的目标。"],
+    },
+    {
+        "key": "independent-reader",
+        "label": "独立的阅读者",
+        "temperament": "calm",
+        "activity": "calm",
+        "routine": "自己挑选安静位置，长时间专注地待着",
+        "traitLabel": "独处也很稳定，适合长时间安静陪读。",
+        "multipliers": {"movement": 0.88, "energyDrain": 0.86, "moodDrain": 0.7},
+        "restOffset": -3,
+        "thoughts": ["不用一直陪我，我们可以各自安静读一会儿。"],
+    },
+    {
+        "key": "night-patroller",
+        "label": "精神的夜巡员",
+        "temperament": "guardian",
+        "activity": "adventurous",
+        "routine": "白天多休息，夜里沿着房间边界巡视",
+        "traitLabel": "偏爱夜间活动，夜里更专注，白天容易打盹。",
+        "multipliers": {"movement": 1.08, "energyDrain": 1.02, "moodDrain": 0.9},
+        "restOffset": 2,
+        "nightOwl": True,
+        "sleepStart": 2,
+        "sleepEnd": 9,
+        "thoughts": ["夜里很安静，正适合我把房间巡一遍。"],
+    },
+    {
+        "key": "sunny-companion",
+        "label": "开朗的陪伴员",
+        "temperament": "clingy",
+        "activity": "balanced",
+        "routine": "在你和喜欢的家具之间轻快地来回走动",
+        "traitLabel": "情绪开朗、适应力强，喜欢频繁但轻松的互动。",
+        "multipliers": {"movement": 1.02, "moodDrain": 0.92, "playMoodGain": 1.14},
+        "thoughts": ["今天看起来很不错，我们一起做点开心的事吧。"],
+    },
+]
 CAT_WORLD_CAT_PATTERN_BY_KEY = {item["key"]: item for item in CAT_WORLD_CAT_PATTERNS}
 CAT_WORLD_CAT_FEATURE_BY_KEY = {item["key"]: item for item in CAT_WORLD_CAT_FEATURES}
+CAT_WORLD_CAT_PERSONALITY_BY_KEY = {item["key"]: item for item in CAT_WORLD_CAT_PERSONALITIES}
 CAT_WORLD_SHOP = [
     {
         "id": "daily-kibble",
@@ -14787,6 +14905,112 @@ def cat_world_random_gender(db: Session) -> str:
     return "male" if ticket < int(weights["male"]) else "female"
 
 
+def cat_world_personality_choice(db: Session, phone: str, breed_id: str) -> dict[str, Any]:
+    used_keys = {
+        str(key)
+        for key in db.scalars(
+            select(CatWorldCatProfile.personality_key).where(
+                CatWorldCatProfile.phone == phone,
+                CatWorldCatProfile.breed_id == breed_id,
+                CatWorldCatProfile.is_active.is_(True),
+                CatWorldCatProfile.personality_key.is_not(None),
+            )
+        ).all()
+        if key
+    }
+    available = [item for item in CAT_WORLD_CAT_PERSONALITIES if item["key"] not in used_keys]
+    return secrets.choice(available or CAT_WORLD_CAT_PERSONALITIES)
+
+
+def cat_world_build_personality_traits(
+    breed: dict[str, Any],
+    personality: dict[str, Any],
+) -> dict[str, Any]:
+    base_traits = cat_world_cat_traits(breed)
+    multipliers = personality.get("multipliers") if isinstance(personality.get("multipliers"), dict) else {}
+
+    def varied(key: str) -> float:
+        jitter = (secrets.randbelow(13) - 6) / 100
+        return float(base_traits[key]) * float(multipliers.get(key) or 1) * (1 + jitter)
+
+    sleep_jitter = secrets.randbelow(3) - 1
+    wake_jitter = secrets.randbelow(3) - 1
+    rest_jitter = secrets.randbelow(5) - 2
+    raw_traits = {
+        "activity": personality.get("activity") or "balanced",
+        "movement": varied("movement"),
+        "energyDrain": varied("energyDrain"),
+        "moodDrain": varied("moodDrain"),
+        "playMoodGain": varied("playMoodGain"),
+        "foodEnergyGain": varied("foodEnergyGain"),
+        "restThreshold": int(base_traits["restThreshold"])
+        + int(personality.get("restOffset") or 0)
+        + rest_jitter,
+        "sleepStart": int(
+            personality.get(
+                "sleepStart",
+                int(base_traits["sleepStart"]) + int(personality.get("sleepOffset") or 0) + sleep_jitter,
+            )
+        ),
+        "sleepEnd": int(
+            personality.get(
+                "sleepEnd",
+                int(base_traits["sleepEnd"]) + int(personality.get("wakeOffset") or 0) + wake_jitter,
+            )
+        ),
+        "nightOwl": bool(personality.get("nightOwl", False)),
+        "routine": personality.get("routine") or "按自己的节奏观察房间",
+        "temperament": personality.get("temperament") or "balanced",
+        "label": personality.get("traitLabel") or "有自己的生活节奏和互动偏好。",
+        "personalityKey": personality.get("key") or "individual",
+    }
+    return cat_world_cat_traits({"traits": raw_traits})
+
+
+def cat_world_assign_profile_personality(
+    db: Session,
+    profile: CatWorldCatProfile,
+) -> bool:
+    breed = CAT_WORLD_CAT_BY_ID.get(profile.breed_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    personality = CAT_WORLD_CAT_PERSONALITY_BY_KEY.get(str(profile.personality_key or ""))
+    changed = False
+    if not personality:
+        personality = cat_world_personality_choice(db, profile.phone, profile.breed_id)
+        profile.personality_key = str(personality["key"])
+        changed = True
+    personality_label = str(personality.get("label") or breed.get("personality") or "独立个性猫咪")
+    if profile.personality_label != personality_label:
+        profile.personality_label = personality_label
+        changed = True
+    try:
+        stored_traits = json.loads(profile.personality_traits or "{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        stored_traits = {}
+    if not isinstance(stored_traits, dict) or str(stored_traits.get("personalityKey") or "") != personality["key"]:
+        profile.personality_traits = json.dumps(
+            cat_world_build_personality_traits(breed, personality),
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        changed = True
+    if changed:
+        db.add(profile)
+    return changed
+
+
+def cat_world_profile_traits(
+    profile: CatWorldCatProfile,
+    breed: dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        stored_traits = json.loads(profile.personality_traits or "{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        stored_traits = {}
+    if not isinstance(stored_traits, dict) or not stored_traits:
+        return cat_world_cat_traits(breed)
+    return cat_world_cat_traits({"traits": stored_traits})
+
+
 def create_cat_world_cat_profile(
     db: Session,
     state: CatWorldState,
@@ -14806,6 +15030,7 @@ def create_cat_world_cat_profile(
         is_active=True,
         adopted_at=datetime.utcnow(),
     )
+    cat_world_assign_profile_personality(db, profile)
     db.add(profile)
     db.flush()
     return profile
@@ -14826,6 +15051,10 @@ def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]
     breed = CAT_WORLD_CAT_BY_ID.get(profile.breed_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     pattern = CAT_WORLD_CAT_PATTERN_BY_KEY.get(profile.pattern_key, CAT_WORLD_CAT_PATTERNS[0])
     feature = CAT_WORLD_CAT_FEATURE_BY_KEY.get(profile.feature_key, CAT_WORLD_CAT_FEATURES[0])
+    personality = CAT_WORLD_CAT_PERSONALITY_BY_KEY.get(str(profile.personality_key or ""), {})
+    personality_label = str(profile.personality_label or personality.get("label") or breed.get("personality") or "独立个性猫咪")
+    personality_thoughts = personality.get("thoughts") if isinstance(personality.get("thoughts"), list) else []
+    breed_thoughts = breed.get("thoughts") if isinstance(breed.get("thoughts"), list) else []
     profile_code = str(profile.profile_id).rsplit("-", 1)[-1][:4].upper()
     return {
         **cat_world_cat_payload(breed),
@@ -14840,6 +15069,10 @@ def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]
         "patternLabel": pattern["label"],
         "featureKey": feature["key"],
         "featureLabel": feature["label"],
+        "personalityKey": str(profile.personality_key or ""),
+        "personality": personality_label,
+        "traits": cat_world_profile_traits(profile, breed),
+        "thoughts": [*personality_thoughts, *breed_thoughts],
         "source": profile.source,
         "adoptedAt": profile.adopted_at.replace(microsecond=0).isoformat() + "Z",
     }
@@ -14853,6 +15086,8 @@ def ensure_cat_world_cat_profiles(
     profiles = cat_world_active_cat_profiles(db, state.phone)
     profiled_breeds = {profile.breed_id for profile in profiles}
     changed = False
+    for profile in profiles:
+        changed = cat_world_assign_profile_personality(db, profile) or changed
     for breed_id in owned_cats:
         if breed_id in profiled_breeds:
             continue
@@ -17044,6 +17279,11 @@ def ensure_schema_columns() -> None:
         if "cat_world_daily_logs" in table_names
         else set()
     )
+    cat_world_cat_profile_columns = (
+        {column["name"] for column in inspector.get_columns("cat_world_cat_profiles")}
+        if "cat_world_cat_profiles" in table_names
+        else set()
+    )
     essay_entry_columns = (
         {column["name"] for column in inspector.get_columns("essay_entries")}
         if "essay_entries" in table_names
@@ -17118,6 +17358,12 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE cat_world_daily_logs ADD COLUMN agent_state TEXT NULL"))
         if "cat_world_daily_logs" in table_names and "damaged_item_id" not in cat_world_daily_log_columns:
             connection.execute(text("ALTER TABLE cat_world_daily_logs ADD COLUMN damaged_item_id VARCHAR(80) NULL"))
+        if "cat_world_cat_profiles" in table_names and "personality_key" not in cat_world_cat_profile_columns:
+            connection.execute(text("ALTER TABLE cat_world_cat_profiles ADD COLUMN personality_key VARCHAR(40) NULL"))
+        if "cat_world_cat_profiles" in table_names and "personality_label" not in cat_world_cat_profile_columns:
+            connection.execute(text("ALTER TABLE cat_world_cat_profiles ADD COLUMN personality_label VARCHAR(120) NULL"))
+        if "cat_world_cat_profiles" in table_names and "personality_traits" not in cat_world_cat_profile_columns:
+            connection.execute(text("ALTER TABLE cat_world_cat_profiles ADD COLUMN personality_traits TEXT NULL"))
         if "essay_entries" in table_names and "writing_score" not in essay_entry_columns:
             connection.execute(text("ALTER TABLE essay_entries ADD COLUMN writing_score INTEGER NOT NULL DEFAULT 0"))
         if "essay_entries" in table_names and "writing_score_breakdown" not in essay_entry_columns:
