@@ -98,8 +98,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260728-001"
-DEFAULT_PAGE_VERSION = "v20260728.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260728-002"
+DEFAULT_PAGE_VERSION = "v20260728.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -13941,6 +13941,18 @@ def cat_world_is_sleep_hour(hour: int, sleep_start: int, sleep_end: int) -> bool
     return hour >= sleep_start or hour < sleep_end
 
 
+def cat_world_is_wake_transition(now: datetime, traits: dict[str, Any]) -> bool:
+    if bool(traits.get("nightOwl")):
+        return False
+    sleep_start = int(traits.get("sleepStart") or 23)
+    sleep_end = int(traits.get("sleepEnd") or 7)
+    local_now = cat_world_local_now(now)
+    return (
+        cat_world_is_sleep_hour((local_now - timedelta(hours=1)).hour, sleep_start, sleep_end)
+        and not cat_world_is_sleep_hour(local_now.hour, sleep_start, sleep_end)
+    )
+
+
 def cat_world_stable_ratio(seed: str) -> float:
     digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
     return int(digest[:12], 16) / float(0xFFFFFFFFFFFF)
@@ -14511,6 +14523,9 @@ def cat_world_behavior_hourly_change(
     energy_decay = max(1, energy_decay + daily_energy_bias)
     behavior = cat_world_current_behavior(agent_state, traits, mood_score, energy_score, now)
     mood_key = str(agent_state.get("dailyMoodKey") or "")
+    sleeping = behavior["key"] == "sleeping"
+    waking = cat_world_is_wake_transition(now, traits)
+    recovering = sleeping or waking
 
     mood_delta = -mood_decay
     energy_delta = -energy_decay
@@ -14526,11 +14541,16 @@ def cat_world_behavior_hourly_change(
     elif daily_mood_bias < 0:
         daily_notes.append("今天比较专注")
 
-    if behavior["key"] == "sleeping":
+    if sleeping:
         energy_delta = max(1, round(3 / max(float(traits["energyDrain"]), 0.5)))
-        mood_delta = 1 if mood_key not in {"quiet", "grumpy"} else 0
+        mood_delta = 3
         label = "睡觉恢复"
         reason = "按自己的作息睡觉"
+    elif waking:
+        energy_delta = max(1, round(2 / max(float(traits["energyDrain"]), 0.5)))
+        mood_delta = 6
+        label = "睡醒舒展"
+        reason = "睡足后醒来，坏情绪得到缓解"
     elif behavior["key"] == "resting":
         energy_delta = -max(1, round(energy_decay * 0.35))
         mood_delta = -max(1, round(mood_decay * 0.45))
@@ -14562,21 +14582,30 @@ def cat_world_behavior_hourly_change(
 
     if mood_key == "bright" and mood_delta < 2:
         mood_delta += 1
-    elif mood_key == "grumpy":
+    elif mood_key == "grumpy" and not recovering:
         mood_delta -= 1
 
     if favorite_count > 0 and mood_delta < 0:
         mood_delta = min(0, mood_delta + min(favorite_count, 2))
 
     litter_penalty = cat_world_litter_mood_penalty(litter_count)
+    if recovering:
+        litter_penalty = min(litter_penalty, 1)
     if litter_penalty:
         mood_delta -= litter_penalty
         reason = f"{reason}，房间有 {max(int(litter_count or 0), 0)} 堆猫屎"
 
     bath_penalty = max(int(bath_mood_penalty or 0), 0)
+    if recovering:
+        bath_penalty = min(bath_penalty, 1)
     if bath_penalty:
         mood_delta -= bath_penalty
         reason = f"{reason}，太久没洗澡正在炸毛"
+
+    if sleeping:
+        mood_delta = max(mood_delta, 2)
+    elif waking:
+        mood_delta = max(mood_delta, 4)
 
     if daily_notes:
         reason = f"{reason}，{'、'.join(daily_notes)}"
