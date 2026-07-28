@@ -2,14 +2,17 @@
 import { computed, nextTick, ref, watch } from "vue";
 import {
   Award,
+  BookOpen,
   CalendarDays,
   CheckCircle2,
+  ChevronRight,
   MessageSquareQuote,
   Send,
   Sparkles,
   Swords,
   Target,
   Trophy,
+  X,
   Zap,
 } from "lucide-vue-next";
 import { routeApiPaths } from "../routeApiPaths.js";
@@ -29,6 +32,8 @@ const argument = ref("");
 const busyAction = ref("");
 const notice = ref("");
 const transcriptEnd = ref(null);
+const replaySession = ref(null);
+const replayBusy = ref(0);
 
 watch(
   () => props.data,
@@ -39,6 +44,7 @@ watch(
 const session = computed(() => payload.value?.session || null);
 const rules = computed(() => payload.value?.rules || {});
 const levels = computed(() => payload.value?.levels || []);
+const history = computed(() => payload.value?.history || []);
 const currentTopic = computed(() => {
   if (session.value?.topic) return session.value.topic;
   return payload.value?.dailyTopics?.[selectedLevel.value] || {};
@@ -48,8 +54,8 @@ const completed = computed(() => Boolean(session.value && session.value.status !
 const argumentWordCount = computed(() => (argument.value.match(/[A-Za-z]+(?:[-'][A-Za-z]+)*/g) || []).length);
 const canSubmit = computed(() => active.value && argumentWordCount.value >= 3 && !busyAction.value);
 const argumentMaxChars = computed(() => Number(rules.value.argumentMaxChars || 2000));
-const targetPoints = computed(() => Number(session.value?.targetPoints || rules.value.targetPoints || 100));
-const maxTurns = computed(() => Number(session.value?.maxTurns || rules.value.maxTurns || 6));
+const targetPoints = computed(() => Number(session.value?.targetPoints || rules.value.targetPoints || 30));
+const speakingRounds = computed(() => Number(session.value?.speakingRounds || rules.value.speakingRounds || 2));
 const userProgress = computed(() => scoreProgress(session.value?.userPoints));
 const stanceText = computed(() => (session.value?.userStance === "con" ? "CON" : "PRO"));
 const finalReview = computed(() => session.value?.finalFeedback || {});
@@ -66,6 +72,10 @@ function scoreProgress(value) {
 
 function stanceLabel(value) {
   return value === "con" ? "CON" : "PRO";
+}
+
+function sideForEntry(entry, source) {
+  return stanceLabel(entry?.role === "user" ? source?.userStance : source?.aiStance);
 }
 
 function dimensionRows(entry) {
@@ -127,6 +137,23 @@ async function submitTurn() {
     busyAction.value = "";
   }
 }
+
+async function openReplay(item) {
+  if (!item?.id || replayBusy.value) return;
+  replayBusy.value = item.id;
+  try {
+    const response = await fetchJson(routeApiPaths.debateSession(item.id));
+    replaySession.value = response?.session || null;
+  } catch (error) {
+    notice.value = error.message || "The debate record could not be opened.";
+  } finally {
+    replayBusy.value = 0;
+  }
+}
+
+function closeReplay() {
+  replaySession.value = null;
+}
 </script>
 
 <template>
@@ -139,7 +166,7 @@ async function submitTurn() {
       </div>
       <div class="debate-head-rules" aria-label="比赛规则">
         <span><Target :size="18" /><strong>{{ rules.passScore || 60 }}</strong> Pass Score</span>
-        <span><Swords :size="18" /><strong>{{ rules.maxTurns || 6 }}</strong> Rounds</span>
+        <span><Swords :size="18" /><strong>{{ rules.speakingRounds || 2 }}</strong> Speaking Rounds</span>
       </div>
     </header>
 
@@ -212,8 +239,8 @@ async function submitTurn() {
         </div>
         <div class="debate-score-center">
           <Target :size="26" />
-          <strong>Round {{ Math.min(session.turnCount + (active ? 1 : 0), maxTurns) }} / {{ maxTurns }}</strong>
-          <span>{{ targetPoints }} point growth goal</span>
+          <strong>{{ speakingRounds }} Speaking Rounds</strong>
+          <span>One turn for PRO · one turn for CON</span>
         </div>
       </section>
 
@@ -236,7 +263,7 @@ async function submitTurn() {
               <span>
                 <MessageSquareQuote v-if="entry.role === 'user'" :size="17" />
                 <Sparkles v-else :size="17" />
-                {{ entry.role === "user" ? `My round ${entry.round}` : `AI response ${entry.round}` }}
+                {{ sideForEntry(entry, session) }} argument
               </span>
               <strong v-if="entry.role === 'user'">+{{ entry.points }} points</strong>
             </header>
@@ -255,8 +282,8 @@ async function submitTurn() {
         </div>
         <div v-else class="debate-opening">
           <MessageSquareQuote :size="30" />
-          <strong>{{ stanceLabel(session.userStance) }} makes the opening argument</strong>
-          <span>State your claim in English, then support it with a reason or example.</span>
+          <strong>Your {{ stanceLabel(session.userStance) }} argument</strong>
+          <span>State your claim in English. The other side will respond once.</span>
         </div>
 
         <form v-if="active" class="debate-turn-form" @submit.prevent="submitTurn">
@@ -273,7 +300,7 @@ async function submitTurn() {
             <button class="primary-action-button" type="submit" :disabled="!canSubmit">
               <Sparkles v-if="busyAction === 'turn'" :size="18" />
               <Send v-else :size="18" />
-              {{ busyAction === "turn" ? "AI is responding and scoring your argument..." : "Submit this round" }}
+              {{ busyAction === "turn" ? "The other side is responding..." : "Submit my argument" }}
             </button>
           </div>
         </form>
@@ -319,5 +346,91 @@ async function submitTurn() {
         </div>
       </section>
     </template>
+
+    <section v-if="history.length" class="debate-history panel">
+      <header>
+        <div>
+          <span class="eyebrow">DEBATE REVIEW</span>
+          <h2>Past Debates</h2>
+        </div>
+        <strong>{{ history.length }} records</strong>
+      </header>
+      <div class="debate-history-list">
+        <button
+          v-for="item in history"
+          :key="item.id"
+          type="button"
+          :disabled="Boolean(replayBusy)"
+          @click="openReplay(item)"
+        >
+          <time>{{ item.date }}</time>
+          <span>
+            <strong>{{ item.topic.title }}</strong>
+            <small>{{ item.levelLabel }} · {{ stanceLabel(item.userStance) }} · {{ item.statusLabel }}</small>
+          </span>
+          <em v-if="item.status === 'completed'">{{ item.finalScore }} / 100</em>
+          <em v-else>In progress</em>
+          <ChevronRight :size="19" />
+        </button>
+      </div>
+    </section>
+
+    <div v-if="replaySession" class="debate-replay-backdrop" @click.self="closeReplay">
+      <article class="debate-replay-dialog" role="dialog" aria-modal="true" aria-labelledby="debate-replay-title">
+        <header>
+          <div>
+            <span class="eyebrow">DEBATE RECORD · {{ replaySession.date }}</span>
+            <h2 id="debate-replay-title">{{ replaySession.topic.title }}</h2>
+          </div>
+          <button type="button" aria-label="Close debate record" title="Close" @click="closeReplay">
+            <X :size="21" />
+          </button>
+        </header>
+
+        <div class="debate-replay-summary">
+          <span><BookOpen :size="17" />{{ replaySession.statusLabel }}</span>
+          <span>{{ stanceLabel(replaySession.userStance) }} side</span>
+          <strong v-if="replaySession.status === 'completed'">{{ replaySession.finalScore }} / 100</strong>
+        </div>
+
+        <section class="debate-replay-transcript">
+          <article
+            v-for="(entry, index) in replaySession.transcript"
+            :key="`${entry.round}-${entry.role}-${index}`"
+            :class="['debate-message', entry.role]"
+          >
+            <header>
+              <span>
+                <MessageSquareQuote v-if="entry.role === 'user'" :size="17" />
+                <Sparkles v-else :size="17" />
+                {{ sideForEntry(entry, replaySession) }} argument
+              </span>
+              <strong v-if="entry.role === 'user'">+{{ entry.points }} points</strong>
+            </header>
+            <p>{{ entry.text }}</p>
+            <div v-if="entry.role === 'user'" class="debate-dimension-row">
+              <span v-for="item in dimensionRows(entry)" :key="item.key">
+                {{ item.label }} <strong>{{ item.value }}/{{ item.max }}</strong>
+              </span>
+            </div>
+            <aside v-if="entry.coachNote" class="debate-coach-note">
+              <Award :size="18" />
+              <span><strong>{{ entry.highlight }}</strong>{{ entry.coachNote }}</span>
+            </aside>
+          </article>
+          <p v-if="!replaySession.transcript.length" class="debate-replay-empty">No arguments have been submitted yet.</p>
+        </section>
+
+        <footer v-if="replaySession.finalFeedback?.summary">
+          <strong>成长回顾</strong>
+          <p>{{ replaySession.finalFeedback.summary }}</p>
+          <div v-if="replaySession.finalFeedback.strengths?.length">
+            <span v-for="item in replaySession.finalFeedback.strengths" :key="item">
+              <CheckCircle2 :size="15" />{{ item }}
+            </span>
+          </div>
+        </footer>
+      </article>
+    </div>
   </section>
 </template>

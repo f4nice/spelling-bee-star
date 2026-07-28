@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from app.services.debate import (
     DEBATE_MAX_TURNS,
     DEBATE_PASS_SCORE,
+    DEBATE_SPEAKING_ROUNDS,
     DEBATE_TARGET_POINTS,
     debate_encouragement_score,
     debate_energy_reward,
@@ -37,13 +38,14 @@ class DebateServiceTests(unittest.TestCase):
         self.assertIn("category", topic)
 
     def test_result_finishes_at_target_or_turn_limit(self):
-        self.assertEqual(debate_result_status(99, 5), "active")
+        self.assertEqual(DEBATE_SPEAKING_ROUNDS, 2)
+        self.assertEqual(debate_result_status(DEBATE_TARGET_POINTS - 1, 0), "active")
         self.assertEqual(
-            debate_result_status(DEBATE_TARGET_POINTS, 4),
+            debate_result_status(DEBATE_TARGET_POINTS, 0),
             "completed",
         )
         self.assertEqual(
-            debate_result_status(88, DEBATE_MAX_TURNS),
+            debate_result_status(18, DEBATE_MAX_TURNS),
             "completed",
         )
 
@@ -99,11 +101,12 @@ class DebateServiceTests(unittest.TestCase):
         self.assertIn("must be in Simplified Chinese", system_prompt)
         self.assertIn("Do not award match points to yourself", system_prompt)
         self.assertIn("Do not assign an overall score", system_prompt)
+        self.assertIn("exactly two speaking rounds", system_prompt)
 
     def test_encouragement_score_has_passing_floor(self):
         self.assertEqual(debate_encouragement_score(0, 1), DEBATE_PASS_SCORE)
-        self.assertEqual(debate_encouragement_score(82, 4), 68)
-        self.assertEqual(debate_encouragement_score(120, 4), 100)
+        self.assertEqual(debate_encouragement_score(24, 1), 80)
+        self.assertEqual(debate_encouragement_score(30, 1), 100)
 
     def test_reward_matches_encouragement_score(self):
         self.assertEqual(debate_energy_reward(0), DEBATE_PASS_SCORE)

@@ -70,6 +70,7 @@ from app.services.debate import (
     DEBATE_LEVELS,
     DEBATE_MAX_TURNS,
     DEBATE_PASS_SCORE,
+    DEBATE_SPEAKING_ROUNDS,
     DEBATE_TARGET_POINTS,
     debate_encouragement_score,
     debate_energy_reward,
@@ -111,8 +112,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260728-003"
-DEFAULT_PAGE_VERSION = "v20260728.3"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260728-004"
+DEFAULT_PAGE_VERSION = "v20260728.4"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -6534,8 +6535,9 @@ def serialize_debate_session(session: DebateSession | None) -> dict[str, Any] | 
         "statusLabel": "In progress" if status == "active" else "Completed",
         "userPoints": max(int(session.user_points or 0), 0),
         "turnCount": max(int(session.turn_count or 0), 0),
-        "targetPoints": max(int(session.target_points or DEBATE_TARGET_POINTS), 1),
-        "maxTurns": max(int(session.max_turns or DEBATE_MAX_TURNS), 1),
+        "targetPoints": DEBATE_TARGET_POINTS,
+        "maxTurns": DEBATE_MAX_TURNS,
+        "speakingRounds": DEBATE_SPEAKING_ROUNDS,
         "transcript": transcript,
         "finalScore": final_score,
         "finalFeedback": final_feedback,
@@ -6555,6 +6557,40 @@ def debate_session_for_day(db: Session, phone: str, debate_day: date) -> DebateS
     )
 
 
+def serialize_debate_history_item(session: DebateSession) -> dict[str, Any]:
+    topic = debate_topic_payload(session.debate_date, session.level)
+    if topic["key"] != session.topic_key:
+        topic.update({"category": session.category, "title": session.topic})
+    completed = session.status != "active"
+    final_score = min(max(int(session.final_score or 0), 0), 100)
+    if completed:
+        final_score = max(final_score, DEBATE_PASS_SCORE)
+    return {
+        "id": session.id,
+        "date": session.debate_date.isoformat(),
+        "level": session.level,
+        "levelLabel": "Primary" if session.level == "primary" else "Middle School",
+        "topic": topic,
+        "userStance": session.user_stance,
+        "status": "completed" if completed else "active",
+        "statusLabel": "Completed" if completed else "In progress",
+        "userPoints": max(int(session.user_points or 0), 0),
+        "finalScore": final_score,
+        "energyAwarded": max(int(session.energy_awarded or 0), 0),
+        "createdAt": debate_datetime_text(session.created_at),
+    }
+
+
+def debate_history_payload(db: Session, phone: str, limit: int = 50) -> list[dict[str, Any]]:
+    sessions = db.scalars(
+        select(DebateSession)
+        .where(DebateSession.phone == phone)
+        .order_by(DebateSession.debate_date.desc(), DebateSession.id.desc())
+        .limit(limit)
+    ).all()
+    return [serialize_debate_history_item(session) for session in sessions]
+
+
 def debate_page_payload(db: Session, request: Request) -> dict[str, Any]:
     user = current_admin_user(request, db)
     today = date.today()
@@ -6569,6 +6605,7 @@ def debate_page_payload(db: Session, request: Request) -> dict[str, Any]:
             "targetPoints": DEBATE_TARGET_POINTS,
             "passScore": DEBATE_PASS_SCORE,
             "maxTurns": DEBATE_MAX_TURNS,
+            "speakingRounds": DEBATE_SPEAKING_ROUNDS,
             "argumentMaxChars": DEBATE_ARGUMENT_MAX_CHARS,
             "scoreDimensions": [
                 {"key": "claim", "label": "观点清楚", "max": 8},
@@ -6578,6 +6615,7 @@ def debate_page_payload(db: Session, request: Request) -> dict[str, Any]:
             ],
         },
         "session": serialize_debate_session(debate_session_for_day(db, user.phone, today)),
+        "history": debate_history_payload(db, user.phone),
     }
 
 
@@ -6597,6 +6635,11 @@ def owned_debate_session(db: Session, request: Request, session_id: int) -> Deba
 @app.get("/api/vue/debate")
 def vue_debate_api(request: Request, db: Session = Depends(get_db)):
     return debate_page_payload(db, request)
+
+
+@app.get("/api/vue/debate/session/{session_id}")
+def vue_debate_session_api(session_id: int, request: Request, db: Session = Depends(get_db)):
+    return {"session": serialize_debate_session(owned_debate_session(db, request, session_id))}
 
 
 @app.post("/api/vue/debate/start")
@@ -6737,6 +6780,8 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
     session.user_points = int(session.user_points or 0) + int(result["userPoints"])
     session.ai_points = 0
     session.turn_count = round_number
+    session.target_points = DEBATE_TARGET_POINTS
+    session.max_turns = DEBATE_MAX_TURNS
     if current_topic["key"] == session.topic_key:
         session.topic = current_topic["title"]
         session.category = current_topic["category"]

@@ -28,6 +28,7 @@ export const routeApiPaths = {
   essayCover: (id) => `/api/vue/essays/${id}/cover`,
   essayDelete: (id) => `/api/vue/essays/${id}/delete`,
   debate: () => "/api/vue/debate",
+  debateSession: (id) => `/api/vue/debate/session/${id}`,
   debateStart: () => "/api/vue/debate/start",
   debateTurn: (id) => `/api/vue/debate/${id}/turn`,
   spb: (route = {}) => `/api/vue/spb?collection=${encodeURIComponent(route.params?.collection || "individual")}`,
