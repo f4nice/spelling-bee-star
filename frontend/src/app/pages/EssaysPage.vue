@@ -72,6 +72,8 @@ function emptyDraft() {
     title: "",
     body: "",
     optimizedBody: "",
+    translationBody: "",
+    optimizedTranslationBody: "",
     coverUrl: "",
     wordCount: 0,
     optimizedWordCount: 0,
@@ -81,6 +83,7 @@ function emptyDraft() {
     bestWritingScore: 0,
     bestWritingPoints: 0,
     aiModel: "",
+    translationModel: "",
     coverModel: "",
     updatedAt: "",
   };
@@ -104,6 +107,8 @@ function loadDraft(essay) {
     title: essay.title || "",
     body: essay.body || "",
     optimizedBody: essay.optimizedBody || "",
+    translationBody: essay.translationBody || "",
+    optimizedTranslationBody: essay.optimizedTranslationBody || "",
     coverUrl: essay.coverUrl || "",
     wordCount: Number(essay.wordCount || 0),
     optimizedWordCount: Number(essay.optimizedWordCount || 0),
@@ -113,6 +118,7 @@ function loadDraft(essay) {
     bestWritingScore: Number(essay.bestWritingScore || 0),
     bestWritingPoints: Number(essay.bestWritingPoints || 0),
     aiModel: essay.aiModel || "",
+    translationModel: essay.translationModel || "",
     coverModel: essay.coverModel || "",
     updatedAt: essay.updatedAt || "",
   });
@@ -212,6 +218,11 @@ watch(
       draft.writingAdvice = [];
       draft.aiModel = "";
     }
+    if (draft.translationBody || draft.optimizedTranslationBody || draft.translationModel) {
+      draft.translationBody = "";
+      draft.optimizedTranslationBody = "";
+      draft.translationModel = "";
+    }
     if (draft.coverUrl || draft.coverModel) {
       draft.coverUrl = "";
       draft.coverModel = "";
@@ -295,6 +306,29 @@ async function optimizeEssay() {
     }
   } catch (error) {
     notice.value = error?.message || "AI 优化失败，请稍后再试。";
+  } finally {
+    busyAction.value = "";
+  }
+}
+
+async function translateEssay() {
+  if (!hasEssayInput.value) {
+    notice.value = "正文写好后再翻译。";
+    return;
+  }
+  if (busyAction.value) return;
+  const essay = await ensureSavedEssay();
+  if (!essay?.id) return;
+  busyAction.value = "translate";
+  notice.value = "";
+  try {
+    const payload = await fetchJson(routeApiPaths.essayTranslate(essay.id), requestOptions());
+    applyResponse(payload);
+    notice.value = draft.optimizedBody
+      ? "原稿和 AI 优化稿的中文译文已生成。"
+      : "原稿的中文译文已生成。";
+  } catch (error) {
+    notice.value = error?.message || "一键翻译失败，请稍后再试。";
   } finally {
     busyAction.value = "";
   }
@@ -424,6 +458,9 @@ async function deleteEssay() {
           <button type="button" class="challenge-button" :disabled="!hasEssayInput || Boolean(busyAction)" @click="optimizeEssay">
             {{ busyAction === "optimize" ? "优化中..." : "AI 优化" }}
           </button>
+          <button type="button" class="secondary-button" :disabled="!hasEssayInput || Boolean(busyAction)" @click="translateEssay">
+            {{ busyAction === "translate" ? "翻译中..." : "一键翻译" }}
+          </button>
         </div>
 
         <p v-if="notice" class="notice essay-notice">{{ notice }}</p>
@@ -452,14 +489,22 @@ async function deleteEssay() {
                 <span class="eyebrow">MY DRAFT</span>
                 <strong>{{ currentWordCount }} 字</strong>
               </div>
-              <p>{{ draft.body || "正文会显示在这里。" }}</p>
+              <p class="essay-english-copy">{{ draft.body || "正文会显示在这里。" }}</p>
+              <section v-if="draft.translationBody" class="essay-translation-block">
+                <strong>中文译文</strong>
+                <p>{{ draft.translationBody }}</p>
+              </section>
             </article>
             <article class="essay-text-panel">
               <div class="essay-section-title">
                 <span class="eyebrow">AI VERSION</span>
                 <strong>{{ aiVersionWordCount }} 字</strong>
               </div>
-              <p>{{ aiVersionText }}</p>
+              <p class="essay-english-copy">{{ aiVersionText }}</p>
+              <section v-if="draft.optimizedTranslationBody" class="essay-translation-block">
+                <strong>中文译文</strong>
+                <p>{{ draft.optimizedTranslationBody }}</p>
+              </section>
             </article>
           </section>
         </div>

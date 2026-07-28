@@ -24,6 +24,7 @@ export const routeApiPaths = {
   essays: () => "/api/vue/essays",
   essay: (id) => `/api/vue/essays/${id}`,
   essayOptimize: (id) => `/api/vue/essays/${id}/optimize`,
+  essayTranslate: (id) => `/api/vue/essays/${id}/translate`,
   essayCover: (id) => `/api/vue/essays/${id}/cover`,
   essayDelete: (id) => `/api/vue/essays/${id}/delete`,
   spb: (route = {}) => `/api/vue/spb?collection=${encodeURIComponent(route.params?.collection || "individual")}`,

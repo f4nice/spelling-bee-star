@@ -7409,7 +7409,6 @@ button.calendar-day {
 
 .essay-text-panel {
   display: grid;
-  grid-template-rows: auto auto;
   gap: 10px;
   align-content: start;
   border: 1px solid rgba(18, 35, 47, 0.1);
@@ -7431,12 +7430,31 @@ button.calendar-day {
   font-size: 12px;
 }
 
-.essay-text-panel p {
+.essay-text-panel > .essay-english-copy {
   align-self: start;
   min-height: 180px;
   margin: 0;
   color: var(--ink);
   line-height: 1.68;
+  white-space: pre-wrap;
+}
+
+.essay-translation-block {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid rgba(29, 127, 91, 0.22);
+  padding-top: 12px;
+}
+
+.essay-translation-block > strong {
+  color: var(--accent-dark);
+  font-size: 13px;
+}
+
+.essay-translation-block > p {
+  margin: 0;
+  color: #304a5a;
+  line-height: 1.75;
   white-space: pre-wrap;
 }
 

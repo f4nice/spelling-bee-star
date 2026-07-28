@@ -5733,6 +5733,8 @@ def serialize_essay(essay: EssayEntry) -> dict[str, Any]:
         "title": essay.title,
         "body": essay.body,
         "optimizedBody": essay.optimized_body or "",
+        "translationBody": essay.translation_body or "",
+        "optimizedTranslationBody": essay.optimized_translation_body or "",
         "coverUrl": essay.cover_url or "",
         "wordCount": int(essay.word_count or 0),
         "optimizedWordCount": int(essay.optimized_word_count or 0),
@@ -5743,6 +5745,7 @@ def serialize_essay(essay: EssayEntry) -> dict[str, Any]:
         "bestWritingPoints": best_writing_points,
         "writingAdvice": normalize_essay_advice_items(writing_advice),
         "aiModel": essay.ai_model or "",
+        "translationModel": essay.translation_model or "",
         "coverModel": essay.cover_model or "",
         "createdAt": essay.created_at.isoformat() if essay.created_at else "",
         "updatedAt": essay.updated_at.isoformat() if essay.updated_at else "",
@@ -5997,6 +6000,156 @@ def chat_completion_text(data: dict[str, Any]) -> str:
     return str(((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
 
 
+ESSAY_TRANSLATION_SYSTEM_PROMPT = (
+    "You are a professional English-to-Simplified-Chinese translator for student compositions. "
+    "Translate accurately and naturally while preserving meaning, names, tone, paragraph breaks, and story details. "
+    "Do not correct, expand, summarize, explain, or add facts. "
+    'Return only one valid JSON object with this exact shape: {"draft":"原稿的简体中文译文","optimized":"AI稿的简体中文译文"}. '
+    'If the input field "optimized" is empty, return an empty string for "optimized". '
+    "Do not include markdown or any text outside the JSON object."
+)
+
+
+def essay_translation_messages(*, title: str, body: str, optimized_body: str | None) -> list[dict[str, str]]:
+    source = {
+        "title": title,
+        "draft": body,
+        "optimized": optimized_body or "",
+    }
+    return [
+        {
+            "role": "system",
+            "content": ESSAY_TRANSLATION_SYSTEM_PROMPT,
+        },
+        {
+            "role": "user",
+            "content": json.dumps(source, ensure_ascii=False),
+        },
+    ]
+
+
+def parse_essay_translation_result(
+    text_value: str,
+    *,
+    require_optimized: bool,
+) -> tuple[str, str]:
+    raw = str(text_value or "").strip()
+    json_text = raw
+    if raw.startswith("```"):
+        json_text = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.IGNORECASE | re.DOTALL).strip()
+    try:
+        parsed = json.loads(json_text)
+    except json.JSONDecodeError:
+        start = raw.find("{")
+        end = raw.rfind("}")
+        try:
+            parsed = json.loads(raw[start:end + 1]) if start >= 0 and end > start else None
+        except json.JSONDecodeError:
+            parsed = None
+    if not isinstance(parsed, dict):
+        raise RuntimeError("AI 没有返回有效的中文译文。")
+
+    translation_body = clean_essay_body(
+        parsed.get("draft")
+        or parsed.get("translation")
+        or parsed.get("translationBody")
+    )
+    optimized_translation_body = clean_essay_body(
+        parsed.get("optimized")
+        or parsed.get("optimizedTranslation")
+        or parsed.get("optimizedTranslationBody")
+    )
+    if not translation_body:
+        raise RuntimeError("AI 没有返回原稿的中文译文。")
+    if require_optimized and not optimized_translation_body:
+        raise RuntimeError("AI 没有返回优化稿的中文译文。")
+    return translation_body, optimized_translation_body
+
+
+async def translate_essay_with_dashscope(
+    *,
+    title: str,
+    body: str,
+    optimized_body: str | None,
+) -> tuple[str, str, str]:
+    api_key = settings.dashscope_api_key.strip()
+    if not api_key:
+        raise RuntimeError("DASHSCOPE_API_KEY is not configured on the server.")
+    model = (settings.dashscope_text_model or "qwen-plus").strip()
+    endpoint = (settings.dashscope_text_endpoint or "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions").strip()
+    payload = {
+        "model": model,
+        "messages": essay_translation_messages(title=title, body=body, optimized_body=optimized_body),
+        "temperature": 0.1,
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=90) as client:
+        response = await client.post(endpoint, headers=headers, json=payload)
+        response.raise_for_status()
+    translation_body, optimized_translation_body = parse_essay_translation_result(
+        chat_completion_text(response.json()),
+        require_optimized=bool(optimized_body),
+    )
+    return translation_body, optimized_translation_body, f"dashscope:{model}"
+
+
+async def translate_essay_with_openai(
+    *,
+    title: str,
+    body: str,
+    optimized_body: str | None,
+) -> tuple[str, str, str]:
+    api_key = settings.openai_api_key.strip()
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured on the server.")
+    model = (settings.openai_text_model or "gpt-4o-mini").strip()
+    payload = {
+        "model": model,
+        "messages": essay_translation_messages(title=title, body=body, optimized_body=optimized_body),
+        "temperature": 0.1,
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=90) as client:
+        response = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+        response.raise_for_status()
+    translation_body, optimized_translation_body = parse_essay_translation_result(
+        chat_completion_text(response.json()),
+        require_optimized=bool(optimized_body),
+    )
+    return translation_body, optimized_translation_body, f"openai:{model}"
+
+
+async def translate_essay_with_ai(
+    *,
+    title: str,
+    body: str,
+    optimized_body: str | None,
+) -> tuple[str, str, str]:
+    provider = (settings.ai_text_provider or "dashscope").strip().lower()
+    providers = ["openai", "dashscope"] if provider == "openai" else ["dashscope", "openai"]
+    configuration_errors: list[str] = []
+    for candidate in providers:
+        try:
+            if candidate == "dashscope":
+                return await translate_essay_with_dashscope(
+                    title=title,
+                    body=body,
+                    optimized_body=optimized_body,
+                )
+            return await translate_essay_with_openai(
+                title=title,
+                body=body,
+                optimized_body=optimized_body,
+            )
+        except RuntimeError as exc:
+            detail = str(exc)
+            if "not configured" in detail:
+                configuration_errors.append(detail)
+                continue
+            raise
+    raise RuntimeError("；".join(configuration_errors) or "没有可用的 AI 文本模型。")
+
+
 async def optimize_essay_with_dashscope(*, title: str, body: str) -> tuple[str, str, dict[str, Any]]:
     api_key = settings.dashscope_api_key.strip()
     if not api_key:
@@ -6097,11 +6250,14 @@ def apply_essay_payload(
     essay.word_count = essay_word_count(body)
     if clear_generated_on_change and content_changed:
         essay.optimized_body = None
+        essay.translation_body = None
+        essay.optimized_translation_body = None
         essay.optimized_word_count = 0
         essay.writing_score = 0
         essay.writing_score_breakdown = None
         essay.writing_advice = None
         essay.ai_model = None
+        essay.translation_model = None
         essay.cover_url = None
         essay.cover_model = None
     return content_changed
@@ -6175,6 +6331,7 @@ async def vue_optimize_essay_api(essay_id: int, request: Request, db: Session = 
         raise HTTPException(status_code=502, detail=f"AI 优化失败: {exc}") from exc
 
     essay.optimized_body = optimized_body
+    essay.optimized_translation_body = None
     essay.optimized_word_count = essay_word_count(optimized_body)
     essay.writing_score = int(assessment["total"])
     essay.writing_score_breakdown = json.dumps(
@@ -6198,6 +6355,45 @@ async def vue_optimize_essay_api(essay_id: int, request: Request, db: Session = 
     response["essay"] = serialize_essay(essay)
     response["energyGain"] = energy_gain
     response["energyGainEligible"] = energy_gain_eligible
+    return response
+
+
+@app.post("/api/vue/essays/{essay_id}/translate")
+async def vue_translate_essay_api(essay_id: int, request: Request, db: Session = Depends(get_db)):
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="作文数据不是有效 JSON。") from exc
+
+    essay = get_owned_essay(db, request, essay_id)
+    apply_essay_payload(essay, payload or {}, clear_generated_on_change=True)
+    try:
+        translation_body, optimized_translation_body, model = await translate_essay_with_ai(
+            title=essay.title,
+            body=essay.body,
+            optimized_body=essay.optimized_body,
+        )
+    except RuntimeError as exc:
+        detail = str(exc)
+        if "not configured" in detail:
+            raise HTTPException(status_code=400, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=f"一键翻译失败: {detail}") from exc
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text[:400] if exc.response is not None else str(exc)
+        if is_ai_quota_error(detail):
+            raise HTTPException(status_code=402, detail="额度已经用完") from exc
+        raise HTTPException(status_code=502, detail=f"一键翻译失败: {detail}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"一键翻译失败: {exc}") from exc
+
+    essay.translation_body = translation_body
+    essay.optimized_translation_body = optimized_translation_body or None
+    essay.translation_model = model
+    db.add(essay)
+    db.commit()
+    db.refresh(essay)
+    response = essays_payload(db, request)
+    response["essay"] = serialize_essay(essay)
     return response
 
 
@@ -17787,6 +17983,21 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE essay_entries ADD COLUMN writing_score_breakdown TEXT NULL"))
         if "essay_entries" in table_names and "writing_advice" not in essay_entry_columns:
             connection.execute(text("ALTER TABLE essay_entries ADD COLUMN writing_advice TEXT NULL"))
+        if "essay_entries" in table_names and "translation_body" not in essay_entry_columns:
+            translation_text_type = "LONGTEXT" if dialect == "mysql" else "TEXT"
+            connection.execute(
+                text(f"ALTER TABLE essay_entries ADD COLUMN translation_body {translation_text_type} NULL")
+            )
+        if "essay_entries" in table_names and "optimized_translation_body" not in essay_entry_columns:
+            translation_text_type = "LONGTEXT" if dialect == "mysql" else "TEXT"
+            connection.execute(
+                text(
+                    "ALTER TABLE essay_entries "
+                    f"ADD COLUMN optimized_translation_body {translation_text_type} NULL"
+                )
+            )
+        if "essay_entries" in table_names and "translation_model" not in essay_entry_columns:
+            connection.execute(text("ALTER TABLE essay_entries ADD COLUMN translation_model VARCHAR(120) NULL"))
         if "essay_entries" in table_names and "best_writing_score" not in essay_entry_columns:
             connection.execute(text("ALTER TABLE essay_entries ADD COLUMN best_writing_score INTEGER NOT NULL DEFAULT 0"))
         if "essay_entries" in table_names and "best_writing_points" not in essay_entry_columns:
