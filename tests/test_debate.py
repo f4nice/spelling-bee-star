@@ -4,7 +4,9 @@ from datetime import date, timedelta
 
 from app.services.debate import (
     DEBATE_MAX_TURNS,
+    DEBATE_PASS_SCORE,
     DEBATE_TARGET_POINTS,
+    debate_encouragement_score,
     debate_energy_reward,
     debate_result_status,
     debate_topic_for_day,
@@ -35,18 +37,14 @@ class DebateServiceTests(unittest.TestCase):
         self.assertIn("category", topic)
 
     def test_result_finishes_at_target_or_turn_limit(self):
-        self.assertEqual(debate_result_status(99, 80, 5), "active")
+        self.assertEqual(debate_result_status(99, 5), "active")
         self.assertEqual(
-            debate_result_status(DEBATE_TARGET_POINTS, 94, 4),
-            "won",
+            debate_result_status(DEBATE_TARGET_POINTS, 4),
+            "completed",
         )
         self.assertEqual(
-            debate_result_status(88, 91, DEBATE_MAX_TURNS),
-            "lost",
-        )
-        self.assertEqual(
-            debate_result_status(90, 90, DEBATE_MAX_TURNS),
-            "draw",
+            debate_result_status(88, DEBATE_MAX_TURNS),
+            "completed",
         )
 
     def test_parser_normalizes_points_dimensions_and_review(self):
@@ -80,8 +78,8 @@ class DebateServiceTests(unittest.TestCase):
         result = parse_debate_turn_result(json.dumps(source, ensure_ascii=False))
 
         self.assertEqual(result["userPoints"], 22)
-        self.assertEqual(result["aiPoints"], 22)
-        self.assertEqual(result["finalReview"]["overallScore"], 86)
+        self.assertNotIn("aiPoints", result)
+        self.assertNotIn("overallScore", result["finalReview"])
         self.assertEqual(result["finalReview"]["improvements"][0]["title"], "补上反驳")
 
     def test_prompt_requires_english_debate_and_chinese_coaching(self):
@@ -91,7 +89,6 @@ class DebateServiceTests(unittest.TestCase):
             user_stance="pro",
             ai_stance="con",
             user_points=0,
-            ai_points=0,
             turn_count=0,
             argument="Chores teach children to be responsible.",
             transcript=[],
@@ -100,11 +97,18 @@ class DebateServiceTests(unittest.TestCase):
         system_prompt = messages[0]["content"]
         self.assertIn("AI debate reply and highlight must be in English", system_prompt)
         self.assertIn("must be in Simplified Chinese", system_prompt)
+        self.assertIn("Do not award match points to yourself", system_prompt)
+        self.assertIn("Do not assign an overall score", system_prompt)
 
-    def test_reward_has_participation_floor_and_result_bonus(self):
-        self.assertEqual(debate_energy_reward(0, "lost"), 20)
-        self.assertEqual(debate_energy_reward(80, "draw"), 90)
-        self.assertEqual(debate_energy_reward(100, "won"), 120)
+    def test_encouragement_score_has_passing_floor(self):
+        self.assertEqual(debate_encouragement_score(0, 1), DEBATE_PASS_SCORE)
+        self.assertEqual(debate_encouragement_score(82, 4), 68)
+        self.assertEqual(debate_encouragement_score(120, 4), 100)
+
+    def test_reward_matches_encouragement_score(self):
+        self.assertEqual(debate_energy_reward(0), DEBATE_PASS_SCORE)
+        self.assertEqual(debate_energy_reward(80), 80)
+        self.assertEqual(debate_energy_reward(100), 100)
 
 
 if __name__ == "__main__":

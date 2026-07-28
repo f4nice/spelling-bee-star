@@ -69,7 +69,9 @@ from app.services.debate import (
     DEBATE_ARGUMENT_MAX_CHARS,
     DEBATE_LEVELS,
     DEBATE_MAX_TURNS,
+    DEBATE_PASS_SCORE,
     DEBATE_TARGET_POINTS,
+    debate_encouragement_score,
     debate_energy_reward,
     debate_result_status,
     debate_topic_for_day,
@@ -109,8 +111,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260728-002"
-DEFAULT_PAGE_VERSION = "v20260728.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260728-003"
+DEFAULT_PAGE_VERSION = "v20260728.3"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -6517,12 +6519,10 @@ def serialize_debate_session(session: DebateSession | None) -> dict[str, Any] | 
         transcript = []
     if not isinstance(final_feedback, dict):
         final_feedback = {}
-    result_labels = {
-        "active": "In progress",
-        "won": "You won",
-        "lost": "AI won",
-        "draw": "Draw",
-    }
+    status = "active" if session.status == "active" else "completed"
+    final_score = min(max(int(session.final_score or 0), 0), 100)
+    if status == "completed":
+        final_score = max(final_score, DEBATE_PASS_SCORE)
     return {
         "id": session.id,
         "date": session.debate_date.isoformat(),
@@ -6530,15 +6530,14 @@ def serialize_debate_session(session: DebateSession | None) -> dict[str, Any] | 
         "topic": topic,
         "userStance": session.user_stance,
         "aiStance": session.ai_stance,
-        "status": session.status,
-        "statusLabel": result_labels.get(session.status, "In progress"),
+        "status": status,
+        "statusLabel": "In progress" if status == "active" else "Completed",
         "userPoints": max(int(session.user_points or 0), 0),
-        "aiPoints": max(int(session.ai_points or 0), 0),
         "turnCount": max(int(session.turn_count or 0), 0),
         "targetPoints": max(int(session.target_points or DEBATE_TARGET_POINTS), 1),
         "maxTurns": max(int(session.max_turns or DEBATE_MAX_TURNS), 1),
         "transcript": transcript,
-        "finalScore": min(max(int(session.final_score or 0), 0), 100),
+        "finalScore": final_score,
         "finalFeedback": final_feedback,
         "energyAwarded": max(int(session.energy_awarded or 0), 0),
         "aiModel": session.ai_model or "",
@@ -6568,6 +6567,7 @@ def debate_page_payload(db: Session, request: Request) -> dict[str, Any]:
         },
         "rules": {
             "targetPoints": DEBATE_TARGET_POINTS,
+            "passScore": DEBATE_PASS_SCORE,
             "maxTurns": DEBATE_MAX_TURNS,
             "argumentMaxChars": DEBATE_ARGUMENT_MAX_CHARS,
             "scoreDimensions": [
@@ -6688,7 +6688,6 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
             user_stance=session.user_stance,
             ai_stance=session.ai_stance,
             user_points=int(session.user_points or 0),
-            ai_points=int(session.ai_points or 0),
             turn_count=initial_turn_count,
             argument=argument,
             transcript=transcript,
@@ -6729,7 +6728,6 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
                 "role": "ai",
                 "round": round_number,
                 "text": result["aiReply"],
-                "points": int(result["aiPoints"]),
                 "coachNote": result["coachNote"],
                 "highlight": result["highlight"],
                 "createdAt": debate_datetime_text(now),
@@ -6737,14 +6735,13 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
         ]
     )
     session.user_points = int(session.user_points or 0) + int(result["userPoints"])
-    session.ai_points = int(session.ai_points or 0) + int(result["aiPoints"])
+    session.ai_points = 0
     session.turn_count = round_number
     if current_topic["key"] == session.topic_key:
         session.topic = current_topic["title"]
         session.category = current_topic["category"]
     session.status = debate_result_status(
         session.user_points,
-        session.ai_points,
         session.turn_count,
         target_points=session.target_points,
         max_turns=session.max_turns,
@@ -6754,14 +6751,13 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
     energy_gain = 0
     if session.status != "active":
         review = result["finalReview"]
-        fallback_score = round(
-            min(max(session.user_points / max(session.turn_count * 30, 1), 0), 1) * 100
+        session.final_score = debate_encouragement_score(
+            session.user_points,
+            session.turn_count,
         )
-        session.final_score = int(review.get("overallScore") or fallback_score)
-        review["overallScore"] = session.final_score
         session.final_feedback = json.dumps(review, ensure_ascii=False)
         if int(session.energy_awarded or 0) <= 0:
-            energy_gain = debate_energy_reward(session.final_score, session.status)
+            energy_gain = debate_energy_reward(session.final_score)
             session.energy_awarded = energy_gain
             db.add(
                 CatWorldEnergyGrant(

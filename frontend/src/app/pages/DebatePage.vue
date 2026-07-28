@@ -51,20 +51,8 @@ const argumentMaxChars = computed(() => Number(rules.value.argumentMaxChars || 2
 const targetPoints = computed(() => Number(session.value?.targetPoints || rules.value.targetPoints || 100));
 const maxTurns = computed(() => Number(session.value?.maxTurns || rules.value.maxTurns || 6));
 const userProgress = computed(() => scoreProgress(session.value?.userPoints));
-const aiProgress = computed(() => scoreProgress(session.value?.aiPoints));
 const stanceText = computed(() => (session.value?.userStance === "con" ? "CON" : "PRO"));
-const aiStanceText = computed(() => (session.value?.aiStance === "con" ? "CON" : "PRO"));
 const finalReview = computed(() => session.value?.finalFeedback || {});
-const resultTone = computed(() => {
-  if (session.value?.status === "won") return "won";
-  if (session.value?.status === "lost") return "lost";
-  return "draw";
-});
-const resultTitle = computed(() => {
-  if (session.value?.status === "won") return "You won today's debate!";
-  if (session.value?.status === "lost") return "The AI opponent won today";
-  return "A close match - it's a draw";
-});
 
 function applyPayload(value) {
   payload.value = value || {};
@@ -129,7 +117,7 @@ async function submitTurn() {
     if (nextPayload?.energyGain > 0) {
       notice.value = `本场结算完成，猫咪世界获得 +${nextPayload.energyGain} 能量。`;
     } else {
-      notice.value = nextPayload?.session?.status === "active" ? "Round scored. Your turn to respond in English." : "The match is complete.";
+      notice.value = nextPayload?.session?.status === "active" ? "Your growth points are ready. Keep going!" : "Today's practice is complete.";
     }
     await nextTick();
     transcriptEnd.value?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -150,7 +138,7 @@ async function submitTurn() {
         <p><CalendarDays :size="16" /> {{ payload.today }}</p>
       </div>
       <div class="debate-head-rules" aria-label="比赛规则">
-        <span><Target :size="18" /><strong>{{ rules.targetPoints || 100 }}</strong> Target</span>
+        <span><Target :size="18" /><strong>{{ rules.passScore || 60 }}</strong> Pass Score</span>
         <span><Swords :size="18" /><strong>{{ rules.maxTurns || 6 }}</strong> Rounds</span>
       </div>
     </header>
@@ -216,21 +204,16 @@ async function submitTurn() {
     </section>
 
     <template v-else>
-      <section class="debate-scoreboard">
+      <section class="debate-scoreboard solo">
         <div class="debate-score-side user">
-          <span>YOU · {{ stanceText }}</span>
+          <span>YOUR GROWTH POINTS · {{ stanceText }}</span>
           <strong>{{ session.userPoints }}</strong>
           <i><b :style="{ width: userProgress }"></b></i>
         </div>
         <div class="debate-score-center">
-          <Swords :size="26" />
+          <Target :size="26" />
           <strong>Round {{ Math.min(session.turnCount + (active ? 1 : 0), maxTurns) }} / {{ maxTurns }}</strong>
-          <span>First to {{ targetPoints }} points</span>
-        </div>
-        <div class="debate-score-side ai">
-          <span>AI · {{ aiStanceText }}</span>
-          <strong>{{ session.aiPoints }}</strong>
-          <i><b :style="{ width: aiProgress }"></b></i>
+          <span>{{ targetPoints }} point growth goal</span>
         </div>
       </section>
 
@@ -255,7 +238,7 @@ async function submitTurn() {
                 <Sparkles v-else :size="17" />
                 {{ entry.role === "user" ? `My round ${entry.round}` : `AI response ${entry.round}` }}
               </span>
-              <strong>+{{ entry.points }} points</strong>
+              <strong v-if="entry.role === 'user'">+{{ entry.points }} points</strong>
             </header>
             <p>{{ entry.text }}</p>
             <div v-if="entry.role === 'user'" class="debate-dimension-row">
@@ -290,22 +273,23 @@ async function submitTurn() {
             <button class="primary-action-button" type="submit" :disabled="!canSubmit">
               <Sparkles v-if="busyAction === 'turn'" :size="18" />
               <Send v-else :size="18" />
-              {{ busyAction === "turn" ? "AI is thinking and scoring..." : "Submit this round" }}
+              {{ busyAction === "turn" ? "AI is responding and scoring your argument..." : "Submit this round" }}
             </button>
           </div>
         </form>
       </section>
 
-      <section v-if="completed" :class="['debate-result', resultTone]">
+      <section v-if="completed" class="debate-result completed">
         <header>
           <div>
-            <span class="eyebrow">FINAL REVIEW</span>
-            <h2>{{ resultTitle }}</h2>
+            <span class="eyebrow">GROWTH REVIEW</span>
+            <h2>Great work - today's debate is complete!</h2>
           </div>
           <div class="debate-final-score">
             <Trophy :size="22" />
             <strong>{{ session.finalScore }}</strong>
-            <span>Final score</span>
+            <span>Encouragement score</span>
+            <small>Pass line {{ rules.passScore || 60 }}</small>
           </div>
         </header>
         <p>{{ finalReview.summary || "你完成了今天的辩论，坚持表达本身就是一次进步。" }}</p>
