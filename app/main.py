@@ -5731,7 +5731,7 @@ def essays_for_phone(db: Session, phone: str) -> list[EssayEntry]:
     return db.scalars(
         select(EssayEntry)
         .where(EssayEntry.phone == phone)
-        .order_by(EssayEntry.updated_at.desc(), EssayEntry.id.desc())
+        .order_by(EssayEntry.created_at.desc(), EssayEntry.id.desc())
     ).all()
 
 

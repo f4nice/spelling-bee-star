@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from "vue";
+import { sortEssaysNewestFirst } from "../essaySorting.js";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
 
@@ -55,7 +56,7 @@ const writingAdviceRows = computed(() =>
 watch(
   () => props.data,
   (value) => {
-    essays.value = Array.isArray(value?.essays) ? value.essays : [];
+    essays.value = sortEssaysNewestFirst(value?.essays);
     if (selectedId.value && essays.value.some((item) => Number(item.id) === Number(selectedId.value))) {
       loadDraft(essays.value.find((item) => Number(item.id) === Number(selectedId.value)));
       return;
@@ -235,7 +236,9 @@ function requestOptions() {
 }
 
 function applyResponse(payload) {
-  essays.value = Array.isArray(payload?.essays) ? payload.essays : essays.value;
+  essays.value = Array.isArray(payload?.essays)
+    ? sortEssaysNewestFirst(payload.essays)
+    : essays.value;
   const nextEssay = payload?.essay || essays.value.find((item) => Number(item.id) === Number(selectedId.value)) || essays.value[0] || null;
   loadDraft(nextEssay);
 }
