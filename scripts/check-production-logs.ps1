@@ -66,7 +66,7 @@ printf 'log_errors=none\n'
 $remoteScript = $remoteScript -replace "`r`n", "`n"
 
 Write-Host "==> Checking Ubuntu production service and logs"
-$remoteCommand = "bash -s -- $RemoteProjectPath $ServiceName `"$Since`""
+$remoteCommand = "bash -s -- $RemoteProjectPath $ServiceName '$Since'"
 $remoteScript | & ssh @sshArguments $target $remoteCommand
 if ($LASTEXITCODE -ne 0) {
     throw "Production log check failed."
