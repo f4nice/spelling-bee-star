@@ -67,10 +67,10 @@ from app.services.ai_tts import generate_word_ai_audio
 from app.services.chinadaily import get_chinadaily_article, load_chinadaily_articles
 from app.services.debate import (
     DEBATE_ARGUMENT_MAX_CHARS,
+    DEBATE_CHALLENGE_ROUNDS,
     DEBATE_LEVELS,
     DEBATE_MAX_TURNS,
     DEBATE_PASS_SCORE,
-    DEBATE_SPEAKING_ROUNDS,
     DEBATE_TARGET_POINTS,
     debate_encouragement_score,
     debate_energy_reward,
@@ -112,8 +112,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260728-004"
-DEFAULT_PAGE_VERSION = "v20260728.4"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260728-005"
+DEFAULT_PAGE_VERSION = "v20260728.5"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -6502,6 +6502,17 @@ def debate_topic_payload(debate_day: date, level: str) -> dict[str, Any]:
     }
 
 
+def debate_stances_for_turn(turn_count: int) -> tuple[str, str]:
+    user_stance = "pro" if int(turn_count or 0) <= 0 else "con"
+    return user_stance, "con" if user_stance == "pro" else "pro"
+
+
+def debate_format_label(session: DebateSession) -> str:
+    if session.user_stance == "both" or (session.status == "active" and session.debate_date == date.today()):
+        return "PRO + CON"
+    return "CON" if session.user_stance == "con" else "PRO"
+
+
 def serialize_debate_session(session: DebateSession | None) -> dict[str, Any] | None:
     if not session:
         return None
@@ -6524,6 +6535,7 @@ def serialize_debate_session(session: DebateSession | None) -> dict[str, Any] | 
     final_score = min(max(int(session.final_score or 0), 0), 100)
     if status == "completed":
         final_score = max(final_score, DEBATE_PASS_SCORE)
+    current_user_stance, current_ai_stance = debate_stances_for_turn(session.turn_count)
     return {
         "id": session.id,
         "date": session.debate_date.isoformat(),
@@ -6531,13 +6543,16 @@ def serialize_debate_session(session: DebateSession | None) -> dict[str, Any] | 
         "topic": topic,
         "userStance": session.user_stance,
         "aiStance": session.ai_stance,
+        "formatLabel": debate_format_label(session),
+        "currentUserStance": current_user_stance,
+        "currentAiStance": current_ai_stance,
         "status": status,
         "statusLabel": "In progress" if status == "active" else "Completed",
         "userPoints": max(int(session.user_points or 0), 0),
         "turnCount": max(int(session.turn_count or 0), 0),
         "targetPoints": DEBATE_TARGET_POINTS,
         "maxTurns": DEBATE_MAX_TURNS,
-        "speakingRounds": DEBATE_SPEAKING_ROUNDS,
+        "challengeRounds": DEBATE_CHALLENGE_ROUNDS,
         "transcript": transcript,
         "finalScore": final_score,
         "finalFeedback": final_feedback,
@@ -6572,6 +6587,7 @@ def serialize_debate_history_item(session: DebateSession) -> dict[str, Any]:
         "levelLabel": "Primary" if session.level == "primary" else "Middle School",
         "topic": topic,
         "userStance": session.user_stance,
+        "formatLabel": debate_format_label(session),
         "status": "completed" if completed else "active",
         "statusLabel": "Completed" if completed else "In progress",
         "userPoints": max(int(session.user_points or 0), 0),
@@ -6605,7 +6621,7 @@ def debate_page_payload(db: Session, request: Request) -> dict[str, Any]:
             "targetPoints": DEBATE_TARGET_POINTS,
             "passScore": DEBATE_PASS_SCORE,
             "maxTurns": DEBATE_MAX_TURNS,
-            "speakingRounds": DEBATE_SPEAKING_ROUNDS,
+            "challengeRounds": DEBATE_CHALLENGE_ROUNDS,
             "argumentMaxChars": DEBATE_ARGUMENT_MAX_CHARS,
             "scoreDimensions": [
                 {"key": "claim", "label": "观点清楚", "max": 8},
@@ -6660,11 +6676,8 @@ async def vue_start_debate_api(request: Request, db: Session = Depends(get_db)):
         return response
 
     level = str(payload.get("level") or "").strip().lower()
-    stance = str(payload.get("stance") or "").strip().lower()
     if level not in {item["key"] for item in DEBATE_LEVELS}:
         raise HTTPException(status_code=400, detail="请选择小学组或初中组。")
-    if stance not in {"pro", "con"}:
-        raise HTTPException(status_code=400, detail="请选择支持或反对立场。")
     topic = debate_topic_for_day(today, level)
     session = DebateSession(
         phone=user.phone,
@@ -6673,8 +6686,8 @@ async def vue_start_debate_api(request: Request, db: Session = Depends(get_db)):
         topic_key=topic["key"],
         topic=topic["title"],
         category=topic["category"],
-        user_stance=stance,
-        ai_stance="con" if stance == "pro" else "pro",
+        user_stance="both",
+        ai_stance="opponent",
         status="active",
         user_points=0,
         ai_points=0,
@@ -6722,14 +6735,15 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
     if not isinstance(transcript, list):
         transcript = []
     initial_turn_count = int(session.turn_count or 0)
+    round_user_stance, round_ai_stance = debate_stances_for_turn(initial_turn_count)
     current_topic = debate_topic_for_day(session.debate_date, session.level)
     topic_text = current_topic["title"] if current_topic["key"] == session.topic_key else session.topic
     try:
         result, model = await debate_turn_with_ai(
             level=session.level,
             topic=topic_text,
-            user_stance=session.user_stance,
-            ai_stance=session.ai_stance,
+            user_stance=round_user_stance,
+            ai_stance=round_ai_stance,
             user_points=int(session.user_points or 0),
             turn_count=initial_turn_count,
             argument=argument,
@@ -6762,6 +6776,7 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
             {
                 "role": "user",
                 "round": round_number,
+                "stance": round_user_stance,
                 "text": argument,
                 "points": int(result["userPoints"]),
                 "dimensions": result["userDimensions"],
@@ -6770,6 +6785,7 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
             {
                 "role": "ai",
                 "round": round_number,
+                "stance": round_ai_stance,
                 "text": result["aiReply"],
                 "coachNote": result["coachNote"],
                 "highlight": result["highlight"],
@@ -6779,6 +6795,8 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
     )
     session.user_points = int(session.user_points or 0) + int(result["userPoints"])
     session.ai_points = 0
+    session.user_stance = "both"
+    session.ai_stance = "opponent"
     session.turn_count = round_number
     session.target_points = DEBATE_TARGET_POINTS
     session.max_turns = DEBATE_MAX_TURNS

@@ -27,7 +27,6 @@ const props = defineProps({
 
 const payload = ref(props.data || {});
 const selectedLevel = ref("primary");
-const selectedStance = ref("pro");
 const argument = ref("");
 const busyAction = ref("");
 const notice = ref("");
@@ -54,16 +53,16 @@ const completed = computed(() => Boolean(session.value && session.value.status !
 const argumentWordCount = computed(() => (argument.value.match(/[A-Za-z]+(?:[-'][A-Za-z]+)*/g) || []).length);
 const canSubmit = computed(() => active.value && argumentWordCount.value >= 3 && !busyAction.value);
 const argumentMaxChars = computed(() => Number(rules.value.argumentMaxChars || 2000));
-const targetPoints = computed(() => Number(session.value?.targetPoints || rules.value.targetPoints || 30));
-const speakingRounds = computed(() => Number(session.value?.speakingRounds || rules.value.speakingRounds || 2));
+const targetPoints = computed(() => Number(session.value?.targetPoints || rules.value.targetPoints || 60));
+const challengeRounds = computed(() => Number(session.value?.challengeRounds || rules.value.challengeRounds || 2));
 const userProgress = computed(() => scoreProgress(session.value?.userPoints));
-const stanceText = computed(() => (session.value?.userStance === "con" ? "CON" : "PRO"));
+const stanceText = computed(() => stanceLabel(session.value?.currentUserStance));
+const currentRoundNumber = computed(() => Math.min(Number(session.value?.turnCount || 0) + 1, challengeRounds.value));
 const finalReview = computed(() => session.value?.finalFeedback || {});
 
 function applyPayload(value) {
   payload.value = value || {};
   if (value?.session?.level) selectedLevel.value = value.session.level;
-  if (value?.session?.userStance) selectedStance.value = value.session.userStance;
 }
 
 function scoreProgress(value) {
@@ -75,6 +74,11 @@ function stanceLabel(value) {
 }
 
 function sideForEntry(entry, source) {
+  if (entry?.stance) return stanceLabel(entry.stance);
+  if (source?.userStance === "both") {
+    const userStance = Number(entry?.round || 1) === 1 ? "pro" : "con";
+    return stanceLabel(entry?.role === "user" ? userStance : userStance === "pro" ? "con" : "pro");
+  }
   return stanceLabel(entry?.role === "user" ? source?.userStance : source?.aiStance);
 }
 
@@ -101,10 +105,10 @@ async function startDebate() {
   try {
     const nextPayload = await fetchJson(
       routeApiPaths.debateStart(),
-      requestOptions({ level: selectedLevel.value, stance: selectedStance.value }),
+      requestOptions({ level: selectedLevel.value }),
     );
     applyPayload(nextPayload);
-    notice.value = "The debate has started. Make your opening argument in English.";
+    notice.value = "Round 1: argue PRO in English. The AI will challenge you from the CON side.";
   } catch (error) {
     notice.value = error.message || "The debate could not be started.";
   } finally {
@@ -127,7 +131,9 @@ async function submitTurn() {
     if (nextPayload?.energyGain > 0) {
       notice.value = `本场结算完成，猫咪世界获得 +${nextPayload.energyGain} 能量。`;
     } else {
-      notice.value = nextPayload?.session?.status === "active" ? "Your growth points are ready. Keep going!" : "Today's practice is complete.";
+      notice.value = nextPayload?.session?.status === "active"
+        ? "Round 1 is complete. Now switch sides and argue CON."
+        : "Both challenges are complete.";
     }
     await nextTick();
     transcriptEnd.value?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -166,7 +172,7 @@ function closeReplay() {
       </div>
       <div class="debate-head-rules" aria-label="比赛规则">
         <span><Target :size="18" /><strong>{{ rules.passScore || 60 }}</strong> Pass Score</span>
-        <span><Swords :size="18" /><strong>{{ rules.speakingRounds || 2 }}</strong> Speaking Rounds</span>
+        <span><Swords :size="18" /><strong>{{ rules.challengeRounds || 2 }}</strong> Challenge Rounds</span>
       </div>
     </header>
 
@@ -200,28 +206,9 @@ function closeReplay() {
         </div>
       </div>
 
-      <div class="debate-stance-picker">
-        <span class="debate-field-label">Choose your side</span>
-        <div>
-          <button
-            type="button"
-            :class="{ active: selectedStance === 'pro' }"
-            :aria-pressed="selectedStance === 'pro'"
-            @click="selectedStance = 'pro'"
-          >
-            <CheckCircle2 :size="20" />
-            <span><strong>PRO</strong><small>I support the motion</small></span>
-          </button>
-          <button
-            type="button"
-            :class="{ active: selectedStance === 'con' }"
-            :aria-pressed="selectedStance === 'con'"
-            @click="selectedStance = 'con'"
-          >
-            <Swords :size="20" />
-            <span><strong>CON</strong><small>I oppose the motion</small></span>
-          </button>
-        </div>
+      <div class="debate-two-round-plan" aria-label="Two challenge rounds">
+        <span><strong>Round 1 · PRO</strong><small>You support the motion. AI argues CON.</small></span>
+        <span><strong>Round 2 · CON</strong><small>You oppose the motion. AI argues PRO.</small></span>
       </div>
 
       <button class="primary-action-button debate-start-button" type="button" :disabled="Boolean(busyAction)" @click="startDebate">
@@ -233,14 +220,14 @@ function closeReplay() {
     <template v-else>
       <section class="debate-scoreboard solo">
         <div class="debate-score-side user">
-          <span>YOUR GROWTH POINTS · {{ stanceText }}</span>
+          <span>ROUND {{ currentRoundNumber }} / {{ challengeRounds }} · YOU {{ stanceText }}</span>
           <strong>{{ session.userPoints }}</strong>
           <i><b :style="{ width: userProgress }"></b></i>
         </div>
         <div class="debate-score-center">
           <Target :size="26" />
-          <strong>{{ speakingRounds }} Speaking Rounds</strong>
-          <span>One turn for PRO · one turn for CON</span>
+          <strong>{{ stanceText }} Challenge</strong>
+          <span>AI takes the opposite side</span>
         </div>
       </section>
 
@@ -263,7 +250,7 @@ function closeReplay() {
               <span>
                 <MessageSquareQuote v-if="entry.role === 'user'" :size="17" />
                 <Sparkles v-else :size="17" />
-                {{ sideForEntry(entry, session) }} argument
+                Round {{ entry.round }} · {{ sideForEntry(entry, session) }} argument
               </span>
               <strong v-if="entry.role === 'user'">+{{ entry.points }} points</strong>
             </header>
@@ -282,8 +269,9 @@ function closeReplay() {
         </div>
         <div v-else class="debate-opening">
           <MessageSquareQuote :size="30" />
-          <strong>Your {{ stanceLabel(session.userStance) }} argument</strong>
-          <span>State your claim in English. The other side will respond once.</span>
+          <strong>Round {{ currentRoundNumber }} · Your {{ stanceText }} argument</strong>
+          <span v-if="stanceText === 'PRO'">Support the motion with a clear reason or example.</span>
+          <span v-else>Challenge the motion and respond from the opposite side.</span>
         </div>
 
         <form v-if="active" class="debate-turn-form" @submit.prevent="submitTurn">
@@ -366,7 +354,7 @@ function closeReplay() {
           <time>{{ item.date }}</time>
           <span>
             <strong>{{ item.topic.title }}</strong>
-            <small>{{ item.levelLabel }} · {{ stanceLabel(item.userStance) }} · {{ item.statusLabel }}</small>
+            <small>{{ item.levelLabel }} · {{ item.formatLabel }} · {{ item.statusLabel }}</small>
           </span>
           <em v-if="item.status === 'completed'">{{ item.finalScore }} / 100</em>
           <em v-else>In progress</em>
@@ -389,7 +377,7 @@ function closeReplay() {
 
         <div class="debate-replay-summary">
           <span><BookOpen :size="17" />{{ replaySession.statusLabel }}</span>
-          <span>{{ stanceLabel(replaySession.userStance) }} side</span>
+          <span>{{ replaySession.formatLabel }}</span>
           <strong v-if="replaySession.status === 'completed'">{{ replaySession.finalScore }} / 100</strong>
         </div>
 
@@ -403,7 +391,7 @@ function closeReplay() {
               <span>
                 <MessageSquareQuote v-if="entry.role === 'user'" :size="17" />
                 <Sparkles v-else :size="17" />
-                {{ sideForEntry(entry, replaySession) }} argument
+                Round {{ entry.round }} · {{ sideForEntry(entry, replaySession) }} argument
               </span>
               <strong v-if="entry.role === 'user'">+{{ entry.points }} points</strong>
             </header>

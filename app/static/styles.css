@@ -15184,6 +15184,36 @@ select {
   font-weight: 800;
 }
 
+.debate-two-round-plan {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.debate-two-round-plan > span {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #cbdad2;
+  border-left: 5px solid #1d7f5b;
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: #f7fbf9;
+}
+
+.debate-two-round-plan > span:last-child {
+  border-left-color: #d68a0d;
+  background: #fffaf0;
+}
+
+.debate-two-round-plan strong {
+  color: var(--ink);
+}
+
+.debate-two-round-plan small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
 .debate-stance-picker {
   display: grid;
   gap: 9px;
@@ -15999,7 +16029,8 @@ select {
   }
 
   .debate-setup-controls,
-  .debate-stance-picker > div {
+  .debate-stance-picker > div,
+  .debate-two-round-plan {
     grid-template-columns: 1fr;
   }
 
