@@ -6,7 +6,7 @@ export function routeTitle(route, data) {
   if (route.name === "growth") return "成长体系";
   if (route.name === "catWorld") return "猫咪世界";
   if (route.name === "essays") return "我的作文集";
-  if (route.name === "debate") return "AI辩论赛";
+  if (route.name === "debate") return "AI Debate";
   if (route.name === "admin") return "后台管理";
   if (route.name === "challengeDay") return `${route.params.day} 挑战词汇`;
   if (route.name === "challenge") return "拼写挑战";

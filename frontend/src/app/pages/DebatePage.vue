@@ -45,14 +45,15 @@ const currentTopic = computed(() => {
 });
 const active = computed(() => session.value?.status === "active");
 const completed = computed(() => Boolean(session.value && session.value.status !== "active"));
-const canSubmit = computed(() => active.value && argument.value.trim().length >= 8 && !busyAction.value);
+const argumentWordCount = computed(() => (argument.value.match(/[A-Za-z]+(?:[-'][A-Za-z]+)*/g) || []).length);
+const canSubmit = computed(() => active.value && argumentWordCount.value >= 3 && !busyAction.value);
 const argumentMaxChars = computed(() => Number(rules.value.argumentMaxChars || 2000));
 const targetPoints = computed(() => Number(session.value?.targetPoints || rules.value.targetPoints || 100));
 const maxTurns = computed(() => Number(session.value?.maxTurns || rules.value.maxTurns || 6));
 const userProgress = computed(() => scoreProgress(session.value?.userPoints));
 const aiProgress = computed(() => scoreProgress(session.value?.aiPoints));
-const stanceText = computed(() => (session.value?.userStance === "con" ? "反对方" : "支持方"));
-const aiStanceText = computed(() => (session.value?.aiStance === "con" ? "反对方" : "支持方"));
+const stanceText = computed(() => (session.value?.userStance === "con" ? "CON" : "PRO"));
+const aiStanceText = computed(() => (session.value?.aiStance === "con" ? "CON" : "PRO"));
 const finalReview = computed(() => session.value?.finalFeedback || {});
 const resultTone = computed(() => {
   if (session.value?.status === "won") return "won";
@@ -60,9 +61,9 @@ const resultTone = computed(() => {
   return "draw";
 });
 const resultTitle = computed(() => {
-  if (session.value?.status === "won") return "恭喜，你赢下了今天的辩论";
-  if (session.value?.status === "lost") return "今天由 AI 对手获胜";
-  return "势均力敌，本场平局";
+  if (session.value?.status === "won") return "You won today's debate!";
+  if (session.value?.status === "lost") return "The AI opponent won today";
+  return "A close match - it's a draw";
 });
 
 function applyPayload(value) {
@@ -76,7 +77,7 @@ function scoreProgress(value) {
 }
 
 function stanceLabel(value) {
-  return value === "con" ? "反对" : "支持";
+  return value === "con" ? "CON" : "PRO";
 }
 
 function dimensionRows(entry) {
@@ -105,9 +106,9 @@ async function startDebate() {
       requestOptions({ level: selectedLevel.value, stance: selectedStance.value }),
     );
     applyPayload(nextPayload);
-    notice.value = "比赛开始。请先亮出你的第一个观点。";
+    notice.value = "The debate has started. Make your opening argument in English.";
   } catch (error) {
-    notice.value = error.message || "暂时无法开始比赛。";
+    notice.value = error.message || "The debate could not be started.";
   } finally {
     busyAction.value = "";
   }
@@ -128,7 +129,7 @@ async function submitTurn() {
     if (nextPayload?.energyGain > 0) {
       notice.value = `本场结算完成，猫咪世界获得 +${nextPayload.energyGain} 能量。`;
     } else {
-      notice.value = nextPayload?.session?.status === "active" ? "本轮评分完成，轮到你继续回应。" : "本场结算完成。";
+      notice.value = nextPayload?.session?.status === "active" ? "Round scored. Your turn to respond in English." : "The match is complete.";
     }
     await nextTick();
     transcriptEnd.value?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -144,13 +145,13 @@ async function submitTurn() {
   <section class="debate-page">
     <header class="debate-page-head">
       <div>
-        <span class="eyebrow">DAILY DEBATE</span>
-        <h1>每日 AI 辩论赛</h1>
+        <span class="eyebrow">SPEAKEASY</span>
+        <h1>Daily AI Debate</h1>
         <p><CalendarDays :size="16" /> {{ payload.today }}</p>
       </div>
       <div class="debate-head-rules" aria-label="比赛规则">
-        <span><Target :size="18" /><strong>{{ rules.targetPoints || 100 }}</strong> 赛点</span>
-        <span><Swords :size="18" /><strong>{{ rules.maxTurns || 6 }}</strong> 轮上限</span>
+        <span><Target :size="18" /><strong>{{ rules.targetPoints || 100 }}</strong> Target</span>
+        <span><Swords :size="18" /><strong>{{ rules.maxTurns || 6 }}</strong> Rounds</span>
       </div>
     </header>
 
@@ -159,8 +160,8 @@ async function submitTurn() {
     <section v-if="!session" class="debate-setup panel">
       <div class="debate-setup-controls">
         <div>
-          <span class="debate-field-label">选择组别</span>
-          <div class="debate-segmented" role="group" aria-label="选择辩论组别">
+          <span class="debate-field-label">Choose a division</span>
+          <div class="debate-segmented" role="group" aria-label="Choose a debate division">
             <button
               v-for="level in levels"
               :key="level.key"
@@ -177,7 +178,7 @@ async function submitTurn() {
       </div>
 
       <div class="debate-daily-topic">
-        <span>{{ currentTopic.category || "今日辩题" }}</span>
+        <span>{{ currentTopic.category || "Today's motion" }}</span>
         <h2>{{ currentTopic.title }}</h2>
         <div class="debate-topic-hints">
           <span v-for="hint in currentTopic.hints || []" :key="hint">{{ hint }}</span>
@@ -185,7 +186,7 @@ async function submitTurn() {
       </div>
 
       <div class="debate-stance-picker">
-        <span class="debate-field-label">选择你的立场</span>
+        <span class="debate-field-label">Choose your side</span>
         <div>
           <button
             type="button"
@@ -194,7 +195,7 @@ async function submitTurn() {
             @click="selectedStance = 'pro'"
           >
             <CheckCircle2 :size="20" />
-            <span><strong>支持方</strong><small>我赞成这个观点</small></span>
+            <span><strong>PRO</strong><small>I support the motion</small></span>
           </button>
           <button
             type="button"
@@ -203,14 +204,14 @@ async function submitTurn() {
             @click="selectedStance = 'con'"
           >
             <Swords :size="20" />
-            <span><strong>反对方</strong><small>我不赞成这个观点</small></span>
+            <span><strong>CON</strong><small>I oppose the motion</small></span>
           </button>
         </div>
       </div>
 
       <button class="primary-action-button debate-start-button" type="button" :disabled="Boolean(busyAction)" @click="startDebate">
         <Swords :size="20" />
-        {{ busyAction === "start" ? "正在准备赛场..." : "开始今天的辩论" }}
+        {{ busyAction === "start" ? "Preparing the debate..." : "Start today's debate" }}
       </button>
     </section>
 
@@ -223,8 +224,8 @@ async function submitTurn() {
         </div>
         <div class="debate-score-center">
           <Swords :size="26" />
-          <strong>第 {{ Math.min(session.turnCount + (active ? 1 : 0), maxTurns) }} / {{ maxTurns }} 轮</strong>
-          <span>先到 {{ targetPoints }} 赛点获胜</span>
+          <strong>Round {{ Math.min(session.turnCount + (active ? 1 : 0), maxTurns) }} / {{ maxTurns }}</strong>
+          <span>First to {{ targetPoints }} points</span>
         </div>
         <div class="debate-score-side ai">
           <span>AI · {{ aiStanceText }}</span>
@@ -252,9 +253,9 @@ async function submitTurn() {
               <span>
                 <MessageSquareQuote v-if="entry.role === 'user'" :size="17" />
                 <Sparkles v-else :size="17" />
-                {{ entry.role === "user" ? `我的第 ${entry.round} 轮` : `AI 第 ${entry.round} 轮回应` }}
+                {{ entry.role === "user" ? `My round ${entry.round}` : `AI response ${entry.round}` }}
               </span>
-              <strong>+{{ entry.points }} 赛点</strong>
+              <strong>+{{ entry.points }} points</strong>
             </header>
             <p>{{ entry.text }}</p>
             <div v-if="entry.role === 'user'" class="debate-dimension-row">
@@ -271,25 +272,25 @@ async function submitTurn() {
         </div>
         <div v-else class="debate-opening">
           <MessageSquareQuote :size="30" />
-          <strong>{{ stanceLabel(session.userStance) }}方先发言</strong>
-          <span>亮出观点，再用一个理由或例子支持它。</span>
+          <strong>{{ stanceLabel(session.userStance) }} makes the opening argument</strong>
+          <span>State your claim in English, then support it with a reason or example.</span>
         </div>
 
         <form v-if="active" class="debate-turn-form" @submit.prevent="submitTurn">
-          <label for="debate-argument">本轮发言</label>
+          <label for="debate-argument">Your argument</label>
           <textarea
             id="debate-argument"
             v-model="argument"
             :maxlength="argumentMaxChars"
-            placeholder="写下你的观点、理由、例子，或回应 AI 刚才的论点..."
+            placeholder="Write your claim, reason, example, or rebuttal in English..."
             :disabled="Boolean(busyAction)"
           ></textarea>
           <div>
-            <span>{{ argument.length }} / {{ argumentMaxChars }}</span>
+            <span>{{ argumentWordCount }} words · {{ argument.length }} / {{ argumentMaxChars }}</span>
             <button class="primary-action-button" type="submit" :disabled="!canSubmit">
               <Sparkles v-if="busyAction === 'turn'" :size="18" />
               <Send v-else :size="18" />
-              {{ busyAction === "turn" ? "AI 正在思考和评分..." : "提交本轮" }}
+              {{ busyAction === "turn" ? "AI is thinking and scoring..." : "Submit this round" }}
             </button>
           </div>
         </form>
@@ -304,14 +305,14 @@ async function submitTurn() {
           <div class="debate-final-score">
             <Trophy :size="22" />
             <strong>{{ session.finalScore }}</strong>
-            <span>综合分</span>
+            <span>Final score</span>
           </div>
         </header>
         <p>{{ finalReview.summary || "你完成了今天的辩论，坚持表达本身就是一次进步。" }}</p>
         <div class="debate-reward-band">
           <Zap :size="22" />
-          <strong>+{{ session.energyAwarded }} 猫能量</strong>
-          <span>本场奖励已计入猫咪世界</span>
+          <strong>+{{ session.energyAwarded }} Cat Energy</strong>
+          <span>Reward added to Cat World</span>
         </div>
 
         <div v-if="finalReview.strengths?.length" class="debate-strengths">
@@ -324,7 +325,7 @@ async function submitTurn() {
           <article v-for="(item, index) in finalReview.improvements" :key="`${item.title}-${index}`">
             <header><span>{{ index + 1 }}</span><strong>{{ item.title }}</strong></header>
             <p>{{ item.advice }}</p>
-            <blockquote v-if="item.example"><strong>示例表达</strong>{{ item.example }}</blockquote>
+            <blockquote v-if="item.example"><strong>English example</strong>{{ item.example }}</blockquote>
           </article>
         </div>
 

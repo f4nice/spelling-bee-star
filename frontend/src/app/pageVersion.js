@@ -6,7 +6,7 @@ const ROUTE_MODULES = [
   { names: ["growth"], key: "growth", label: "成长体系" },
   { names: ["catWorld"], key: "cat-world", label: "猫咪世界" },
   { names: ["essays"], key: "essays", label: "我的作文集" },
-  { names: ["debate"], key: "ai-debate", label: "AI辩论赛" },
+  { names: ["debate"], key: "ai-debate", label: "AI Debate" },
   { names: ["lists", "listDetail", "wordDetail"], key: "word-lists", label: "我的单词表" },
   { names: ["upload", "preview"], key: "upload-import", label: "上传导入" },
   { prefix: "newspaper", key: "newspaper", label: "英文小报" },

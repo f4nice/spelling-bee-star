@@ -8,6 +8,7 @@ from app.services.debate import (
     debate_energy_reward,
     debate_result_status,
     debate_topic_for_day,
+    debate_turn_messages,
     parse_debate_turn_result,
 )
 
@@ -24,6 +25,8 @@ class DebateServiceTests(unittest.TestCase):
         self.assertNotEqual(primary["key"], middle["key"])
         self.assertTrue(primary["title"])
         self.assertEqual(len(primary["hints"]), 2)
+        self.assertRegex(primary["title"], r"[A-Za-z]{3}")
+        self.assertNotRegex(primary["title"], r"[\u4e00-\u9fff]")
 
     def test_topic_selection_accepts_future_dates(self):
         topic = debate_topic_for_day(date.today() + timedelta(days=30), "middle")
@@ -48,7 +51,7 @@ class DebateServiceTests(unittest.TestCase):
 
     def test_parser_normalizes_points_dimensions_and_review(self):
         source = {
-            "aiReply": "我理解你的理由，不过我们还要考虑时间是否够用。",
+            "aiReply": "I understand your reason, but we should also consider whether students have enough free time.",
             "userPoints": 30,
             "aiPoints": 22,
             "userDimensions": {
@@ -80,6 +83,23 @@ class DebateServiceTests(unittest.TestCase):
         self.assertEqual(result["aiPoints"], 22)
         self.assertEqual(result["finalReview"]["overallScore"], 86)
         self.assertEqual(result["finalReview"]["improvements"][0]["title"], "补上反驳")
+
+    def test_prompt_requires_english_debate_and_chinese_coaching(self):
+        messages = debate_turn_messages(
+            level="primary",
+            topic="Should children do chores every day?",
+            user_stance="pro",
+            ai_stance="con",
+            user_points=0,
+            ai_points=0,
+            turn_count=0,
+            argument="Chores teach children to be responsible.",
+            transcript=[],
+        )
+
+        system_prompt = messages[0]["content"]
+        self.assertIn("AI debate reply and highlight must be in English", system_prompt)
+        self.assertIn("must be in Simplified Chinese", system_prompt)
 
     def test_reward_has_participation_floor_and_result_bonus(self):
         self.assertEqual(debate_energy_reward(0, "lost"), 20)

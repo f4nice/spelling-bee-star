@@ -6503,13 +6503,14 @@ def serialize_debate_session(session: DebateSession | None) -> dict[str, Any] | 
     if not session:
         return None
     topic = debate_topic_payload(session.debate_date, session.level)
-    topic.update(
-        {
-            "key": session.topic_key,
-            "category": session.category,
-            "title": session.topic,
-        }
-    )
+    if topic["key"] != session.topic_key:
+        topic.update(
+            {
+                "key": session.topic_key,
+                "category": session.category,
+                "title": session.topic,
+            }
+        )
     transcript = parse_debate_json(session.transcript, [])
     final_feedback = parse_debate_json(session.final_feedback, {})
     if not isinstance(transcript, list):
@@ -6517,10 +6518,10 @@ def serialize_debate_session(session: DebateSession | None) -> dict[str, Any] | 
     if not isinstance(final_feedback, dict):
         final_feedback = {}
     result_labels = {
-        "active": "进行中",
-        "won": "你获胜了",
-        "lost": "AI 对手获胜",
-        "draw": "本场平局",
+        "active": "In progress",
+        "won": "You won",
+        "lost": "AI won",
+        "draw": "Draw",
     }
     return {
         "id": session.id,
@@ -6530,7 +6531,7 @@ def serialize_debate_session(session: DebateSession | None) -> dict[str, Any] | 
         "userStance": session.user_stance,
         "aiStance": session.ai_stance,
         "status": session.status,
-        "statusLabel": result_labels.get(session.status, "进行中"),
+        "statusLabel": result_labels.get(session.status, "In progress"),
         "userPoints": max(int(session.user_points or 0), 0),
         "aiPoints": max(int(session.ai_points or 0), 0),
         "turnCount": max(int(session.turn_count or 0), 0),
@@ -6670,17 +6671,20 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
     if session.status != "active":
         raise HTTPException(status_code=400, detail="这场辩论已经完成。")
     argument = re.sub(r"\s+", " ", str(payload.get("argument") or "").strip())[:DEBATE_ARGUMENT_MAX_CHARS]
-    if len(argument) < 8:
-        raise HTTPException(status_code=400, detail="请至少写 8 个字，把观点和理由说清楚。")
+    english_words = re.findall(r"[A-Za-z]+(?:[-'][A-Za-z]+)*", argument)
+    if len(english_words) < 3:
+        raise HTTPException(status_code=400, detail="请至少用 3 个英文单词表达你的观点。")
 
     transcript = parse_debate_json(session.transcript, [])
     if not isinstance(transcript, list):
         transcript = []
     initial_turn_count = int(session.turn_count or 0)
+    current_topic = debate_topic_for_day(session.debate_date, session.level)
+    topic_text = current_topic["title"] if current_topic["key"] == session.topic_key else session.topic
     try:
         result, model = await debate_turn_with_ai(
             level=session.level,
-            topic=session.topic,
+            topic=topic_text,
             user_stance=session.user_stance,
             ai_stance=session.ai_stance,
             user_points=int(session.user_points or 0),
@@ -6735,6 +6739,9 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
     session.user_points = int(session.user_points or 0) + int(result["userPoints"])
     session.ai_points = int(session.ai_points or 0) + int(result["aiPoints"])
     session.turn_count = round_number
+    if current_topic["key"] == session.topic_key:
+        session.topic = current_topic["title"]
+        session.category = current_topic["category"]
     session.status = debate_result_status(
         session.user_points,
         session.ai_points,
