@@ -11022,6 +11022,98 @@ dd {
   font-size: 13px;
 }
 
+.import-preview-progress {
+  display: grid;
+  gap: 9px;
+  margin-top: 12px;
+  border-left: 4px solid var(--accent);
+  padding: 12px 14px;
+  background: #f1f9f5;
+}
+
+.import-preview-progress header,
+.import-preview-progress header > div,
+.import-preview-progress footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.import-preview-progress header > div {
+  justify-content: flex-start;
+}
+
+.import-preview-progress header span,
+.import-preview-progress header b,
+.import-preview-progress footer {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.import-preview-progress header strong {
+  color: var(--accent-dark);
+  font-size: 20px;
+}
+
+.import-preview-progress progress {
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 5px;
+  background: #dcebe3;
+  accent-color: var(--accent);
+}
+
+.import-preview-progress progress::-webkit-progress-bar {
+  border-radius: 5px;
+  background: #dcebe3;
+}
+
+.import-preview-progress progress::-webkit-progress-value {
+  border-radius: 5px;
+  background: var(--accent);
+}
+
+.import-preview-progress.is-active progress::-webkit-progress-value {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.24) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.24) 50%,
+    rgba(255, 255, 255, 0.24) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 22px 22px;
+  animation: sync-stripes 0.8s linear infinite;
+}
+
+.import-preview-progress.has-error {
+  border-left-color: var(--warn);
+  background: #fff8f7;
+}
+
+.import-preview-progress.has-error progress {
+  accent-color: var(--warn);
+}
+
+.import-preview-progress.has-error progress::-webkit-progress-value {
+  background: var(--warn);
+}
+
+@media (max-width: 680px) {
+  .import-preview-progress header,
+  .import-preview-progress footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+}
+
 .field-label {
   color: var(--muted);
   font-size: 13px;

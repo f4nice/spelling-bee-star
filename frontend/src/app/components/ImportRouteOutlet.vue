@@ -28,6 +28,7 @@ defineProps({
     :set-all-rows="ctx.setAllRows"
     :set-all-columns="ctx.setAllColumns"
     :submit-import="ctx.submitImport"
+    :import-job="ctx.importJob"
     :is-importing="ctx.isImporting"
   />
 </template>

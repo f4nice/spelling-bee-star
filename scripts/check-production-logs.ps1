@@ -63,6 +63,7 @@ fi
 
 printf 'log_errors=none\n'
 '@
+$remoteScript = $remoteScript -replace "`r`n", "`n"
 
 Write-Host "==> Checking Ubuntu production service and logs"
 $remoteCommand = "bash -s -- $RemoteProjectPath $ServiceName `"$Since`""

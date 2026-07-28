@@ -3,6 +3,10 @@ export const importPreviewSubmitButtonProps = {
     type: Function,
     required: true,
   },
+  importJob: {
+    type: Object,
+    default: null,
+  },
   isImporting: {
     type: Boolean,
     default: false,

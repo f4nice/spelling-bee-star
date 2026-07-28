@@ -14,7 +14,7 @@ import re
 import secrets
 import sys
 from threading import Lock, Thread
-from typing import Any
+from typing import Any, Callable
 import unicodedata
 from urllib.parse import quote_plus, urlparse
 from uuid import uuid4
@@ -189,6 +189,7 @@ SCIENCE_PUBLIC_BOOK_FALLBACKS = [
 IMAGE_SYNC_JOBS: dict[str, dict] = {}
 LIST_AI_IMAGE_JOBS: dict[str, dict] = {}
 SPB_SYNC_JOBS: dict[str, dict] = {}
+IMPORT_PREVIEW_JOBS: dict[str, dict] = {}
 SPB_SYNC_BATCH_SIZE = 80
 LIST_AI_IMAGE_DEFAULT_MODEL = "wan2.6-t2i"
 LIST_AI_IMAGE_MODEL_LABELS = {
@@ -2975,6 +2976,7 @@ def store_essay_cover_image(title: str, content: bytes) -> str:
 
 
 IMAGE_SYNC_LOCK = Lock()
+IMPORT_PREVIEW_JOB_LOCK = Lock()
 CACHE_REFRESHING: set[str] = set()
 CACHE_REFRESH_LOCK = Lock()
 
@@ -6932,6 +6934,171 @@ def vue_upload_preview_api(
     return {"preview_id": preview_id, "preview": preview}
 
 
+def update_import_preview_job(job_id: str, **changes) -> None:
+    with IMPORT_PREVIEW_JOB_LOCK:
+        job = IMPORT_PREVIEW_JOBS.get(job_id)
+        if not job:
+            return
+        job.update(changes)
+        total = max(int(job.get("total") or 0), 0)
+        processed = min(max(int(job.get("processed") or 0), 0), total) if total else 0
+        job["processed"] = processed
+        job["percent"] = 100 if job.get("status") == "complete" else round((processed / total) * 100) if total else 0
+        job["updated_at"] = datetime.utcnow().isoformat()
+
+
+def import_preview_job_snapshot(job_id: str) -> dict[str, Any] | None:
+    with IMPORT_PREVIEW_JOB_LOCK:
+        job = IMPORT_PREVIEW_JOBS.get(job_id)
+        return dict(job) if job else None
+
+
+def store_import_preview_job(job: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    with IMPORT_PREVIEW_JOB_LOCK:
+        existing_job = IMPORT_PREVIEW_JOBS.get(job["id"])
+        if existing_job and existing_job.get("status") in {"queued", "running"}:
+            return dict(existing_job), False
+        terminal_jobs = sorted(
+            (
+                item
+                for item in IMPORT_PREVIEW_JOBS.values()
+                if item.get("status") in {"complete", "failed"} and item.get("id") != job["id"]
+            ),
+            key=lambda item: str(item.get("updated_at") or item.get("created_at") or ""),
+            reverse=True,
+        )
+        for stale_job in terminal_jobs[99:]:
+            IMPORT_PREVIEW_JOBS.pop(str(stale_job["id"]), None)
+        IMPORT_PREVIEW_JOBS[job["id"]] = job
+        return dict(job), True
+
+
+def run_import_preview_job(
+    job_id: str,
+    rows: list[dict[str, Any]],
+    word_list_id: str,
+    word_list_name: str,
+) -> None:
+    db = SessionLocal()
+    chunk_size = 500
+    total = len(rows)
+    total_lists = max((total + chunk_size - 1) // chunk_size, 1)
+    base_name = clean_list_name(word_list_name)
+    word_ids: list[int] = []
+    split_lists: list[WordList] = []
+    target_list: WordList | None = None
+
+    try:
+        update_import_preview_job(
+            job_id,
+            status="running",
+            stage="importing",
+            total=total,
+            total_lists=total_lists,
+            completed_lists=0,
+            current_list=1,
+            message=f"正在写入第 1 / {total_lists} 个词表。",
+        )
+
+        if total > chunk_size:
+            split_group = get_or_create_word_list_group_by_name(db, base_name)
+            for chunk_index in range(0, total, chunk_size):
+                chunk_number = (chunk_index // chunk_size) + 1
+                chunk = rows[chunk_index : chunk_index + chunk_size]
+                chunk_list = get_or_create_word_list_by_name(db, f"{base_name}-{chunk_number}")
+                clear_word_list_items(db, chunk_list.id)
+                chunk_list.group_id = split_group.id
+                chunk_list.sequence_offset = chunk_index
+                db.add(chunk_list)
+                db.commit()
+                split_lists.append(chunk_list)
+                update_import_preview_job(
+                    job_id,
+                    current_list=chunk_number,
+                    message=f"正在写入第 {chunk_number} / {total_lists} 个词表。",
+                )
+
+                def report_chunk_progress(chunk_processed: int, *, start: int = chunk_index, size: int = len(chunk)) -> None:
+                    if chunk_processed == size or chunk_processed % 10 == 0:
+                        update_import_preview_job(job_id, processed=start + chunk_processed)
+
+                word_ids.extend(import_rows(chunk, db, chunk_list, progress_callback=report_chunk_progress))
+                update_import_preview_job(
+                    job_id,
+                    processed=min(chunk_index + len(chunk), total),
+                    completed_lists=chunk_number,
+                )
+            target_list = split_lists[0]
+        else:
+            target_list = get_or_create_word_list(db, word_list_id, base_name)
+            if not word_list_id:
+                target_list.sequence_offset = 0
+                db.add(target_list)
+                db.commit()
+
+            def report_single_list_progress(processed: int) -> None:
+                if processed == total or processed % 10 == 0:
+                    update_import_preview_job(job_id, processed=processed)
+
+            word_ids = import_rows(rows, db, target_list, progress_callback=report_single_list_progress)
+            update_import_preview_job(job_id, processed=total, completed_lists=1)
+
+        update_import_preview_job(
+            job_id,
+            status="running",
+            stage="finalizing",
+            processed=total,
+            message="正在完成导入并准备单词详情。",
+        )
+        if word_ids:
+            start_enrichment_thread(word_ids, include_images=False)
+        if target_list is None:
+            raise RuntimeError("导入完成后没有找到目标词表")
+
+        result = {
+            "ok": True,
+            "word_list_id": target_list.id,
+            "word_list_name": target_list.name,
+            "count": len(word_ids),
+            "split_word_lists": [
+                {"id": word_list.id, "name": word_list.name, "sequence_offset": word_list.sequence_offset}
+                for word_list in split_lists
+            ],
+            "image_result": {"matched": 0, "unmatched": 0, "failed": 0},
+        }
+        update_import_preview_job(
+            job_id,
+            status="complete",
+            stage="complete",
+            processed=total,
+            completed_lists=total_lists,
+            current_list=total_lists,
+            message=f"导入完成：{len(word_ids)} 个单词，{total_lists} 个词表。",
+            result=result,
+        )
+        preview_path(job_id).unlink(missing_ok=True)
+        preview_excel_path(job_id).unlink(missing_ok=True)
+    except Exception as exc:
+        db.rollback()
+        update_import_preview_job(
+            job_id,
+            status="failed",
+            stage="failed",
+            message=f"导入失败：{str(exc)[:240]}",
+        )
+    finally:
+        db.close()
+
+
+@app.get("/api/vue/import-preview/{job_id}/status")
+def vue_import_preview_status(job_id: str):
+    preview_path(job_id)
+    job = import_preview_job_snapshot(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="没有找到这个导入任务")
+    return {"ok": True, "job": job}
+
+
 @app.post("/api/vue/import-preview")
 async def vue_import_preview(
     preview_id: str = Form(...),
@@ -6941,7 +7108,6 @@ async def vue_import_preview(
     selected_rows: list[int] = Form(default=[]),
     selected_columns: list[str] = Form(default=[]),
     image_files: list[UploadFile] = File(default=[]),
-    db: Session = Depends(get_db),
 ):
     path = preview_path(preview_id)
     if not path.exists():
@@ -6960,47 +7126,34 @@ async def vue_import_preview(
         selected_columns=selected_preview_columns,
         word_columns=word_columns,
     )
-    chunk_size = 500
-    base_name = clean_list_name(word_list_name)
-    word_ids: list[int] = []
-    split_lists: list[WordList] = []
-    if len(rows) > chunk_size:
-        split_group = get_or_create_word_list_group_by_name(db, base_name)
-        for chunk_index in range(0, len(rows), chunk_size):
-            chunk_number = (chunk_index // chunk_size) + 1
-            chunk_list = get_or_create_word_list_by_name(db, f"{base_name}-{chunk_number}")
-            clear_word_list_items(db, chunk_list.id)
-            chunk_list.group_id = split_group.id
-            chunk_list.sequence_offset = chunk_index
-            db.add(chunk_list)
-            db.commit()
-            split_lists.append(chunk_list)
-            word_ids.extend(import_rows(rows[chunk_index : chunk_index + chunk_size], db, chunk_list))
-        target_list = split_lists[0]
-    else:
-        target_list = get_or_create_word_list(db, word_list_id, base_name)
-        if not word_list_id:
-            target_list.sequence_offset = 0
-            db.add(target_list)
-            db.commit()
-        word_ids = import_rows(rows, db, target_list)
-    image_result = {"matched": 0, "unmatched": 0, "failed": 0}
-    # Imports should not auto-match images; use the list page image tools after import.
-    if word_ids:
-        start_enrichment_thread(word_ids, include_images=False)
-    path.unlink(missing_ok=True)
-    preview_excel_path(preview_id).unlink(missing_ok=True)
-    return {
+    total = len(rows)
+    total_lists = max((total + 499) // 500, 1)
+    now = datetime.utcnow().isoformat()
+    job, should_start = store_import_preview_job({
+        "id": preview_id,
+        "status": "queued",
+        "stage": "queued",
+        "total": total,
+        "processed": 0,
+        "percent": 0,
+        "total_lists": total_lists,
+        "completed_lists": 0,
+        "current_list": 0,
+        "message": f"准备导入 {total} 个单词，将生成 {total_lists} 个词表。",
+        "created_at": now,
+        "updated_at": now,
+        "result": None,
+    })
+    if should_start:
+        Thread(
+            target=run_import_preview_job,
+            args=(preview_id, rows, word_list_id, word_list_name),
+            daemon=True,
+        ).start()
+    return JSONResponse({
         "ok": True,
-        "word_list_id": target_list.id,
-        "word_list_name": target_list.name,
-        "count": len(word_ids),
-        "split_word_lists": [
-            {"id": word_list.id, "name": word_list.name, "sequence_offset": word_list.sequence_offset}
-            for word_list in split_lists
-        ],
-        "image_result": image_result,
-    }
+        "job": job,
+    }, status_code=202)
 
 
 @app.get("/api/challenge/{word_list_id}/state")
@@ -11043,12 +11196,17 @@ def upload_preview_sheet(
     return vue_shell(request, db, f"upload/preview/{preview_id}")
 
 
-def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]:
+def import_rows(
+    rows: list[dict],
+    db: Session,
+    word_list: WordList,
+    progress_callback: Callable[[int], None] | None = None,
+) -> list[int]:
     created = updated = skipped = 0
     errors: list[str] = []
     word_ids: list[int] = []
 
-    for row in rows:
+    for row_index, row in enumerate(rows, start=1):
         word_text = row["word"]
         existing = db.scalar(select(Word).where(func.lower(Word.word) == word_text.lower()))
         if existing:
@@ -11134,6 +11292,8 @@ def import_rows(rows: list[dict], db: Session, word_list: WordList) -> list[int]
             db.rollback()
             skipped += 1
             errors.append(f"第 {row.get('row_number')} 行 {word_text}: {exc}")
+        if progress_callback:
+            progress_callback(row_index)
 
     return word_ids
 
@@ -18352,13 +18512,7 @@ def challenge_state(db: Session, word_list: WordList) -> dict:
     total = db.scalar(
         select(func.count(WordListItem.id)).where(WordListItem.word_list_id == word_list.id)
     ) or 0
-    progress = db.scalar(select(ChallengeProgress).where(ChallengeProgress.word_list_id == word_list.id))
-    created_progress = False
-    if not progress and total:
-        progress = ChallengeProgress(word_list_id=word_list.id, current_index=0, completed_count=0, completed_rounds=0)
-        db.add(progress)
-        db.flush()
-        created_progress = True
+    progress = get_or_create_challenge_progress(db, word_list.id) if total else None
     historical_completed = challenged_word_count_for_list(db, word_list.id, total) if not progress or not progress.completed_rounds else 0
     completed = min(
         max(progress.completed_count if progress else 0, historical_completed),
@@ -18374,9 +18528,6 @@ def challenge_state(db: Session, word_list: WordList) -> dict:
         db.refresh(progress)
         completed = 0
         completed_rounds = progress.completed_rounds
-    elif created_progress:
-        db.commit()
-        db.refresh(progress)
     percent = round((completed / total) * 100) if total else 0
     return {
         "completed": completed,

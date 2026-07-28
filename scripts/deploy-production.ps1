@@ -117,6 +117,7 @@ done
 journalctl -u "$service_name" -n 50 --no-pager
 exit 1
 '@
+$remoteScript = $remoteScript -replace "`r`n", "`n"
 
 try {
     Write-Host "==> Packaging $commit"
