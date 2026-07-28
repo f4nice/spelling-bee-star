@@ -221,14 +221,19 @@ const mood = computed(() => state.value.mood || {});
 const focusedDailyLog = computed(
   () => individualizeCatLog(
     focusedCat.value,
-    dailyLogs.value[focusedCat.value.breedId || focusedCat.value.id]
+    dailyLogs.value[focusedCat.value.id]
+      || dailyLogs.value[focusedCat.value.breedId]
       || dailyLogs.value[state.value.selectedCat]
       || mood.value.dailyLog
       || {},
   ),
 );
 const focusedAgentState = computed(() => focusedDailyLog.value.agentState || {});
-const focusedBond = computed(() => catBonds.value[focusedCat.value.breedId || focusedCat.value.id] || {});
+const focusedBond = computed(() =>
+  catBonds.value[focusedCat.value.id]
+  || catBonds.value[focusedCat.value.breedId]
+  || {},
+);
 const rawActiveFood = computed(() => mood.value.activeFood || {});
 const activeFoodRemainingSeconds = computed(() => {
   const food = rawActiveFood.value || {};
@@ -414,10 +419,10 @@ const catAgentCards = computed(() =>
   roomCats.value.map((cat) => {
     const breedId = catBreedId(cat);
     const owned = ownsCat(breedId);
-    const log = individualizeCatLog(cat, dailyLogs.value[breedId] || {});
+    const log = individualizeCatLog(cat, dailyLogs.value[cat.id] || dailyLogs.value[breedId] || {});
     const agent = log.agentState || {};
     const behavior = agent.currentBehavior || {};
-    const bond = catBonds.value[breedId] || {};
+    const bond = catBonds.value[cat.id] || catBonds.value[breedId] || {};
     const careNeed = agent.careNeed || {};
     const lostInfo = lostCats.value[breedId] || null;
     const agentEvents = Array.isArray(agent.events) ? agent.events.filter((event) => event?.message) : [];
@@ -529,7 +534,10 @@ const activeCatDiary = computed(() =>
 );
 const gameDailyLogs = computed(() =>
   Object.fromEntries(
-    roomCats.value.map((cat) => [cat.id, individualizeCatLog(cat, dailyLogs.value[catBreedId(cat)] || {})]),
+    roomCats.value.map((cat) => [
+      cat.id,
+      individualizeCatLog(cat, dailyLogs.value[cat.id] || dailyLogs.value[catBreedId(cat)] || {}),
+    ]),
   ),
 );
 const selectedProfileId = computed(() =>
@@ -540,6 +548,7 @@ const selectedProfileId = computed(() =>
 );
 function gameTargetProfileId(targetBreedId) {
   if (!targetBreedId) return "";
+  if (roomCats.value.some((cat) => cat.id === targetBreedId)) return targetBreedId;
   const selected = roomCats.value.find(
     (cat) => cat.id === selectedProfileId.value && catBreedId(cat) === targetBreedId,
   );
@@ -758,7 +767,7 @@ function recordCatAmbientEvent(cat, event = {}) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      catId: catBreedId(cat),
+      catId: cat.id,
       kind: event.kind,
       itemId: event.itemId,
       label: event.label || "",
@@ -779,7 +788,11 @@ function recordCatAmbientEvent(cat, event = {}) {
 function recordCatFoodNibble(cat, event = {}) {
   if (roomEditMode.value) return;
   if (!cat?.id || !activeFood.value.active) return;
-  if (activeFood.value.targetCatId && activeFood.value.targetCatId !== catBreedId(cat)) return;
+  if (
+    activeFood.value.targetCatId
+    && activeFood.value.targetCatId !== cat.id
+    && activeFood.value.targetCatId !== catBreedId(cat)
+  ) return;
   const token = rawActiveFood.value?.expiresAt || activeFood.value.itemId || "active-food";
   const key = `${cat.id}:${token}`;
   const now = Date.now();
@@ -789,7 +802,7 @@ function recordCatFoodNibble(cat, event = {}) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      catId: catBreedId(cat),
+      catId: cat.id,
       itemId: event.itemId || activeFood.value.itemId,
     }),
   }).then((nextPayload) => {
@@ -1204,7 +1217,7 @@ async function petCat(cat = selectedCat.value, options = {}) {
     const nextPayload = await fetchJson(routeApiPaths.catWorldPet(), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ catId: catBreedId(cat) }),
+      body: JSON.stringify({ catId: cat.id }),
     });
     replacePayload(nextPayload);
     if (nextPayload.effect?.message) {
@@ -1319,7 +1332,7 @@ async function useConsumable(item, options = {}) {
   busyItemId.value = item.id;
   notice.value = "";
   const targetProfileId = options.targetCatId || openCatDiaryId.value || focusedCat.value.id;
-  const targetCatId = catBreedId(catForId(targetProfileId)) || state.value.selectedCat;
+  const targetCatId = catForId(targetProfileId)?.id || state.value.selectedCatProfile || state.value.selectedCat;
   try {
     const nextPayload = await fetchJson(routeApiPaths.catWorldUseConsumable(), {
       method: "POST",
@@ -1331,7 +1344,7 @@ async function useConsumable(item, options = {}) {
     notice.value = `${effect.message || `${item.label}已经使用。`} 剩余 ${effect.remaining || 0} 个。`;
     const targetCat = catForId(effect.catId) || focusedCat.value;
     const targetEffect = Array.isArray(effect.effects)
-      ? effect.effects.find((row) => row.catId === catBreedId(targetCat))
+      ? effect.effects.find((row) => row.catId === targetCat.id || row.catId === catBreedId(targetCat))
       : null;
     if (targetEffect?.message) showCatReaction(targetCat, targetEffect.message);
   } catch (error) {

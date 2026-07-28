@@ -98,8 +98,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260727-001"
-DEFAULT_PAGE_VERSION = "v20260727.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260728-001"
+DEFAULT_PAGE_VERSION = "v20260728.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -4378,7 +4378,15 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
         adopted_profile = create_cat_world_cat_profile(db, state, item_id, "shop")
         state.selected_cat_profile = adopted_profile.profile_id
         if was_escaped:
-            log = get_or_create_cat_world_daily_log(db, state.phone, item_id, date.today(), now)
+            adopted_cat = cat_world_cat_profile_payload(adopted_profile)
+            log = get_or_create_cat_world_daily_log(
+                db,
+                state.phone,
+                adopted_profile.profile_id,
+                date.today(),
+                now,
+                adopted_cat,
+            )
             log.energy_score = 68
             log.mood_score = 70
             log.hourly_energy_decay = 0
@@ -4581,9 +4589,12 @@ async def vue_cat_world_food_nibble_api(request: Request, db: Session = Depends(
     payload = payload if isinstance(payload, dict) else {}
     cat_id = str(payload.get("catId") or "").strip()
     state = get_or_create_cat_world_state(db, phone)
-    owned_cats = parse_cat_world_cats(state.cats)
-    if cat_id not in owned_cats:
+    profile = cat_world_profile_for_reference(db, state, cat_id)
+    if not profile:
         raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
+    cat_id = profile.profile_id
+    cat = cat_world_cat_profile_payload(profile)
+    breed_id = profile.breed_id
     inventory = parse_cat_world_inventory(state.inventory)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
@@ -4666,9 +4677,16 @@ async def vue_cat_world_use_consumable_api(request: Request, db: Session = Depen
     if not owned_cats:
         raise HTTPException(status_code=400, detail="活动室里没有猫咪，请先去商店重新领养。")
     now = datetime.utcnow()
-    target_cat_id = str(payload.get("catId") or state.selected_cat or CAT_WORLD_DEFAULT_CAT_ID)
-    if target_cat_id not in owned_cats:
-        target_cat_id = state.selected_cat if state.selected_cat in owned_cats else owned_cats[0]
+    active_profiles = cat_world_active_cat_profiles(db, state.phone)
+    target_profile = cat_world_profile_for_reference(
+        db,
+        state,
+        str(payload.get("catId") or state.selected_cat_profile or state.selected_cat),
+        active_profiles,
+    )
+    if not target_profile:
+        raise HTTPException(status_code=400, detail="没有找到要照顾的猫咪个体。")
+    target_cat_id = target_profile.profile_id
     if use_type == "litter-prevent":
         state.litter_ready_count = 1
         if not state.litter_updated_at:
@@ -4689,13 +4707,20 @@ async def vue_cat_world_use_consumable_api(request: Request, db: Session = Depen
             },
             **serialize_cat_world_payload(db, state),
         }
-    target_ids = owned_cats if use_type == "room-care" else [target_cat_id]
+    target_ids = (
+        [profile.profile_id for profile in active_profiles]
+        if use_type == "room-care"
+        else [target_cat_id]
+    )
     effects = []
     for cat_id in target_ids:
-        cat = CAT_WORLD_CAT_BY_ID.get(cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+        cat = cat_world_cat_for_reference(db, state, cat_id, active_profiles)
+        if not cat:
+            continue
+        breed_id = str(cat.get("breedId") or cat.get("id"))
         traits = cat_world_cat_traits(cat)
-        favorite_ids = cat_world_active_favorite_decor_ids(cat_id, usable_inventory, room_layout)
-        log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now)
+        favorite_ids = cat_world_active_favorite_decor_ids(breed_id, usable_inventory, room_layout)
+        log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now, cat)
         apply_cat_world_hourly_decay(
             log,
             traits,
@@ -4703,7 +4728,8 @@ async def vue_cat_world_use_consumable_api(request: Request, db: Session = Depen
             len(favorite_ids),
             now,
             int(state.litter_count or 0),
-            cat_world_cat_bath_mood_penalty(state, cat_id, now),
+            cat_world_cat_bath_mood_penalty(state, cat_id, now, cat),
+            cat,
         )
         mood_gain = max(int(item.get("mood") or 0), 0)
         energy_gain = max(int(item.get("catEnergy") or 0), 0)
@@ -4743,7 +4769,7 @@ async def vue_cat_world_use_consumable_api(request: Request, db: Session = Depen
         state.active_care_cat_id = target_cat_id
         state.active_care_at = now
     if use_type == "cat-bath":
-        cat_care, _ = cat_world_ensure_care_records(state, owned_cats, now)
+        cat_care, _ = cat_world_ensure_profile_care_records(state, active_profiles, now)
         care_row = {**cat_care.get(target_cat_id, {})}
         care_row["lastBathAt"] = now.replace(microsecond=0).isoformat() + "Z"
         care_row["bathCount"] = max(int(care_row.get("bathCount") or 0), 0) + 1
@@ -4785,9 +4811,10 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
     if event_kind not in {"favorite-toy", "favorite-decor", "rest-spot"}:
         raise HTTPException(status_code=400, detail="不支持这个猫咪事件。")
     state = get_or_create_cat_world_state(db, phone)
-    owned_cats = parse_cat_world_cats(state.cats)
-    if cat_id not in owned_cats:
+    profile = cat_world_profile_for_reference(db, state, cat_id)
+    if not profile:
         raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
+    cat_id = profile.profile_id
     inventory = parse_cat_world_inventory(state.inventory)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
@@ -4801,9 +4828,9 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
         if inventory.get(item_id, 0) <= 0 or item_id in damaged_items:
             return {"ok": True, "recorded": False}
         if event_kind == "favorite-toy":
-            favorite_match = cat_world_item_favorite_cat_id(item_id) == cat_id
+            favorite_match = cat_world_item_favorite_cat_id(item_id) == breed_id
         else:
-            favorite_match = item_id in cat_world_cat_favorite_decor_ids(cat_id) and item_id in room_layout
+            favorite_match = item_id in cat_world_cat_favorite_decor_ids(breed_id) and item_id in room_layout
         if not favorite_match:
             return {"ok": True, "recorded": False}
     else:
@@ -4819,15 +4846,14 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
         favorite_match = bool(
             item_id
             and (
-                cat_world_item_favorite_cat_id(item_id) == cat_id
-                or item_id in cat_world_cat_favorite_decor_ids(cat_id)
+                cat_world_item_favorite_cat_id(item_id) == breed_id
+                or item_id in cat_world_cat_favorite_decor_ids(breed_id)
             )
         )
-    cat = CAT_WORLD_CAT_BY_ID.get(cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     traits = cat_world_cat_traits(cat)
     now = datetime.utcnow()
-    log = get_or_create_cat_world_daily_log(db, state.phone, cat["id"], date.today(), now)
-    favorite_active_ids = cat_world_active_favorite_decor_ids(cat["id"], usable_inventory, room_layout)
+    log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now, cat)
+    favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, usable_inventory, room_layout)
     apply_cat_world_hourly_decay(
         log,
         traits,
@@ -4835,7 +4861,8 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
         len(favorite_active_ids),
         now,
         int(state.litter_count or 0),
-        cat_world_cat_bath_mood_penalty(state, cat["id"], now),
+        cat_world_cat_bath_mood_penalty(state, cat_id, now, cat),
+        cat,
     )
     agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
     ambient_event_at = agent_state.get("ambientEventAt") if isinstance(agent_state.get("ambientEventAt"), dict) else {}
@@ -4910,7 +4937,7 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
     if energy_gain:
         log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) + energy_gain)
     bond_gain = 1 + (1 if favorite_match and event_kind in {"favorite-toy", "favorite-decor", "rest-spot"} else 0)
-    bond = cat_world_apply_cat_bond(state, cat["id"], bond_gain, event_kind, label, now)
+    bond = cat_world_apply_cat_bond(state, cat_id, bond_gain, event_kind, label, now)
     agent_state = append_cat_world_agent_event(
         log,
         cat,
@@ -4988,10 +5015,13 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
     state.energy_spent = max(int(state.energy_spent or 0), 0) + repair_cost
     repair_cat_id = str(damaged.get("catId") or state.selected_cat or CAT_WORLD_DEFAULT_CAT_ID)
     repair_label = str(damaged.get("label") or CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("label") or item_id)
-    repair_cat = CAT_WORLD_CAT_BY_ID.get(repair_cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    repair_cat = cat_world_cat_for_reference(db, state, repair_cat_id) or cat_world_cat_payload(
+        CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID]
+    )
+    repair_cat_id = str(repair_cat.get("profileId") or repair_cat.get("id"))
     repair_traits = cat_world_cat_traits(repair_cat)
     now = datetime.utcnow()
-    repair_log = get_or_create_cat_world_daily_log(db, state.phone, repair_cat["id"], date.today(), now)
+    repair_log = get_or_create_cat_world_daily_log(db, state.phone, repair_cat_id, date.today(), now, repair_cat)
     repair_agent_state = append_cat_world_agent_event(
         repair_log,
         repair_cat,
@@ -5011,7 +5041,7 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
     repair_log.agent_state = encode_cat_world_agent_state(repair_agent_state)
     if repair_log.damaged_item_id == item_id:
         repair_log.damaged_item_id = None
-    bond = cat_world_apply_cat_bond(state, repair_cat["id"], 4, "repair", repair_label, now)
+    bond = cat_world_apply_cat_bond(state, repair_cat_id, 4, "repair", repair_label, now)
     db.add(repair_log)
     db.add(state)
     db.commit()
@@ -5166,36 +5196,27 @@ async def vue_cat_world_select_cat_api(request: Request, db: Session = Depends(g
         payload = await request.json()
     except Exception as exc:
         raise HTTPException(status_code=400, detail="猫咪数据不是有效 JSON。") from exc
-    cat_id = str((payload or {}).get("catId") or "").strip()
+    requested_cat_id = str((payload or {}).get("catId") or "").strip()
     profile_id = str((payload or {}).get("profileId") or "").strip()
     state = get_or_create_cat_world_state(db, phone)
-    owned_cats = parse_cat_world_cats(state.cats)
-    if cat_id not in owned_cats:
-        raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
     if profile_id:
         profile = db.scalar(
             select(CatWorldCatProfile).where(
                 CatWorldCatProfile.phone == state.phone,
                 CatWorldCatProfile.profile_id == profile_id,
-                CatWorldCatProfile.breed_id == cat_id,
                 CatWorldCatProfile.is_active.is_(True),
             )
         )
         if not profile:
             raise HTTPException(status_code=400, detail="没有找到这只猫咪个体。")
-        state.selected_cat_profile = profile.profile_id
+        if requested_cat_id and requested_cat_id not in {profile.profile_id, profile.breed_id}:
+            raise HTTPException(status_code=400, detail="猫咪个体与品种不匹配。")
     else:
-        profile = db.scalar(
-            select(CatWorldCatProfile)
-            .where(
-                CatWorldCatProfile.phone == state.phone,
-                CatWorldCatProfile.breed_id == cat_id,
-                CatWorldCatProfile.is_active.is_(True),
-            )
-            .order_by(CatWorldCatProfile.adopted_at.desc(), CatWorldCatProfile.id.desc())
-        )
-        state.selected_cat_profile = profile.profile_id if profile else None
-    state.selected_cat = cat_id
+        profile = cat_world_profile_for_reference(db, state, requested_cat_id)
+        if not profile:
+            raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
+    state.selected_cat_profile = profile.profile_id
+    state.selected_cat = profile.breed_id
     db.add(state)
     db.commit()
     db.refresh(state)
@@ -5260,9 +5281,10 @@ async def vue_cat_world_pet_api(request: Request, db: Session = Depends(get_db))
     cat_id = str((payload or {}).get("catId") or "").strip()
     state = get_or_create_cat_world_state(db, phone)
     db.refresh(state, with_for_update=True)
-    owned_cats = parse_cat_world_cats(state.cats)
-    if cat_id not in owned_cats:
+    profile = cat_world_profile_for_reference(db, state, cat_id)
+    if not profile:
         raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
+    cat_id = profile.profile_id
     inventory = parse_cat_world_inventory(state.inventory)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
@@ -12596,14 +12618,14 @@ def parse_cat_world_damaged_items(raw: str | None) -> dict[str, dict[str, Any]]:
             repair_cost = max(int(repair_cost or round(int(item.get("cost") or 0) * 0.35)), 10)
         except (TypeError, ValueError):
             repair_cost = max(round(int(item.get("cost") or 0) * 0.35), 10)
-        cat_id = str(source.get("catId") or "")
+        cat_id = cat_world_individual_state_key(source.get("catId"))
         cat = CAT_WORLD_CAT_BY_ID.get(cat_id)
         damaged[item_key] = {
             "itemId": item_key,
             "label": item.get("label") or item_key,
             "category": item.get("category") or "",
-            "catId": cat_id if cat else "",
-            "catLabel": cat.get("label") if cat else "",
+            "catId": cat_id,
+            "catLabel": cat.get("label") if cat else str(source.get("catLabel") or ""),
             "repairCost": repair_cost,
             "reason": str(source.get("reason") or "猫咪捣蛋弄坏了它。"),
             "damagedAt": str(source.get("damagedAt") or ""),
@@ -12625,6 +12647,7 @@ def encode_cat_world_damaged_items(damaged_items: dict[str, dict[str, Any]]) -> 
             repair_cost = max(round(int(item.get("cost") or 0) * 0.35), 10)
         clean[item_key] = {
             "catId": str(source.get("catId") or ""),
+            "catLabel": str(source.get("catLabel") or ""),
             "repairCost": repair_cost,
             "reason": str(source.get("reason") or "猫咪捣蛋弄坏了它。"),
             "damagedAt": str(source.get("damagedAt") or ""),
@@ -12665,6 +12688,13 @@ def encode_cat_world_cats(cats: list[str]) -> str:
     return json.dumps(clean, ensure_ascii=False)
 
 
+def cat_world_individual_state_key(value: Any) -> str:
+    key = str(value or "").strip()
+    if not key or len(key) > 80 or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", key):
+        return ""
+    return key
+
+
 def parse_cat_world_care(raw: str | None) -> dict[str, dict[str, Any]]:
     try:
         loaded = json.loads(raw or "{}")
@@ -12674,8 +12704,8 @@ def parse_cat_world_care(raw: str | None) -> dict[str, dict[str, Any]]:
         return {}
     care: dict[str, dict[str, Any]] = {}
     for cat_id, source in loaded.items():
-        cat_key = str(cat_id)
-        if cat_key not in CAT_WORLD_CAT_BY_ID or not isinstance(source, dict):
+        cat_key = cat_world_individual_state_key(cat_id)
+        if not cat_key or not isinstance(source, dict):
             continue
         try:
             bath_count = max(int(source.get("bathCount") or 0), 0)
@@ -12701,8 +12731,8 @@ def parse_cat_world_care(raw: str | None) -> dict[str, dict[str, Any]]:
 def encode_cat_world_care(care: dict[str, dict[str, Any]]) -> str:
     clean: dict[str, dict[str, Any]] = {}
     for cat_id, source in care.items():
-        cat_key = str(cat_id)
-        if cat_key not in CAT_WORLD_CAT_BY_ID or not isinstance(source, dict):
+        cat_key = cat_world_individual_state_key(cat_id)
+        if not cat_key or not isinstance(source, dict):
             continue
         try:
             bath_count = max(int(source.get("bathCount") or 0), 0)
@@ -12761,8 +12791,8 @@ def parse_cat_world_bonds(raw: str | None) -> dict[str, dict[str, Any]]:
         loaded = {}
     bonds: dict[str, dict[str, Any]] = {}
     for cat_id, source in loaded.items():
-        cat_key = str(cat_id)
-        if cat_key not in CAT_WORLD_CAT_BY_ID or not isinstance(source, dict):
+        cat_key = cat_world_individual_state_key(cat_id)
+        if not cat_key or not isinstance(source, dict):
             continue
         row = cat_world_default_bond(cat_key)
         source_counts = source.get("sources")
@@ -12799,8 +12829,8 @@ def parse_cat_world_bonds(raw: str | None) -> dict[str, dict[str, Any]]:
 def encode_cat_world_bonds(bonds: dict[str, dict[str, Any]]) -> str:
     clean: dict[str, dict[str, Any]] = {}
     for cat_id, source in bonds.items():
-        cat_key = str(cat_id)
-        if cat_key not in CAT_WORLD_CAT_BY_ID or not isinstance(source, dict):
+        cat_key = cat_world_individual_state_key(cat_id)
+        if not cat_key or not isinstance(source, dict):
             continue
         score = cat_world_clamp_bond_score(source.get("score", 18))
         try:
@@ -12839,7 +12869,8 @@ def cat_world_bond_payload(raw_bonds: dict[str, dict[str, Any]], cat_ids: list[s
     cat_ids = cat_ids or [cat["id"] for cat in CAT_WORLD_CATS]
     payload: dict[str, dict[str, Any]] = {}
     for cat_id in cat_ids:
-        if cat_id not in CAT_WORLD_CAT_BY_ID:
+        cat_id = cat_world_individual_state_key(cat_id)
+        if not cat_id:
             continue
         row = {**cat_world_default_bond(cat_id), **raw_bonds.get(cat_id, {})}
         score = cat_world_clamp_bond_score(row.get("score", 18))
@@ -12862,7 +12893,8 @@ def cat_world_apply_cat_bond(
     label: str,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    if cat_id not in CAT_WORLD_CAT_BY_ID:
+    cat_id = cat_world_individual_state_key(cat_id)
+    if not cat_id:
         cat_id = CAT_WORLD_DEFAULT_CAT_ID
     gain = max(int(amount or 0), 0)
     bonds = parse_cat_world_bonds(state.cat_bonds)
@@ -14266,9 +14298,10 @@ def cat_world_behavior_hourly_change(
     now: datetime,
     litter_count: int = 0,
     bath_mood_penalty: int = 0,
+    cat: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     mood_decay, energy_decay, relief = cat_world_decay_rates(traits, inventory, favorite_count)
-    cat = CAT_WORLD_CAT_BY_ID.get(log.cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    cat = cat or CAT_WORLD_CAT_BY_ID.get(log.cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
     mood_score = clamp_cat_world_score(int(log.mood_score or 0) + int(agent_state.get("moodOffset") or 0))
     energy_score = clamp_cat_world_score(int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0))
@@ -14454,7 +14487,8 @@ def cat_world_agent_daily_goal(
         if count > 0 and item_id in room_layout and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") == "decor"
     )
     active_favorites = [item_id for item_id in favorite_active_ids if item_id in owned_decor]
-    favorite_owned_toys = [item_id for item_id in owned_toys if cat_world_item_favorite_cat_id(item_id) == cat["id"]]
+    breed_id = str(cat.get("breedId") or cat.get("id") or CAT_WORLD_DEFAULT_CAT_ID)
+    favorite_owned_toys = [item_id for item_id in owned_toys if cat_world_item_favorite_cat_id(item_id) == breed_id]
     damage_candidates = sorted(set(owned_toys + owned_decor))
     damage_ready, damage_ready_reason = cat_world_damage_attempt_ready(agent_state, traits, mood_score)
     damage_probability = cat_world_damage_probability(agent_state, traits, mood_score)
@@ -14629,6 +14663,7 @@ def cat_world_agent_care_need(
     damaged_item_id: str = "",
 ) -> dict[str, Any]:
     cat_id = str(cat.get("id") or CAT_WORLD_DEFAULT_CAT_ID)
+    breed_id = str(cat.get("breedId") or cat_id)
     cat_label = str(cat.get("label") or "猫咪")
     rest_threshold = int(traits.get("restThreshold") or 34)
     social_need = min(max(int(agent_state.get("socialNeed") or 50), 0), 100)
@@ -14691,7 +14726,7 @@ def cat_world_agent_care_need(
         for item_id, count in inventory.items()
         if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") == "food"
     ]
-    favorite_food_ids = [item_id for item_id in owned_food_ids if cat_world_item_favorite_cat_id(item_id) == cat_id]
+    favorite_food_ids = [item_id for item_id in owned_food_ids if cat_world_item_favorite_cat_id(item_id) == breed_id]
     if energy_score < rest_threshold:
         target_item_id = favorite_food_ids[0] if favorite_food_ids else (owned_food_ids[0] if owned_food_ids else "")
         action_label = "摆放食物" if target_item_id else "购买猫粮"
@@ -14721,7 +14756,7 @@ def cat_world_agent_care_need(
         for item_id, count in inventory.items()
         if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") == "toy"
     ]
-    favorite_toy_ids = [item_id for item_id in owned_toys if cat_world_item_favorite_cat_id(item_id) == cat_id]
+    favorite_toy_ids = [item_id for item_id in owned_toys if cat_world_item_favorite_cat_id(item_id) == breed_id]
     if mood_score < 42:
         target_item_id = favorite_toy_ids[0] if favorite_toy_ids else (owned_toys[0] if owned_toys else "")
         action_label = "玩喜欢的玩具" if target_item_id else "摸摸安抚"
@@ -14745,7 +14780,7 @@ def cat_world_agent_care_need(
             "touch",
         )
 
-    favorite_decor_ids = cat_world_cat_favorite_decor_ids(cat_id)
+    favorite_decor_ids = cat_world_cat_favorite_decor_ids(breed_id)
     owned_favorite_decor = [
         decor_id
         for decor_id in favorite_decor_ids
@@ -14814,7 +14849,14 @@ def cat_world_agent_payload(
     mood_score = clamp_cat_world_score(int(log.mood_score or 0) + int(agent_state.get("moodOffset") or 0))
     energy_score = clamp_cat_world_score(int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0))
     behavior = cat_world_current_behavior(agent_state, traits, mood_score, energy_score, now)
-    hourly_change = cat_world_behavior_hourly_change(log, traits, inventory, len(favorite_active_ids), now or datetime.utcnow())
+    hourly_change = cat_world_behavior_hourly_change(
+        log,
+        traits,
+        inventory,
+        len(favorite_active_ids),
+        now or datetime.utcnow(),
+        cat=cat,
+    )
     comfort_relief = int(hourly_change.get("relief") or 0)
     comfort_parts = []
     if comfort_relief > 0:
@@ -14881,6 +14923,7 @@ def get_or_create_cat_world_daily_log(
     cat_id: str,
     log_date: date,
     now: datetime,
+    cat: dict[str, Any] | None = None,
 ) -> CatWorldDailyLog:
     normalized = normalize_login_phone(phone)
     for pending in db.new:
@@ -14900,15 +14943,37 @@ def get_or_create_cat_world_daily_log(
     )
     if log:
         return log
-    cat = CAT_WORLD_CAT_BY_ID.get(cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    cat = cat or CAT_WORLD_CAT_BY_ID.get(cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    breed_id = str(cat.get("breedId") or cat.get("id") or CAT_WORLD_DEFAULT_CAT_ID)
     traits = cat_world_cat_traits(cat)
+    legacy_log = None
+    if cat_id != breed_id:
+        legacy_log = db.scalar(
+            select(CatWorldDailyLog).where(
+                CatWorldDailyLog.phone == normalized,
+                CatWorldDailyLog.log_date == log_date,
+                CatWorldDailyLog.cat_id == breed_id,
+            )
+        )
     log = CatWorldDailyLog(
         phone=normalized,
         log_date=log_date,
         cat_id=cat_id,
-        favorite_decor_ids=",".join(cat_world_cat_favorite_decor_ids(cat_id)),
-        mood_score=clamp_cat_world_score(64 - round(4 * float(traits["moodDrain"]))),
-        energy_score=clamp_cat_world_score(62 - round(4 * float(traits["energyDrain"]))),
+        favorite_decor_ids=",".join(cat_world_cat_favorite_decor_ids(breed_id)),
+        mood_score=(
+            int(legacy_log.mood_score or 0)
+            if legacy_log
+            else clamp_cat_world_score(64 - round(4 * float(traits["moodDrain"])))
+        ),
+        energy_score=(
+            int(legacy_log.energy_score or 0)
+            if legacy_log
+            else clamp_cat_world_score(62 - round(4 * float(traits["energyDrain"])))
+        ),
+        food_count=int(legacy_log.food_count or 0) if legacy_log else 0,
+        toy_count=int(legacy_log.toy_count or 0) if legacy_log else 0,
+        last_food_item=legacy_log.last_food_item if legacy_log else None,
+        last_play_item=legacy_log.last_play_item if legacy_log else None,
         last_decay_at=now,
     )
     db.add(log)
@@ -14923,13 +14988,16 @@ def apply_cat_world_hourly_decay(
     now: datetime,
     litter_count: int = 0,
     bath_mood_penalty: int = 0,
+    cat: dict[str, Any] | None = None,
 ) -> bool:
     last_decay_at = log.last_decay_at or datetime.combine(log.log_date, datetime.min.time())
     elapsed_hours = int(max((now - last_decay_at).total_seconds(), 0) // 3600)
     hourly_change = cat_world_behavior_hourly_change(
-        log, traits, inventory, favorite_count, now, litter_count, bath_mood_penalty
+        log, traits, inventory, favorite_count, now, litter_count, bath_mood_penalty, cat
     )
-    log.favorite_decor_ids = ",".join(cat_world_cat_favorite_decor_ids(log.cat_id))
+    cat = cat or CAT_WORLD_CAT_BY_ID.get(log.cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    breed_id = str(cat.get("breedId") or cat.get("id") or CAT_WORLD_DEFAULT_CAT_ID)
+    log.favorite_decor_ids = ",".join(cat_world_cat_favorite_decor_ids(breed_id))
     favorite_bonus = favorite_count * 8
     relief_bonus = int(hourly_change["relief"])
     log.decor_bonus = max(favorite_bonus, relief_bonus)
@@ -14937,7 +15005,6 @@ def apply_cat_world_hourly_decay(
         log.hourly_mood_decay = int(hourly_change["hourlyMood"])
         log.hourly_energy_decay = int(hourly_change["hourlyEnergy"])
         return False
-    cat = CAT_WORLD_CAT_BY_ID.get(log.cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
     history = cat_world_trim_hourly_history(agent_state.get("hourlyHistory"))
     total_mood_delta = 0
@@ -14947,7 +15014,7 @@ def apply_cat_world_hourly_decay(
     for index in range(detailed_hours):
         hour_at = last_decay_at + timedelta(hours=index + 1)
         hourly_change = cat_world_behavior_hourly_change(
-            log, traits, inventory, favorite_count, hour_at, litter_count, bath_mood_penalty
+            log, traits, inventory, favorite_count, hour_at, litter_count, bath_mood_penalty, cat
         )
         mood_delta = int(hourly_change["moodDelta"])
         energy_delta = int(hourly_change["energyDelta"])
@@ -14970,7 +15037,7 @@ def apply_cat_world_hourly_decay(
         remaining_hours = elapsed_hours - applied_hours
         hour_at = last_decay_at + timedelta(hours=elapsed_hours)
         hourly_change = cat_world_behavior_hourly_change(
-            log, traits, inventory, favorite_count, hour_at, litter_count, bath_mood_penalty
+            log, traits, inventory, favorite_count, hour_at, litter_count, bath_mood_penalty, cat
         )
         mood_delta = int(hourly_change["moodDelta"]) * remaining_hours
         energy_delta = int(hourly_change["energyDelta"]) * remaining_hours
@@ -14990,7 +15057,7 @@ def apply_cat_world_hourly_decay(
             )
         )
     hourly_change = cat_world_behavior_hourly_change(
-        log, traits, inventory, favorite_count, now, litter_count, bath_mood_penalty
+        log, traits, inventory, favorite_count, now, litter_count, bath_mood_penalty, cat
     )
     log.hourly_mood_decay = int(hourly_change["hourlyMood"])
     log.hourly_energy_decay = int(hourly_change["hourlyEnergy"])
@@ -15014,14 +15081,16 @@ def cat_world_daily_log_payload(
     favorite_active_ids: list[str],
     inventory: dict[str, int] | None = None,
     room_layout: dict[str, dict[str, float]] | None = None,
+    cat: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    cat = CAT_WORLD_CAT_BY_ID.get(log.cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    cat = cat or CAT_WORLD_CAT_BY_ID.get(log.cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    breed_id = str(cat.get("breedId") or cat.get("id") or CAT_WORLD_DEFAULT_CAT_ID)
     traits = cat_world_cat_traits(cat)
     agent_state = cat_world_agent_payload(log, cat, traits, inventory, room_layout, favorite_active_ids)
     return {
         "date": log.log_date.isoformat(),
         "catId": log.cat_id,
-        "favoriteDecorIds": cat_world_cat_favorite_decor_ids(log.cat_id),
+        "favoriteDecorIds": cat_world_cat_favorite_decor_ids(breed_id),
         "favoriteActiveDecorIds": favorite_active_ids,
         "moodScore": int(agent_state.get("adjustedMoodScore") or log.mood_score or 0),
         "baseMoodScore": int(log.mood_score or 0),
@@ -15065,13 +15134,12 @@ def cat_world_random_gender(db: Session) -> str:
     return "male" if ticket < int(weights["male"]) else "female"
 
 
-def cat_world_personality_choice(db: Session, phone: str, breed_id: str) -> dict[str, Any]:
+def cat_world_personality_choice(db: Session, phone: str) -> dict[str, Any]:
     used_keys = {
         str(key)
         for key in db.scalars(
             select(CatWorldCatProfile.personality_key).where(
                 CatWorldCatProfile.phone == phone,
-                CatWorldCatProfile.breed_id == breed_id,
                 CatWorldCatProfile.is_active.is_(True),
                 CatWorldCatProfile.personality_key.is_not(None),
             )
@@ -15083,10 +15151,9 @@ def cat_world_personality_choice(db: Session, phone: str, breed_id: str) -> dict
 
 
 def cat_world_build_personality_traits(
-    breed: dict[str, Any],
     personality: dict[str, Any],
 ) -> dict[str, Any]:
-    base_traits = cat_world_cat_traits(breed)
+    base_traits = cat_world_cat_traits(None)
     multipliers = personality.get("multipliers") if isinstance(personality.get("multipliers"), dict) else {}
 
     def varied(key: str) -> float:
@@ -15123,6 +15190,7 @@ def cat_world_build_personality_traits(
         "temperament": personality.get("temperament") or "balanced",
         "label": personality.get("traitLabel") or "有自己的生活节奏和互动偏好。",
         "personalityKey": personality.get("key") or "individual",
+        "personalityModel": 2,
     }
     return cat_world_cat_traits({"traits": raw_traits})
 
@@ -15135,7 +15203,7 @@ def cat_world_assign_profile_personality(
     personality = CAT_WORLD_CAT_PERSONALITY_BY_KEY.get(str(profile.personality_key or ""))
     changed = False
     if not personality:
-        personality = cat_world_personality_choice(db, profile.phone, profile.breed_id)
+        personality = cat_world_personality_choice(db, profile.phone)
         profile.personality_key = str(personality["key"])
         changed = True
     personality_label = str(personality.get("label") or breed.get("personality") or "独立个性猫咪")
@@ -15146,9 +15214,13 @@ def cat_world_assign_profile_personality(
         stored_traits = json.loads(profile.personality_traits or "{}")
     except (TypeError, ValueError, json.JSONDecodeError):
         stored_traits = {}
-    if not isinstance(stored_traits, dict) or str(stored_traits.get("personalityKey") or "") != personality["key"]:
+    if (
+        not isinstance(stored_traits, dict)
+        or str(stored_traits.get("personalityKey") or "") != personality["key"]
+        or int(stored_traits.get("personalityModel") or 0) < 2
+    ):
         profile.personality_traits = json.dumps(
-            cat_world_build_personality_traits(breed, personality),
+            cat_world_build_personality_traits(personality),
             ensure_ascii=False,
             sort_keys=True,
         )
@@ -15167,7 +15239,7 @@ def cat_world_profile_traits(
     except (TypeError, ValueError, json.JSONDecodeError):
         stored_traits = {}
     if not isinstance(stored_traits, dict) or not stored_traits:
-        return cat_world_cat_traits(breed)
+        return cat_world_cat_traits(None)
     return cat_world_cat_traits({"traits": stored_traits})
 
 
@@ -15214,7 +15286,6 @@ def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]
     personality = CAT_WORLD_CAT_PERSONALITY_BY_KEY.get(str(profile.personality_key or ""), {})
     personality_label = str(profile.personality_label or personality.get("label") or breed.get("personality") or "独立个性猫咪")
     personality_thoughts = personality.get("thoughts") if isinstance(personality.get("thoughts"), list) else []
-    breed_thoughts = breed.get("thoughts") if isinstance(breed.get("thoughts"), list) else []
     profile_code = str(profile.profile_id).rsplit("-", 1)[-1][:4].upper()
     return {
         **cat_world_cat_payload(breed),
@@ -15232,10 +15303,69 @@ def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]
         "personalityKey": str(profile.personality_key or ""),
         "personality": personality_label,
         "traits": cat_world_profile_traits(profile, breed),
-        "thoughts": [*personality_thoughts, *breed_thoughts],
+        "thoughts": personality_thoughts,
         "source": profile.source,
         "adoptedAt": profile.adopted_at.replace(microsecond=0).isoformat() + "Z",
     }
+
+
+def cat_world_profile_for_reference(
+    db: Session,
+    state: CatWorldState,
+    cat_reference: str | None,
+    profiles: list[CatWorldCatProfile] | None = None,
+) -> CatWorldCatProfile | None:
+    profiles = profiles if profiles is not None else cat_world_active_cat_profiles(db, state.phone)
+    reference = str(cat_reference or "").strip()
+    by_id = {profile.profile_id: profile for profile in profiles}
+    if reference in by_id:
+        return by_id[reference]
+    selected = by_id.get(str(state.selected_cat_profile or ""))
+    if selected and (not reference or selected.breed_id == reference):
+        return selected
+    return next(
+        (profile for profile in reversed(profiles) if profile.breed_id == reference),
+        profiles[0] if not reference and profiles else None,
+    )
+
+
+def cat_world_cat_for_reference(
+    db: Session,
+    state: CatWorldState,
+    cat_reference: str | None,
+    profiles: list[CatWorldCatProfile] | None = None,
+) -> dict[str, Any] | None:
+    profile = cat_world_profile_for_reference(db, state, cat_reference, profiles)
+    if profile:
+        return cat_world_cat_profile_payload(profile)
+    breed = CAT_WORLD_CAT_BY_ID.get(str(cat_reference or ""))
+    return cat_world_cat_payload(breed) if breed else None
+
+
+def cat_world_migrate_profile_state(
+    state: CatWorldState,
+    profiles: list[CatWorldCatProfile],
+) -> bool:
+    bonds = parse_cat_world_bonds(state.cat_bonds)
+    care = parse_cat_world_care(state.cat_care)
+    changed = False
+    for profile in profiles:
+        profile_id = profile.profile_id
+        breed_id = profile.breed_id
+        if profile_id not in bonds and breed_id in bonds:
+            bonds[profile_id] = {
+                **cat_world_default_bond(profile_id),
+                **bonds[breed_id],
+                "catId": profile_id,
+            }
+            changed = True
+        if profile_id not in care and breed_id in care:
+            care[profile_id] = {**care[breed_id]}
+            changed = True
+    if changed:
+        state.cat_bonds = encode_cat_world_bonds(bonds)
+        state.cat_care = encode_cat_world_care(care)
+    return changed
 
 
 def ensure_cat_world_cat_profiles(
@@ -15246,8 +15376,18 @@ def ensure_cat_world_cat_profiles(
     profiles = cat_world_active_cat_profiles(db, state.phone)
     profiled_breeds = {profile.breed_id for profile in profiles}
     changed = False
+    used_personality_keys: set[str] = set()
     for profile in profiles:
+        personality_key = str(profile.personality_key or "")
+        if personality_key and personality_key in used_personality_keys:
+            profile.personality_key = None
+            profile.personality_label = None
+            profile.personality_traits = None
+            db.add(profile)
+            changed = True
         changed = cat_world_assign_profile_personality(db, profile) or changed
+        if profile.personality_key:
+            used_personality_keys.add(str(profile.personality_key))
     for breed_id in owned_cats:
         if breed_id in profiled_breeds:
             continue
@@ -15255,6 +15395,7 @@ def ensure_cat_world_cat_profiles(
         profiles.append(profile)
         profiled_breeds.add(breed_id)
         changed = True
+    changed = cat_world_migrate_profile_state(state, profiles) or changed
     profiles_by_id = {profile.profile_id: profile for profile in profiles}
     selected_profile = profiles_by_id.get(str(state.selected_cat_profile or ""))
     if not selected_profile or selected_profile.breed_id != state.selected_cat:
@@ -15271,15 +15412,19 @@ def ensure_cat_world_cat_profiles(
 def deactivate_cat_world_profiles(
     db: Session,
     phone: str,
-    breed_ids: list[str],
+    cat_references: list[str],
     escaped_at: datetime,
 ) -> None:
-    if not breed_ids:
+    if not cat_references:
         return
+    references = set(cat_references)
     profiles = db.scalars(
         select(CatWorldCatProfile).where(
             CatWorldCatProfile.phone == phone,
-            CatWorldCatProfile.breed_id.in_(set(breed_ids)),
+            or_(
+                CatWorldCatProfile.profile_id.in_(references),
+                CatWorldCatProfile.breed_id.in_(references),
+            ),
             CatWorldCatProfile.is_active.is_(True),
         )
     ).all()
@@ -15364,18 +15509,19 @@ def cat_world_apply_agent_damage_events(
     now = datetime.utcnow()
     today = date.today()
     changed = False
-    for cat_id in owned_cats:
-        cat = CAT_WORLD_CAT_BY_ID.get(cat_id)
-        if not cat:
-            continue
+    profiles = cat_world_active_cat_profiles(db, state.phone)
+    for profile in profiles:
+        cat = cat_world_cat_profile_payload(profile)
+        cat_id = profile.profile_id
+        breed_id = profile.breed_id
         traits = cat_world_cat_traits(cat)
         usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
         favorite_active_ids = cat_world_active_favorite_decor_ids(
-            cat_id,
+            breed_id,
             usable_inventory,
             active_layout,
         )
-        log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, today, now)
+        log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, today, now, cat)
         apply_cat_world_hourly_decay(
             log,
             traits,
@@ -15383,7 +15529,8 @@ def cat_world_apply_agent_damage_events(
             len(favorite_active_ids),
             now,
             int(state.litter_count or 0),
-            cat_world_cat_bath_mood_penalty(state, cat_id, now),
+            cat_world_cat_bath_mood_penalty(state, cat_id, now, cat),
+            cat,
         )
         agent_state, agent_changed = ensure_cat_world_agent_state(log, cat, traits)
         if agent_state.get("mischiefChecked"):
@@ -15465,15 +15612,16 @@ def cat_world_apply_favorite_decor_rewards(
 ) -> list[dict[str, Any]]:
     now = now or datetime.utcnow()
     rewards: list[dict[str, Any]] = []
-    for cat_id in owned_cats:
-        cat = CAT_WORLD_CAT_BY_ID.get(cat_id)
-        if not cat:
-            continue
-        favorite_decor_ids = cat_world_active_favorite_decor_ids(cat_id, inventory, room_layout)
+    profiles = cat_world_active_cat_profiles(db, state.phone)
+    for profile in profiles:
+        cat = cat_world_cat_profile_payload(profile)
+        cat_id = profile.profile_id
+        breed_id = profile.breed_id
+        favorite_decor_ids = cat_world_active_favorite_decor_ids(breed_id, inventory, room_layout)
         if not favorite_decor_ids:
             continue
         traits = cat_world_cat_traits(cat)
-        log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now)
+        log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now, cat)
         apply_cat_world_hourly_decay(
             log,
             traits,
@@ -15481,7 +15629,8 @@ def cat_world_apply_favorite_decor_rewards(
             len(favorite_decor_ids),
             now,
             int(state.litter_count or 0),
-            cat_world_cat_bath_mood_penalty(state, cat_id, now),
+            cat_world_cat_bath_mood_penalty(state, cat_id, now, cat),
+            cat,
         )
         agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
         rewarded = agent_state.get("favoriteDecorRewarded")
@@ -15779,14 +15928,48 @@ def cat_world_ensure_care_records(
     return care, changed
 
 
+def cat_world_ensure_profile_care_records(
+    state: CatWorldState,
+    profiles: list[CatWorldCatProfile],
+    now: datetime | None = None,
+) -> tuple[dict[str, dict[str, Any]], bool]:
+    now = now or datetime.utcnow()
+    care = parse_cat_world_care(state.cat_care)
+    changed = False
+    for profile_row in profiles:
+        profile_id = profile_row.profile_id
+        if profile_id in care and cat_world_parse_utc_datetime(care[profile_id].get("lastBathAt")):
+            continue
+        cat = cat_world_cat_profile_payload(profile_row)
+        cleanliness = cat_world_cleanliness_profile(state.phone, profile_id, cat_world_cat_traits(cat))
+        interval_days = max(int(cleanliness.get("bathIntervalDays") or 4), 2)
+        initial_age_seconds = int(
+            cat_world_stable_ratio(f"{state.phone}:{profile_id}:initial-bath-age")
+            * (interval_days + 1.5)
+            * 24
+            * 60
+            * 60
+        )
+        care[profile_id] = {
+            **care.get(profile_row.breed_id, {}),
+            "lastBathAt": (now - timedelta(seconds=initial_age_seconds)).replace(microsecond=0).isoformat() + "Z",
+            "bathCount": max(int(care.get(profile_row.breed_id, {}).get("bathCount") or 0), 0),
+        }
+        changed = True
+    if changed:
+        state.cat_care = encode_cat_world_care(care)
+    return care, changed
+
+
 def cat_world_cat_hygiene_payload(
     state: CatWorldState,
     cat_id: str,
     care: dict[str, dict[str, Any]] | None = None,
     now: datetime | None = None,
+    cat: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     now = now or datetime.utcnow()
-    cat = CAT_WORLD_CAT_BY_ID.get(cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    cat = cat or CAT_WORLD_CAT_BY_ID.get(cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     profile = cat_world_cleanliness_profile(state.phone, cat_id, cat_world_cat_traits(cat))
     care = care if care is not None else parse_cat_world_care(state.cat_care)
     row = care.get(cat_id, {})
@@ -15840,8 +16023,9 @@ def cat_world_cat_bath_mood_penalty(
     state: CatWorldState,
     cat_id: str,
     now: datetime | None = None,
+    cat: dict[str, Any] | None = None,
 ) -> int:
-    return int(cat_world_cat_hygiene_payload(state, cat_id, now=now).get("moodDecayBonus") or 0)
+    return int(cat_world_cat_hygiene_payload(state, cat_id, now=now, cat=cat).get("moodDecayBonus") or 0)
 
 
 def cat_world_elapsed_care_hours(value: str | None, now: datetime) -> int:
@@ -15857,6 +16041,7 @@ def cat_world_update_neglect_status(
     energy_score: int,
     mood_score: int,
     now: datetime,
+    breed_id: str | None = None,
 ) -> tuple[dict[str, Any], bool]:
     row = {**care.get(cat_id, {})}
     changed = False
@@ -15886,7 +16071,7 @@ def cat_world_update_neglect_status(
     low_mood_critical = bool(row.get("lowMoodSince")) and low_mood_hours >= CAT_WORLD_LOW_MOOD_CRITICAL_HOURS
     hunger_escape = bool(row.get("hungerSince")) and hunger_hours >= CAT_WORLD_HUNGER_ESCAPE_HOURS
     low_mood_escape = bool(row.get("lowMoodSince")) and low_mood_hours >= CAT_WORLD_LOW_MOOD_ESCAPE_HOURS
-    limited_cat = bool(CAT_WORLD_CAT_BY_ID.get(cat_id, {}).get("limited"))
+    limited_cat = bool(CAT_WORLD_CAT_BY_ID.get(str(breed_id or cat_id), {}).get("limited"))
     escaped = (hunger_escape or low_mood_escape) and not limited_cat
     escape_reason = "hunger" if hunger_escape else ("low-mood" if low_mood_escape else "")
     escape_label = "连续 3 天挨饿" if escape_reason == "hunger" else ("连续 5 天心情跌至谷底" if escape_reason else "")
@@ -15948,20 +16133,39 @@ def cat_world_update_neglect_status(
 
 
 def cat_world_lost_cats_payload(
+    db: Session,
+    phone: str,
     care: dict[str, dict[str, Any]],
     owned_cats: list[str],
 ) -> dict[str, dict[str, Any]]:
     owned = set(owned_cats)
+    profile_ids = [cat_id for cat_id in care if cat_id not in CAT_WORLD_CAT_BY_ID]
+    profiles_by_id = {
+        profile.profile_id: profile
+        for profile in (
+            db.scalars(
+                select(CatWorldCatProfile).where(
+                    CatWorldCatProfile.phone == normalize_login_phone(phone),
+                    CatWorldCatProfile.profile_id.in_(profile_ids),
+                )
+            ).all()
+            if profile_ids
+            else []
+        )
+    }
     payload: dict[str, dict[str, Any]] = {}
-    for cat_id, row in care.items():
-        if cat_id in owned or not row.get("escapedAt"):
+    for cat_reference, row in care.items():
+        profile = profiles_by_id.get(cat_reference)
+        breed_id = profile.breed_id if profile else cat_reference
+        if breed_id in owned or not row.get("escapedAt"):
             continue
-        cat = CAT_WORLD_CAT_BY_ID.get(cat_id)
+        cat = CAT_WORLD_CAT_BY_ID.get(breed_id)
         if not cat:
             continue
-        payload[cat_id] = {
-            "catId": cat_id,
-            "catLabel": cat.get("label") or cat_id,
+        payload[breed_id] = {
+            "catId": breed_id,
+            "profileId": profile.profile_id if profile else "",
+            "catLabel": cat.get("label") or breed_id,
             "escapedAt": str(row.get("escapedAt") or ""),
             "escapeReason": str(row.get("escapeReason") or ""),
             "escapeLabel": str(row.get("escapeLabel") or "长期缺少照护"),
@@ -16068,23 +16272,24 @@ def cat_world_apply_daily_decay(
     db: Session,
     state: CatWorldState,
     inventory: dict[str, int],
-    owned_cats: list[str],
+    cat_profiles: list[CatWorldCatProfile],
     room_layout: dict[str, dict[str, float]],
 ) -> dict[str, dict[str, Any]]:
     now = datetime.utcnow()
     today = date.today()
     changed = False
     payload: dict[str, dict[str, Any]] = {}
-    care = parse_cat_world_care(state.cat_care)
-    escaped_cat_ids: list[str] = []
-    for cat_id in owned_cats:
-        cat = CAT_WORLD_CAT_BY_ID.get(cat_id)
-        if not cat:
-            continue
+    care, care_changed = cat_world_ensure_profile_care_records(state, cat_profiles, now)
+    changed = care_changed or changed
+    escaped_profile_ids: list[str] = []
+    for profile in cat_profiles:
+        cat = cat_world_cat_profile_payload(profile)
+        cat_id = profile.profile_id
+        breed_id = profile.breed_id
         traits = cat_world_cat_traits(cat)
-        favorite_active_ids = cat_world_active_favorite_decor_ids(cat_id, inventory, room_layout)
-        log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, today, now)
-        hygiene = cat_world_cat_hygiene_payload(state, cat_id, care, now)
+        favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, inventory, room_layout)
+        log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, today, now, cat)
+        hygiene = cat_world_cat_hygiene_payload(state, cat_id, care, now, cat)
         changed = apply_cat_world_hourly_decay(
             log,
             traits,
@@ -16093,10 +16298,11 @@ def cat_world_apply_daily_decay(
             now,
             int(state.litter_count or 0),
             int(hygiene.get("moodDecayBonus") or 0),
+            cat,
         ) or changed
         changed = cat_world_apply_agent_routine_event(log, cat, traits, inventory, favorite_active_ids, now) or changed
         db.add(log)
-        row = cat_world_daily_log_payload(log, favorite_active_ids, inventory, room_layout)
+        row = cat_world_daily_log_payload(log, favorite_active_ids, inventory, room_layout, cat)
         row["hygiene"] = hygiene
         neglect, neglect_changed = cat_world_update_neglect_status(
             cat_id,
@@ -16104,6 +16310,7 @@ def cat_world_apply_daily_decay(
             int(row.get("energyScore") or 0),
             int(row.get("moodScore") or 0),
             now,
+            breed_id,
         )
         changed = neglect_changed or changed
         row["neglect"] = neglect
@@ -16149,26 +16356,29 @@ def cat_world_apply_daily_decay(
                 + ("摆放食物并让猫咪吃完即可停止挨饿计时。" if hunger_risk else "摸摸、玩具和护理用品都能帮助恢复心情。")
             )
         if neglect.get("escaped"):
-            escaped_cat_ids.append(cat_id)
+            escaped_profile_ids.append(cat_id)
         row["agentState"] = agent_state
         payload[cat_id] = row
     state.cat_care = encode_cat_world_care(care)
-    if escaped_cat_ids:
-        remaining_cats = [cat_id for cat_id in owned_cats if cat_id not in set(escaped_cat_ids)]
+    if escaped_profile_ids:
+        escaped_set = set(escaped_profile_ids)
+        remaining_profiles = [profile for profile in cat_profiles if profile.profile_id not in escaped_set]
+        remaining_cats = list(dict.fromkeys(profile.breed_id for profile in remaining_profiles))
         state.cats = encode_cat_world_cats(remaining_cats)
-        deactivate_cat_world_profiles(db, state.phone, escaped_cat_ids, now)
-        if state.selected_cat in escaped_cat_ids:
-            state.selected_cat = remaining_cats[0] if remaining_cats else ""
-            state.selected_cat_profile = None
-        if state.active_food_cat_id in escaped_cat_ids:
+        deactivate_cat_world_profiles(db, state.phone, escaped_profile_ids, now)
+        if state.selected_cat_profile in escaped_set:
+            selected = remaining_profiles[0] if remaining_profiles else None
+            state.selected_cat = selected.breed_id if selected else ""
+            state.selected_cat_profile = selected.profile_id if selected else None
+        if state.active_food_cat_id in escaped_set:
             state.active_food_item = None
             state.active_food_cat_id = None
             state.active_food_at = None
-        if state.active_care_cat_id in escaped_cat_ids:
+        if state.active_care_cat_id in escaped_set:
             state.active_care_item = None
             state.active_care_cat_id = None
             state.active_care_at = None
-        for cat_id in escaped_cat_ids:
+        for cat_id in escaped_profile_ids:
             payload.pop(cat_id, None)
         changed = True
     db.add(state)
@@ -16178,6 +16388,7 @@ def cat_world_apply_daily_decay(
 
 
 def cat_world_active_care_payload(
+    db: Session,
     state: CatWorldState,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -16194,7 +16405,7 @@ def cat_world_active_care_payload(
         state.active_care_cat_id = None
         state.active_care_at = None
         return {"active": False, "changed": True, "itemId": "", "remainingSeconds": 0}
-    target_cat = CAT_WORLD_CAT_BY_ID.get(str(state.active_care_cat_id or ""))
+    target_cat = cat_world_cat_for_reference(db, state, str(state.active_care_cat_id or ""))
     expires_at = state.active_care_at + timedelta(seconds=duration_seconds)
     return {
         "active": True,
@@ -16202,8 +16413,8 @@ def cat_world_active_care_payload(
         "itemId": item_id,
         "label": item.get("label") or item_id,
         "englishName": item.get("englishName") or "",
-        "targetCatId": target_cat.get("id") if target_cat else "",
-        "targetCatLabel": target_cat.get("label") if target_cat else "",
+        "targetCatId": (target_cat.get("profileId") or target_cat.get("id")) if target_cat else "",
+        "targetCatLabel": (target_cat.get("displayLabel") or target_cat.get("label")) if target_cat else "",
         "remainingSeconds": remaining_seconds,
         "durationSeconds": duration_seconds,
         "startedAt": state.active_care_at.replace(microsecond=0).isoformat() + "Z",
@@ -16265,14 +16476,17 @@ def cat_world_apply_active_food_progress(
     now = now or datetime.utcnow()
     changed = False
     target_cat_id = str(state.active_food_cat_id or "").strip()
-    if target_cat_id not in CAT_WORLD_CAT_BY_ID:
+    cat = cat_world_cat_for_reference(db, state, target_cat_id)
+    if not cat:
         target_cat_id = cat_world_effect_target_cat_id(db, state, inventory, room_layout, "food", item_id)
         state.active_food_cat_id = target_cat_id
+        cat = cat_world_cat_for_reference(db, state, target_cat_id)
         changed = True
-    cat = CAT_WORLD_CAT_BY_ID.get(target_cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    cat = cat or cat_world_cat_payload(CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    breed_id = str(cat.get("breedId") or cat.get("id"))
     traits = cat_world_cat_traits(cat)
-    favorite_active_ids = cat_world_active_favorite_decor_ids(target_cat_id, inventory, room_layout)
-    log = get_or_create_cat_world_daily_log(db, state.phone, target_cat_id, date.today(), now)
+    favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, inventory, room_layout)
+    log = get_or_create_cat_world_daily_log(db, state.phone, target_cat_id, date.today(), now, cat)
     changed = apply_cat_world_hourly_decay(
         log,
         traits,
@@ -16280,7 +16494,8 @@ def cat_world_apply_active_food_progress(
         len(favorite_active_ids),
         now,
         int(state.litter_count or 0),
-        cat_world_cat_bath_mood_penalty(state, target_cat_id, now),
+        cat_world_cat_bath_mood_penalty(state, target_cat_id, now, cat),
+        cat,
     ) or changed
     agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
     token = cat_world_active_food_token(state, item_id, target_cat_id)
@@ -16293,8 +16508,8 @@ def cat_world_apply_active_food_progress(
         agent_state["activeFoodManualBites"] = 0
         agent_state["activeFoodNibbleAt"] = ""
         changed = True
-    favorite_match = cat_world_item_favorite_cat_id(item_id) == cat["id"]
-    progress = cat_world_food_progress_targets(item, traits, state.active_food_at, now, cat["id"], force_initial=force_initial)
+    favorite_match = cat_world_item_favorite_cat_id(item_id) == breed_id
+    progress = cat_world_food_progress_targets(item, traits, state.active_food_at, now, breed_id, force_initial=force_initial)
     previous_energy = max(int(agent_state.get("activeFoodConsumedEnergy") or 0), 0)
     previous_mood = max(int(agent_state.get("activeFoodConsumedMood") or 0), 0)
     total_energy = int(progress["totalEnergy"])
@@ -16386,10 +16601,13 @@ def cat_world_apply_active_food_nibble(
     if not item or item.get("category") != "food" or not state.active_food_at:
         return {"active": False, "recorded": False, "message": "房间里没有正在吃的食物。"}
     now = now or datetime.utcnow()
-    if str(state.active_food_cat_id or "") not in CAT_WORLD_CAT_BY_ID:
+    target_cat = cat_world_cat_for_reference(db, state, str(state.active_food_cat_id or ""))
+    if not target_cat:
         state.active_food_cat_id = cat_world_effect_target_cat_id(db, state, inventory, room_layout, "food", item_id)
-    target_cat_id = str(state.active_food_cat_id or CAT_WORLD_DEFAULT_CAT_ID)
-    target_cat = CAT_WORLD_CAT_BY_ID.get(target_cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+        target_cat = cat_world_cat_for_reference(db, state, state.active_food_cat_id)
+    target_cat_id = str(state.active_food_cat_id or "")
+    target_cat = target_cat or cat_world_cat_payload(CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    breed_id = str(target_cat.get("breedId") or target_cat.get("id"))
     if cat_id and cat_id != target_cat_id:
         return {
             "active": True,
@@ -16407,8 +16625,8 @@ def cat_world_apply_active_food_nibble(
 
     cat = target_cat
     traits = cat_world_cat_traits(cat)
-    favorite_active_ids = cat_world_active_favorite_decor_ids(cat["id"], inventory, room_layout)
-    log = get_or_create_cat_world_daily_log(db, state.phone, cat["id"], date.today(), now)
+    favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, inventory, room_layout)
+    log = get_or_create_cat_world_daily_log(db, state.phone, target_cat_id, date.today(), now, cat)
     apply_cat_world_hourly_decay(
         log,
         traits,
@@ -16416,7 +16634,8 @@ def cat_world_apply_active_food_nibble(
         len(favorite_active_ids),
         now,
         int(state.litter_count or 0),
-        cat_world_cat_bath_mood_penalty(state, cat["id"], now),
+        cat_world_cat_bath_mood_penalty(state, target_cat_id, now, cat),
+        cat,
     )
     agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
     token = cat_world_active_food_token(state, item_id, cat["id"])
@@ -16494,8 +16713,8 @@ def cat_world_apply_active_food_nibble(
     agent_state["activeFoodRemainingSeconds"] = int(time_progress.get("remainingSeconds") or 0)
     agent_state["activeFoodManualBites"] = manual_bites + 1
     agent_state["activeFoodNibbleAt"] = now.replace(microsecond=0).isoformat() + "Z"
-    bond_gain = 2 if cat_world_item_favorite_cat_id(item_id) == cat["id"] else 1
-    bond = cat_world_apply_cat_bond(state, cat["id"], bond_gain, "food-nibble", item.get("label") or item_id, now)
+    bond_gain = 2 if cat_world_item_favorite_cat_id(item_id) == breed_id else 1
+    bond = cat_world_apply_cat_bond(state, target_cat_id, bond_gain, "food-nibble", item.get("label") or item_id, now)
     finished = next_remaining_energy <= 0
     if finished:
         log.agent_state = encode_cat_world_agent_state(agent_state)
@@ -16548,11 +16767,14 @@ def cat_world_apply_daily_effect(
     effect_type: str,
 ) -> dict[str, Any]:
     cat_id = cat_world_effect_target_cat_id(db, state, inventory, room_layout, effect_type, item.get("id") or "")
-    cat = CAT_WORLD_CAT_BY_ID.get(cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    cat = cat_world_cat_for_reference(db, state, cat_id) or cat_world_cat_payload(
+        CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID]
+    )
+    breed_id = str(cat.get("breedId") or cat.get("id"))
     traits = cat_world_cat_traits(cat)
     now = datetime.utcnow()
-    favorite_active_ids = cat_world_active_favorite_decor_ids(cat_id, inventory, room_layout)
-    log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now)
+    favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, inventory, room_layout)
+    log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now, cat)
     apply_cat_world_hourly_decay(
         log,
         traits,
@@ -16560,10 +16782,11 @@ def cat_world_apply_daily_effect(
         len(favorite_active_ids),
         now,
         int(state.litter_count or 0),
-        cat_world_cat_bath_mood_penalty(state, cat_id, now),
+        cat_world_cat_bath_mood_penalty(state, cat_id, now, cat),
+        cat,
     )
     if effect_type == "food":
-        state.active_food_cat_id = cat["id"]
+        state.active_food_cat_id = cat_id
         if not state.active_food_at:
             state.active_food_at = now
         state.active_food_item = item["id"]
@@ -16581,7 +16804,7 @@ def cat_world_apply_daily_effect(
         cat_world_apply_cat_bond(
             state,
             cat["id"],
-            4 if cat_world_item_favorite_cat_id(item["id"]) == cat["id"] else 3,
+            4 if cat_world_item_favorite_cat_id(item["id"]) == breed_id else 3,
             "food",
             item.get("label") or item["id"],
             now,
@@ -16597,7 +16820,7 @@ def cat_world_apply_daily_effect(
             now=now,
             force_initial=True,
         )
-    favorite_match = cat_world_item_favorite_cat_id(item["id"]) == cat["id"]
+    favorite_match = cat_world_item_favorite_cat_id(item["id"]) == breed_id
     mood_gain = round(int(item.get("mood") or 0) * float(traits["playMoodGain"])) + (4 if favorite_match else 0)
     energy_gain = -max(1, round(4 * float(traits["energyDrain"])))
     log.toy_count = int(log.toy_count or 0) + 1
@@ -16639,21 +16862,25 @@ def cat_world_apply_pet_effect(
     inventory: dict[str, int],
     room_layout: dict[str, dict[str, float]],
 ) -> dict[str, Any]:
-    cat = CAT_WORLD_CAT_BY_ID.get(cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    cat = cat_world_cat_for_reference(db, state, cat_id) or cat_world_cat_payload(
+        CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID]
+    )
+    cat_id = str(cat.get("profileId") or cat.get("id"))
+    breed_id = str(cat.get("breedId") or cat.get("id"))
     traits = cat_world_cat_traits(cat)
     now = datetime.utcnow()
-    favorite_active_ids = cat_world_active_favorite_decor_ids(cat["id"], inventory, room_layout)
+    favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, inventory, room_layout)
     log = db.scalar(
         select(CatWorldDailyLog)
         .where(
             CatWorldDailyLog.phone == normalize_login_phone(state.phone),
             CatWorldDailyLog.log_date == date.today(),
-            CatWorldDailyLog.cat_id == cat["id"],
+            CatWorldDailyLog.cat_id == cat_id,
         )
         .with_for_update()
     )
     if log is None:
-        log = get_or_create_cat_world_daily_log(db, state.phone, cat["id"], date.today(), now)
+        log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now, cat)
     apply_cat_world_hourly_decay(
         log,
         traits,
@@ -16661,12 +16888,13 @@ def cat_world_apply_pet_effect(
         len(favorite_active_ids),
         now,
         int(state.litter_count or 0),
-        cat_world_cat_bath_mood_penalty(state, cat["id"], now),
+        cat_world_cat_bath_mood_penalty(state, cat_id, now, cat),
+        cat,
     )
     agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
     pet_count = min(int(agent_state.get("petCount") or 0) + 1, 999)
     cooldown = cat_world_pet_reward_cooldown(
-        cat_world_latest_pet_at(db, state.phone, cat["id"], agent_state),
+        cat_world_latest_pet_at(db, state.phone, cat_id, agent_state),
         now,
     )
     if cooldown["active"]:
@@ -16674,7 +16902,7 @@ def cat_world_apply_pet_effect(
         agent_state["petCount"] = pet_count
         log.agent_state = encode_cat_world_agent_state(agent_state)
         db.add(log)
-        current_bond = cat_world_bond_payload(parse_cat_world_bonds(state.cat_bonds), [cat["id"]])[cat["id"]]
+        current_bond = cat_world_bond_payload(parse_cat_world_bonds(state.cat_bonds), [cat_id])[cat_id]
         return {
             "catId": cat["id"],
             "catLabel": cat["label"],
@@ -16722,7 +16950,7 @@ def cat_world_apply_pet_effect(
     agent_state["lastPetAt"] = now.replace(microsecond=0).isoformat() + "Z"
     bond = cat_world_apply_cat_bond(
         state,
-        cat["id"],
+        cat_id,
         5 if temperament == "clingy" else 4,
         "pet",
         "摸摸",
@@ -16752,18 +16980,25 @@ def cat_world_effect_target_cat_id(
     effect_type: str,
     item_id: str = "",
 ) -> str:
-    selected_cat_id = state.selected_cat if state.selected_cat in CAT_WORLD_CAT_BY_ID else CAT_WORLD_DEFAULT_CAT_ID
+    profiles = cat_world_active_cat_profiles(db, state.phone)
+    selected_profile = cat_world_profile_for_reference(
+        db,
+        state,
+        state.selected_cat_profile or state.selected_cat,
+        profiles,
+    )
+    selected_cat_id = selected_profile.profile_id if selected_profile else ""
     if effect_type != "food":
         return selected_cat_id
     now = datetime.utcnow()
     target_rows: list[tuple[int, int, int, str]] = []
-    for cat_id in parse_cat_world_cats(state.cats):
-        cat = CAT_WORLD_CAT_BY_ID.get(cat_id)
-        if not cat:
-            continue
+    for profile in profiles:
+        cat_id = profile.profile_id
+        breed_id = profile.breed_id
+        cat = cat_world_cat_profile_payload(profile)
         traits = cat_world_cat_traits(cat)
-        favorite_active_ids = cat_world_active_favorite_decor_ids(cat_id, inventory, room_layout)
-        log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now)
+        favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, inventory, room_layout)
+        log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now, cat)
         apply_cat_world_hourly_decay(
             log,
             traits,
@@ -16771,12 +17006,13 @@ def cat_world_effect_target_cat_id(
             len(favorite_active_ids),
             now,
             int(state.litter_count or 0),
-            cat_world_cat_bath_mood_penalty(state, cat_id, now),
+            cat_world_cat_bath_mood_penalty(state, cat_id, now, cat),
+            cat,
         )
         agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
         db.add(log)
         energy_score = clamp_cat_world_score(int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0))
-        favorite_rank = 0 if item_id and cat_world_item_favorite_cat_id(item_id) == cat_id else 1
+        favorite_rank = 0 if item_id and cat_world_item_favorite_cat_id(item_id) == breed_id else 1
         target_rows.append((energy_score, favorite_rank, len(target_rows), cat_id))
     if not target_rows:
         return selected_cat_id
@@ -16853,7 +17089,7 @@ def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
     return state
 
 
-def cat_world_active_food(state: CatWorldState) -> dict[str, Any]:
+def cat_world_active_food(db: Session, state: CatWorldState) -> dict[str, Any]:
     item_id = str(state.active_food_item or "").strip()
     item = CAT_WORLD_SHOP_BY_ID.get(item_id)
     if not item or item.get("category") != "food" or not state.active_food_at:
@@ -16863,10 +17099,11 @@ def cat_world_active_food(state: CatWorldState) -> dict[str, Any]:
     remaining_seconds = max(duration_seconds - elapsed_seconds, 0)
     if remaining_seconds <= 0:
         return {"active": False, "itemId": "", "label": "", "remainingSeconds": 0, "durationSeconds": duration_seconds}
-    target_cat = CAT_WORLD_CAT_BY_ID.get(str(state.active_food_cat_id or ""))
+    target_cat = cat_world_cat_for_reference(db, state, str(state.active_food_cat_id or ""))
     traits = cat_world_cat_traits(target_cat or CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
-    target_cat_id = target_cat["id"] if target_cat else ""
-    favorite_multiplier = cat_world_food_favorite_multiplier(item, target_cat_id)
+    target_cat_id = str(target_cat.get("profileId") or target_cat.get("id")) if target_cat else ""
+    target_breed_id = str(target_cat.get("breedId") or target_cat.get("id")) if target_cat else ""
+    favorite_multiplier = cat_world_food_favorite_multiplier(item, target_breed_id)
     total_energy = round(int(item.get("catEnergy") or 0) * float(traits["foodEnergyGain"]) * favorite_multiplier)
     total_mood = round(int(item.get("mood") or 0) * float(traits["foodEnergyGain"]) * favorite_multiplier)
     remaining_energy = max(int((total_energy * remaining_seconds + duration_seconds - 1) // duration_seconds), 0)
@@ -16892,6 +17129,7 @@ def cat_world_active_food(state: CatWorldState) -> dict[str, Any]:
 
 
 def cat_world_mood(
+    db: Session,
     state: CatWorldState,
     inventory: dict[str, int],
     owned_cats: list[str],
@@ -16920,9 +17158,15 @@ def cat_world_mood(
             "energyCost": 0,
             "emptyRoom": True,
         }
-    selected_cat = cat_world_selected_cat(state)
+    selected_cat = cat_world_cat_for_reference(
+        db,
+        state,
+        state.selected_cat_profile or state.selected_cat,
+    ) or cat_world_cat_payload(CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+    selected_cat_id = str(selected_cat.get("profileId") or selected_cat.get("id"))
+    selected_breed_id = str(selected_cat.get("breedId") or selected_cat.get("id"))
     traits = cat_world_cat_traits(selected_cat)
-    active_food = cat_world_active_food(state)
+    active_food = cat_world_active_food(db, state)
     daily_logs = daily_logs or {}
     if active_food.get("active"):
         target_cat_id = str(active_food.get("targetCatId") or state.active_food_cat_id or "")
@@ -16959,9 +17203,9 @@ def cat_world_mood(
                         "remainingMood": remaining_mood,
                         "remainingSeconds": min(int(active_food.get("remainingSeconds") or remaining_seconds), remaining_seconds),
                     }
-    daily_log = daily_logs.get(selected_cat["id"]) or {}
+    daily_log = daily_logs.get(selected_cat_id) or daily_logs.get(selected_breed_id) or {}
     favorite_active_ids = daily_log.get("favoriteActiveDecorIds") or cat_world_active_favorite_decor_ids(
-        selected_cat["id"],
+        selected_breed_id,
         inventory,
         room_layout or {},
     )
@@ -17035,13 +17279,13 @@ def cat_world_mood(
         "canWalk": cat_energy >= traits["restThreshold"],
         "activeFood": active_food,
         "dailyLog": daily_log,
-        "favoriteDecorIds": cat_world_cat_favorite_decor_ids(selected_cat["id"]),
+        "favoriteDecorIds": cat_world_cat_favorite_decor_ids(selected_breed_id),
         "favoriteActiveDecorIds": favorite_active_ids,
         "favoriteDecorBonus": favorite_bonus,
         "recentPlay": recent_play,
         "lastPlayItem": state.last_play_item or "",
         "lastPlayedAt": state.last_played_at.isoformat() if state.last_played_at else "",
-        "selectedCatId": selected_cat["id"],
+        "selectedCatId": selected_cat_id,
         "traits": traits,
         "movementCost": movement_cost,
         "energyCost": energy_cost,
@@ -17062,10 +17306,14 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     available_energy = max(earned_energy - spent_energy, 0)
     inventory = parse_cat_world_inventory(state.inventory)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
-    cat_bonds = parse_cat_world_bonds(state.cat_bonds)
     shop = cat_world_effective_shop(db)
     shop_by_id = {item["id"]: item for item in shop}
     owned_cats = parse_cat_world_cats(state.cats)
+    cat_profiles, cat_profiles_changed = ensure_cat_world_cat_profiles(db, state, owned_cats)
+    if cat_profiles_changed:
+        db.commit()
+        db.refresh(state)
+    cat_bonds = parse_cat_world_bonds(state.cat_bonds)
     blind_box_catalog = cat_world_blind_box_catalog_payload(db, state, owned_cats)
     collection_catalog = cat_world_collection_catalog_payload(blind_box_catalog, owned_cats)
     current_blind_series = next(
@@ -17088,9 +17336,9 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
                 "drawnCatId": current_blind_series.get("drawnCatId") or "",
             }
         )
-    cat_care, cat_care_changed = cat_world_ensure_care_records(state, owned_cats)
+    cat_care, cat_care_changed = cat_world_ensure_profile_care_records(state, cat_profiles)
     litter_status = cat_world_refresh_litter(state, inventory, owned_cats)
-    active_care = cat_world_active_care_payload(state)
+    active_care = cat_world_active_care_payload(db, state)
     if cat_care_changed or litter_status.get("changed") or active_care.get("changed"):
         db.add(state)
         db.commit()
@@ -17103,7 +17351,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "addedCount": int(litter_status.get("addedCount") or 0),
             "changed": False,
         }
-        active_care = cat_world_active_care_payload(state)
+        active_care = cat_world_active_care_payload(db, state)
     damaged_items, damaged_changed = cat_world_apply_agent_damage_events(
         db,
         state,
@@ -17160,14 +17408,12 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         db.add(state)
         db.commit()
         db.refresh(state)
-    daily_logs = cat_world_apply_daily_decay(db, state, usable_inventory, owned_cats, room_layout)
+    daily_logs = cat_world_apply_daily_decay(db, state, usable_inventory, cat_profiles, room_layout)
     owned_cats = parse_cat_world_cats(state.cats)
-    cat_profiles, cat_profiles_changed = ensure_cat_world_cat_profiles(db, state, owned_cats)
-    if cat_profiles_changed:
-        db.commit()
-        db.refresh(state)
+    cat_profiles = cat_world_active_cat_profiles(db, state.phone)
+    cat_bonds = parse_cat_world_bonds(state.cat_bonds)
     cat_care = parse_cat_world_care(state.cat_care)
-    lost_cats = cat_world_lost_cats_payload(cat_care, owned_cats)
+    lost_cats = cat_world_lost_cats_payload(db, state.phone, cat_care, owned_cats)
     style_options = {
         decor_id: cat_world_owned_style_options(inventory, decor_id)
         for decor_id, count in inventory.items()
@@ -17192,7 +17438,10 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "ownedCats": owned_cats,
             "lostCats": lost_cats,
             "catCare": cat_care,
-            "catBonds": cat_world_bond_payload(cat_bonds, owned_cats),
+            "catBonds": cat_world_bond_payload(
+                cat_bonds,
+                [profile.profile_id for profile in cat_profiles],
+            ),
             "roomStyles": room_styles,
             "roomLayout": visual_room_layout,
             "currentSceneId": active_scene["id"],
@@ -17203,7 +17452,15 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "hygiene": litter_status,
             "activeCare": active_care,
             "dailyLogs": daily_logs,
-            "mood": cat_world_mood(state, usable_inventory, owned_cats, available_energy, room_layout, daily_logs),
+            "mood": cat_world_mood(
+                db,
+                state,
+                usable_inventory,
+                owned_cats,
+                available_energy,
+                room_layout,
+                daily_logs,
+            ),
         },
         "cats": [cat_world_cat_payload(cat) for cat in CAT_WORLD_CATS],
         "catProfiles": [cat_world_cat_profile_payload(profile) for profile in cat_profiles],
