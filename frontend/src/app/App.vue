@@ -8,7 +8,7 @@ import { useAppState } from "./composables/useAppState.js";
 const { shellContext, route, data, routeTitle, loading, error, go, pageContext } = useAppState();
 
 const hidePageHeader = computed(() => {
-  const hiddenRoutes = ["admin", "catWorld", "challenge", "essays", "lists", "listDetail", "wrongWords", "spb", "newspaper", "newspaperArticle"];
+  const hiddenRoutes = ["admin", "catWorld", "challenge", "debate", "essays", "lists", "listDetail", "wrongWords", "spb", "newspaper", "newspaperArticle"];
   const routeName = route.value?.name || "";
   return hiddenRoutes.includes(routeName) || routeName.startsWith("booklearner");
 });

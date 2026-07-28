@@ -49,6 +49,7 @@ from app.models import (
     ChallengeSpellingAttempt,
     AdminUserSetting,
     DailyQuote,
+    DebateSession,
     EssayEntry,
     LearningGrowthMetric,
     Word,
@@ -64,6 +65,16 @@ from app.services.audio_storage import audio_candidates_with_dictionary, is_loca
 from app.services.ai_image_generation import generate_dashscope_prompt_image, generate_word_image
 from app.services.ai_tts import generate_word_ai_audio
 from app.services.chinadaily import get_chinadaily_article, load_chinadaily_articles
+from app.services.debate import (
+    DEBATE_ARGUMENT_MAX_CHARS,
+    DEBATE_LEVELS,
+    DEBATE_MAX_TURNS,
+    DEBATE_TARGET_POINTS,
+    debate_energy_reward,
+    debate_result_status,
+    debate_topic_for_day,
+    debate_turn_with_ai,
+)
 from app.services.image_storage import is_local_media_url, remove_local_image, store_uploaded_word_image, store_word_image
 from app.services.images import ImageClient
 
@@ -3827,6 +3838,11 @@ def essays_page(request: Request, db: Session = Depends(get_db)):
     return vue_shell(request, db, "essays")
 
 
+@app.get("/debate", response_class=HTMLResponse)
+def debate_page(request: Request, db: Session = Depends(get_db)):
+    return vue_shell(request, db, "debate")
+
+
 @app.get("/lists", response_class=HTMLResponse)
 def word_lists_page(
     request: Request,
@@ -6459,6 +6475,303 @@ async def vue_delete_essay_api(essay_id: int, request: Request, db: Session = De
     db.delete(essay)
     db.commit()
     return essays_payload(db, request)
+
+
+def parse_debate_json(value: str | None, fallback: Any) -> Any:
+    try:
+        parsed = json.loads(value or "")
+    except (json.JSONDecodeError, TypeError):
+        return fallback
+    return parsed
+
+
+def debate_datetime_text(value: datetime | None) -> str:
+    return value.replace(microsecond=0).isoformat() + "Z" if value else ""
+
+
+def debate_topic_payload(debate_day: date, level: str) -> dict[str, Any]:
+    topic = debate_topic_for_day(debate_day, level)
+    return {
+        "key": topic["key"],
+        "category": topic["category"],
+        "title": topic["title"],
+        "hints": list(topic.get("hints") or []),
+    }
+
+
+def serialize_debate_session(session: DebateSession | None) -> dict[str, Any] | None:
+    if not session:
+        return None
+    topic = debate_topic_payload(session.debate_date, session.level)
+    topic.update(
+        {
+            "key": session.topic_key,
+            "category": session.category,
+            "title": session.topic,
+        }
+    )
+    transcript = parse_debate_json(session.transcript, [])
+    final_feedback = parse_debate_json(session.final_feedback, {})
+    if not isinstance(transcript, list):
+        transcript = []
+    if not isinstance(final_feedback, dict):
+        final_feedback = {}
+    result_labels = {
+        "active": "进行中",
+        "won": "你获胜了",
+        "lost": "AI 对手获胜",
+        "draw": "本场平局",
+    }
+    return {
+        "id": session.id,
+        "date": session.debate_date.isoformat(),
+        "level": session.level,
+        "topic": topic,
+        "userStance": session.user_stance,
+        "aiStance": session.ai_stance,
+        "status": session.status,
+        "statusLabel": result_labels.get(session.status, "进行中"),
+        "userPoints": max(int(session.user_points or 0), 0),
+        "aiPoints": max(int(session.ai_points or 0), 0),
+        "turnCount": max(int(session.turn_count or 0), 0),
+        "targetPoints": max(int(session.target_points or DEBATE_TARGET_POINTS), 1),
+        "maxTurns": max(int(session.max_turns or DEBATE_MAX_TURNS), 1),
+        "transcript": transcript,
+        "finalScore": min(max(int(session.final_score or 0), 0), 100),
+        "finalFeedback": final_feedback,
+        "energyAwarded": max(int(session.energy_awarded or 0), 0),
+        "aiModel": session.ai_model or "",
+        "createdAt": debate_datetime_text(session.created_at),
+        "updatedAt": debate_datetime_text(session.updated_at),
+    }
+
+
+def debate_session_for_day(db: Session, phone: str, debate_day: date) -> DebateSession | None:
+    return db.scalar(
+        select(DebateSession).where(
+            DebateSession.phone == phone,
+            DebateSession.debate_date == debate_day,
+        )
+    )
+
+
+def debate_page_payload(db: Session, request: Request) -> dict[str, Any]:
+    user = current_admin_user(request, db)
+    today = date.today()
+    return {
+        "today": today.isoformat(),
+        "levels": DEBATE_LEVELS,
+        "dailyTopics": {
+            level["key"]: debate_topic_payload(today, level["key"])
+            for level in DEBATE_LEVELS
+        },
+        "rules": {
+            "targetPoints": DEBATE_TARGET_POINTS,
+            "maxTurns": DEBATE_MAX_TURNS,
+            "argumentMaxChars": DEBATE_ARGUMENT_MAX_CHARS,
+            "scoreDimensions": [
+                {"key": "claim", "label": "观点清楚", "max": 8},
+                {"key": "reason", "label": "理由充分", "max": 8},
+                {"key": "evidence", "label": "例子有效", "max": 7},
+                {"key": "rebuttal", "label": "回应对方", "max": 7},
+            ],
+        },
+        "session": serialize_debate_session(debate_session_for_day(db, user.phone, today)),
+    }
+
+
+def owned_debate_session(db: Session, request: Request, session_id: int) -> DebateSession:
+    user = current_admin_user(request, db)
+    session = db.scalar(
+        select(DebateSession).where(
+            DebateSession.id == session_id,
+            DebateSession.phone == user.phone,
+        )
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="没有找到这场辩论赛。")
+    return session
+
+
+@app.get("/api/vue/debate")
+def vue_debate_api(request: Request, db: Session = Depends(get_db)):
+    return debate_page_payload(db, request)
+
+
+@app.post("/api/vue/debate/start")
+async def vue_start_debate_api(request: Request, db: Session = Depends(get_db)):
+    user = current_admin_user(request, db)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="辩论赛设置不是有效 JSON。") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="辩论赛设置不是有效 JSON。")
+
+    today = date.today()
+    existing = debate_session_for_day(db, user.phone, today)
+    if existing:
+        response = debate_page_payload(db, request)
+        response["session"] = serialize_debate_session(existing)
+        return response
+
+    level = str(payload.get("level") or "").strip().lower()
+    stance = str(payload.get("stance") or "").strip().lower()
+    if level not in {item["key"] for item in DEBATE_LEVELS}:
+        raise HTTPException(status_code=400, detail="请选择小学组或初中组。")
+    if stance not in {"pro", "con"}:
+        raise HTTPException(status_code=400, detail="请选择支持或反对立场。")
+    topic = debate_topic_for_day(today, level)
+    session = DebateSession(
+        phone=user.phone,
+        debate_date=today,
+        level=level,
+        topic_key=topic["key"],
+        topic=topic["title"],
+        category=topic["category"],
+        user_stance=stance,
+        ai_stance="con" if stance == "pro" else "pro",
+        status="active",
+        user_points=0,
+        ai_points=0,
+        turn_count=0,
+        target_points=DEBATE_TARGET_POINTS,
+        max_turns=DEBATE_MAX_TURNS,
+        transcript="[]",
+        final_score=0,
+        energy_awarded=0,
+    )
+    db.add(session)
+    try:
+        db.commit()
+        db.refresh(session)
+    except IntegrityError:
+        db.rollback()
+        session = debate_session_for_day(db, user.phone, today)
+        if not session:
+            raise
+    response = debate_page_payload(db, request)
+    response["session"] = serialize_debate_session(session)
+    return response
+
+
+@app.post("/api/vue/debate/{session_id}/turn")
+async def vue_debate_turn_api(session_id: int, request: Request, db: Session = Depends(get_db)):
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="辩论内容不是有效 JSON。") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="辩论内容不是有效 JSON。")
+
+    session = owned_debate_session(db, request, session_id)
+    if session.debate_date != date.today():
+        raise HTTPException(status_code=400, detail="这场辩论已经结束，请参加今天的新辩题。")
+    if session.status != "active":
+        raise HTTPException(status_code=400, detail="这场辩论已经完成。")
+    argument = re.sub(r"\s+", " ", str(payload.get("argument") or "").strip())[:DEBATE_ARGUMENT_MAX_CHARS]
+    if len(argument) < 8:
+        raise HTTPException(status_code=400, detail="请至少写 8 个字，把观点和理由说清楚。")
+
+    transcript = parse_debate_json(session.transcript, [])
+    if not isinstance(transcript, list):
+        transcript = []
+    initial_turn_count = int(session.turn_count or 0)
+    try:
+        result, model = await debate_turn_with_ai(
+            level=session.level,
+            topic=session.topic,
+            user_stance=session.user_stance,
+            ai_stance=session.ai_stance,
+            user_points=int(session.user_points or 0),
+            ai_points=int(session.ai_points or 0),
+            turn_count=initial_turn_count,
+            argument=argument,
+            transcript=transcript,
+        )
+    except RuntimeError as exc:
+        detail = str(exc)
+        if "not configured" in detail:
+            raise HTTPException(status_code=400, detail=detail) from exc
+        if is_ai_quota_error(detail):
+            raise HTTPException(status_code=402, detail="AI 文本额度已经用完") from exc
+        raise HTTPException(status_code=502, detail=f"AI 辩手暂时没有回应：{detail}") from exc
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text[:400] if exc.response is not None else str(exc)
+        if is_ai_quota_error(detail):
+            raise HTTPException(status_code=402, detail="AI 文本额度已经用完") from exc
+        raise HTTPException(status_code=502, detail=f"AI 辩手暂时没有回应：{detail}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AI 辩手暂时没有回应：{exc}") from exc
+
+    db.expire_all()
+    session = owned_debate_session(db, request, session_id)
+    if session.status != "active" or int(session.turn_count or 0) != initial_turn_count:
+        raise HTTPException(status_code=409, detail="这一轮已经提交，请刷新页面查看最新赛况。")
+
+    round_number = initial_turn_count + 1
+    now = datetime.utcnow()
+    transcript.extend(
+        [
+            {
+                "role": "user",
+                "round": round_number,
+                "text": argument,
+                "points": int(result["userPoints"]),
+                "dimensions": result["userDimensions"],
+                "createdAt": debate_datetime_text(now),
+            },
+            {
+                "role": "ai",
+                "round": round_number,
+                "text": result["aiReply"],
+                "points": int(result["aiPoints"]),
+                "coachNote": result["coachNote"],
+                "highlight": result["highlight"],
+                "createdAt": debate_datetime_text(now),
+            },
+        ]
+    )
+    session.user_points = int(session.user_points or 0) + int(result["userPoints"])
+    session.ai_points = int(session.ai_points or 0) + int(result["aiPoints"])
+    session.turn_count = round_number
+    session.status = debate_result_status(
+        session.user_points,
+        session.ai_points,
+        session.turn_count,
+        target_points=session.target_points,
+        max_turns=session.max_turns,
+    )
+    session.transcript = json.dumps(transcript, ensure_ascii=False)
+    session.ai_model = model
+    energy_gain = 0
+    if session.status != "active":
+        review = result["finalReview"]
+        fallback_score = round(
+            min(max(session.user_points / max(session.turn_count * 30, 1), 0), 1) * 100
+        )
+        session.final_score = int(review.get("overallScore") or fallback_score)
+        review["overallScore"] = session.final_score
+        session.final_feedback = json.dumps(review, ensure_ascii=False)
+        if int(session.energy_awarded or 0) <= 0:
+            energy_gain = debate_energy_reward(session.final_score, session.status)
+            session.energy_awarded = energy_gain
+            db.add(
+                CatWorldEnergyGrant(
+                    phone=session.phone,
+                    amount=energy_gain,
+                    reason=f"AI辩论赛 {session.debate_date.isoformat()} {session.topic[:80]}",
+                    granted_by_phone="system:debate",
+                    created_at=now,
+                )
+            )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    response = debate_page_payload(db, request)
+    response["session"] = serialize_debate_session(session)
+    response["energyGain"] = energy_gain
+    return response
 
 
 @app.get("/api/vue/lists")

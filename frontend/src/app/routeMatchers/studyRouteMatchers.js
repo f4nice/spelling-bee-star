@@ -16,6 +16,10 @@ export const studyRouteMatchers = [
     route: () => ({ name: "essays", params: {} }),
   },
   {
+    match: ([section]) => section === "debate",
+    route: () => ({ name: "debate", params: {} }),
+  },
+  {
     match: ([section]) => section === "spb",
     route: () => ({ name: "spb", params: { collection: "individual" } }),
   },

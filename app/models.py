@@ -134,6 +134,34 @@ class EssayEntry(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class DebateSession(Base):
+    __tablename__ = "debate_sessions"
+    __table_args__ = (UniqueConstraint("phone", "debate_date", name="uq_debate_sessions_phone_date"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    debate_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    level: Mapped[str] = mapped_column(String(20), nullable=False)
+    topic_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    topic: Mapped[str] = mapped_column(String(500), nullable=False)
+    category: Mapped[str] = mapped_column(String(80), nullable=False)
+    user_stance: Mapped[str] = mapped_column(String(20), nullable=False)
+    ai_stance: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="active", server_default="active", nullable=False)
+    user_points: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    ai_points: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    turn_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    target_points: Mapped[int] = mapped_column(Integer, default=100, server_default="100", nullable=False)
+    max_turns: Mapped[int] = mapped_column(Integer, default=6, server_default="6", nullable=False)
+    transcript: Mapped[str | None] = mapped_column(Text().with_variant(mysql.LONGTEXT, "mysql"))
+    final_score: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    final_feedback: Mapped[str | None] = mapped_column(Text().with_variant(mysql.LONGTEXT, "mysql"))
+    energy_awarded: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    ai_model: Mapped[str | None] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class ChallengeProgress(Base):
     __tablename__ = "challenge_progress"
     __table_args__ = (UniqueConstraint("word_list_id", name="uq_challenge_progress_word_list"),)
