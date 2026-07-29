@@ -53,11 +53,20 @@ const completed = computed(() => Boolean(session.value && session.value.status !
 const argumentWordCount = computed(() => (argument.value.match(/[A-Za-z]+(?:[-'][A-Za-z]+)*/g) || []).length);
 const canSubmit = computed(() => active.value && argumentWordCount.value >= 3 && !busyAction.value);
 const argumentMaxChars = computed(() => Number(rules.value.argumentMaxChars || 2000));
-const targetPoints = computed(() => Number(session.value?.targetPoints || rules.value.targetPoints || 60));
-const challengeRounds = computed(() => Number(session.value?.challengeRounds || rules.value.challengeRounds || 2));
-const userProgress = computed(() => scoreProgress(session.value?.userPoints));
+const roundsPerSide = computed(() => Number(session.value?.roundsPerSide || rules.value.roundsPerSide || 10));
+const sideTargetPoints = computed(() => Number(session.value?.sideTargetPoints || rules.value.sideTargetPoints || 100));
+const totalRounds = computed(() => Number(session.value?.maxTurns || rules.value.maxTurns || roundsPerSide.value * 2));
+const turnMaxPoints = computed(() => Number(session.value?.turnMaxPoints || rules.value.turnMaxPoints || 10));
+const proPoints = computed(() => Number(session.value?.proPoints || 0));
+const conPoints = computed(() => Number(session.value?.conPoints || 0));
+const totalPoints = computed(() => Number(session.value?.totalPoints || proPoints.value + conPoints.value));
+const proProgress = computed(() => scoreProgress(proPoints.value, sideTargetPoints.value));
+const conProgress = computed(() => scoreProgress(conPoints.value, sideTargetPoints.value));
 const stanceText = computed(() => stanceLabel(session.value?.currentUserStance));
-const currentRoundNumber = computed(() => Math.min(Number(session.value?.turnCount || 0) + 1, challengeRounds.value));
+const currentStageRound = computed(() => Number(
+  session.value?.currentStageRound
+  || ((Math.max(Number(session.value?.turnCount || 0), 0) % roundsPerSide.value) + 1),
+));
 const finalReview = computed(() => session.value?.finalFeedback || {});
 
 function applyPayload(value) {
@@ -65,8 +74,8 @@ function applyPayload(value) {
   if (value?.session?.level) selectedLevel.value = value.session.level;
 }
 
-function scoreProgress(value) {
-  return `${Math.min(Math.max((Number(value || 0) / targetPoints.value) * 100, 0), 100)}%`;
+function scoreProgress(value, maximum) {
+  return `${Math.min(Math.max((Number(value || 0) / Math.max(Number(maximum || 0), 1)) * 100, 0), 100)}%`;
 }
 
 function stanceLabel(value) {
@@ -76,15 +85,40 @@ function stanceLabel(value) {
 function sideForEntry(entry, source) {
   if (entry?.stance) return stanceLabel(entry.stance);
   if (source?.userStance === "both") {
-    const userStance = Number(entry?.round || 1) === 1 ? "pro" : "con";
+    const sideRounds = Number(source?.scoringVersion || 1) >= 2
+      ? Number(source?.roundsPerSide || rules.value.roundsPerSide || 10)
+      : 1;
+    const userStance = Number(entry?.round || 1) <= sideRounds ? "pro" : "con";
     return stanceLabel(entry?.role === "user" ? userStance : userStance === "pro" ? "con" : "pro");
   }
   return stanceLabel(entry?.role === "user" ? source?.userStance : source?.aiStance);
 }
 
-function dimensionRows(entry) {
+function entryMaxPoints(source) {
+  return Number(source?.scoringVersion || 1) >= 2
+    ? Number(source?.turnMaxPoints || rules.value.turnMaxPoints || 10)
+    : 30;
+}
+
+function entryStageRound(entry, source) {
+  if (entry?.stageRound) return Number(entry.stageRound);
+  if (Number(source?.scoringVersion || 1) < 2) return Number(entry?.round || 1);
+  const sideRounds = Number(source?.roundsPerSide || rules.value.roundsPerSide || 10);
+  return ((Math.max(Number(entry?.round || 1), 1) - 1) % sideRounds) + 1;
+}
+
+function dimensionRows(entry, source) {
   const dimensions = entry?.dimensions || {};
-  return (rules.value.scoreDimensions || []).map((item) => ({
+  const legacyDimensions = [
+    { key: "claim", label: "观点清楚", max: 8 },
+    { key: "reason", label: "理由充分", max: 8 },
+    { key: "evidence", label: "例子有效", max: 7 },
+    { key: "rebuttal", label: "回应对方", max: 7 },
+  ];
+  const sourceDimensions = Number(source?.scoringVersion || 1) >= 2
+    ? (rules.value.scoreDimensions || [])
+    : legacyDimensions;
+  return sourceDimensions.map((item) => ({
     ...item,
     value: Number(dimensions[item.key] || 0),
   }));
@@ -108,7 +142,7 @@ async function startDebate() {
       requestOptions({ level: selectedLevel.value }),
     );
     applyPayload(nextPayload);
-    notice.value = "Round 1: argue PRO in English. The AI will challenge you from the CON side.";
+    notice.value = "PRO Round 1 of 10: support the motion in English. The AI will argue CON.";
   } catch (error) {
     notice.value = error.message || "The debate could not be started.";
   } finally {
@@ -128,12 +162,20 @@ async function submitTurn() {
     );
     argument.value = "";
     applyPayload(nextPayload);
+    const latestUserTurn = [...(nextPayload?.session?.transcript || [])]
+      .reverse()
+      .find((entry) => entry?.role === "user");
     if (nextPayload?.energyGain > 0) {
       notice.value = `本场结算完成，猫咪世界获得 +${nextPayload.energyGain} 能量。`;
     } else {
-      notice.value = nextPayload?.session?.status === "active"
-        ? "Round 1 is complete. Now switch sides and argue CON."
-        : "Both challenges are complete.";
+      const nextSession = nextPayload?.session;
+      if (nextSession?.status !== "active") {
+        notice.value = "All 20 rounds are complete.";
+      } else if (Number(nextSession?.turnCount || 0) === roundsPerSide.value) {
+        notice.value = `本回合 ${latestUserTurn?.points || 0}/${turnMaxPoints.value} 分。正方 10 回合完成，现在切换为反方。`;
+      } else {
+        notice.value = `本回合 ${latestUserTurn?.points || 0}/${turnMaxPoints.value} 分。继续 ${stanceLabel(nextSession?.currentUserStance)} 第 ${nextSession?.currentStageRound || 1} 回合。`;
+      }
     }
     await nextTick();
     transcriptEnd.value?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -171,8 +213,8 @@ function closeReplay() {
         <p><CalendarDays :size="16" /> {{ payload.today }}</p>
       </div>
       <div class="debate-head-rules" aria-label="比赛规则">
-        <span><Target :size="18" /><strong>{{ rules.passScore || 60 }}</strong> Pass Score</span>
-        <span><Swords :size="18" /><strong>{{ rules.challengeRounds || 2 }}</strong> Challenge Rounds</span>
+        <span><Target :size="18" /><strong>{{ rules.roundsPerSide || 10 }}</strong> Rounds / Side</span>
+        <span><Swords :size="18" /><strong>{{ rules.targetPoints || 200 }}</strong> Total Points</span>
       </div>
     </header>
 
@@ -206,9 +248,15 @@ function closeReplay() {
         </div>
       </div>
 
-      <div class="debate-two-round-plan" aria-label="Two challenge rounds">
-        <span><strong>Round 1 · PRO</strong><small>You support the motion. AI argues CON.</small></span>
-        <span><strong>Round 2 · CON</strong><small>You oppose the motion. AI argues PRO.</small></span>
+      <div class="debate-two-round-plan" aria-label="Two ten-round debate stages">
+        <span>
+          <strong>Stage 1 · PRO · 10 rounds</strong>
+          <small>You support the motion. Every round is /10; the PRO stage is /100.</small>
+        </span>
+        <span>
+          <strong>Stage 2 · CON · 10 rounds</strong>
+          <small>You switch sides after Round 10. The CON stage is another /100.</small>
+        </span>
       </div>
 
       <button class="primary-action-button debate-start-button" type="button" :disabled="Boolean(busyAction)" @click="startDebate">
@@ -218,16 +266,21 @@ function closeReplay() {
     </section>
 
     <template v-else>
-      <section class="debate-scoreboard solo">
-        <div class="debate-score-side user">
-          <span>ROUND {{ currentRoundNumber }} / {{ challengeRounds }} · YOU {{ stanceText }}</span>
-          <strong>{{ session.userPoints }}</strong>
-          <i><b :style="{ width: userProgress }"></b></i>
+      <section class="debate-scoreboard">
+        <div :class="['debate-score-side', 'pro', { active: active && stanceText === 'PRO' }]">
+          <span>PRO · {{ Math.min(session.turnCount, roundsPerSide) }} / {{ roundsPerSide }} rounds</span>
+          <strong>{{ proPoints }}<small>/ {{ sideTargetPoints }}</small></strong>
+          <i><b :style="{ width: proProgress }"></b></i>
         </div>
         <div class="debate-score-center">
           <Target :size="26" />
-          <strong>{{ stanceText }} Challenge</strong>
-          <span>AI takes the opposite side</span>
+          <strong>{{ active ? `${stanceText} ${currentStageRound} / ${roundsPerSide}` : "Complete" }}</strong>
+          <span>Overall {{ Math.min(session.turnCount, totalRounds) }} / {{ totalRounds }} rounds</span>
+        </div>
+        <div :class="['debate-score-side', 'con', { active: active && stanceText === 'CON' }]">
+          <span>CON · {{ Math.max(Math.min(session.turnCount - roundsPerSide, roundsPerSide), 0) }} / {{ roundsPerSide }} rounds</span>
+          <strong>{{ conPoints }}<small>/ {{ sideTargetPoints }}</small></strong>
+          <i><b :style="{ width: conProgress }"></b></i>
         </div>
       </section>
 
@@ -250,13 +303,13 @@ function closeReplay() {
               <span>
                 <MessageSquareQuote v-if="entry.role === 'user'" :size="17" />
                 <Sparkles v-else :size="17" />
-                Round {{ entry.round }} · {{ sideForEntry(entry, session) }} argument
+                {{ sideForEntry(entry, session) }} Round {{ entryStageRound(entry, session) }} argument
               </span>
-              <strong v-if="entry.role === 'user'">+{{ entry.points }} points</strong>
+              <strong v-if="entry.role === 'user'">{{ entry.points }} / {{ entryMaxPoints(session) }}</strong>
             </header>
             <p>{{ entry.text }}</p>
             <div v-if="entry.role === 'user'" class="debate-dimension-row">
-              <span v-for="item in dimensionRows(entry)" :key="item.key">
+              <span v-for="item in dimensionRows(entry, session)" :key="item.key">
                 {{ item.label }} <strong>{{ item.value }}/{{ item.max }}</strong>
               </span>
             </div>
@@ -269,7 +322,7 @@ function closeReplay() {
         </div>
         <div v-else class="debate-opening">
           <MessageSquareQuote :size="30" />
-          <strong>Round {{ currentRoundNumber }} · Your {{ stanceText }} argument</strong>
+          <strong>{{ stanceText }} Round {{ currentStageRound }} / {{ roundsPerSide }}</strong>
           <span v-if="stanceText === 'PRO'">Support the motion with a clear reason or example.</span>
           <span v-else>Challenge the motion and respond from the opposite side.</span>
         </div>
@@ -302,9 +355,9 @@ function closeReplay() {
           </div>
           <div class="debate-final-score">
             <Trophy :size="22" />
-            <strong>{{ session.finalScore }}</strong>
-            <span>Encouragement score</span>
-            <small>Pass line {{ rules.passScore || 60 }}</small>
+            <strong>{{ totalPoints }}<small>/ 200</small></strong>
+            <span>Total debate points</span>
+            <small>PRO {{ proPoints }} · CON {{ conPoints }}</small>
           </div>
         </header>
         <p>{{ finalReview.summary || "你完成了今天的辩论，坚持表达本身就是一次进步。" }}</p>
@@ -356,7 +409,10 @@ function closeReplay() {
             <strong>{{ item.topic.title }}</strong>
             <small>{{ item.levelLabel }} · {{ item.formatLabel }} · {{ item.statusLabel }}</small>
           </span>
-          <em v-if="item.status === 'completed'">{{ item.finalScore }} / 100</em>
+          <em v-if="item.status === 'completed' && item.scoringVersion >= 2">
+            PRO {{ item.proPoints }}/100 · CON {{ item.conPoints }}/100
+          </em>
+          <em v-else-if="item.status === 'completed'">{{ item.finalScore }} / 100</em>
           <em v-else>In progress</em>
           <ChevronRight :size="19" />
         </button>
@@ -378,7 +434,10 @@ function closeReplay() {
         <div class="debate-replay-summary">
           <span><BookOpen :size="17" />{{ replaySession.statusLabel }}</span>
           <span>{{ replaySession.formatLabel }}</span>
-          <strong v-if="replaySession.status === 'completed'">{{ replaySession.finalScore }} / 100</strong>
+          <strong v-if="replaySession.status === 'completed' && replaySession.scoringVersion >= 2">
+            PRO {{ replaySession.proPoints }}/100 · CON {{ replaySession.conPoints }}/100
+          </strong>
+          <strong v-else-if="replaySession.status === 'completed'">{{ replaySession.finalScore }} / 100</strong>
         </div>
 
         <section class="debate-replay-transcript">
@@ -391,13 +450,13 @@ function closeReplay() {
               <span>
                 <MessageSquareQuote v-if="entry.role === 'user'" :size="17" />
                 <Sparkles v-else :size="17" />
-                Round {{ entry.round }} · {{ sideForEntry(entry, replaySession) }} argument
+                {{ sideForEntry(entry, replaySession) }} Round {{ entryStageRound(entry, replaySession) }} argument
               </span>
-              <strong v-if="entry.role === 'user'">+{{ entry.points }} points</strong>
+              <strong v-if="entry.role === 'user'">{{ entry.points }} / {{ entryMaxPoints(replaySession) }}</strong>
             </header>
             <p>{{ entry.text }}</p>
             <div v-if="entry.role === 'user'" class="debate-dimension-row">
-              <span v-for="item in dimensionRows(entry)" :key="item.key">
+              <span v-for="item in dimensionRows(entry, replaySession)" :key="item.key">
                 {{ item.label }} <strong>{{ item.value }}/{{ item.max }}</strong>
               </span>
             </div>

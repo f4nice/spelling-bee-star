@@ -6,7 +6,10 @@ from app.services.debate import (
     DEBATE_CHALLENGE_ROUNDS,
     DEBATE_MAX_TURNS,
     DEBATE_PASS_SCORE,
+    DEBATE_ROUNDS_PER_SIDE,
+    DEBATE_SIDE_TARGET_POINTS,
     DEBATE_TARGET_POINTS,
+    DEBATE_TURN_MAX_POINTS,
     debate_encouragement_score,
     debate_energy_reward,
     debate_result_status,
@@ -38,14 +41,17 @@ class DebateServiceTests(unittest.TestCase):
         self.assertIn("category", topic)
 
     def test_result_finishes_at_target_or_turn_limit(self):
-        self.assertEqual(DEBATE_CHALLENGE_ROUNDS, 2)
-        self.assertEqual(debate_result_status(29, 1), "active")
+        self.assertEqual(DEBATE_ROUNDS_PER_SIDE, 10)
+        self.assertEqual(DEBATE_SIDE_TARGET_POINTS, 100)
+        self.assertEqual(DEBATE_TURN_MAX_POINTS, 10)
+        self.assertEqual(DEBATE_CHALLENGE_ROUNDS, 20)
+        self.assertEqual(debate_result_status(99, 10), "active")
         self.assertEqual(
             debate_result_status(DEBATE_TARGET_POINTS, 0),
             "completed",
         )
         self.assertEqual(
-            debate_result_status(42, DEBATE_MAX_TURNS),
+            debate_result_status(142, DEBATE_MAX_TURNS),
             "completed",
         )
 
@@ -79,7 +85,11 @@ class DebateServiceTests(unittest.TestCase):
 
         result = parse_debate_turn_result(json.dumps(source, ensure_ascii=False))
 
-        self.assertEqual(result["userPoints"], 22)
+        self.assertEqual(result["userPoints"], 10)
+        self.assertEqual(
+            result["userDimensions"],
+            {"claim": 3, "reason": 3, "evidence": 2, "rebuttal": 2},
+        )
         self.assertNotIn("aiPoints", result)
         self.assertNotIn("overallScore", result["finalReview"])
         self.assertEqual(result["finalReview"]["improvements"][0]["title"], "补上反驳")
@@ -101,14 +111,16 @@ class DebateServiceTests(unittest.TestCase):
         self.assertIn("must be in Simplified Chinese", system_prompt)
         self.assertIn("Do not award match points to yourself", system_prompt)
         self.assertIn("Do not assign an overall score", system_prompt)
-        self.assertIn("exactly two student challenge rounds", system_prompt)
-        self.assertIn("round 1 the student argues PRO", system_prompt)
-        self.assertIn("round 2 the student switches to CON", system_prompt)
+        self.assertIn("exactly 20 student challenge rounds", system_prompt)
+        self.assertIn("rounds 1-10 the student argues PRO", system_prompt)
+        self.assertIn("rounds 11-20 the student switches to CON", system_prompt)
+        self.assertIn("score only the student from 0-10 points", system_prompt)
+        self.assertIn("PRO stage round 1 of 10, overall round 1 of 20", system_prompt)
 
     def test_encouragement_score_has_passing_floor(self):
         self.assertEqual(debate_encouragement_score(0, 1), DEBATE_PASS_SCORE)
-        self.assertEqual(debate_encouragement_score(42, 2), 70)
-        self.assertEqual(debate_encouragement_score(60, 2), 100)
+        self.assertEqual(debate_encouragement_score(14, 2), 70)
+        self.assertEqual(debate_encouragement_score(20, 2), 100)
 
     def test_reward_matches_encouragement_score(self):
         self.assertEqual(debate_energy_reward(0), DEBATE_PASS_SCORE)

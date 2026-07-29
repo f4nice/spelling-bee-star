@@ -15296,12 +15296,22 @@ select {
   padding: 14px 18px;
 }
 
-.debate-score-side.user {
+.debate-score-side.user,
+.debate-score-side.pro {
   background: #e9f8f1;
 }
 
-.debate-score-side.ai {
+.debate-score-side.ai,
+.debate-score-side.con {
   background: #fff2d6;
+}
+
+.debate-score-side.active {
+  box-shadow: inset 0 -5px 0 #1d7f5b;
+}
+
+.debate-score-side.con.active {
+  box-shadow: inset 0 -5px 0 #d68a0d;
 }
 
 .debate-score-side span {
@@ -15313,9 +15323,18 @@ select {
 
 .debate-score-side strong {
   grid-row: span 2;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
   color: var(--ink);
   font-size: 34px;
   line-height: 1;
+}
+
+.debate-score-side strong small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .debate-score-side i {
@@ -15335,7 +15354,8 @@ select {
   transition: width 0.35s ease;
 }
 
-.debate-score-side.ai i b {
+.debate-score-side.ai i b,
+.debate-score-side.con i b {
   background: #d68a0d;
 }
 
@@ -15651,8 +15671,16 @@ select {
 }
 
 .debate-final-score strong {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
   font-size: 29px;
   line-height: 1;
+}
+
+.debate-final-score strong small {
+  color: inherit;
+  font-size: 13px;
 }
 
 .debate-final-score span {
@@ -15877,6 +15905,9 @@ select {
 
 .debate-history-list em {
   color: #0b6c4b;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -16057,6 +16088,10 @@ select {
     font-size: 27px;
   }
 
+  .debate-score-side strong small {
+    font-size: 10px;
+  }
+
   .debate-score-center span {
     display: none;
   }
@@ -16094,6 +16129,10 @@ select {
 
   .debate-history-list time {
     grid-column: 1 / -1;
+  }
+
+  .debate-history-list em {
+    max-width: 210px;
   }
 
   .debate-history-list button > span small {

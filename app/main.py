@@ -71,7 +71,10 @@ from app.services.debate import (
     DEBATE_LEVELS,
     DEBATE_MAX_TURNS,
     DEBATE_PASS_SCORE,
+    DEBATE_ROUNDS_PER_SIDE,
+    DEBATE_SIDE_TARGET_POINTS,
     DEBATE_TARGET_POINTS,
+    DEBATE_TURN_MAX_POINTS,
     debate_encouragement_score,
     debate_energy_reward,
     debate_result_status,
@@ -112,8 +115,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260728-005"
-DEFAULT_PAGE_VERSION = "v20260728.5"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260729-001"
+DEFAULT_PAGE_VERSION = "v20260729.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -6503,11 +6506,70 @@ def debate_topic_payload(debate_day: date, level: str) -> dict[str, Any]:
 
 
 def debate_stances_for_turn(turn_count: int) -> tuple[str, str]:
-    user_stance = "pro" if int(turn_count or 0) <= 0 else "con"
+    user_stance = "pro" if int(turn_count or 0) < DEBATE_ROUNDS_PER_SIDE else "con"
     return user_stance, "con" if user_stance == "pro" else "pro"
 
 
+def debate_stage_round_for_turn(turn_count: int) -> int:
+    return (max(int(turn_count or 0), 0) % DEBATE_ROUNDS_PER_SIDE) + 1
+
+
+def debate_session_uses_current_scoring(session: DebateSession) -> bool:
+    return int(session.max_turns or 0) >= DEBATE_MAX_TURNS
+
+
+def debate_entry_points(entry: dict[str, Any], *, legacy: bool = False) -> int:
+    try:
+        points = int(round(float(entry.get("points") or 0)))
+    except (TypeError, ValueError):
+        return 0
+    if legacy:
+        points = round(points * DEBATE_TURN_MAX_POINTS / 30)
+    return min(max(points, 0), DEBATE_TURN_MAX_POINTS)
+
+
+def debate_dimensions_for_points(points: int) -> dict[str, int]:
+    remaining = min(max(int(points or 0), 0), DEBATE_TURN_MAX_POINTS)
+    dimensions: dict[str, int] = {}
+    for key, maximum in (("claim", 3), ("reason", 3), ("evidence", 2), ("rebuttal", 2)):
+        dimensions[key] = min(remaining, maximum)
+        remaining -= dimensions[key]
+    return dimensions
+
+
+def debate_side_points(
+    transcript: list[dict[str, Any]],
+    *,
+    legacy: bool = False,
+) -> dict[str, int]:
+    totals = {"pro": 0, "con": 0}
+    for entry in transcript:
+        if not isinstance(entry, dict) or entry.get("role") != "user":
+            continue
+        round_number = max(int(entry.get("round") or 1), 1)
+        stance = str(entry.get("stance") or "").lower()
+        if stance not in totals:
+            stance = "pro" if round_number <= (1 if legacy else DEBATE_ROUNDS_PER_SIDE) else "con"
+        totals[stance] += debate_entry_points(entry, legacy=legacy)
+    return totals
+
+
+def upgrade_active_debate_transcript(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    for entry in transcript:
+        if not isinstance(entry, dict):
+            continue
+        round_number = max(int(entry.get("round") or 1), 1)
+        entry["stageRound"] = ((round_number - 1) % DEBATE_ROUNDS_PER_SIDE) + 1
+        if entry.get("role") == "user":
+            points = debate_entry_points(entry, legacy=True)
+            entry["points"] = points
+            entry["dimensions"] = debate_dimensions_for_points(points)
+    return transcript
+
+
 def debate_format_label(session: DebateSession) -> str:
+    if debate_session_uses_current_scoring(session):
+        return f"PRO {DEBATE_ROUNDS_PER_SIDE} + CON {DEBATE_ROUNDS_PER_SIDE}"
     if session.user_stance == "both" or (session.status == "active" and session.debate_date == date.today()):
         return "PRO + CON"
     return "CON" if session.user_stance == "con" else "PRO"
@@ -6532,6 +6594,12 @@ def serialize_debate_session(session: DebateSession | None) -> dict[str, Any] | 
     if not isinstance(final_feedback, dict):
         final_feedback = {}
     status = "active" if session.status == "active" else "completed"
+    current_scoring = debate_session_uses_current_scoring(session)
+    if status == "active" and not current_scoring:
+        transcript = upgrade_active_debate_transcript(transcript)
+        current_scoring = True
+    side_points = debate_side_points(transcript, legacy=False) if current_scoring else {"pro": 0, "con": 0}
+    user_points = sum(side_points.values()) if current_scoring else max(int(session.user_points or 0), 0)
     final_score = min(max(int(session.final_score or 0), 0), 100)
     if status == "completed":
         final_score = max(final_score, DEBATE_PASS_SCORE)
@@ -6543,16 +6611,32 @@ def serialize_debate_session(session: DebateSession | None) -> dict[str, Any] | 
         "topic": topic,
         "userStance": session.user_stance,
         "aiStance": session.ai_stance,
-        "formatLabel": debate_format_label(session),
+        "formatLabel": (
+            f"PRO {DEBATE_ROUNDS_PER_SIDE} + CON {DEBATE_ROUNDS_PER_SIDE}"
+            if current_scoring
+            else debate_format_label(session)
+        ),
         "currentUserStance": current_user_stance,
         "currentAiStance": current_ai_stance,
         "status": status,
         "statusLabel": "In progress" if status == "active" else "Completed",
-        "userPoints": max(int(session.user_points or 0), 0),
+        "userPoints": user_points,
+        "proPoints": side_points["pro"],
+        "conPoints": side_points["con"],
+        "totalPoints": sum(side_points.values()),
         "turnCount": max(int(session.turn_count or 0), 0),
         "targetPoints": DEBATE_TARGET_POINTS,
         "maxTurns": DEBATE_MAX_TURNS,
         "challengeRounds": DEBATE_CHALLENGE_ROUNDS,
+        "roundsPerSide": DEBATE_ROUNDS_PER_SIDE,
+        "sideTargetPoints": DEBATE_SIDE_TARGET_POINTS,
+        "turnMaxPoints": DEBATE_TURN_MAX_POINTS,
+        "currentStageRound": (
+            debate_stage_round_for_turn(session.turn_count)
+            if status == "active"
+            else DEBATE_ROUNDS_PER_SIDE
+        ),
+        "scoringVersion": 2 if current_scoring else 1,
         "transcript": transcript,
         "finalScore": final_score,
         "finalFeedback": final_feedback,
@@ -6577,6 +6661,11 @@ def serialize_debate_history_item(session: DebateSession) -> dict[str, Any]:
     if topic["key"] != session.topic_key:
         topic.update({"category": session.category, "title": session.topic})
     completed = session.status != "active"
+    transcript = parse_debate_json(session.transcript, [])
+    if not isinstance(transcript, list):
+        transcript = []
+    current_scoring = debate_session_uses_current_scoring(session)
+    side_points = debate_side_points(transcript, legacy=False) if current_scoring else {"pro": 0, "con": 0}
     final_score = min(max(int(session.final_score or 0), 0), 100)
     if completed:
         final_score = max(final_score, DEBATE_PASS_SCORE)
@@ -6591,6 +6680,10 @@ def serialize_debate_history_item(session: DebateSession) -> dict[str, Any]:
         "status": "completed" if completed else "active",
         "statusLabel": "Completed" if completed else "In progress",
         "userPoints": max(int(session.user_points or 0), 0),
+        "proPoints": side_points["pro"],
+        "conPoints": side_points["con"],
+        "totalPoints": sum(side_points.values()),
+        "scoringVersion": 2 if current_scoring else 1,
         "finalScore": final_score,
         "energyAwarded": max(int(session.energy_awarded or 0), 0),
         "createdAt": debate_datetime_text(session.created_at),
@@ -6622,12 +6715,15 @@ def debate_page_payload(db: Session, request: Request) -> dict[str, Any]:
             "passScore": DEBATE_PASS_SCORE,
             "maxTurns": DEBATE_MAX_TURNS,
             "challengeRounds": DEBATE_CHALLENGE_ROUNDS,
+            "roundsPerSide": DEBATE_ROUNDS_PER_SIDE,
+            "sideTargetPoints": DEBATE_SIDE_TARGET_POINTS,
+            "turnMaxPoints": DEBATE_TURN_MAX_POINTS,
             "argumentMaxChars": DEBATE_ARGUMENT_MAX_CHARS,
             "scoreDimensions": [
-                {"key": "claim", "label": "观点清楚", "max": 8},
-                {"key": "reason", "label": "理由充分", "max": 8},
-                {"key": "evidence", "label": "例子有效", "max": 7},
-                {"key": "rebuttal", "label": "回应对方", "max": 7},
+                {"key": "claim", "label": "观点清楚", "max": 3},
+                {"key": "reason", "label": "理由充分", "max": 3},
+                {"key": "evidence", "label": "例子有效", "max": 2},
+                {"key": "rebuttal", "label": "回应对方", "max": 2},
             ],
         },
         "session": serialize_debate_session(debate_session_for_day(db, user.phone, today)),
@@ -6735,6 +6831,11 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
     if not isinstance(transcript, list):
         transcript = []
     initial_turn_count = int(session.turn_count or 0)
+    legacy_active_session = not debate_session_uses_current_scoring(session)
+    if legacy_active_session:
+        transcript = upgrade_active_debate_transcript(transcript)
+    side_points_before_turn = debate_side_points(transcript)
+    user_points_before_turn = sum(side_points_before_turn.values())
     round_user_stance, round_ai_stance = debate_stances_for_turn(initial_turn_count)
     current_topic = debate_topic_for_day(session.debate_date, session.level)
     topic_text = current_topic["title"] if current_topic["key"] == session.topic_key else session.topic
@@ -6744,7 +6845,7 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
             topic=topic_text,
             user_stance=round_user_stance,
             ai_stance=round_ai_stance,
-            user_points=int(session.user_points or 0),
+            user_points=user_points_before_turn,
             turn_count=initial_turn_count,
             argument=argument,
             transcript=transcript,
@@ -6770,12 +6871,20 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
         raise HTTPException(status_code=409, detail="这一轮已经提交，请刷新页面查看最新赛况。")
 
     round_number = initial_turn_count + 1
+    stage_round = debate_stage_round_for_turn(initial_turn_count)
     now = datetime.utcnow()
+    transcript = parse_debate_json(session.transcript, [])
+    if not isinstance(transcript, list):
+        transcript = []
+    if legacy_active_session:
+        transcript = upgrade_active_debate_transcript(transcript)
+    side_points_before_turn = debate_side_points(transcript)
     transcript.extend(
         [
             {
                 "role": "user",
                 "round": round_number,
+                "stageRound": stage_round,
                 "stance": round_user_stance,
                 "text": argument,
                 "points": int(result["userPoints"]),
@@ -6785,6 +6894,7 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
             {
                 "role": "ai",
                 "round": round_number,
+                "stageRound": stage_round,
                 "stance": round_ai_stance,
                 "text": result["aiReply"],
                 "coachNote": result["coachNote"],
@@ -6793,7 +6903,7 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
             },
         ]
     )
-    session.user_points = int(session.user_points or 0) + int(result["userPoints"])
+    session.user_points = sum(side_points_before_turn.values()) + int(result["userPoints"])
     session.ai_points = 0
     session.user_stance = "both"
     session.ai_stance = "opponent"
