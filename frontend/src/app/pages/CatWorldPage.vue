@@ -92,6 +92,12 @@ onMounted(async () => {
     onCatPet: (cat, message) => {
       if (!roomEditMode.value) petCat(cat, { message, anchor: false });
     },
+    onCatCarryStart: (_cat, interaction) => {
+      if (interaction?.message) notice.value = interaction.message;
+    },
+    onCatDrop: (_cat, interaction) => {
+      if (interaction?.message) notice.value = interaction.message;
+    },
     onDecorClick: handleDecorClick,
     onDecorSelect: (decorId) => {
       selectedDecorId.value = decorId || "";
@@ -679,6 +685,11 @@ function closeCatDiary() {
 
 function handleGlobalKeydown(event) {
   if (event.key !== "Escape") return;
+  const carryResult = catWorldGame.value?.cancelCatCarry?.();
+  if (carryResult?.handled) {
+    notice.value = carryResult.message || "猫咪已放回原处。";
+    return;
+  }
   if (activeCatDiary.value) {
     closeCatDiary();
     return;

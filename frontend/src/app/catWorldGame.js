@@ -4,6 +4,9 @@ import {
   resolveCatBubbleTiming,
 } from "./catWorldBubbleState.js";
 import {
+  catDecorDropPosition,
+  catDropInteractionFor,
+  catFloorDropPosition,
   catLikesItem,
   floorDropPosition,
   interactionMoveDuration,
@@ -31,6 +34,7 @@ const CAT_INTERACTION_DEPTH = 980;
 const CAMERA_DRAG_THRESHOLD = 6;
 const CAT_HITBOX = { x: -58, y: -74, width: 232, height: 184 };
 const FEATHER_WAND_CURSOR = 'url("/static/cursors/feather-wand-cursor.svg") 4 28, crosshair';
+const CAT_CARRY_CURSOR = "grabbing";
 const ACTIVE_FOOD_SPOT = { x: GAME_WIDTH - 260, y: 408, width: 118, height: 46 };
 const ACTIVE_CARE_SPOT = { x: 590, y: 426, width: 68, height: 70 };
 const READY_LITTER_SPOT = { x: 1134, y: 352, width: 112, height: 82 };
@@ -317,6 +321,7 @@ class CatWorldScene extends Phaser.Scene {
     this.toyContainers = new Map();
     this.catContainers = new Map();
     this.catBubbles = new Map();
+    this.carryTargetIndicators = [];
     this.cameraDrag = {
       active: false,
       pointerId: null,
@@ -332,13 +337,23 @@ class CatWorldScene extends Phaser.Scene {
     this.scale.resize(VIEW_WIDTH, VIEW_HEIGHT);
     this.syncCamera();
     this.input.on("pointerdown", (pointer) => {
+      if (this.owner.carriedCat) {
+        this.dropCarriedCat(pointer);
+        return;
+      }
       if (this.owner.wandMode) {
         this.dropFeatherWand(pointer);
         return;
       }
       this.startCameraPan(pointer);
     });
-    this.input.on("pointermove", (pointer) => this.handleCameraPanMove(pointer));
+    this.input.on("pointermove", (pointer) => {
+      if (this.owner.carriedCat) {
+        this.moveCarriedCat(pointer);
+        return;
+      }
+      this.handleCameraPanMove(pointer);
+    });
     this.input.on("pointerup", (pointer) => this.finishCameraPan(pointer));
     this.input.on("dragstart", (_pointer, gameObject) => {
       if (!gameObject.getData("layoutItem")) return;
@@ -448,7 +463,7 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   startCameraPan(pointer) {
-    if (this.isEditMode() || this.owner.wandMode || !this.owner.canPan()) return false;
+    if (this.isEditMode() || this.owner.wandMode || this.owner.carriedCat || !this.owner.canPan()) return false;
     if (pointer?.event?.button != null && pointer.event.button !== 0) return false;
     this.tweens.killTweensOf(this.cameras.main);
     this.cameraDrag = {
@@ -516,6 +531,9 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   renderSnapshot() {
+    if (this.owner.snapshot.editMode && this.owner.carriedCat) {
+      this.cancelCarriedCat({ notify: false });
+    }
     this.cacheCatPositions();
     if (this.owner.snapshot.editMode && this.owner.wandMode) {
       this.stopFeatherWandMode({ notify: false, resume: false });
@@ -527,6 +545,7 @@ class CatWorldScene extends Phaser.Scene {
     this.decorContainers.clear();
     this.toyContainers.clear();
     this.catBubbles.clear();
+    this.carryTargetIndicators = [];
     const snapshot = this.owner.snapshot;
     this.owner.layout = cloneLayout(snapshot.layout);
     this.drawRoom();
@@ -536,6 +555,7 @@ class CatWorldScene extends Phaser.Scene {
       this.drawEditModeHint();
     } else if (snapshot.scene.features.cats) {
       this.drawCats(snapshot);
+      this.restoreCarriedCat();
       this.restoreCatBubbles(snapshot);
       this.restoreActiveItemInteractions();
     }
@@ -591,12 +611,14 @@ class CatWorldScene extends Phaser.Scene {
         this.input.setDraggable(container);
       }
       container.on("pointerdown", (pointer, _localX, _localY, event) => {
+        if (this.handleCarriedCatPointerDown(pointer, event)) return;
         this.startCameraPan(pointer);
         this.stopPointerEvent(event);
       });
       container.on("pointerup", (pointer, _localX, _localY, event) => {
         const wasPanning = this.finishCameraPan(pointer);
         this.stopPointerEvent(event);
+        if (this.shouldSuppressRoomClick()) return;
         if (wasPanning) return;
         if (!container.getData("dragMoved")) {
           const interaction = !editMode && !damaged ? this.interactWithDecor(decorId) : null;
@@ -614,12 +636,14 @@ class CatWorldScene extends Phaser.Scene {
         bathHitZone.setData("kind", "bathtub-hit-zone");
         bathHitZone.setInteractive({ cursor: "pointer" });
         bathHitZone.on("pointerdown", (pointer, _localX, _localY, event) => {
+          if (this.handleCarriedCatPointerDown(pointer, event)) return;
           this.startCameraPan(pointer);
           this.stopPointerEvent(event);
         });
         bathHitZone.on("pointerup", (pointer, _localX, _localY, event) => {
           const wasPanning = this.finishCameraPan(pointer);
           this.stopPointerEvent(event);
+          if (this.shouldSuppressRoomClick()) return;
           if (wasPanning) return;
           const interaction = this.interactWithDecor(decorId);
           this.owner.handlers.onDecorClick?.(decorId, interaction);
@@ -787,12 +811,14 @@ class CatWorldScene extends Phaser.Scene {
         container.setInteractive(new Phaser.Geom.Rectangle(0, 0, 86, 76), Phaser.Geom.Rectangle.Contains);
         if (container.input) container.input.cursor = "pointer";
         container.on("pointerdown", (pointer, _localX, _localY, event) => {
+          if (this.handleCarriedCatPointerDown(pointer, event)) return;
           this.startCameraPan(pointer);
           this.stopPointerEvent(event);
         });
         container.on("pointerup", (pointer, _localX, _localY, event) => {
           const wasPanning = this.finishCameraPan(pointer);
           this.stopPointerEvent(event);
+          if (this.shouldSuppressRoomClick()) return;
           if (wasPanning) return;
           this.owner.handlers.onLitterClick?.(index);
         });
@@ -823,12 +849,14 @@ class CatWorldScene extends Phaser.Scene {
       this.input.setDraggable(container);
     }
     container.on("pointerdown", (pointer, _localX, _localY, event) => {
+      if (this.handleCarriedCatPointerDown(pointer, event)) return;
       this.startCameraPan(pointer);
       this.stopPointerEvent(event);
     });
     container.on("pointerup", (pointer, _localX, _localY, event) => {
       const wasPanning = this.finishCameraPan(pointer);
       this.stopPointerEvent(event);
+      if (this.shouldSuppressRoomClick()) return;
       if (wasPanning) return;
       if (!container.getData("dragMoved")) {
         const interaction = !editMode && !damaged ? this.interactWithToy(itemId) : null;
@@ -1156,6 +1184,7 @@ class CatWorldScene extends Phaser.Scene {
         const wasPanning = this.finishCameraPan(pointer);
         this.children.bringToTop(container);
         this.stopPointerEvent(event);
+        if (this.shouldSuppressRoomClick()) return;
         if (wasPanning) return;
         if (this.owner.wandMode) {
           const interaction = this.joinCatToFeatherWandChase(cat.id);
@@ -1167,8 +1196,11 @@ class CatWorldScene extends Phaser.Scene {
           this.owner.handlers.onToyClick?.("feather-wand", interaction);
           return;
         }
-        const message = this.spawnCatBubble(container, cat);
-        this.owner.handlers.onCatPet?.(cat, message);
+        const interaction = this.startCatCarry(cat.id, pointer);
+        if (!interaction?.handled) return;
+        const message = this.spawnCatBubble(container, cat, interaction.catMessage);
+        this.owner.handlers.onCatCarryStart?.(cat, interaction);
+        if (interaction.carrying) this.owner.handlers.onCatPet?.(cat, message);
       });
       this.drawCatShape(container, cat, snapshot.selectedCatId === cat.id, snapshot, behavior);
       this.catContainers.set(cat.id, container);
@@ -1192,6 +1224,474 @@ class CatWorldScene extends Phaser.Scene {
         behavior: this.catBehavior(cat, index),
       }))
       .filter((entry) => entry.container?.active);
+  }
+
+  shouldSuppressRoomClick() {
+    return Date.now() < Number(this.owner.ignoreRoomClickUntil || 0);
+  }
+
+  handleCarriedCatPointerDown(pointer, event) {
+    if (!this.owner.carriedCat) return false;
+    this.dropCarriedCat(pointer);
+    this.stopPointerEvent(event);
+    return true;
+  }
+
+  startCatCarry(catId, pointer) {
+    if (this.isEditMode()) return null;
+    const entry = this.roomCatEntries().find((candidate) => candidate.cat.id === catId);
+    if (!entry?.container?.active) return null;
+    const activeAction = this.owner.catItemActions.get(catId);
+    if (["bathtub", "carried-bathtub"].includes(activeAction?.kind)) {
+      return {
+        handled: true,
+        carrying: false,
+        catId,
+        catMessage: "我还在洗澡，等泡泡冲干净再抱我。",
+        message: `${entry.cat.label}正在洗澡，结束后才能抱起来。`,
+      };
+    }
+    if (this.owner.wandMode) this.stopFeatherWandMode({ notify: false });
+    const facing = entry.container.scaleX < 0 ? -1 : 1;
+    this.owner.catItemActions.delete(catId);
+    this.interruptCatAutonomy(entry, "cat-carry");
+    this.owner.carriedCat = {
+      catId,
+      originX: entry.container.x,
+      originY: entry.container.y,
+      facing,
+      lastX: Number(pointer?.worldX) || entry.container.x + 45,
+      lastY: Number(pointer?.worldY) || entry.container.y + 36,
+    };
+    this.applyCarriedCatVisual(entry);
+    this.moveCarriedCat(pointer);
+    this.drawCarryTargetIndicators();
+    return {
+      handled: true,
+      carrying: true,
+      catId,
+      catMessage: "被抱起来啦，点地板或发光家具把我放下。",
+      message: `已抱起${entry.cat.label}，移动鼠标后点击地板或发光家具放下；按 Esc 可放回原处。`,
+    };
+  }
+
+  applyCarriedCatVisual(entry) {
+    if (!entry?.container?.active) return;
+    const container = entry.container;
+    this.interruptCatAutonomy(entry, "cat-carry");
+    container.disableInteractive();
+    container.setAlpha(0.96);
+    const facing = container.scaleX < 0 ? -1 : 1;
+    container.setScale(facing * 1.06, 1.06);
+    container.setDepth(CAT_INTERACTION_DEPTH + 260);
+    container.getData("catCarryBadge")?.destroy?.();
+    const badge = this.add
+      .text(45, -58, "抱起中", {
+        color: "#263047",
+        backgroundColor: "#fff07d",
+        fontFamily: "Consolas, monospace",
+        fontSize: "10px",
+        fontStyle: "bold",
+        padding: { x: 5, y: 2 },
+      })
+      .setOrigin(0.5);
+    badge.setData("catCarryBadge", true);
+    this.pinCatTextOverlay(badge);
+    container.add(badge);
+    container.setData("catCarryBadge", badge);
+    this.syncCatTextOverlays(container);
+    this.setCatCarryCursor(true);
+  }
+
+  clearCarriedCatVisual(entry, facing = 1) {
+    if (!entry?.container?.active) return;
+    const container = entry.container;
+    container.getData("catCarryBadge")?.destroy?.();
+    container.setData("catCarryBadge", null);
+    container.setAlpha(1);
+    container.setScale(facing === -1 ? -1 : 1, 1);
+    container.setInteractive(
+      new Phaser.Geom.Rectangle(CAT_HITBOX.x, CAT_HITBOX.y, CAT_HITBOX.width, CAT_HITBOX.height),
+      Phaser.Geom.Rectangle.Contains,
+    );
+    if (container.input) container.input.cursor = "pointer";
+    this.syncCatTextOverlays(container);
+  }
+
+  moveCarriedCat(pointer) {
+    const state = this.owner.carriedCat;
+    if (!state) return false;
+    const entry = this.roomCatEntries().find((candidate) => candidate.cat.id === state.catId);
+    if (!entry?.container?.active) return false;
+    const pointerX = Number(pointer?.worldX);
+    const pointerY = Number(pointer?.worldY);
+    const nextPointerX = Number.isFinite(pointerX) ? pointerX : Number(state.lastX || entry.container.x + 45);
+    const nextPointerY = Number.isFinite(pointerY) ? pointerY : Number(state.lastY || entry.container.y + 36);
+    state.lastX = nextPointerX;
+    state.lastY = nextPointerY;
+    entry.container.setPosition(
+      clamp(nextPointerX - 45, 38, GAME_WIDTH - 132),
+      clamp(nextPointerY - 36, 54, FLOOR_BOTTOM - 54),
+    );
+    entry.container.setDepth(CAT_INTERACTION_DEPTH + 260);
+    this.owner.catPositions.set(entry.cat.id, {
+      x: entry.container.x,
+      y: clamp(entry.container.y, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+      facing: state.facing === -1 ? -1 : 1,
+    });
+    return true;
+  }
+
+  restoreCarriedCat() {
+    const state = this.owner.carriedCat;
+    if (!state) return;
+    const entry = this.roomCatEntries().find((candidate) => candidate.cat.id === state.catId);
+    if (!entry?.container?.active) {
+      this.owner.carriedCat = null;
+      this.setCatCarryCursor(false);
+      return;
+    }
+    this.applyCarriedCatVisual(entry);
+    this.moveCarriedCat({ worldX: state.lastX, worldY: state.lastY });
+    this.drawCarryTargetIndicators();
+  }
+
+  drawCarryTargetIndicators() {
+    this.clearCarryTargetIndicators();
+    for (const [decorId, container] of this.decorContainers.entries()) {
+      const interaction = catDropInteractionFor(decorId);
+      const spec = DECOR_SPECS[decorId];
+      if (!interaction || !spec || !container?.active || container.getData("damaged")) continue;
+      const indicator = this.add.container(container.x, container.y);
+      indicator.setDepth(CAT_INTERACTION_DEPTH + 190);
+      const graphics = makeLocalGraphics(this, indicator);
+      graphics.fillStyle(0xfff07d, 0.14);
+      graphics.fillRect(-8, -8, spec.width + 16, spec.height + 16);
+      graphics.lineStyle(4, 0xfff07d, 0.96);
+      graphics.strokeRect(-8, -8, spec.width + 16, spec.height + 16);
+      const label = this.add
+        .text(spec.width / 2, -12, interaction.actionLabel, {
+          color: "#263047",
+          backgroundColor: "#fff07d",
+          fontFamily: "Consolas, monospace",
+          fontSize: "11px",
+          fontStyle: "bold",
+          padding: { x: 6, y: 3 },
+        })
+        .setOrigin(0.5, 1);
+      indicator.add(label);
+      this.tweens.add({
+        targets: indicator,
+        alpha: 0.58,
+        yoyo: true,
+        repeat: -1,
+        duration: 680,
+        ease: "Sine.easeInOut",
+      });
+      this.carryTargetIndicators.push(indicator);
+    }
+  }
+
+  clearCarryTargetIndicators() {
+    for (const indicator of this.carryTargetIndicators || []) {
+      this.tweens.killTweensOf(indicator);
+      indicator?.destroy?.();
+    }
+    this.carryTargetIndicators = [];
+  }
+
+  carriedDecorTargetAt(pointer) {
+    const x = Number(pointer?.worldX);
+    const y = Number(pointer?.worldY);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const candidates = [];
+    for (const [decorId, container] of this.decorContainers.entries()) {
+      const interaction = catDropInteractionFor(decorId);
+      const spec = DECOR_SPECS[decorId];
+      if (!interaction || !spec || !container?.active || container.getData("damaged")) continue;
+      const padding = 18;
+      if (
+        x >= container.x - padding
+        && x <= container.x + spec.width + padding
+        && y >= container.y - padding
+        && y <= container.y + spec.height + padding
+      ) {
+        candidates.push({
+          decorId,
+          interaction,
+          spec,
+          position: { x: container.x, y: container.y },
+          distance: Math.hypot(
+            x - (container.x + spec.width / 2),
+            y - (container.y + spec.height / 2),
+          ),
+        });
+      }
+    }
+    return candidates.sort((left, right) => left.distance - right.distance)[0] || null;
+  }
+
+  dropCarriedCat(pointer) {
+    const state = this.owner.carriedCat;
+    if (!state) return null;
+    const entry = this.roomCatEntries().find((candidate) => candidate.cat.id === state.catId);
+    if (!entry?.container?.active) {
+      this.owner.carriedCat = null;
+      this.clearCarryTargetIndicators();
+      this.setCatCarryCursor(false);
+      return null;
+    }
+    const target = this.carriedDecorTargetAt(pointer);
+    this.owner.carriedCat = null;
+    this.owner.ignoreRoomClickUntil = Date.now() + 360;
+    this.clearCarryTargetIndicators();
+    this.setCatCarryCursor(false);
+    this.clearCarriedCatVisual(entry, state.facing);
+    const result = target
+      ? this.placeCarriedCatOnDecor(entry, target)
+      : this.placeCarriedCatOnFloor(entry, pointer);
+    this.owner.handlers.onCatDrop?.(entry.cat, result);
+    return result;
+  }
+
+  cancelCarriedCat(options = {}) {
+    const state = this.owner.carriedCat;
+    if (!state) return null;
+    const entry = this.roomCatEntries().find((candidate) => candidate.cat.id === state.catId);
+    this.owner.carriedCat = null;
+    this.owner.ignoreRoomClickUntil = Date.now() + 260;
+    this.clearCarryTargetIndicators();
+    this.setCatCarryCursor(false);
+    if (entry?.container?.active) {
+      this.clearCarriedCatVisual(entry, state.facing);
+      entry.container.setPosition(state.originX, state.originY);
+      this.owner.catPositions.set(entry.cat.id, {
+        x: state.originX,
+        y: state.originY,
+        facing: state.facing,
+      });
+      this.resumeCatAutonomy(entry, "cat-carry");
+    }
+    const result = {
+      handled: true,
+      cancelled: true,
+      catId: state.catId,
+      message: `${entry?.cat?.label || "猫咪"}已放回原来的位置。`,
+    };
+    if (options.notify !== false) this.owner.handlers.onCatDrop?.(entry?.cat, result);
+    return result;
+  }
+
+  setCatCarryCursor(active) {
+    const cursor = active ? CAT_CARRY_CURSOR : "default";
+    this.input?.setDefaultCursor?.(cursor);
+    if (this.game?.canvas) {
+      if (active) this.game.canvas.style.cursor = cursor;
+      else this.game.canvas.style.removeProperty("cursor");
+    }
+  }
+
+  placeCarriedCatOnFloor(entry, pointer) {
+    const target = catFloorDropPosition(
+      { x: pointer?.worldX, y: pointer?.worldY },
+      { width: GAME_WIDTH, floorTop: FLOOR_TOP, floorBottom: FLOOR_BOTTOM },
+    );
+    const action = {
+      kind: "manual-floor",
+      itemId: "manual-floor",
+      target,
+      message: "这里不错，我先看看四周。",
+      expiresAt: Date.now() + 6500,
+    };
+    this.owner.catItemActions.set(entry.cat.id, action);
+    this.startManualFloorAction(entry, action);
+    return {
+      handled: true,
+      catId: entry.cat.id,
+      targetType: "floor",
+      message: `${entry.cat.label}已放到活动室地板上。`,
+    };
+  }
+
+  placeCarriedCatOnDecor(entry, target) {
+    const { decorId, interaction } = target;
+    if (decorId === "bubble-bathtub" && Number(this.owner.snapshot.inventory?.["cat-bath-kit"] || 0) > 0) {
+      const action = {
+        kind: "carried-bathtub",
+        itemId: decorId,
+        expiresAt: Date.now() + 18000,
+      };
+      this.owner.catItemActions.set(entry.cat.id, action);
+      this.startCarriedBathtubAction(entry, action);
+      return {
+        handled: true,
+        catId: entry.cat.id,
+        targetType: "decor",
+        itemId: decorId,
+        message: `${entry.cat.label}已放进泡泡浴缸，正在使用 1 套泡泡浴用品洗澡。`,
+      };
+    }
+    const noBathKit = decorId === "bubble-bathtub";
+    const action = {
+      kind: "manual-decor",
+      itemId: decorId,
+      message: noBathKit ? "浴缸里还没有泡泡浴用品，先在这里等一等。" : interaction.catMessage,
+      expiresAt: Date.now() + (noBathKit ? 5200 : interaction.holdMs),
+    };
+    this.owner.catItemActions.set(entry.cat.id, action);
+    this.startManualDecorAction(entry, action);
+    if (!noBathKit) {
+      const ambientKind = catLikesItem(entry.cat, decorId, "decor")
+        ? "favorite-decor"
+        : ["nap", "roll"].includes(interaction.behavior)
+          ? "rest-spot"
+          : "";
+      if (ambientKind) {
+        this.owner.handlers.onCatAmbient?.(entry.cat, {
+          kind: ambientKind,
+          itemId: decorId,
+          label: interaction.label,
+        });
+      }
+    }
+    return {
+      handled: true,
+      catId: entry.cat.id,
+      targetType: "decor",
+      itemId: decorId,
+      message: noBathKit
+        ? `${entry.cat.label}已放到浴缸旁，但背包里没有泡泡浴套装。`
+        : `${entry.cat.label}已放到${interaction.label}，开始${interaction.actionLabel}互动。`,
+    };
+  }
+
+  startManualFloorAction(entry, action) {
+    if (!entry?.container?.active) return;
+    this.interruptCatAutonomy(entry, action.itemId);
+    const target = action.target || { x: entry.container.x, y: entry.container.y };
+    this.tweens.add({
+      targets: entry.container,
+      x: target.x,
+      y: target.y - 18,
+      duration: 220,
+      ease: "Quad.easeOut",
+      onComplete: () => {
+        if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
+        this.tweens.add({
+          targets: entry.container,
+          y: target.y,
+          duration: 250,
+          ease: "Bounce.easeOut",
+          onComplete: () => {
+            if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
+            this.owner.catPositions.set(entry.cat.id, {
+              x: target.x,
+              y: target.y,
+              facing: entry.container.scaleX < 0 ? -1 : 1,
+            });
+            this.spawnCatBubble(entry.container, entry.cat, action.message);
+            this.holdCatInteraction(entry, action.itemId, Math.max(action.expiresAt - Date.now(), 500));
+          },
+        });
+      },
+    });
+  }
+
+  startManualDecorAction(entry, action) {
+    const interaction = catDropInteractionFor(action.itemId);
+    const spec = DECOR_SPECS[action.itemId];
+    const decor = this.decorContainers.get(action.itemId);
+    if (!entry?.container?.active || !interaction || !spec || !decor?.active) return;
+    const target = catDecorDropPosition(
+      interaction,
+      { x: decor.x, y: decor.y },
+      spec,
+      { width: GAME_WIDTH, floorBottom: FLOOR_BOTTOM },
+    );
+    this.interruptCatAutonomy(entry, action.itemId);
+    this.turnCat(entry.container, target.x);
+    this.tweens.add({
+      targets: entry.container,
+      x: target.x,
+      y: target.y - 22,
+      duration: 260,
+      ease: "Quad.easeOut",
+      onComplete: () => {
+        if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
+        this.tweens.add({
+          targets: entry.container,
+          y: target.y,
+          duration: 270,
+          ease: "Bounce.easeOut",
+          onComplete: () => {
+            if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
+            this.owner.catPositions.set(entry.cat.id, {
+              x: target.x,
+              y: target.y,
+              facing: entry.container.scaleX < 0 ? -1 : 1,
+            });
+            this.spawnCatBubble(entry.container, entry.cat, action.message || interaction.catMessage);
+            this.holdCatInteraction(entry, action.itemId, Math.max(action.expiresAt - Date.now(), 500));
+          },
+        });
+      },
+    });
+  }
+
+  startCarriedBathtubAction(entry, action) {
+    const interaction = catDropInteractionFor(action.itemId);
+    const spec = DECOR_SPECS[action.itemId];
+    const decor = this.decorContainers.get(action.itemId);
+    if (!entry?.container?.active || !interaction || !spec || !decor?.active) return;
+    const target = catDecorDropPosition(
+      interaction,
+      { x: decor.x, y: decor.y },
+      spec,
+      { width: GAME_WIDTH, floorBottom: FLOOR_BOTTOM },
+    );
+    this.interruptCatAutonomy(entry, action.itemId);
+    this.turnCat(entry.container, target.x);
+    this.tweens.add({
+      targets: entry.container,
+      x: target.x,
+      y: target.y - 24,
+      duration: 260,
+      ease: "Quad.easeOut",
+      onComplete: () => {
+        if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
+        this.tweens.add({
+          targets: entry.container,
+          y: target.y,
+          duration: 260,
+          ease: "Bounce.easeOut",
+          onComplete: () => {
+            if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
+            const overlay = this.createBathtubBubbleOverlay({ x: decor.x, y: decor.y }, spec, entry.index);
+            this.spawnCatBubble(entry.container, entry.cat, interaction.catMessage);
+            const timer = this.time.delayedCall(2800, () => {
+              overlay?.destroy?.();
+              if (this.owner.catItemActions.get(entry.cat.id) !== action) return;
+              this.owner.catItemActions.delete(entry.cat.id);
+              const result = this.owner.handlers.onBathtubBath?.({
+                catId: entry.cat.id,
+                catLabel: entry.cat.label,
+                decorId: action.itemId,
+              });
+              Promise.resolve(result).finally(() => {
+                const currentEntry = this.roomCatEntries().find((candidate) => candidate.cat.id === entry.cat.id);
+                if (
+                  currentEntry?.container?.active
+                  && currentEntry.container.getData("interactionItemId") === action.itemId
+                ) {
+                  this.resumeCatAutonomy(currentEntry, action.itemId);
+                }
+              });
+            });
+            entry.container.setData("interactionTimer", timer);
+          },
+        });
+      },
+    });
   }
 
   favoriteCatEntries(itemId, itemKind) {
@@ -1703,11 +2203,22 @@ class CatWorldScene extends Phaser.Scene {
 
     for (const [catId, action] of [...this.owner.catItemActions.entries()]) {
       const entry = entries.get(catId);
-      if (!entry?.behavior.canWalk || Number(action.expiresAt || 0) <= Date.now()) {
+      if (!entry || Number(action.expiresAt || 0) <= Date.now()) {
         this.owner.catItemActions.delete(catId);
         continue;
       }
-      if (action.kind === "lamp" && this.owner.itemInteractionStates.get(action.itemId)?.active) {
+      if (this.owner.carriedCat?.catId === catId) {
+        continue;
+      }
+      if (action.kind === "manual-floor") {
+        this.startManualFloorAction(entry, action);
+      } else if (action.kind === "manual-decor") {
+        this.startManualDecorAction(entry, action);
+      } else if (action.kind === "carried-bathtub") {
+        this.startCarriedBathtubAction(entry, action);
+      } else if (!entry.behavior.canWalk) {
+        this.owner.catItemActions.delete(catId);
+      } else if (action.kind === "lamp" && this.owner.itemInteractionStates.get(action.itemId)?.active) {
         this.startLampFavoriteAction(entry, action.itemId, action);
       } else if (action.kind === "desk") {
         this.startDeskFavoriteAction(entry, action.itemId, action);
@@ -2102,12 +2613,14 @@ class CatWorldScene extends Phaser.Scene {
     zone.setData("id", itemId);
     zone.setInteractive(new Phaser.Geom.Rectangle(0, 0, width, height), Phaser.Geom.Rectangle.Contains);
     zone.on("pointerdown", (pointer, _localX, _localY, event) => {
+      if (this.handleCarriedCatPointerDown(pointer, event)) return;
       this.startCameraPan(pointer);
       this.stopPointerEvent(event);
     });
     zone.on("pointerup", (pointer, _localX, _localY, event) => {
       const wasPanning = this.finishCameraPan(pointer);
       this.stopPointerEvent(event);
+      if (this.shouldSuppressRoomClick()) return;
       if (wasPanning) return;
       this.owner.handlers.onToyClick?.(itemId);
     });
@@ -3113,6 +3626,8 @@ export class CatWorldGame {
     this.catReactions = new Map();
     this.catItemActions = new Map();
     this.itemInteractionStates = new Map();
+    this.carriedCat = null;
+    this.ignoreRoomClickUntil = 0;
     this.cameraScrollX = 0;
     this.cameraDragMoved = false;
     this.cameraPanActive = false;
@@ -3153,6 +3668,7 @@ export class CatWorldGame {
     applySceneConfig(this.snapshot.scene);
     this.layout = cloneLayout(this.snapshot.layout);
     if (sceneChanged) {
+      this.game.scene.getScene("CatWorldScene")?.cancelCarriedCat({ notify: false });
       this.catPositions.clear();
       this.cameraScrollX = sceneInitialScroll(this.snapshot.scene);
     }
@@ -3170,6 +3686,10 @@ export class CatWorldGame {
 
   showCatReaction(catId, message) {
     return Boolean(this.game.scene.getScene("CatWorldScene")?.showCatReaction(catId, message));
+  }
+
+  cancelCatCarry() {
+    return this.game.scene.getScene("CatWorldScene")?.cancelCarriedCat() || null;
   }
 
   canPan() {
@@ -3192,6 +3712,7 @@ export class CatWorldGame {
   }
 
   destroy() {
+    this.game?.scene?.getScene("CatWorldScene")?.cancelCarriedCat({ notify: false });
     this.game?.scene?.getScene("CatWorldScene")?.stopFeatherWandMode({ notify: false, resume: false });
     this.catReactions.clear();
     this.catItemActions.clear();

@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  catDecorDropPosition,
+  catDropInteractionFor,
+  catFloorDropPosition,
   catLikesItem,
   floorDropPosition,
   interactionMoveDuration,
@@ -17,6 +20,13 @@ test("interactive room items use the expected controlled behavior", () => {
   assert.equal(itemInteractionFor("feather-wand", "decor"), null);
 });
 
+test("carried cats recognize furniture drop interactions", () => {
+  assert.equal(catDropInteractionFor("bubble-bathtub")?.behavior, "bathe");
+  assert.equal(catDropInteractionFor("study-desk")?.behavior, "perch");
+  assert.equal(catDropInteractionFor("felt-cat-bed")?.behavior, "nap");
+  assert.equal(catDropInteractionFor("word-gallery"), null);
+});
+
 test("floor drop positions a held toy around the clicked floor point", () => {
   assert.deepEqual(
     floorDropPosition(
@@ -25,6 +35,37 @@ test("floor drop positions a held toy around the clicked floor point", () => {
       { width: 2560, floorTop: 260, floorBottom: 522, border: 12 },
     ),
     { x: 1412, y: 348 },
+  );
+});
+
+test("carried cats stay inside the walkable floor when dropped", () => {
+  assert.deepEqual(
+    catFloorDropPosition(
+      { x: 4, y: 900 },
+      { width: 1600, floorTop: 260, floorBottom: 522 },
+    ),
+    { x: 38, y: 452 },
+  );
+});
+
+test("decor drop positions use each furniture interaction anchor", () => {
+  assert.deepEqual(
+    catDecorDropPosition(
+      catDropInteractionFor("bubble-bathtub"),
+      { x: 940, y: 332 },
+      { width: 180, height: 108 },
+      { width: 1600, floorBottom: 522 },
+    ),
+    { x: 982, y: 398 },
+  );
+  assert.deepEqual(
+    catDecorDropPosition(
+      catDropInteractionFor("study-desk"),
+      { x: 496, y: 348 },
+      { width: 200, height: 96 },
+      { width: 1600, floorBottom: 522 },
+    ),
+    { x: 548, y: 300 },
   );
 });
 
