@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
 import {
+  ArrowRightLeft,
   Award,
   BookOpen,
   CalendarDays,
@@ -33,6 +34,10 @@ const notice = ref("");
 const transcriptEnd = ref(null);
 const replaySession = ref(null);
 const replayBusy = ref(0);
+const selectedStage = ref("pro");
+const replayStage = ref("pro");
+const showRoleSwitch = ref(false);
+const acknowledgedRoleSwitchSession = ref(0);
 
 watch(
   () => props.data,
@@ -68,10 +73,35 @@ const currentStageRound = computed(() => Number(
   || ((Math.max(Number(session.value?.turnCount || 0), 0) % roundsPerSide.value) + 1),
 ));
 const finalReview = computed(() => session.value?.finalFeedback || {});
+const visibleTranscript = computed(() => (session.value?.transcript || []).filter(
+  (entry) => stageForEntry(entry, session.value) === selectedStage.value,
+));
+const replayTranscript = computed(() => (replaySession.value?.transcript || []).filter(
+  (entry) => stageForEntry(entry, replaySession.value) === replayStage.value,
+));
+const selectedStageIsCurrent = computed(() => selectedStage.value === session.value?.currentUserStance);
 
 function applyPayload(value) {
   payload.value = value || {};
   if (value?.session?.level) selectedLevel.value = value.session.level;
+  const nextSession = value?.session;
+  if (!nextSession) {
+    selectedStage.value = "pro";
+    showRoleSwitch.value = false;
+    return;
+  }
+  if (nextSession.status === "active") {
+    selectedStage.value = Number(nextSession.turnCount || 0) >= Number(nextSession.roundsPerSide || 10)
+      ? "con"
+      : "pro";
+    showRoleSwitch.value = (
+      Number(nextSession.turnCount || 0) === Number(nextSession.roundsPerSide || 10)
+      && acknowledgedRoleSwitchSession.value !== Number(nextSession.id || 0)
+    );
+  } else {
+    selectedStage.value = "con";
+    showRoleSwitch.value = false;
+  }
 }
 
 function scoreProgress(value, maximum) {
@@ -98,6 +128,13 @@ function entryMaxPoints(source) {
   return Number(source?.scoringVersion || 1) >= 2
     ? Number(source?.turnMaxPoints || rules.value.turnMaxPoints || 10)
     : 30;
+}
+
+function stageForEntry(entry, source) {
+  const sideRounds = Number(source?.scoringVersion || 1) >= 2
+    ? Number(source?.roundsPerSide || rules.value.roundsPerSide || 10)
+    : 1;
+  return Number(entry?.round || 1) <= sideRounds ? "pro" : "con";
 }
 
 function entryStageRound(entry, source) {
@@ -192,6 +229,7 @@ async function openReplay(item) {
   try {
     const response = await fetchJson(routeApiPaths.debateSession(item.id));
     replaySession.value = response?.session || null;
+    replayStage.value = "pro";
   } catch (error) {
     notice.value = error.message || "The debate record could not be opened.";
   } finally {
@@ -201,6 +239,18 @@ async function openReplay(item) {
 
 function closeReplay() {
   replaySession.value = null;
+}
+
+function selectStage(stage) {
+  if (stage === "con" && Number(session.value?.turnCount || 0) < roundsPerSide.value) return;
+  selectedStage.value = stage;
+}
+
+function confirmRoleSwitch() {
+  acknowledgedRoleSwitchSession.value = Number(session.value?.id || 0);
+  selectedStage.value = "con";
+  showRoleSwitch.value = false;
+  notice.value = "现在你是反方，AI 是正方。请从反方角度提出新的理由或反驳。";
 }
 </script>
 
@@ -293,9 +343,34 @@ function closeReplay() {
           <em :class="['debate-status', session.status]">{{ session.statusLabel }}</em>
         </header>
 
-        <div v-if="session.transcript.length" class="debate-transcript" aria-live="polite">
+        <nav class="debate-stage-tabs" aria-label="Debate stage conversations">
+          <button
+            type="button"
+            :class="{ active: selectedStage === 'pro' }"
+            :aria-pressed="selectedStage === 'pro'"
+            @click="selectStage('pro')"
+          >
+            <span>PRO Dialog</span>
+            <strong>{{ proPoints }} / 100</strong>
+            <small>{{ Math.min(session.turnCount, roundsPerSide) }} / {{ roundsPerSide }} rounds</small>
+          </button>
+          <button
+            type="button"
+            :class="{ active: selectedStage === 'con' }"
+            :aria-pressed="selectedStage === 'con'"
+            :disabled="active && session.turnCount < roundsPerSide"
+            @click="selectStage('con')"
+          >
+            <span>CON Dialog</span>
+            <strong>{{ conPoints }} / 100</strong>
+            <small v-if="active && session.turnCount < roundsPerSide">Unlocks after PRO Round 10</small>
+            <small v-else>{{ Math.max(Math.min(session.turnCount - roundsPerSide, roundsPerSide), 0) }} / {{ roundsPerSide }} rounds</small>
+          </button>
+        </nav>
+
+        <div v-if="visibleTranscript.length" class="debate-transcript" aria-live="polite">
           <article
-            v-for="(entry, index) in session.transcript"
+            v-for="(entry, index) in visibleTranscript"
             :key="`${entry.round}-${entry.role}-${index}`"
             :class="['debate-message', entry.role]"
           >
@@ -322,13 +397,13 @@ function closeReplay() {
         </div>
         <div v-else class="debate-opening">
           <MessageSquareQuote :size="30" />
-          <strong>{{ stanceText }} Round {{ currentStageRound }} / {{ roundsPerSide }}</strong>
-          <span v-if="stanceText === 'PRO'">Support the motion with a clear reason or example.</span>
-          <span v-else>Challenge the motion and respond from the opposite side.</span>
+          <strong>{{ selectedStage === "pro" ? "PRO" : "CON" }} Dialog</strong>
+          <span v-if="selectedStage === 'pro'">Support the motion with a clear reason or example.</span>
+          <span v-else>This is a fresh conversation. Challenge the motion from the CON side.</span>
         </div>
 
-        <form v-if="active" class="debate-turn-form" @submit.prevent="submitTurn">
-          <label for="debate-argument">Your argument</label>
+        <form v-if="active && selectedStageIsCurrent" class="debate-turn-form" @submit.prevent="submitTurn">
+          <label for="debate-argument">{{ stanceText }} Round {{ currentStageRound }} / {{ roundsPerSide }} · Your argument</label>
           <textarea
             id="debate-argument"
             v-model="argument"
@@ -345,6 +420,12 @@ function closeReplay() {
             </button>
           </div>
         </form>
+        <div v-else-if="active" class="debate-stage-return">
+          <span>You are reviewing the {{ selectedStage === "pro" ? "PRO" : "CON" }} dialog.</span>
+          <button type="button" class="secondary-button" @click="selectStage(session.currentUserStance)">
+            Continue {{ stanceText }} Round {{ currentStageRound }}
+          </button>
+        </div>
       </section>
 
       <section v-if="completed" class="debate-result completed">
@@ -387,6 +468,30 @@ function closeReplay() {
         </div>
       </section>
     </template>
+
+    <div v-if="showRoleSwitch && session" class="debate-role-switch-backdrop">
+      <article class="debate-role-switch-dialog" role="dialog" aria-modal="true" aria-labelledby="debate-role-switch-title">
+        <div class="debate-role-switch-icon" aria-hidden="true">
+          <ArrowRightLeft :size="30" />
+        </div>
+        <span class="eyebrow">ROLE SWITCH</span>
+        <h2 id="debate-role-switch-title">PRO stage complete</h2>
+        <p>正方 10 回合已经完成。接下来请切换立场，从反方角度重新思考同一个辩题。</p>
+        <div class="debate-role-switch-sides">
+          <span><small>Your completed role</small><strong>PRO · {{ proPoints }} / 100</strong></span>
+          <ArrowRightLeft :size="22" aria-hidden="true" />
+          <span><small>Your new role</small><strong>CON · Round 1 / 10</strong></span>
+        </div>
+        <div class="debate-role-switch-note">
+          <strong>You argue CON</strong>
+          <span>AI now argues PRO. Your CON dialog starts clean, and the PRO dialog remains available for review.</span>
+        </div>
+        <button class="primary-action-button" type="button" @click="confirmRoleSwitch">
+          <Swords :size="19" />
+          Start CON Round 1
+        </button>
+      </article>
+    </div>
 
     <section v-if="history.length" class="debate-history panel">
       <header>
@@ -440,9 +545,30 @@ function closeReplay() {
           <strong v-else-if="replaySession.status === 'completed'">{{ replaySession.finalScore }} / 100</strong>
         </div>
 
+        <nav class="debate-stage-tabs compact" aria-label="Replay debate stage conversations">
+          <button
+            type="button"
+            :class="{ active: replayStage === 'pro' }"
+            :aria-pressed="replayStage === 'pro'"
+            @click="replayStage = 'pro'"
+          >
+            <span>PRO Dialog</span>
+            <strong v-if="replaySession.scoringVersion >= 2">{{ replaySession.proPoints }} / 100</strong>
+          </button>
+          <button
+            type="button"
+            :class="{ active: replayStage === 'con' }"
+            :aria-pressed="replayStage === 'con'"
+            @click="replayStage = 'con'"
+          >
+            <span>CON Dialog</span>
+            <strong v-if="replaySession.scoringVersion >= 2">{{ replaySession.conPoints }} / 100</strong>
+          </button>
+        </nav>
+
         <section class="debate-replay-transcript">
           <article
-            v-for="(entry, index) in replaySession.transcript"
+            v-for="(entry, index) in replayTranscript"
             :key="`${entry.round}-${entry.role}-${index}`"
             :class="['debate-message', entry.role]"
           >
@@ -465,7 +591,7 @@ function closeReplay() {
               <span><strong>{{ entry.highlight }}</strong>{{ entry.coachNote }}</span>
             </aside>
           </article>
-          <p v-if="!replaySession.transcript.length" class="debate-replay-empty">No arguments have been submitted yet.</p>
+          <p v-if="!replayTranscript.length" class="debate-replay-empty">No arguments were submitted in this stage.</p>
         </section>
 
         <footer v-if="replaySession.finalFeedback?.summary">

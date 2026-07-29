@@ -15432,6 +15432,81 @@ select {
   background: #fff7e4;
 }
 
+.debate-stage-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.debate-stage-tabs button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 12px;
+  min-width: 0;
+  min-height: 68px;
+  border: 2px solid #d2ddd7;
+  border-radius: 7px;
+  padding: 10px 12px;
+  color: var(--muted);
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.debate-stage-tabs button:last-child {
+  border-color: #eadbb9;
+  background: #fffcf5;
+}
+
+.debate-stage-tabs button.active {
+  border-color: #1d7f5b;
+  color: var(--accent-dark);
+  background: #eef9f3;
+  box-shadow: inset 0 -4px 0 #1d7f5b;
+}
+
+.debate-stage-tabs button:last-child.active {
+  border-color: #d68a0d;
+  color: #805409;
+  background: #fff8e8;
+  box-shadow: inset 0 -4px 0 #d68a0d;
+}
+
+.debate-stage-tabs button:disabled {
+  border-color: #dce3df;
+  color: #8d9a94;
+  background: #f3f5f4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.debate-stage-tabs button span,
+.debate-stage-tabs button strong,
+.debate-stage-tabs button small {
+  min-width: 0;
+}
+
+.debate-stage-tabs button span {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.debate-stage-tabs button strong {
+  color: var(--ink);
+  font-size: 17px;
+  white-space: nowrap;
+}
+
+.debate-stage-tabs button small {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.debate-stage-tabs.compact button {
+  min-height: 52px;
+}
+
 .debate-transcript {
   display: grid;
   gap: 14px;
@@ -15610,6 +15685,118 @@ select {
   align-items: center;
   gap: 8px;
   min-width: 190px;
+}
+
+.debate-stage-return {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 2px solid #243746;
+  padding-top: 16px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.debate-role-switch-backdrop {
+  position: fixed;
+  z-index: 1250;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 29, 38, 0.7);
+}
+
+.debate-role-switch-dialog {
+  display: grid;
+  justify-items: center;
+  gap: 13px;
+  width: min(560px, 100%);
+  border: 3px solid #243746;
+  border-top: 8px solid #d68a0d;
+  border-radius: 8px;
+  padding: 24px;
+  color: var(--ink);
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 29, 38, 0.36);
+  text-align: center;
+}
+
+.debate-role-switch-icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border: 2px solid #d68a0d;
+  border-radius: 50%;
+  color: #8a5907;
+  background: #fff4d9;
+}
+
+.debate-role-switch-dialog h2 {
+  margin: 0;
+  font-size: 27px;
+}
+
+.debate-role-switch-dialog > p {
+  max-width: 480px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.debate-role-switch-sides {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.debate-role-switch-sides > span {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #c8d9d0;
+  border-radius: 6px;
+  padding: 11px;
+  color: var(--accent-dark);
+  background: #f2faf6;
+}
+
+.debate-role-switch-sides > span:last-child {
+  border-color: #e4cc97;
+  color: #805409;
+  background: #fff8e8;
+}
+
+.debate-role-switch-sides small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.debate-role-switch-note {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border-left: 5px solid #d68a0d;
+  padding: 10px 12px;
+  color: #5f5135;
+  background: #fffaf0;
+  text-align: left;
+}
+
+.debate-role-switch-note span {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.debate-role-switch-dialog > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 210px;
 }
 
 .debate-result {
@@ -16098,6 +16285,32 @@ select {
 
   .debate-message {
     width: 96%;
+  }
+
+  .debate-stage-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .debate-stage-return {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .debate-role-switch-dialog {
+    padding: 19px 15px;
+  }
+
+  .debate-role-switch-sides {
+    grid-template-columns: 1fr;
+  }
+
+  .debate-role-switch-sides > svg {
+    transform: rotate(90deg);
+  }
+
+  .debate-role-switch-dialog > button {
+    width: 100%;
+    min-width: 0;
   }
 
   .debate-dimension-row {
