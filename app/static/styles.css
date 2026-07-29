@@ -15184,6 +15184,50 @@ select {
   font-weight: 800;
 }
 
+.debate-viewpoint-map {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.debate-viewpoint-map > div {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  border-left: 5px solid #1d7f5b;
+  padding: 11px 14px;
+  background: #eef9f3;
+}
+
+.debate-viewpoint-map > div.con {
+  border-left-color: #d68a0d;
+  background: #fff8e8;
+}
+
+.debate-viewpoint-map span {
+  color: var(--accent-dark);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.debate-viewpoint-map .con span {
+  color: #805409;
+}
+
+.debate-viewpoint-map strong {
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.debate-viewpoint-map p {
+  margin: 0;
+  color: #486274;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
 .debate-two-round-plan {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -15507,6 +15551,33 @@ select {
   min-height: 52px;
 }
 
+.debate-current-viewpoint {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 6px 12px;
+  border-left: 5px solid #1d7f5b;
+  padding: 10px 12px;
+  color: #486274;
+  background: #eef9f3;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.debate-current-viewpoint.con {
+  border-left-color: #d68a0d;
+  background: #fff8e8;
+}
+
+.debate-current-viewpoint strong {
+  color: var(--accent-dark);
+  white-space: nowrap;
+}
+
+.debate-current-viewpoint.con strong {
+  color: #805409;
+}
+
 .debate-transcript {
   display: grid;
   gap: 14px;
@@ -15790,6 +15861,13 @@ select {
 .debate-role-switch-note span {
   font-size: 13px;
   line-height: 1.55;
+}
+
+.debate-role-switch-note small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
 }
 
 .debate-role-switch-dialog > button {
@@ -16248,7 +16326,8 @@ select {
 
   .debate-setup-controls,
   .debate-stance-picker > div,
-  .debate-two-round-plan {
+  .debate-two-round-plan,
+  .debate-viewpoint-map {
     grid-template-columns: 1fr;
   }
 
@@ -16288,6 +16367,10 @@ select {
   }
 
   .debate-stage-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .debate-current-viewpoint {
     grid-template-columns: 1fr;
   }
 

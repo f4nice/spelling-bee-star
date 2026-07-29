@@ -144,6 +144,21 @@ function entryStageRound(entry, source) {
   return ((Math.max(Number(entry?.round || 1), 1) - 1) % sideRounds) + 1;
 }
 
+function viewpointFor(stage, topic = currentTopic.value) {
+  const hints = Array.isArray(topic?.hints) ? topic.hints : [];
+  const focus = String(hints[stage === "con" ? 1 : 0] || "")
+    .trim()
+    .replace(/[.!?]+$/, "");
+  if (stage === "con") {
+    return focus
+      ? `Oppose the motion. Focus on ${focus}.`
+      : "Oppose the motion. Explain its risks, limits, or fair alternatives.";
+  }
+  return focus
+    ? `Support the motion. Focus on ${focus}.`
+    : "Support the motion. Explain how it could help students or families.";
+}
+
 function dimensionRows(entry, source) {
   const dimensions = entry?.dimensions || {};
   const legacyDimensions = [
@@ -293,8 +308,18 @@ function confirmRoleSwitch() {
       <div class="debate-daily-topic">
         <span>{{ currentTopic.category || "Today's motion" }}</span>
         <h2>{{ currentTopic.title }}</h2>
-        <div class="debate-topic-hints">
-          <span v-for="hint in currentTopic.hints || []" :key="hint">{{ hint }}</span>
+      </div>
+
+      <div class="debate-viewpoint-map" aria-label="PRO and CON viewpoints">
+        <div class="pro">
+          <span>PRO VIEWPOINT</span>
+          <strong>Support the motion</strong>
+          <p>{{ viewpointFor("pro", currentTopic) }}</p>
+        </div>
+        <div class="con">
+          <span>CON VIEWPOINT</span>
+          <strong>Oppose the motion</strong>
+          <p>{{ viewpointFor("con", currentTopic) }}</p>
         </div>
       </div>
 
@@ -343,6 +368,19 @@ function confirmRoleSwitch() {
           <em :class="['debate-status', session.status]">{{ session.statusLabel }}</em>
         </header>
 
+        <div class="debate-viewpoint-map" aria-label="PRO and CON viewpoints">
+          <div class="pro">
+            <span>PRO VIEWPOINT</span>
+            <strong>Support the motion</strong>
+            <p>{{ viewpointFor("pro", session.topic) }}</p>
+          </div>
+          <div class="con">
+            <span>CON VIEWPOINT</span>
+            <strong>Oppose the motion</strong>
+            <p>{{ viewpointFor("con", session.topic) }}</p>
+          </div>
+        </div>
+
         <nav class="debate-stage-tabs" aria-label="Debate stage conversations">
           <button
             type="button"
@@ -367,6 +405,11 @@ function confirmRoleSwitch() {
             <small v-else>{{ Math.max(Math.min(session.turnCount - roundsPerSide, roundsPerSide), 0) }} / {{ roundsPerSide }} rounds</small>
           </button>
         </nav>
+
+        <div :class="['debate-current-viewpoint', selectedStage]">
+          <strong>Your {{ selectedStage === "pro" ? "PRO" : "CON" }} viewpoint</strong>
+          <span>{{ viewpointFor(selectedStage, session.topic) }}</span>
+        </div>
 
         <div v-if="visibleTranscript.length" class="debate-transcript" aria-live="polite">
           <article
@@ -483,8 +526,9 @@ function confirmRoleSwitch() {
           <span><small>Your new role</small><strong>CON · Round 1 / 10</strong></span>
         </div>
         <div class="debate-role-switch-note">
-          <strong>You argue CON</strong>
-          <span>AI now argues PRO. Your CON dialog starts clean, and the PRO dialog remains available for review.</span>
+          <strong>Your CON viewpoint</strong>
+          <span>{{ viewpointFor("con", session.topic) }}</span>
+          <small>AI now argues PRO. Your CON dialog starts clean, and the PRO dialog remains available for review.</small>
         </div>
         <button class="primary-action-button" type="button" @click="confirmRoleSwitch">
           <Swords :size="19" />
@@ -565,6 +609,11 @@ function confirmRoleSwitch() {
             <strong v-if="replaySession.scoringVersion >= 2">{{ replaySession.conPoints }} / 100</strong>
           </button>
         </nav>
+
+        <div :class="['debate-current-viewpoint', replayStage]">
+          <strong>{{ replayStage === "pro" ? "PRO" : "CON" }} viewpoint</strong>
+          <span>{{ viewpointFor(replayStage, replaySession.topic) }}</span>
+        </div>
 
         <section class="debate-replay-transcript">
           <article
