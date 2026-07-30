@@ -15053,6 +15053,15 @@ select {
   font-weight: 800;
 }
 
+.admin-play-time-grant-panel {
+  border-color: rgba(29, 84, 127, 0.22);
+  background: #f3f9ff;
+}
+
+.admin-play-time-grant-panel strong {
+  color: #174f73;
+}
+
 .admin-cat-world-operations-panel {
   display: grid;
   gap: 14px;

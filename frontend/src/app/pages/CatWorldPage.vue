@@ -203,9 +203,11 @@ const playTimeRemainingSeconds = computed(() =>
 const playTimeClock = computed(() => formatCatWorldPlayTime(playTimeRemainingSeconds.value));
 const playTimeProgressLabel = computed(() => {
   const count = Math.max(Number(playTime.value.spellingCount || 0), 0);
-  if (count < 100) return `还差 ${100 - count} 词解锁 10 分钟`;
-  if (count < 200) return `已解锁 10 分钟 · 再拼 ${200 - count} 词`;
-  return "今日已解锁 20 分钟";
+  const rewardMinutes = Math.max(Number(playTime.value.rewardMinutes || 0), 0);
+  let learningLabel = "今日已解锁 20 分钟";
+  if (count < 100) learningLabel = `还差 ${100 - count} 词解锁 10 分钟`;
+  else if (count < 200) learningLabel = `已解锁 10 分钟 · 再拼 ${200 - count} 词`;
+  return rewardMinutes > 0 ? `${learningLabel} · 奖励 +${rewardMinutes} 分钟` : learningLabel;
 });
 const playTimeCardState = computed(() => {
   if (Number(playTime.value.earnedSeconds || 0) <= 0) return "waiting";

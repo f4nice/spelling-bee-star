@@ -30,6 +30,13 @@ const catGenderWeightDrafts = ref({
 });
 const energyGrantDraft = ref({ reason: "", amount: 100, password: "" });
 const grantingCatWorldEnergy = ref(false);
+const playTimeRewards = ref(props.data.catWorldPlayTimeRewards || {
+  minutes: 0,
+  grantCount: 0,
+  latestReason: "",
+});
+const playTimeGrantDraft = ref({ reason: "", minutes: 10, password: "" });
+const grantingCatWorldPlayTime = ref(false);
 const priceDrafts = ref(
   Object.fromEntries((catWorldPricing.value.items || []).map((item) => [item.id, Number(item.cost || 0)])),
 );
@@ -384,6 +391,41 @@ async function grantCatWorldEnergy() {
   }
 }
 
+async function grantCatWorldPlayTime() {
+  const reason = playTimeGrantDraft.value.reason.trim();
+  const minutes = Math.round(Number(playTimeGrantDraft.value.minutes));
+  const password = playTimeGrantDraft.value.password.trim();
+  if (reason.length < 2) {
+    notice.value = "请填写至少 2 个字的陪伴时间奖励理由。";
+    return;
+  }
+  if (!Number.isFinite(minutes) || minutes < 1 || minutes > 1440) {
+    notice.value = "陪伴时间奖励需要在 1 到 1440 分钟之间。";
+    return;
+  }
+  if (!password) {
+    notice.value = "请输入当前后台账号的登录密码。";
+    return;
+  }
+  grantingCatWorldPlayTime.value = true;
+  notice.value = "";
+  try {
+    const result = await fetchJson(routeApiPaths.adminCatWorldPlayTimeGrant(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason, minutes, password }),
+    });
+    const grant = result.grant || {};
+    playTimeRewards.value = result.playTimeRewards || playTimeRewards.value;
+    notice.value = `奖励“${grant.reason || reason}”已增加 ${grant.minutes || minutes} 分钟陪伴时间。`;
+    playTimeGrantDraft.value = { reason: "", minutes: 10, password: "" };
+  } catch (error) {
+    notice.value = error.message || "陪伴时间奖励发放失败。";
+  } finally {
+    grantingCatWorldPlayTime.value = false;
+  }
+}
+
 async function resetCatWorldData() {
   const password = catWorldResetPassword.value.trim();
   if (!password) {
@@ -400,8 +442,9 @@ async function resetCatWorldData() {
     });
     applyCatWorldPricing(result.catWorldPricing);
     const deleted = result.deleted || {};
-    notice.value = `猫咪世界测试数据已清零：状态 ${deleted.state || 0} 条，猫咪个体 ${deleted.profiles || 0} 只，每日日志 ${deleted.dailyLogs || 0} 条，运营能量 ${deleted.energyGrants || 0} 条。`;
+    notice.value = `猫咪世界测试数据已清零：状态 ${deleted.state || 0} 条，猫咪个体 ${deleted.profiles || 0} 只，每日日志 ${deleted.dailyLogs || 0} 条，运营能量 ${deleted.energyGrants || 0} 条，时间奖励 ${deleted.playTimeGrants || 0} 条。`;
     catWorldResetPassword.value = "";
+    playTimeRewards.value = { minutes: 0, grantCount: 0, latestReason: "" };
   } catch (error) {
     notice.value = error.message || "猫咪世界清零失败。";
   } finally {
@@ -783,6 +826,41 @@ async function resetCatWorldData() {
             </label>
             <button class="challenge-button compact-button" type="button" :disabled="grantingCatWorldEnergy" @click="grantCatWorldEnergy">
               {{ grantingCatWorldEnergy ? "发放中..." : "确认增加能量" }}
+            </button>
+          </section>
+
+          <section class="admin-energy-grant-panel admin-play-time-grant-panel">
+            <div>
+              <strong>陪伴倒计时奖励</strong>
+              <p>
+                为当前账号增加当天可用陪伴时间；今日已奖励 {{ playTimeRewards.minutes || 0 }} 分钟。
+                <template v-if="playTimeRewards.latestReason">最近：{{ playTimeRewards.latestReason }}</template>
+              </p>
+            </div>
+            <label>
+              <span>奖励理由</span>
+              <input v-model="playTimeGrantDraft.reason" type="text" maxlength="120" placeholder="例如：完成本周阅读计划">
+            </label>
+            <label>
+              <span>奖励分钟</span>
+              <input v-model.number="playTimeGrantDraft.minutes" type="number" min="1" max="1440" step="5">
+            </label>
+            <label>
+              <span>登录密码</span>
+              <input
+                v-model="playTimeGrantDraft.password"
+                type="password"
+                autocomplete="current-password"
+                placeholder="输入后台登录密码"
+              >
+            </label>
+            <button
+              class="challenge-button compact-button"
+              type="button"
+              :disabled="grantingCatWorldPlayTime"
+              @click="grantCatWorldPlayTime"
+            >
+              {{ grantingCatWorldPlayTime ? "发放中..." : "确认奖励时间" }}
             </button>
           </section>
 

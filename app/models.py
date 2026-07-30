@@ -309,6 +309,18 @@ class CatWorldEnergyGrant(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
 
+class CatWorldPlayTimeGrant(Base):
+    __tablename__ = "cat_world_play_time_grants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    reward_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    granted_by_phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+
+
 class CatWorldScene(Base):
     __tablename__ = "cat_world_scenes"
     __table_args__ = (UniqueConstraint("scene_key", name="uq_cat_world_scenes_key"),)

@@ -39,6 +39,7 @@ from app.models import (
     CatWorldEnergyGrant,
     CatWorldGameSetting,
     CatWorldLimitedCatStock,
+    CatWorldPlayTimeGrant,
     CatWorldScene,
     CatWorldShopSetting,
     CatWorldState,
@@ -115,8 +116,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260730-001"
-DEFAULT_PAGE_VERSION = "v20260730.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260730-002"
+DEFAULT_PAGE_VERSION = "v20260730.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -4365,10 +4366,12 @@ async def vue_cat_world_play_time_api(request: Request, db: Session = Depends(ge
         raise HTTPException(status_code=400, detail="计时状态不是有效 JSON。") from exc
     active = (body or {}).get("active") is not False
     state = get_or_create_cat_world_state(db, phone)
+    reward_source = cat_world_play_time_reward_source(db, phone)
     play_time = cat_world_update_play_time_session(
         state,
         cat_world_today_spelling_count(db),
         active=active,
+        reward_seconds=int(reward_source["seconds"]),
     )
     db.add(state)
     db.commit()
@@ -5361,6 +5364,7 @@ def vue_admin_api(request: Request, db: Session = Depends(get_db)):
             {"key": "male", "label": "男声"},
         ],
         "catWorldPricing": admin_cat_world_pricing_payload(db),
+        "catWorldPlayTimeRewards": cat_world_play_time_reward_source(db, current.phone),
     }
 
 
@@ -5528,6 +5532,58 @@ async def vue_admin_cat_world_energy_grant_api(request: Request, db: Session = D
     }
 
 
+@app.post("/api/vue/admin/cat-world/play-time-grant")
+async def vue_admin_cat_world_play_time_grant_api(request: Request, db: Session = Depends(get_db)):
+    current = require_admin_panel_access(request, db)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="陪伴时间奖励不是有效 JSON。") from exc
+    reason = re.sub(r"\s+", " ", str((payload or {}).get("reason") or "").strip())[:120]
+    if len(reason) < 2:
+        raise HTTPException(status_code=400, detail="请填写至少 2 个字的奖励理由。")
+    try:
+        minutes = int((payload or {}).get("minutes"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="请输入有效的奖励分钟数。") from exc
+    if minutes < 1 or minutes > 1440:
+        raise HTTPException(status_code=400, detail="单次陪伴时间奖励需要在 1 到 1440 分钟之间。")
+    password = normalize_login_password((payload or {}).get("password"))
+    if not current.login_password_hash:
+        raise HTTPException(status_code=400, detail="请先在用户中心给当前后台账号设置登录密码。")
+    if not verify_login_password(password, current.login_password_hash):
+        raise HTTPException(status_code=403, detail="后台登录密码不正确。")
+    grant = CatWorldPlayTimeGrant(
+        phone=current.phone,
+        reward_date=date.today(),
+        minutes=minutes,
+        reason=reason,
+        granted_by_phone=current.phone,
+        created_at=datetime.utcnow(),
+    )
+    db.add(grant)
+    db.commit()
+    db.refresh(grant)
+    reward_source = cat_world_play_time_reward_source(db, current.phone)
+    state = get_or_create_cat_world_state(db, current.phone)
+    return {
+        "ok": True,
+        "grant": {
+            "id": grant.id,
+            "minutes": grant.minutes,
+            "reason": grant.reason,
+            "rewardDate": grant.reward_date.isoformat(),
+            "createdAt": grant.created_at.replace(microsecond=0).isoformat() + "Z",
+        },
+        "playTimeRewards": reward_source,
+        "playTime": cat_world_play_time_payload(
+            state,
+            cat_world_today_spelling_count(db),
+            reward_seconds=int(reward_source["seconds"]),
+        ),
+    }
+
+
 @app.post("/api/vue/admin/cat-world/reset")
 async def vue_admin_cat_world_reset_api(request: Request, db: Session = Depends(get_db)):
     current = require_admin_panel_access(request, db)
@@ -5543,6 +5599,9 @@ async def vue_admin_cat_world_reset_api(request: Request, db: Session = Depends(
     deleted_scenes = db.execute(delete(CatWorldUserScene).where(CatWorldUserScene.phone == current.phone)).rowcount or 0
     deleted_profiles = db.execute(delete(CatWorldCatProfile).where(CatWorldCatProfile.phone == current.phone)).rowcount or 0
     deleted_grants = db.execute(delete(CatWorldEnergyGrant).where(CatWorldEnergyGrant.phone == current.phone)).rowcount or 0
+    deleted_play_time_grants = (
+        db.execute(delete(CatWorldPlayTimeGrant).where(CatWorldPlayTimeGrant.phone == current.phone)).rowcount or 0
+    )
     deleted_state = db.execute(delete(CatWorldState).where(CatWorldState.phone == current.phone)).rowcount or 0
     deleted_logs = db.execute(delete(CatWorldDailyLog).where(CatWorldDailyLog.phone == current.phone)).rowcount or 0
     db.commit()
@@ -5554,6 +5613,7 @@ async def vue_admin_cat_world_reset_api(request: Request, db: Session = Depends(
             "dailyLogs": deleted_logs,
             "profiles": deleted_profiles,
             "energyGrants": deleted_grants,
+            "playTimeGrants": deleted_play_time_grants,
         },
         "catWorldPricing": admin_cat_world_pricing_payload(db),
     }
@@ -13291,12 +13351,38 @@ def cat_world_today_spelling_count(db: Session, today: date | None = None) -> in
     return max(int(stat.correct_count or 0), 0) + max(int(stat.wrong_count or 0), 0)
 
 
-def cat_world_play_time_earned_seconds(spelling_count: int) -> int:
+def cat_world_play_time_reward_source(
+    db: Session,
+    phone: str,
+    today: date | None = None,
+) -> dict[str, Any]:
+    reward_date = today or date.today()
+    grants = db.scalars(
+        select(CatWorldPlayTimeGrant)
+        .where(CatWorldPlayTimeGrant.phone == phone)
+        .where(CatWorldPlayTimeGrant.reward_date == reward_date)
+        .order_by(CatWorldPlayTimeGrant.created_at.desc(), CatWorldPlayTimeGrant.id.desc())
+    ).all()
+    total_minutes = sum(max(int(grant.minutes or 0), 0) for grant in grants)
+    latest = grants[0] if grants else None
+    return {
+        "date": reward_date.isoformat(),
+        "minutes": total_minutes,
+        "seconds": total_minutes * 60,
+        "grantCount": len(grants),
+        "latestReason": latest.reason if latest else "",
+        "latestMinutes": max(int(latest.minutes or 0), 0) if latest else 0,
+    }
+
+
+def cat_world_play_time_earned_seconds(spelling_count: int, reward_seconds: int = 0) -> int:
     count = max(int(spelling_count or 0), 0)
+    base_seconds = 0
     for target, seconds in CAT_WORLD_PLAY_TIME_TIERS:
         if count >= target:
-            return seconds
-    return 0
+            base_seconds = seconds
+            break
+    return base_seconds + max(int(reward_seconds or 0), 0)
 
 
 def normalize_cat_world_play_time_day(state: CatWorldState, today: date) -> bool:
@@ -13312,6 +13398,7 @@ def cat_world_play_time_payload(
     state: CatWorldState,
     spelling_count: int,
     *,
+    reward_seconds: int = 0,
     now: datetime | None = None,
     today: date | None = None,
 ) -> dict[str, Any]:
@@ -13319,7 +13406,9 @@ def cat_world_play_time_payload(
     current_day = today or date.today()
     normalize_cat_world_play_time_day(state, current_day)
     count = max(int(spelling_count or 0), 0)
-    earned_seconds = cat_world_play_time_earned_seconds(count)
+    base_earned_seconds = cat_world_play_time_earned_seconds(count)
+    normalized_reward_seconds = max(int(reward_seconds or 0), 0)
+    earned_seconds = cat_world_play_time_earned_seconds(count, normalized_reward_seconds)
     stored_used_seconds = max(int(state.play_time_used_seconds or 0), 0)
     live_seconds = 0
     if state.play_time_last_seen_at and earned_seconds > stored_used_seconds:
@@ -13340,6 +13429,9 @@ def cat_world_play_time_payload(
     return {
         "date": current_day.isoformat(),
         "spellingCount": count,
+        "baseEarnedSeconds": base_earned_seconds,
+        "rewardSeconds": normalized_reward_seconds,
+        "rewardMinutes": normalized_reward_seconds // 60,
         "earnedSeconds": earned_seconds,
         "earnedMinutes": earned_seconds // 60,
         "usedSeconds": used_seconds,
@@ -13355,13 +13447,14 @@ def cat_world_update_play_time_session(
     spelling_count: int,
     *,
     active: bool,
+    reward_seconds: int = 0,
     now: datetime | None = None,
     today: date | None = None,
 ) -> dict[str, Any]:
     current_time = now or datetime.utcnow()
     current_day = today or date.today()
     normalize_cat_world_play_time_day(state, current_day)
-    earned_seconds = cat_world_play_time_earned_seconds(spelling_count)
+    earned_seconds = cat_world_play_time_earned_seconds(spelling_count, reward_seconds)
     used_seconds = max(int(state.play_time_used_seconds or 0), 0)
     if state.play_time_last_seen_at and earned_seconds > used_seconds:
         elapsed_seconds = max(int((current_time - state.play_time_last_seen_at).total_seconds()), 0)
@@ -13373,6 +13466,7 @@ def cat_world_update_play_time_session(
     return cat_world_play_time_payload(
         state,
         spelling_count,
+        reward_seconds=reward_seconds,
         now=current_time,
         today=current_day,
     )
@@ -18125,12 +18219,17 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     growth = learning_growth_summary(db)
     missions = {item["key"]: item for item in growth.get("dailyMissions", []) if isinstance(item, dict)}
     spelling_count = int(missions.get("today_spelling", {}).get("value") or 0)
+    play_time_reward_source = cat_world_play_time_reward_source(db, state.phone)
     play_time_day_changed = normalize_cat_world_play_time_day(state, date.today())
     if play_time_day_changed:
         db.add(state)
         db.commit()
         db.refresh(state)
-    play_time = cat_world_play_time_payload(state, spelling_count)
+    play_time = cat_world_play_time_payload(
+        state,
+        spelling_count,
+        reward_seconds=int(play_time_reward_source["seconds"]),
+    )
     essay_energy_source = cat_world_essay_energy_source(db, state.phone)
     operating_energy_source = cat_world_operating_energy_source(db, state.phone)
     earned_energy = (
