@@ -44,9 +44,21 @@ jobs:
           fi
 
           auth_header="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
-            fetch --no-tags --prune --depth=1 origin "${GITHUB_SHA}"
+          fetch_succeeded=0
+          for attempt in 1 2 3 4; do
+            echo "Fetching release commit (attempt ${attempt}/4)..."
+            if timeout 120s git \
+              -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
+              fetch --no-tags --prune --depth=1 origin "${GITHUB_SHA}"; then
+              fetch_succeeded=1
+              break
+            fi
+            if [[ "${attempt}" -lt 4 ]]; then
+              sleep $((attempt * 10))
+            fi
+          done
           unset auth_header GH_TOKEN
+          [[ "${fetch_succeeded}" -eq 1 ]]
 
           git checkout --force --detach "${GITHUB_SHA}"
           git clean -ffdx
