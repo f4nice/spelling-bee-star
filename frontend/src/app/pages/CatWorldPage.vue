@@ -187,6 +187,7 @@ const catIconColors = {
   "china-lihua": "#8b765f",
   "linqing-lion": "#f2eee5",
   "jianzhou-cat": "#d6a06b",
+  "japanese-bobtail": "#fff3dc",
 };
 
 const energy = computed(() => payload.value.energy || {});
@@ -245,6 +246,10 @@ const catCollectionCatalog = computed(() => payload.value.catCollectionCatalog |
 const currentBlindSeries = computed(
   () => blindBoxCatalog.value.series?.find((series) => series.key === blindBoxCatalog.value.currentSeriesKey) || {},
 );
+const currentBlindRarityLabel = computed(() => {
+  const rarities = [...new Set((currentBlindSeries.value.cats || []).map((cat) => cat.rarity).filter(Boolean))];
+  return rarities.length ? rarities.join(" / ") : "限定";
+});
 const gameSettings = computed(() => payload.value.gameSettings || {});
 const shopById = computed(() => Object.fromEntries(shop.value.map((item) => [item.id, item])));
 const selectedCat = computed(() =>
@@ -2003,7 +2008,7 @@ async function selectCat(catOrId) {
             <div v-else-if="item.category === 'blind-box'" class="cat-world-food-tags cat-world-blind-box-tags">
               <span>{{ item.region }}地区</span>
               <span>{{ item.issue }}</span>
-              <span>R / SR / SSR</span>
+              <span>{{ currentBlindRarityLabel }}</span>
             </div>
             <div v-else-if="item.category === 'handbook'" class="cat-world-food-tags cat-world-handbook-tags">
               <span>永久道具</span>

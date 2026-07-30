@@ -116,8 +116,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260730-002"
-DEFAULT_PAGE_VERSION = "v20260730.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260730-003"
+DEFAULT_PAGE_VERSION = "v20260730.3"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -865,8 +865,8 @@ CAT_WORLD_SHOP = [
         "englishName": "Limited Cat Mystery Box",
         "cost": 10000,
         "mood": 0,
-        "seriesKey": "china-heritage-2026-01",
-        "description": "中国地区第一期限定盲盒，每个账号本期只能开启一次，一次必得一只猫。",
+        "seriesKey": "japan-bobtail-2026-01",
+        "description": "日本地区第一期限定盲盒，每个账号本期只能开启一次，必得一只日本短尾猫。",
     },
     {
         "id": "cat-collection-handbook",
@@ -1117,8 +1117,51 @@ CAT_WORLD_BLIND_BOX_SERIES = [
             },
         ],
     },
+    {
+        "key": "japan-bobtail-2026-01",
+        "label": "和猫纪行 · 日本站",
+        "region": "日本",
+        "issue": "第一期",
+        "description": "本期限定日本短尾猫，全站 100 只，每个账号限开一次。",
+        "shopItemId": "limited-cat-blind-box",
+        "cats": [
+            {
+                "totalStock": 100,
+                "cat": {
+                    "id": "japanese-bobtail",
+                    "label": "日本短尾猫",
+                    "englishName": "Japanese Bobtail",
+                    "rarity": "SSR",
+                    "limited": True,
+                    "region": "日本",
+                    "description": "来自日本的短尾猫，尾巴像一团小绒球，脚步轻快又爱观察房间。",
+                    "personality": "轻巧的缘侧观察员",
+                    "traits": {
+                        "activity": "adventurous",
+                        "movement": 1.1,
+                        "energyDrain": 0.9,
+                        "moodDrain": 0.72,
+                        "playMoodGain": 1.24,
+                        "foodEnergyGain": 1.04,
+                        "restThreshold": 32,
+                        "sleepStart": 23,
+                        "sleepEnd": 7,
+                        "nightOwl": False,
+                        "routine": "沿着窗台和房间边缘轻快巡视",
+                        "temperament": "adventurous",
+                        "label": "脚步轻快、心情稳定，喜欢在窗台附近观察。",
+                    },
+                    "thoughts": [
+                        "窗边的光落下来，正适合安静听你读一段。",
+                        "短尾巴晃了一下，发现了一个新单词。",
+                        "房间巡视完毕，可以陪你继续学习。",
+                    ],
+                },
+            },
+        ],
+    },
 ]
-CAT_WORLD_CURRENT_BLIND_BOX_SERIES_KEY = CAT_WORLD_BLIND_BOX_SERIES[0]["key"]
+CAT_WORLD_CURRENT_BLIND_BOX_SERIES_KEY = "japan-bobtail-2026-01"
 CAT_WORLD_BLIND_BOX_SERIES_BY_KEY = {series["key"]: series for series in CAT_WORLD_BLIND_BOX_SERIES}
 CAT_WORLD_LIMITED_CAT_SEEDS = [
     {**cat_seed, "seriesKey": series["key"]}
@@ -18264,6 +18307,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     if blind_box_item is not None:
         blind_box_item.update(
             {
+                "seriesKey": current_blind_series.get("key") or CAT_WORLD_CURRENT_BLIND_BOX_SERIES_KEY,
                 "seriesLabel": current_blind_series.get("label") or "限定猫咪盲盒",
                 "region": current_blind_series.get("region") or "",
                 "issue": current_blind_series.get("issue") or "",

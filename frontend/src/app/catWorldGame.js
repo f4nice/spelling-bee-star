@@ -78,6 +78,7 @@ const CAT_COLORS = {
   "china-lihua": { body: 0x8b765f, shade: 0x594739, stripe: 0x2f2926, belly: 0xc7b59d, nose: 0xd98b8b },
   "linqing-lion": { body: 0xf2eee5, shade: 0xaab7c8, stripe: 0x6f7f93, belly: 0xffffff, nose: 0xf19ab2 },
   "jianzhou-cat": { body: 0xd6a06b, shade: 0x79523f, stripe: 0x382c2d, belly: 0xf4d3a4, nose: 0xf08a7c },
+  "japanese-bobtail": { body: 0xfff3dc, shade: 0xd98745, stripe: 0x3f3430, belly: 0xffffff, nose: 0xf08faa },
 };
 
 const TONE_PALETTES = {
@@ -2636,14 +2637,21 @@ class CatWorldScene extends Phaser.Scene {
     const stripe = colors.stripe;
     const belly = colors.belly;
     const nose = colors.nose;
-    pixelBlock(graphics, 4, 15, 8, 5, INK);
-    pixelBlock(graphics, 2, 12, 6, 5, INK);
-    pixelBlock(graphics, 3, 9, 5, 4, INK);
-    pixelBlock(graphics, 6, 8, 7, 3, INK);
-    pixelBlock(graphics, 5, 15, 6, 3, body);
-    pixelBlock(graphics, 3, 13, 4, 3, body);
-    pixelBlock(graphics, 4, 10, 3, 2, body);
-    pixelBlock(graphics, 7, 9, 5, 1, body);
+    if ((cat.breedId || cat.id) === "japanese-bobtail") {
+      pixelBlock(graphics, 6, 13, 9, 9, INK);
+      pixelBlock(graphics, 7, 14, 7, 7, body);
+      pixelBlock(graphics, 6, 16, 3, 4, shade);
+      pixelBlock(graphics, 9, 13, 4, 2, belly);
+    } else {
+      pixelBlock(graphics, 4, 15, 8, 5, INK);
+      pixelBlock(graphics, 2, 12, 6, 5, INK);
+      pixelBlock(graphics, 3, 9, 5, 4, INK);
+      pixelBlock(graphics, 6, 8, 7, 3, INK);
+      pixelBlock(graphics, 5, 15, 6, 3, body);
+      pixelBlock(graphics, 3, 13, 4, 3, body);
+      pixelBlock(graphics, 4, 10, 3, 2, body);
+      pixelBlock(graphics, 7, 9, 5, 1, body);
+    }
 
     pixelBlock(graphics, 11, 11, 25, 14, INK);
     pixelBlock(graphics, 13, 9, 20, 4, INK);
