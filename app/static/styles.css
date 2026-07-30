@@ -14994,6 +14994,17 @@ select {
     grid-template-columns: 1fr;
   }
 
+  .cat-world-cats {
+    box-sizing: border-box;
+    width: calc(100vw - 20px);
+    max-width: calc(100vw - 20px);
+    justify-self: start;
+  }
+
+  .cat-world-cat-chip {
+    width: 100%;
+  }
+
   .cat-world-profile-icon-button {
     min-width: 0;
   }
