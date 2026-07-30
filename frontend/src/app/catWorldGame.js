@@ -79,6 +79,8 @@ const CAT_COLORS = {
   "linqing-lion": { body: 0xf2eee5, shade: 0xaab7c8, stripe: 0x6f7f93, belly: 0xffffff, nose: 0xf19ab2 },
   "jianzhou-cat": { body: 0xd6a06b, shade: 0x79523f, stripe: 0x382c2d, belly: 0xf4d3a4, nose: 0xf08a7c },
   "japanese-bobtail": { body: 0xfff3dc, shade: 0xd98745, stripe: 0x3f3430, belly: 0xffffff, nose: 0xf08faa },
+  "turkish-van": { body: 0xfff4dc, shade: 0xc96f3f, stripe: 0x743c2a, belly: 0xffffff, nose: 0xf08faa },
+  "turkish-angora": { body: 0xf8fbff, shade: 0xcad8e6, stripe: 0x70849a, belly: 0xffffff, nose: 0xf29ab3 },
 };
 
 const TONE_PALETTES = {
@@ -2690,6 +2692,7 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   drawCatProfileVariation(graphics, cat, colors) {
+    const breedId = String(cat.breedId || cat.id || "");
     const pattern = String(cat.patternKey || "classic");
     const feature = String(cat.featureKey || "");
     if (pattern === "bold-stripes") {
@@ -2724,6 +2727,20 @@ class CatWorldScene extends Phaser.Scene {
     } else if (feature === "pink-paws") {
       pixelBlock(graphics, 14, 28, 3, 1, 0xff9db7);
       pixelBlock(graphics, 29, 28, 3, 1, 0xff9db7);
+    }
+
+    if (breedId === "turkish-van") {
+      pixelBlock(graphics, 3, 10, 4, 3, colors.shade);
+      pixelBlock(graphics, 7, 9, 5, 2, colors.shade);
+      pixelBlock(graphics, 36, 8, 4, 4, colors.shade);
+      pixelBlock(graphics, 43, 8, 4, 3, colors.shade);
+      pixelBlock(graphics, 37, 5, 3, 2, colors.stripe);
+    } else if (breedId === "turkish-angora") {
+      pixelBlock(graphics, 1, 10, 6, 7, INK);
+      pixelBlock(graphics, 2, 11, 5, 5, colors.body);
+      pixelBlock(graphics, 1, 13, 3, 3, colors.shade);
+      pixelBlock(graphics, 33, 18, 6, 5, colors.belly);
+      pixelBlock(graphics, 35, 20, 3, 3, colors.shade);
     }
   }
 

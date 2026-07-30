@@ -14,6 +14,11 @@ import {
   neglectCountdownLabel,
 } from "../catWorldHygieneRules.js";
 import {
+  collectionRegionMeta,
+  resolveCollectionCat,
+  resolveCollectionSection,
+} from "../catWorldCollectionAtlas.js";
+import {
   formatCatWorldPlayTime,
   projectCatWorldPlayTime,
 } from "../catWorldPlayTime.js";
@@ -51,6 +56,8 @@ const energyModalOpen = ref(false);
 const scenePurchaseTarget = ref(null);
 const openedBlindBox = ref(null);
 const activeHandbook = ref("");
+const selectedCollectionRegionKey = ref("");
+const selectedCollectionCatId = ref("");
 const petBusyCatId = ref("");
 const roomCanPan = ref(false);
 const roomPanActive = ref(false);
@@ -188,6 +195,8 @@ const catIconColors = {
   "linqing-lion": "#f2eee5",
   "jianzhou-cat": "#d6a06b",
   "japanese-bobtail": "#fff3dc",
+  "turkish-van": "#fff4dc",
+  "turkish-angora": "#f8fbff",
 };
 
 const energy = computed(() => payload.value.energy || {});
@@ -245,6 +254,16 @@ const catCollectionCatalog = computed(() => payload.value.catCollectionCatalog |
 });
 const currentBlindSeries = computed(
   () => blindBoxCatalog.value.series?.find((series) => series.key === blindBoxCatalog.value.currentSeriesKey) || {},
+);
+const activeCollectionSection = computed(() =>
+  resolveCollectionSection(
+    catCollectionCatalog.value.sections,
+    selectedCollectionRegionKey.value,
+    currentBlindSeries.value.region,
+  ),
+);
+const activeCollectionCat = computed(() =>
+  resolveCollectionCat(activeCollectionSection.value, selectedCollectionCatId.value),
 );
 const currentBlindRarityLabel = computed(() => {
   const rarities = [...new Set((currentBlindSeries.value.cats || []).map((cat) => cat.rarity).filter(Boolean))];
@@ -785,6 +804,16 @@ function catIconColor(catId) {
   return catIconColors[profile?.breedId || catId] || "#ffbfd7";
 }
 
+function selectCollectionRegion(section) {
+  if (!section?.key) return;
+  selectedCollectionRegionKey.value = section.key;
+  selectedCollectionCatId.value = section.cats?.[0]?.id || "";
+}
+
+function selectCollectionCat(cat) {
+  selectedCollectionCatId.value = cat?.id || "";
+}
+
 function toggleCatDiary(cat) {
   if (!cat?.id) return;
   openCatDiaryId.value = cat.id;
@@ -1300,13 +1329,27 @@ function handbookType(item) {
   return item?.handbookType === "food" ? "food" : "cats";
 }
 
+function openHandbook(type) {
+  const nextType = type === "food" ? "food" : "cats";
+  if (nextType === "cats") {
+    const section = resolveCollectionSection(
+      catCollectionCatalog.value.sections,
+      selectedCollectionRegionKey.value,
+      currentBlindSeries.value.region,
+    );
+    selectedCollectionRegionKey.value = section.key || "";
+    selectedCollectionCatId.value = resolveCollectionCat(section, selectedCollectionCatId.value).id || "";
+  }
+  activeHandbook.value = nextType;
+}
+
 function shopItemActionAvailable(item) {
   return item?.category === "handbook" && isOneTimeOwned(item) ? true : canPurchase(item);
 }
 
 function handleShopItemAction(item) {
   if (item?.category === "handbook" && isOneTimeOwned(item)) {
-    activeHandbook.value = handbookType(item);
+    openHandbook(handbookType(item));
     return;
   }
   purchase(item);
@@ -1372,7 +1415,7 @@ async function purchase(item) {
       return;
     }
     if (item.category === "handbook") {
-      activeHandbook.value = handbookType(item);
+      openHandbook(handbookType(item));
       notice.value = `${item.label} 已永久解锁。`;
       return;
     }
@@ -2075,43 +2118,92 @@ async function selectCat(catOrId) {
           </button>
         </div>
       </header>
-      <article v-for="section in catCollectionCatalog.sections" :key="section.key" class="cat-world-series-album">
-        <header>
-          <div>
-            <strong>{{ section.label }}</strong>
-            <small>{{ section.description }}</small>
+      <div class="cat-world-atlas-layout">
+        <section class="cat-world-atlas-map-panel" aria-labelledby="cat-world-atlas-map-title">
+          <header>
+            <div>
+              <strong id="cat-world-atlas-map-title">世界猫咪地图</strong>
+              <small>点击地区，查看当地可以收集的猫咪。</small>
+            </div>
+            <span>{{ catCollectionCatalog.sections.length }} 个地区</span>
+          </header>
+          <div class="cat-world-atlas-map" role="tablist" aria-label="猫咪收藏地区地图">
+            <img :src="'/static/cat-world/cat-collection-world-map.png'" alt="" aria-hidden="true" />
+            <button
+              v-for="(section, index) in catCollectionCatalog.sections"
+              :key="section.key"
+              :class="['cat-world-atlas-region', { active: activeCollectionSection.key === section.key }]"
+              :style="collectionRegionMeta(section, index).style"
+              type="button"
+              role="tab"
+              :aria-selected="activeCollectionSection.key === section.key"
+              :aria-label="`${section.region}，已收集 ${section.ownedCount} / ${section.totalCount}`"
+              @click="selectCollectionRegion(section)"
+            >
+              <strong>{{ collectionRegionMeta(section, index).shortLabel }}</strong>
+              <small>{{ section.ownedCount }}/{{ section.totalCount }}</small>
+            </button>
           </div>
-          <div class="cat-world-collection-progress">
-            <span v-if="section.badge?.unlocked" class="cat-world-collection-badge">
-              <AwardIcon :size="16" :stroke-width="2.6" aria-hidden="true" />
-              {{ section.badge.label }}
-            </span>
-            <span v-else>{{ section.ownedCount }} / {{ section.totalCount }} 已收集</span>
+          <p>地图上的数字是该地区已收集数量；新限定地区会继续出现在这里。</p>
+        </section>
+
+        <article v-if="activeCollectionSection.key" class="cat-world-series-album cat-world-atlas-region-panel">
+          <header>
+            <div>
+              <strong>{{ activeCollectionSection.label }}</strong>
+              <small>{{ activeCollectionSection.description }}</small>
+            </div>
+            <div class="cat-world-collection-progress">
+              <span v-if="activeCollectionSection.badge?.unlocked" class="cat-world-collection-badge">
+                <AwardIcon :size="16" :stroke-width="2.6" aria-hidden="true" />
+                {{ activeCollectionSection.badge.label }}
+              </span>
+              <span v-else>{{ activeCollectionSection.ownedCount }} / {{ activeCollectionSection.totalCount }} 已收集</span>
+            </div>
+          </header>
+          <div class="cat-world-atlas-cat-tabs" role="tablist" :aria-label="`${activeCollectionSection.region}猫咪种类`">
+            <button
+              v-for="cat in activeCollectionSection.cats"
+              :key="cat.id"
+              :class="{ active: activeCollectionCat.id === cat.id, owned: cat.owned }"
+              type="button"
+              role="tab"
+              :aria-selected="activeCollectionCat.id === cat.id"
+              @click="selectCollectionCat(cat)"
+            >
+              <span class="cat-world-atlas-cat-icon" :style="{ '--collection-color': catIconColor(cat.id) }">
+                <strong v-if="cat.limited && !cat.owned">?</strong>
+                <CatIcon v-else :size="24" :stroke-width="2.4" aria-hidden="true" />
+              </span>
+              <span>
+                <strong>{{ cat.label }}</strong>
+                <small>{{ cat.rarity }} · {{ cat.owned ? "已收集" : "未收集" }}</small>
+              </span>
+            </button>
           </div>
-        </header>
-        <div class="cat-world-card-album">
           <article
-            v-for="cat in section.cats"
-            :key="cat.id"
-            :class="['cat-world-collection-card', `rarity-${String(cat.rarity || 'r').toLowerCase()}`, { owned: cat.owned }]"
+            v-if="activeCollectionCat.id"
+            :class="['cat-world-collection-card', 'cat-world-collection-card-featured', `rarity-${String(activeCollectionCat.rarity || 'r').toLowerCase()}`, { owned: activeCollectionCat.owned }]"
           >
             <div
-              :class="['cat-world-collection-art', { mystery: cat.limited && !cat.owned }]"
-              :style="{ '--collection-color': catIconColor(cat.id) }"
+              :class="['cat-world-collection-art', { mystery: activeCollectionCat.limited && !activeCollectionCat.owned }]"
+              :style="{ '--collection-color': catIconColor(activeCollectionCat.id) }"
             >
-              <strong v-if="cat.limited && !cat.owned" class="cat-world-mystery-mark">?</strong>
+              <strong v-if="activeCollectionCat.limited && !activeCollectionCat.owned" class="cat-world-mystery-mark">?</strong>
               <CatIcon v-else :size="48" :stroke-width="2.2" aria-hidden="true" />
-              <b>{{ cat.limited && !cat.owned ? "?" : cat.rarity }}</b>
+              <b>{{ activeCollectionCat.limited && !activeCollectionCat.owned ? "?" : activeCollectionCat.rarity }}</b>
             </div>
-            <span>{{ cat.collectionTag }}</span>
-            <h3>{{ cat.label }}</h3>
-            <p>{{ cat.description }}</p>
-            <small v-if="cat.owned">已收集</small>
-            <small v-else-if="cat.limited">未收集 · {{ cat.acquisitionHint }} · 初始概率 {{ cat.oddsPercent }}%</small>
-            <small v-else>未收集 · {{ cat.acquisitionHint }}</small>
+            <span>{{ activeCollectionCat.collectionTag }}</span>
+            <h3>{{ activeCollectionCat.label }}</h3>
+            <p>{{ activeCollectionCat.description }}</p>
+            <small v-if="activeCollectionCat.owned">已收集</small>
+            <small v-else-if="activeCollectionCat.limited">
+              未收集 · {{ activeCollectionCat.acquisitionHint }} · 初始概率 {{ activeCollectionCat.oddsPercent }}%
+            </small>
+            <small v-else>未收集 · {{ activeCollectionCat.acquisitionHint }}</small>
           </article>
-        </div>
-      </article>
+        </article>
+      </div>
     </section>
     </div>
 

@@ -12204,7 +12204,7 @@ select {
 }
 
 .cat-world-handbook-modal {
-  width: min(1100px, calc(100vw - 28px));
+  width: min(1180px, calc(100vw - 28px));
   max-height: calc(100vh - 36px);
   overflow: auto;
   border: 4px solid #2c2f3a;
@@ -12226,6 +12226,229 @@ select {
   gap: 5px;
   color: #fff;
   background: #147b59;
+}
+
+.cat-world-atlas-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(330px, 0.85fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.cat-world-atlas-map-panel {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+.cat-world-atlas-map-panel > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cat-world-atlas-map-panel > header strong,
+.cat-world-atlas-map-panel > header small {
+  display: block;
+}
+
+.cat-world-atlas-map-panel > header strong {
+  color: #263047;
+  font-size: 18px;
+}
+
+.cat-world-atlas-map-panel > header small,
+.cat-world-atlas-map-panel > p {
+  color: #52627a;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.cat-world-atlas-map-panel > header small {
+  margin-top: 3px;
+}
+
+.cat-world-atlas-map-panel > header > span {
+  flex: 0 0 auto;
+  border: 3px solid #2c2f3a;
+  border-radius: 4px;
+  padding: 5px 8px;
+  color: #263047;
+  background: #87d9ff;
+  box-shadow: 3px 3px 0 #2c2f3a;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.cat-world-atlas-map-panel > p {
+  margin: 0;
+}
+
+.cat-world-atlas-map {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  min-height: 310px;
+  overflow: hidden;
+  border: 4px solid #2c2f3a;
+  border-radius: 4px;
+  background: #65d5f5;
+  box-shadow: 5px 5px 0 #2c2f3a;
+}
+
+.cat-world-atlas-map > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.cat-world-atlas-region {
+  position: absolute;
+  display: grid;
+  transform: translate(-50%, -50%);
+  place-items: center;
+  min-width: 64px;
+  border: 3px solid #2c2f3a;
+  border-radius: 4px;
+  padding: 5px 7px;
+  color: #263047;
+  background: #fff8df;
+  box-shadow: 3px 3px 0 #2c2f3a;
+  cursor: pointer;
+}
+
+.cat-world-atlas-region strong,
+.cat-world-atlas-region small {
+  color: inherit;
+  line-height: 1.15;
+}
+
+.cat-world-atlas-region strong {
+  font-size: 11px;
+}
+
+.cat-world-atlas-region small {
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.cat-world-atlas-region:hover,
+.cat-world-atlas-region:focus-visible,
+.cat-world-atlas-region.active {
+  color: #fff;
+  background: #147b59;
+}
+
+.cat-world-atlas-region:hover *,
+.cat-world-atlas-region:focus-visible *,
+.cat-world-atlas-region.active * {
+  color: #fff;
+}
+
+.cat-world-atlas-region.active {
+  z-index: 2;
+  box-shadow: 4px 4px 0 #2c2f3a;
+}
+
+.cat-world-atlas-region-panel {
+  min-width: 0;
+  border-left: 4px solid #2c2f3a;
+  padding-left: 16px;
+}
+
+.cat-world-atlas-region-panel > header {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.cat-world-atlas-cat-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cat-world-atlas-cat-tabs > button {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+  min-height: 58px;
+  border: 3px solid #2c2f3a;
+  border-radius: 4px;
+  padding: 6px;
+  color: #263047;
+  background: #fff8df;
+  box-shadow: 3px 3px 0 #2c2f3a;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cat-world-atlas-cat-tabs > button:hover,
+.cat-world-atlas-cat-tabs > button:focus-visible,
+.cat-world-atlas-cat-tabs > button.active {
+  color: #fff;
+  background: #147b59;
+}
+
+.cat-world-atlas-cat-tabs > button:hover *,
+.cat-world-atlas-cat-tabs > button:focus-visible *,
+.cat-world-atlas-cat-tabs > button.active * {
+  color: #fff;
+}
+
+.cat-world-atlas-cat-tabs > button > span:last-child,
+.cat-world-atlas-cat-tabs > button strong,
+.cat-world-atlas-cat-tabs > button small {
+  display: block;
+  min-width: 0;
+}
+
+.cat-world-atlas-cat-tabs > button strong,
+.cat-world-atlas-cat-tabs > button small {
+  overflow-wrap: anywhere;
+}
+
+.cat-world-atlas-cat-tabs > button strong {
+  font-size: 11px;
+}
+
+.cat-world-atlas-cat-tabs > button small {
+  margin-top: 3px;
+  color: #52627a;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.cat-world-atlas-cat-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 2px solid #2c2f3a;
+  color: var(--collection-color, #ffbfd7);
+  background: #d9f6ff;
+}
+
+.cat-world-atlas-cat-tabs > button:hover .cat-world-atlas-cat-icon,
+.cat-world-atlas-cat-tabs > button:focus-visible .cat-world-atlas-cat-icon,
+.cat-world-atlas-cat-tabs > button.active .cat-world-atlas-cat-icon {
+  border-color: #fff;
+  background: #fff8df;
+}
+
+.cat-world-atlas-cat-tabs > button:hover .cat-world-atlas-cat-icon svg,
+.cat-world-atlas-cat-tabs > button:focus-visible .cat-world-atlas-cat-icon svg,
+.cat-world-atlas-cat-tabs > button.active .cat-world-atlas-cat-icon svg {
+  color: var(--collection-color, #ffbfd7);
+}
+
+.cat-world-collection-card-featured {
+  min-height: 250px;
 }
 
 .cat-world-series-album {
@@ -12439,6 +12662,17 @@ select {
 }
 
 @media (max-width: 980px) {
+  .cat-world-atlas-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .cat-world-atlas-region-panel {
+    border-top: 4px solid #2c2f3a;
+    border-left: 0;
+    padding-top: 16px;
+    padding-left: 0;
+  }
+
   .cat-world-food-album {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -12454,6 +12688,36 @@ select {
   .cat-world-series-album > header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .cat-world-handbook-modal {
+    padding: 12px;
+  }
+
+  .cat-world-handbook-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .cat-world-atlas-map {
+    min-height: 0;
+  }
+
+  .cat-world-atlas-region {
+    min-width: 42px;
+    padding: 4px;
+  }
+
+  .cat-world-atlas-region strong {
+    font-size: 9px;
+  }
+
+  .cat-world-atlas-region small {
+    font-size: 8px;
+  }
+
+  .cat-world-atlas-cat-tabs {
+    grid-template-columns: 1fr;
   }
 }
 

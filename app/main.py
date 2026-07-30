@@ -116,8 +116,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260730-003"
-DEFAULT_PAGE_VERSION = "v20260730.3"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260730-004"
+DEFAULT_PAGE_VERSION = "v20260730.4"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -865,8 +865,8 @@ CAT_WORLD_SHOP = [
         "englishName": "Limited Cat Mystery Box",
         "cost": 10000,
         "mood": 0,
-        "seriesKey": "japan-bobtail-2026-01",
-        "description": "日本地区第一期限定盲盒，每个账号本期只能开启一次，必得一只日本短尾猫。",
+        "seriesKey": "turkey-water-2026-01",
+        "description": "土耳其地区第一期限定盲盒，每个账号本期只能开启一次，随机获得土耳其梵猫或土耳其安哥拉猫。",
     },
     {
         "id": "cat-collection-handbook",
@@ -1160,8 +1160,84 @@ CAT_WORLD_BLIND_BOX_SERIES = [
             },
         ],
     },
+    {
+        "key": "turkey-water-2026-01",
+        "label": "湖光白影 · 土耳其站",
+        "region": "土耳其",
+        "issue": "第一期",
+        "description": "本期收录亲水的土耳其梵猫和优雅的土耳其安哥拉猫，全站 100 只，每个账号限开一次。",
+        "shopItemId": "limited-cat-blind-box",
+        "cats": [
+            {
+                "totalStock": 80,
+                "cat": {
+                    "id": "turkish-van",
+                    "label": "土耳其梵猫",
+                    "englishName": "Turkish Van",
+                    "rarity": "SR",
+                    "limited": True,
+                    "region": "土耳其",
+                    "description": "来自凡湖地区的亲水猫咪，白色身体配着醒目的头尾色块，喜欢浴缸和流动的水。",
+                    "personality": "好奇的水边探索员",
+                    "traits": {
+                        "activity": "adventurous",
+                        "movement": 1.12,
+                        "energyDrain": 0.96,
+                        "moodDrain": 0.74,
+                        "playMoodGain": 1.28,
+                        "foodEnergyGain": 1.04,
+                        "restThreshold": 33,
+                        "sleepStart": 23,
+                        "sleepEnd": 7,
+                        "nightOwl": False,
+                        "routine": "沿着浴缸和饮水机巡视水花",
+                        "temperament": "adventurous",
+                        "label": "喜欢玩水、脚步轻快，靠近浴缸和饮水机时更开心。",
+                    },
+                    "thoughts": [
+                        "听见水声了，我想过去看看。",
+                        "凡湖的风和今天的新单词一样清亮。",
+                        "浴缸边很适合甩甩尾巴再继续陪读。",
+                    ],
+                },
+            },
+            {
+                "totalStock": 20,
+                "cat": {
+                    "id": "turkish-angora",
+                    "label": "土耳其安哥拉猫",
+                    "englishName": "Turkish Angora",
+                    "rarity": "SSR",
+                    "limited": True,
+                    "region": "土耳其",
+                    "description": "轻盈的长毛猫，尾巴蓬松，喜欢在窗边和书架旁安静观察你的学习节奏。",
+                    "personality": "优雅的晨光观察员",
+                    "traits": {
+                        "activity": "gentle",
+                        "movement": 0.92,
+                        "energyDrain": 0.7,
+                        "moodDrain": 0.58,
+                        "playMoodGain": 1.12,
+                        "foodEnergyGain": 1.14,
+                        "restThreshold": 27,
+                        "sleepStart": 22,
+                        "sleepEnd": 8,
+                        "nightOwl": False,
+                        "routine": "在窗台与书架之间轻轻踱步",
+                        "temperament": "gentle",
+                        "label": "长毛轻盈、情绪稳定，喜欢安静的窗边和阅读角。",
+                    },
+                    "thoughts": [
+                        "晨光正好，我想听你慢慢读一页。",
+                        "蓬松的尾巴已经替新单词做了标记。",
+                        "安静学习的时候，我会守在窗边。",
+                    ],
+                },
+            },
+        ],
+    },
 ]
-CAT_WORLD_CURRENT_BLIND_BOX_SERIES_KEY = "japan-bobtail-2026-01"
+CAT_WORLD_CURRENT_BLIND_BOX_SERIES_KEY = "turkey-water-2026-01"
 CAT_WORLD_BLIND_BOX_SERIES_BY_KEY = {series["key"]: series for series in CAT_WORLD_BLIND_BOX_SERIES}
 CAT_WORLD_LIMITED_CAT_SEEDS = [
     {**cat_seed, "seriesKey": series["key"]}
@@ -1194,6 +1270,10 @@ CAT_WORLD_DECOR_FAVORITE_CAT = {
     "cat-climbing-tree": "maine-coon",
     "mini-fountain": "siamese",
     "bubble-bathtub": "ragdoll",
+}
+CAT_WORLD_EXTRA_DECOR_FAVORITES = {
+    "turkish-van": ["mini-fountain", "bubble-bathtub"],
+    "turkish-angora": ["sun-window", "book-shelf"],
 }
 CAT_WORLD_TOY_FAVORITE_CAT = {
     "rolling-ball": "siamese",
@@ -14579,11 +14659,13 @@ def cat_world_cat_traits(cat: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def cat_world_cat_favorite_decor_ids(cat_id: str) -> list[str]:
-    return [
+    favorites = [
         decor_id
         for decor_id, favorite_cat_id in CAT_WORLD_DECOR_FAVORITE_CAT.items()
         if favorite_cat_id == cat_id
     ]
+    favorites.extend(CAT_WORLD_EXTRA_DECOR_FAVORITES.get(str(cat_id or ""), []))
+    return list(dict.fromkeys(favorites))
 
 
 def cat_world_item_favorite_cat_id(item_id: str) -> str:
