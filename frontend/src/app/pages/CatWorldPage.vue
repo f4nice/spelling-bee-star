@@ -2134,6 +2134,7 @@ async function selectCat(catOrId) {
               :key="section.key"
               :class="['cat-world-atlas-region', { active: activeCollectionSection.key === section.key }]"
               :style="collectionRegionMeta(section, index).style"
+              :data-region="section.region"
               type="button"
               role="tab"
               :aria-selected="activeCollectionSection.key === section.key"

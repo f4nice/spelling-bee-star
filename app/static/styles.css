@@ -12708,6 +12708,14 @@ select {
     padding: 4px;
   }
 
+  .cat-world-atlas-region[data-region="中国"] {
+    left: 75% !important;
+  }
+
+  .cat-world-atlas-region[data-region="日本"] {
+    left: 88% !important;
+  }
+
   .cat-world-atlas-region strong {
     font-size: 9px;
   }
