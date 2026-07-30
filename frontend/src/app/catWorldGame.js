@@ -468,6 +468,7 @@ class CatWorldScene extends Phaser.Scene {
   startCameraPan(pointer) {
     if (this.isEditMode() || this.owner.wandMode || this.owner.carriedCat || !this.owner.canPan()) return false;
     if (pointer?.event?.button != null && pointer.event.button !== 0) return false;
+    this.releaseCatFocus();
     this.tweens.killTweensOf(this.cameras.main);
     this.cameraDrag = {
       active: true,
@@ -541,6 +542,8 @@ class CatWorldScene extends Phaser.Scene {
     if (this.owner.snapshot.editMode && this.owner.wandMode) {
       this.stopFeatherWandMode({ notify: false, resume: false });
     }
+    const lockedCatId = this.owner.cameraLockedCatId;
+    this.cameras.main.stopFollow();
     this.clearCatInteractions();
     this.tweens.killAll();
     this.time.removeAllEvents();
@@ -563,6 +566,24 @@ class CatWorldScene extends Phaser.Scene {
       this.restoreActiveItemInteractions();
     }
     this.syncCamera();
+    if (lockedCatId) this.focusCat(lockedCatId);
+  }
+
+  focusCat(catId) {
+    if (this.isEditMode()) return false;
+    const container = this.catContainers.get(catId);
+    if (!container?.active) return false;
+    this.owner.cameraLockedCatId = catId;
+    this.children.bringToTop(container);
+    this.cameras.main.startFollow(container, true, 0.1, 0);
+    return true;
+  }
+
+  releaseCatFocus() {
+    if (!this.owner.cameraLockedCatId) return;
+    this.cameras.main.stopFollow();
+    this.owner.cameraScrollX = clamp(this.cameras.main.scrollX, 0, this.maxCameraScrollX());
+    this.owner.cameraLockedCatId = "";
   }
 
   drawRoom() {
@@ -3656,6 +3677,7 @@ export class CatWorldGame {
     this.cameraScrollX = 0;
     this.cameraDragMoved = false;
     this.cameraPanActive = false;
+    this.cameraLockedCatId = "";
     this.wandMode = false;
     this.wandCatIds = new Set();
     this.wandTarget = null;
@@ -3713,6 +3735,10 @@ export class CatWorldGame {
     return Boolean(this.game.scene.getScene("CatWorldScene")?.showCatReaction(catId, message));
   }
 
+  focusCat(catId) {
+    return Boolean(this.game.scene.getScene("CatWorldScene")?.focusCat(catId));
+  }
+
   cancelCatCarry() {
     return this.game.scene.getScene("CatWorldScene")?.cancelCarriedCat() || null;
   }
@@ -3722,10 +3748,12 @@ export class CatWorldGame {
   }
 
   panBy(delta) {
+    this.game.scene.getScene("CatWorldScene")?.releaseCatFocus();
     this.game.scene.getScene("CatWorldScene")?.panCameraBy(delta, { smooth: true });
   }
 
   panPage(direction) {
+    this.game.scene.getScene("CatWorldScene")?.releaseCatFocus();
     const nextScroll = scenePageTarget(this.snapshot.scene, this.cameraScrollX, direction);
     this.game.scene.getScene("CatWorldScene")?.panCameraTo(nextScroll, { smooth: true });
   }

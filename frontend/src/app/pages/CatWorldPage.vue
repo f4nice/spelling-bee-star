@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Award as AwardIcon, Cat as CatIcon, ChevronLeft, ChevronRight, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
@@ -18,6 +18,8 @@ import {
   resolveCollectionCat,
   resolveCollectionSection,
 } from "../catWorldCollectionAtlas.js";
+import { catPortraitModel } from "../catWorldPortrait.js";
+import { catRarityBadge } from "../catWorldRarity.js";
 import {
   formatCatWorldPlayTime,
   projectCatWorldPlayTime,
@@ -503,6 +505,8 @@ const catAgentCards = computed(() =>
     const latestEvent = agentEvents.length ? agentEvents[agentEvents.length - 1] : null;
     return {
       ...cat,
+      portrait: catPortraitModel(cat),
+      rarityBadge: catRarityBadge(cat.rarity),
       owned,
       escaped: Boolean(lostInfo),
       lostInfo,
@@ -1604,8 +1608,15 @@ async function selectCat(catOrId) {
     });
     replacePayload(nextPayload);
     const cat = profile || catForId(nextPayload.state?.selectedCatProfile) || catForId(catId);
-    focusedCatId.value = profileId || cat?.id || catId;
-    notice.value = `${cat?.displayLabel || cat?.label || "猫咪"} 正在房间里陪读。`;
+    const roomCatId = profileId || cat?.id || catId;
+    focusedCatId.value = roomCatId;
+    await nextTick();
+    const locked = Boolean(catWorldGame.value?.focusCat?.(roomCatId));
+    if (locked) {
+      gameMountRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
+      showCatReaction(cat, "镜头找到我啦，我会在这里陪着你。");
+    }
+    notice.value = `${cat?.displayLabel || cat?.label || "猫咪"} 已设为主猫${locked ? "，活动室镜头已锁定" : ""}。`;
   } catch (error) {
     notice.value = error.message || "切换猫咪失败，请稍后再试。";
   } finally {
@@ -2259,12 +2270,47 @@ async function selectCat(catOrId) {
           v-for="cat in catAgentCards"
           :key="cat.id"
           type="button"
-          :class="['cat-world-cat-chip', { active: state.selectedCatProfile === cat.id, locked: !cat.owned }]"
+          :class="[
+            'cat-world-cat-chip',
+            {
+              active: state.selectedCatProfile === cat.id,
+              locked: !cat.owned,
+              'rarity-frame-sr': cat.rarityBadge.tone === 'sr',
+              'rarity-frame-ssr': cat.rarityBadge.tone === 'ssr',
+            },
+          ]"
           :disabled="!cat.owned || busyItemId === cat.id"
           @click="selectCat(cat)"
         >
-          <span>{{ cat.owned ? `${cat.genderLabel || "性别待定"} · ${cat.profileCode || cat.rarity || cat.englishName}` : cat.escaped ? "已离家" : "未解锁" }}</span>
-          <strong>{{ cat.displayLabel || cat.label }}</strong>
+          <div class="cat-world-cat-chip-head">
+            <span>{{ cat.owned ? `${cat.genderLabel || "性别待定"} · ${cat.profileCode || cat.rarity || cat.englishName}` : cat.escaped ? "已离家" : "未解锁" }}</span>
+            <strong>{{ cat.displayLabel || cat.label }}</strong>
+            <div class="cat-world-cat-identity">
+              <figure
+                :class="[
+                  'cat-world-cat-portrait',
+                  `pattern-${cat.portrait.pattern}`,
+                  `feature-${cat.portrait.feature}`,
+                ]"
+                :style="cat.portrait.style"
+                aria-hidden="true"
+              >
+                <i class="cat-world-cat-portrait-ear left"></i>
+                <i class="cat-world-cat-portrait-ear right"></i>
+                <i class="cat-world-cat-portrait-face">
+                  <i class="cat-world-cat-portrait-eye left"></i>
+                  <i class="cat-world-cat-portrait-eye right"></i>
+                  <i class="cat-world-cat-portrait-nose"></i>
+                </i>
+              </figure>
+              <b
+                :class="['cat-world-cat-rarity', `rarity-${cat.rarityBadge.tone}`]"
+                :aria-label="`稀有度 ${cat.rarityBadge.label}`"
+              >
+                {{ cat.rarityBadge.label }}
+              </b>
+            </div>
+          </div>
           <small>{{ cat.owned ? `${cat.patternLabel || "原生花纹"} · ${cat.featureLabel || "普通特点"} · 个性：${cat.personality || cat.englishName}` : cat.escaped ? `${cat.lostInfo.escapeLabel}，请去商店重新领养` : cat.description }}</small>
           <div v-if="cat.owned" class="cat-world-cat-agent-status">
             <p>
