@@ -13,6 +13,10 @@ import {
   litterMoodPenalty,
   neglectCountdownLabel,
 } from "../catWorldHygieneRules.js";
+import {
+  formatCatWorldPlayTime,
+  projectCatWorldPlayTime,
+} from "../catWorldPlayTime.js";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
 
@@ -41,6 +45,8 @@ const savingRoomLayout = ref(false);
 const roomEditMode = ref(false);
 const activeToolCategory = ref("decor");
 const clockNow = ref(Date.now());
+const playTimeSyncedAt = ref(Date.now());
+const playTimeSessionActive = ref(false);
 const energyModalOpen = ref(false);
 const scenePurchaseTarget = ref(null);
 const openedBlindBox = ref(null);
@@ -61,29 +67,44 @@ const catReactionTexts = [
 const CAT_REACTION_DURATION_MS = 7000;
 let catReactionTimer = 0;
 let activeFoodClockTimer = 0;
+let playTimeHeartbeatTimer = 0;
+let playTimeSyncBusy = false;
 let gameMountActive = false;
 
 watch(
   () => props.data,
   (nextData) => {
     payload.value = nextData || {};
+    playTimeSyncedAt.value = Date.now();
   },
 );
 
 onBeforeUnmount(() => {
   gameMountActive = false;
+  endPlayTimeSession();
   window.clearTimeout(catReactionTimer);
   window.clearInterval(activeFoodClockTimer);
+  window.clearInterval(playTimeHeartbeatTimer);
   window.removeEventListener("keydown", handleGlobalKeydown);
+  window.removeEventListener("pagehide", endPlayTimeSession);
+  document.removeEventListener("visibilitychange", handlePlayTimeVisibilityChange);
   catWorldGame.value?.destroy();
   catWorldGame.value = null;
 });
 
 onMounted(async () => {
   window.addEventListener("keydown", handleGlobalKeydown);
+  window.addEventListener("pagehide", endPlayTimeSession);
+  document.addEventListener("visibilitychange", handlePlayTimeVisibilityChange);
+  playTimeSessionActive.value = document.visibilityState === "visible"
+    && Number(payload.value.playTime?.remainingSeconds || 0) > 0;
   activeFoodClockTimer = window.setInterval(() => {
     clockNow.value = Date.now();
+  }, 1000);
+  playTimeHeartbeatTimer = window.setInterval(() => {
+    if (document.visibilityState === "visible") syncPlayTimeSession(true);
   }, 10000);
+  syncPlayTimeSession(true);
   if (!gameMountRef.value) return;
   gameMountActive = true;
   const { CatWorldGame } = await import("../catWorldGame.js");
@@ -170,6 +191,27 @@ const catIconColors = {
 
 const energy = computed(() => payload.value.energy || {});
 const todayEnergy = computed(() => Math.max(Number(energy.value.today || 0), 0));
+const playTime = computed(() => payload.value.playTime || {});
+const playTimeRemainingSeconds = computed(() =>
+  projectCatWorldPlayTime(
+    playTime.value,
+    playTimeSyncedAt.value,
+    clockNow.value,
+    playTimeSessionActive.value && document.visibilityState === "visible",
+  ),
+);
+const playTimeClock = computed(() => formatCatWorldPlayTime(playTimeRemainingSeconds.value));
+const playTimeProgressLabel = computed(() => {
+  const count = Math.max(Number(playTime.value.spellingCount || 0), 0);
+  if (count < 100) return `还差 ${100 - count} 词解锁 10 分钟`;
+  if (count < 200) return `已解锁 10 分钟 · 再拼 ${200 - count} 词`;
+  return "今日已解锁 20 分钟";
+});
+const playTimeCardState = computed(() => {
+  if (Number(playTime.value.earnedSeconds || 0) <= 0) return "waiting";
+  if (playTimeRemainingSeconds.value <= 0) return "finished";
+  return "running";
+});
 const state = computed(() => payload.value.state || {});
 const scenes = computed(() => payload.value.scenes || []);
 const currentScene = computed(
@@ -608,7 +650,70 @@ watch(
 function replacePayload(nextPayload) {
   if (nextPayload?.energy && nextPayload?.state) {
     payload.value = nextPayload;
+    playTimeSyncedAt.value = Date.now();
   }
+}
+
+function setPlayTime(nextPlayTime) {
+  if (!nextPlayTime || typeof nextPlayTime !== "object") return;
+  payload.value = {
+    ...payload.value,
+    playTime: nextPlayTime,
+  };
+  playTimeSyncedAt.value = Date.now();
+}
+
+async function syncPlayTimeSession(active = true) {
+  if (playTimeSyncBusy || (active && document.visibilityState !== "visible")) return;
+  playTimeSyncBusy = true;
+  try {
+    const result = await fetchJson(routeApiPaths.catWorldPlayTime(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ active }),
+      keepalive: !active,
+    });
+    setPlayTime(result?.playTime);
+    playTimeSessionActive.value = Boolean(active && Number(result?.playTime?.remainingSeconds || 0) > 0);
+  } catch {
+    playTimeSessionActive.value = Boolean(active && playTimeRemainingSeconds.value > 0);
+  } finally {
+    playTimeSyncBusy = false;
+  }
+}
+
+function endPlayTimeSession() {
+  const remainingSeconds = playTimeRemainingSeconds.value;
+  setPlayTime({
+    ...playTime.value,
+    remainingSeconds,
+    sessionActive: false,
+  });
+  playTimeSessionActive.value = false;
+  const body = JSON.stringify({ active: false });
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon(
+      routeApiPaths.catWorldPlayTime(),
+      new Blob([body], { type: "application/json" }),
+    );
+    return;
+  }
+  fetch(routeApiPaths.catWorldPlayTime(), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body,
+    credentials: "same-origin",
+    keepalive: true,
+  }).catch(() => {});
+}
+
+function handlePlayTimeVisibilityChange() {
+  if (document.visibilityState === "visible") {
+    clockNow.value = Date.now();
+    syncPlayTimeSession(true);
+    return;
+  }
+  endPlayTimeSession();
 }
 
 function updateCatWorldGame() {
@@ -1467,12 +1572,24 @@ async function selectCat(catOrId) {
         <h1>猫咪能量世界</h1>
         <p>把今天练过的英文变成软绵绵的能量，给猫咪买小鱼干、玩具和漂亮家具，把她的房间一点点装可爱。</p>
       </div>
-      <button class="cat-world-wallet" type="button" aria-label="猫咪世界能量" @click="energyModalOpen = true">
-        <span>可用能量</span>
-        <strong>{{ energy.available || 0 }}</strong>
-        <em class="cat-world-wallet-today">今日 +{{ todayEnergy }}</em>
-        <small>累计 {{ energy.earned || 0 }} · 已用 {{ energy.spent || 0 }}</small>
-      </button>
+      <div class="cat-world-hero-status">
+        <section
+          class="cat-world-play-time"
+          :class="`is-${playTimeCardState}`"
+          aria-label="今日猫咪世界倒计时"
+        >
+          <span>今日陪伴倒计时</span>
+          <strong>{{ playTimeClock }}</strong>
+          <em>{{ playTimeProgressLabel }}</em>
+          <small>100 词 10 分钟 · 200 词 20 分钟</small>
+        </section>
+        <button class="cat-world-wallet" type="button" aria-label="猫咪世界能量" @click="energyModalOpen = true">
+          <span>可用能量</span>
+          <strong>{{ energy.available || 0 }}</strong>
+          <em class="cat-world-wallet-today">今日 +{{ todayEnergy }}</em>
+          <small>累计 {{ energy.earned || 0 }} · 已用 {{ energy.spent || 0 }}</small>
+        </button>
+      </div>
     </section>
 
     <p v-if="notice" class="cat-world-notice" aria-live="polite">{{ notice }}</p>

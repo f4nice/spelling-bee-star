@@ -115,8 +115,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260729-004"
-DEFAULT_PAGE_VERSION = "v20260729.4"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260730-001"
+DEFAULT_PAGE_VERSION = "v20260730.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -267,6 +267,8 @@ CAT_WORLD_CAT_GRASS_ITEM_ID = "cat-grass-pot"
 CAT_WORLD_BATH_ITEM_ID = "cat-bath-kit"
 CAT_WORLD_REPAIR_HAMMER_ITEM_ID = "repair-hammer"
 CAT_WORLD_PET_REWARD_COOLDOWN_SECONDS = 60 * 60
+CAT_WORLD_PLAY_TIME_TIERS = ((200, 20 * 60), (100, 10 * 60))
+CAT_WORLD_PLAY_TIME_HEARTBEAT_GRACE_SECONDS = 30
 CAT_WORLD_LITTER_MAX = 4
 CAT_WORLD_LITTER_MOOD_PENALTY_PER_PILE = 2
 CAT_WORLD_LITTER_MOOD_PENALTY_MAX = 8
@@ -4352,6 +4354,25 @@ def vue_cat_world_api(request: Request, db: Session = Depends(get_db)):
     phone = require_cat_world_phone(request)
     state = get_or_create_cat_world_state(db, phone)
     return serialize_cat_world_payload(db, state)
+
+
+@app.post("/api/vue/cat-world/play-time")
+async def vue_cat_world_play_time_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        body = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="计时状态不是有效 JSON。") from exc
+    active = (body or {}).get("active") is not False
+    state = get_or_create_cat_world_state(db, phone)
+    play_time = cat_world_update_play_time_session(
+        state,
+        cat_world_today_spelling_count(db),
+        active=active,
+    )
+    db.add(state)
+    db.commit()
+    return {"ok": True, "playTime": play_time}
 
 
 @app.post("/api/vue/cat-world/purchase")
@@ -13263,6 +13284,100 @@ def cat_world_today_energy(growth: dict[str, Any]) -> int:
     return max(spelling_count * spelling_points, 0)
 
 
+def cat_world_today_spelling_count(db: Session, today: date | None = None) -> int:
+    stat = db.scalar(select(ChallengeDailyStat).where(ChallengeDailyStat.stat_date == (today or date.today())))
+    if not stat:
+        return 0
+    return max(int(stat.correct_count or 0), 0) + max(int(stat.wrong_count or 0), 0)
+
+
+def cat_world_play_time_earned_seconds(spelling_count: int) -> int:
+    count = max(int(spelling_count or 0), 0)
+    for target, seconds in CAT_WORLD_PLAY_TIME_TIERS:
+        if count >= target:
+            return seconds
+    return 0
+
+
+def normalize_cat_world_play_time_day(state: CatWorldState, today: date) -> bool:
+    if state.play_time_date == today:
+        return False
+    state.play_time_date = today
+    state.play_time_used_seconds = 0
+    state.play_time_last_seen_at = None
+    return True
+
+
+def cat_world_play_time_payload(
+    state: CatWorldState,
+    spelling_count: int,
+    *,
+    now: datetime | None = None,
+    today: date | None = None,
+) -> dict[str, Any]:
+    current_time = now or datetime.utcnow()
+    current_day = today or date.today()
+    normalize_cat_world_play_time_day(state, current_day)
+    count = max(int(spelling_count or 0), 0)
+    earned_seconds = cat_world_play_time_earned_seconds(count)
+    stored_used_seconds = max(int(state.play_time_used_seconds or 0), 0)
+    live_seconds = 0
+    if state.play_time_last_seen_at and earned_seconds > stored_used_seconds:
+        elapsed_seconds = max(int((current_time - state.play_time_last_seen_at).total_seconds()), 0)
+        if elapsed_seconds <= CAT_WORLD_PLAY_TIME_HEARTBEAT_GRACE_SECONDS:
+            live_seconds = min(elapsed_seconds, earned_seconds - stored_used_seconds)
+    used_seconds = min(stored_used_seconds + live_seconds, earned_seconds)
+    remaining_seconds = max(earned_seconds - used_seconds, 0)
+    if count < 100:
+        next_target = 100
+        next_reward_minutes = 10
+    elif count < 200:
+        next_target = 200
+        next_reward_minutes = 20
+    else:
+        next_target = 0
+        next_reward_minutes = 0
+    return {
+        "date": current_day.isoformat(),
+        "spellingCount": count,
+        "earnedSeconds": earned_seconds,
+        "earnedMinutes": earned_seconds // 60,
+        "usedSeconds": used_seconds,
+        "remainingSeconds": remaining_seconds,
+        "nextTarget": next_target,
+        "nextRewardMinutes": next_reward_minutes,
+        "sessionActive": bool(state.play_time_last_seen_at and remaining_seconds > 0),
+    }
+
+
+def cat_world_update_play_time_session(
+    state: CatWorldState,
+    spelling_count: int,
+    *,
+    active: bool,
+    now: datetime | None = None,
+    today: date | None = None,
+) -> dict[str, Any]:
+    current_time = now or datetime.utcnow()
+    current_day = today or date.today()
+    normalize_cat_world_play_time_day(state, current_day)
+    earned_seconds = cat_world_play_time_earned_seconds(spelling_count)
+    used_seconds = max(int(state.play_time_used_seconds or 0), 0)
+    if state.play_time_last_seen_at and earned_seconds > used_seconds:
+        elapsed_seconds = max(int((current_time - state.play_time_last_seen_at).total_seconds()), 0)
+        if elapsed_seconds <= CAT_WORLD_PLAY_TIME_HEARTBEAT_GRACE_SECONDS:
+            used_seconds += min(elapsed_seconds, earned_seconds - used_seconds)
+    state.play_time_used_seconds = min(used_seconds, max(earned_seconds, 20 * 60))
+    remaining_seconds = max(earned_seconds - state.play_time_used_seconds, 0)
+    state.play_time_last_seen_at = current_time if active and remaining_seconds > 0 else None
+    return cat_world_play_time_payload(
+        state,
+        spelling_count,
+        now=current_time,
+        today=current_day,
+    )
+
+
 def parse_cat_world_inventory(raw: str | None) -> dict[str, int]:
     try:
         loaded = json.loads(raw or "{}")
@@ -18008,6 +18123,14 @@ def cat_world_mood(
 
 def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, Any]:
     growth = learning_growth_summary(db)
+    missions = {item["key"]: item for item in growth.get("dailyMissions", []) if isinstance(item, dict)}
+    spelling_count = int(missions.get("today_spelling", {}).get("value") or 0)
+    play_time_day_changed = normalize_cat_world_play_time_day(state, date.today())
+    if play_time_day_changed:
+        db.add(state)
+        db.commit()
+        db.refresh(state)
+    play_time = cat_world_play_time_payload(state, spelling_count)
     essay_energy_source = cat_world_essay_energy_source(db, state.phone)
     operating_energy_source = cat_world_operating_energy_source(db, state.phone)
     earned_energy = (
@@ -18134,6 +18257,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         if count > 0 and CAT_WORLD_SHOP_BY_ID.get(decor_id, {}).get("category") == "decor"
     }
     return {
+        "playTime": play_time,
         "energy": {
             "earned": earned_energy,
             "spent": spent_energy,
@@ -18485,6 +18609,14 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN litter_started_at DATETIME NULL"))
         if "cat_world_states" in table_names and "damaged_items" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN damaged_items TEXT NULL"))
+        if "cat_world_states" in table_names and "play_time_date" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN play_time_date DATE NULL"))
+        if "cat_world_states" in table_names and "play_time_used_seconds" not in cat_world_state_columns:
+            connection.execute(
+                text("ALTER TABLE cat_world_states ADD COLUMN play_time_used_seconds INTEGER NOT NULL DEFAULT 0")
+            )
+        if "cat_world_states" in table_names and "play_time_last_seen_at" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN play_time_last_seen_at DATETIME NULL"))
         if "cat_world_daily_logs" in table_names and "agent_state" not in cat_world_daily_log_columns:
             connection.execute(text("ALTER TABLE cat_world_daily_logs ADD COLUMN agent_state TEXT NULL"))
         if "cat_world_daily_logs" in table_names and "damaged_item_id" not in cat_world_daily_log_columns:
