@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Award as AwardIcon, Cat as CatIcon, ChevronLeft, ChevronRight, X as XIcon } from "lucide-vue-next";
+import { Award as AwardIcon, Cat as CatIcon, ChevronLeft, ChevronRight, LockKeyhole as LockIcon, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -22,6 +22,7 @@ import { catPortraitModel } from "../catWorldPortrait.js";
 import { catRarityBadge } from "../catWorldRarity.js";
 import {
   formatCatWorldPlayTime,
+  isCatWorldPlayTimeLocked,
   projectCatWorldPlayTime,
 } from "../catWorldPlayTime.js";
 import { routeApiPaths } from "../routeApiPaths.js";
@@ -213,6 +214,7 @@ const playTimeRemainingSeconds = computed(() =>
   ),
 );
 const playTimeClock = computed(() => formatCatWorldPlayTime(playTimeRemainingSeconds.value));
+const playTimeLocked = computed(() => isCatWorldPlayTimeLocked(playTimeRemainingSeconds.value));
 const playTimeProgressLabel = computed(() => {
   const count = Math.max(Number(playTime.value.spellingCount || 0), 0);
   const rewardMinutes = Math.max(Number(playTime.value.rewardMinutes || 0), 0);
@@ -225,6 +227,18 @@ const playTimeCardState = computed(() => {
   if (Number(playTime.value.earnedSeconds || 0) <= 0) return "waiting";
   if (playTimeRemainingSeconds.value <= 0) return "finished";
   return "running";
+});
+
+watch(playTimeLocked, (locked) => {
+  if (!locked) return;
+  roomEditMode.value = false;
+  selectedDecorId.value = "";
+  layoutDirty.value = false;
+  activeHandbook.value = "";
+  openCatDiaryId.value = "";
+  scenePurchaseTarget.value = null;
+  openedBlindBox.value = null;
+  catWorldGame.value?.cancelCatCarry?.();
 });
 const state = computed(() => payload.value.state || {});
 const scenes = computed(() => payload.value.scenes || []);
@@ -1653,12 +1667,30 @@ async function selectCat(catOrId) {
       </div>
     </section>
 
-    <p v-if="notice" class="cat-world-notice" aria-live="polite">{{ notice }}</p>
-    <div v-if="lostCatRows.length" class="cat-world-lost-alert" role="status">
+    <div class="cat-world-play-area" :class="{ 'is-locked': playTimeLocked }">
+      <div v-if="playTimeLocked" class="cat-world-play-lock" role="status" aria-live="polite">
+        <section class="cat-world-play-lock-card" aria-labelledby="cat-world-play-lock-title">
+          <span class="cat-world-play-lock-icon" aria-hidden="true">
+            <LockIcon :size="34" :stroke-width="2.8" />
+          </span>
+          <p class="section-kicker">Play Time Ended</p>
+          <h2 id="cat-world-play-lock-title">今日陪伴时间结束</h2>
+          <p>完成今日拼写任务或等待后台发放奖励时间后，猫咪活动区会自动解锁。</p>
+          <strong>{{ playTimeProgressLabel }}</strong>
+        </section>
+      </div>
+
+      <div
+        class="cat-world-play-content"
+        :inert="playTimeLocked ? '' : null"
+        :aria-hidden="playTimeLocked ? 'true' : null"
+      >
+      <p v-if="notice" class="cat-world-notice" aria-live="polite">{{ notice }}</p>
+      <div v-if="lostCatRows.length" class="cat-world-lost-alert" role="status">
       <strong>{{ lostCatRows.map((cat) => cat.catLabel).join("、") }}已经离开活动室</strong>
       <span>{{ lostCatRows[0].escapeLabel }}；需要在猫咪商店重新领养。</span>
       <button type="button" @click="activeCategory = 'cat'">查看猫咪商店</button>
-    </div>
+      </div>
 
     <section class="cat-world-layout">
       <section class="cat-world-room-panel panel">
@@ -2332,6 +2364,8 @@ async function selectCat(catOrId) {
         </button>
       </div>
     </section>
+      </div>
+    </div>
 
     <div v-if="scenePurchaseTarget" class="cat-world-modal-backdrop" @click.self="scenePurchaseTarget = null">
       <section class="cat-world-scene-purchase-modal panel" role="dialog" aria-modal="true" aria-labelledby="cat-world-scene-purchase-title">

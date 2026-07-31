@@ -15249,6 +15249,76 @@ select {
   color: #ffb9cb;
 }
 
+.cat-world-play-area,
+.cat-world-play-content {
+  display: grid;
+  gap: 14px;
+}
+
+.cat-world-play-area {
+  position: relative;
+}
+
+.cat-world-play-content[inert] {
+  pointer-events: none;
+  user-select: none;
+}
+
+.cat-world-play-lock {
+  position: absolute;
+  inset: 0;
+  z-index: 70;
+  padding: 18px;
+  cursor: not-allowed;
+  background: rgba(32, 48, 64, 0.72);
+}
+
+.cat-world-play-lock-card {
+  position: sticky;
+  top: 86px;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: min(460px, calc(100vw - 48px));
+  margin: 0 auto;
+  border: 4px solid #2c2f3a;
+  border-radius: 6px;
+  padding: 22px;
+  color: #203040;
+  background: #fff8df;
+  box-shadow: 8px 8px 0 #2c2f3a;
+  text-align: center;
+}
+
+.cat-world-play-lock-card h2,
+.cat-world-play-lock-card p {
+  margin: 0;
+}
+
+.cat-world-play-lock-card > p:not(.section-kicker) {
+  max-width: 38em;
+  color: #526178;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.cat-world-play-lock-card > strong {
+  color: #176f58;
+  font-size: 13px;
+}
+
+.cat-world-play-lock-icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border: 3px solid #2c2f3a;
+  border-radius: 4px;
+  color: #2c2f3a;
+  background: #fff07d;
+  box-shadow: 4px 4px 0 #2c2f3a;
+}
+
 @media (max-width: 1120px) {
   .shell[data-quant-radar-page-key="cat-world"] .cat-world-hero {
     grid-template-columns: minmax(0, 1fr) minmax(360px, 400px);
@@ -15264,6 +15334,16 @@ select {
 @media (max-width: 560px) {
   .cat-world-hero-status {
     grid-template-columns: 1fr;
+  }
+
+  .cat-world-play-lock {
+    padding: 12px;
+  }
+
+  .cat-world-play-lock-card {
+    top: 74px;
+    width: min(100%, calc(100vw - 40px));
+    padding: 18px 14px;
   }
 }
 

@@ -10,6 +10,10 @@ export function formatCatWorldPlayTime(value) {
   return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
+export function isCatWorldPlayTimeLocked(value) {
+  return normalizePlayTimeSeconds(value) <= 0;
+}
+
 export function projectCatWorldPlayTime(playTime, syncedAt, now, active = true) {
   const remaining = normalizePlayTimeSeconds(playTime?.remainingSeconds);
   if (!active || remaining <= 0) return remaining;
