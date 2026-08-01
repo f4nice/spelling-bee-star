@@ -551,7 +551,7 @@ function individualizeCatLog(cat, sourceLog = {}) {
 }
 
 const catAgentCards = computed(() =>
-  roomCats.value.map((cat) => {
+  (catProfiles.value.length ? catProfiles.value : roomCats.value).map((cat) => {
     const breedId = catBreedId(cat);
     const owned = ownsCat(breedId);
     const log = individualizeCatLog(cat, dailyLogs.value[cat.id] || dailyLogs.value[breedId] || {});
