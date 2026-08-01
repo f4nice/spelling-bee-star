@@ -57,17 +57,30 @@ const ESSAY_DAILY_PROMPTS = [
   },
 ];
 
+const GAOKAO_DAILY_PROMPTS = ESSAY_DAILY_PROMPTS.filter((prompt) => prompt.sourceLabel === "高考英语作文");
+const PET_DAILY_PROMPTS = ESSAY_DAILY_PROMPTS.filter((prompt) => prompt.sourceLabel === "PET Writing");
+
 function normalizedDate(value) {
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
-export function essayDailyPromptForDate(value = new Date()) {
+export function essayDailyPromptsForDate(value = new Date()) {
   const date = normalizedDate(value);
   const dayNumber = Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
-  const prompt = ESSAY_DAILY_PROMPTS[((dayNumber % ESSAY_DAILY_PROMPTS.length) + ESSAY_DAILY_PROMPTS.length) % ESSAY_DAILY_PROMPTS.length];
-  return {
-    ...prompt,
-    dateKey: [date.getFullYear(), date.getMonth() + 1, date.getDate()].map((part) => String(part).padStart(2, "0")).join("-"),
-  };
+  const pairedIndex = Math.floor(
+    (((dayNumber % ESSAY_DAILY_PROMPTS.length) + ESSAY_DAILY_PROMPTS.length) % ESSAY_DAILY_PROMPTS.length) / 2,
+  );
+  const dateKey = [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((part) => String(part).padStart(2, "0"))
+    .join("-");
+  return [
+    { ...GAOKAO_DAILY_PROMPTS[pairedIndex], sourceKey: "gaokao", dateKey },
+    { ...PET_DAILY_PROMPTS[pairedIndex], sourceKey: "pet", dateKey },
+  ];
+}
+
+export function essayDailyPromptForDate(value = new Date(), sourceKey = "gaokao") {
+  const prompts = essayDailyPromptsForDate(value);
+  return prompts.find((prompt) => prompt.sourceKey === sourceKey) || prompts[0];
 }

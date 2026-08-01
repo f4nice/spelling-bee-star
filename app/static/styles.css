@@ -7123,6 +7123,37 @@ button.calendar-day {
   font-weight: 900;
 }
 
+.essay-daily-prompt-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  border: 1px solid #b8cdc3;
+  padding: 3px;
+  background: #fff;
+}
+
+.essay-daily-prompt-tabs button {
+  min-width: 0;
+  min-height: 32px;
+  border: 0;
+  padding: 6px 10px;
+  color: #36544a;
+  background: transparent;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.essay-daily-prompt-tabs button:hover,
+.essay-daily-prompt-tabs button.active {
+  color: #fff;
+  background: var(--accent);
+}
+
+.essay-daily-prompt-tabs button:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 1px;
+}
+
 .essay-daily-prompt > strong {
   color: var(--ink);
   font-size: 17px;

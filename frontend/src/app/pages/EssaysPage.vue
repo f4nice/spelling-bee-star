@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from "vue";
 import { CalendarDays, PenLine } from "lucide-vue-next";
-import { essayDailyPromptForDate } from "../essayDailyPrompt.js";
+import { essayDailyPromptsForDate } from "../essayDailyPrompt.js";
 import { sortEssaysNewestFirst } from "../essaySorting.js";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
@@ -21,6 +21,7 @@ const deletePassword = ref("");
 const deletePasswordInput = ref(null);
 const bodyInput = ref(null);
 const isDeleteConfirmOpen = ref(false);
+const activeDailyPromptSource = ref("gaokao");
 const draft = reactive(emptyDraft());
 let isApplyingDraft = false;
 
@@ -28,7 +29,10 @@ const titleMaxChars = computed(() => Number(props.data?.limits?.titleMaxChars ||
 const bodyMaxChars = computed(() => Number(props.data?.limits?.bodyMaxChars || 30000));
 const currentWordCount = computed(() => countEssayWords(draft.body));
 const hasEssayInput = computed(() => Boolean(draft.body.trim()));
-const dailyPrompt = computed(() => essayDailyPromptForDate(new Date()));
+const dailyPrompts = computed(() => essayDailyPromptsForDate(new Date()));
+const dailyPrompt = computed(
+  () => dailyPrompts.value.find((prompt) => prompt.sourceKey === activeDailyPromptSource.value) || dailyPrompts.value[0],
+);
 const aiVersionText = computed(() => {
   if (busyAction.value === "optimize") return "AI 正在优化这篇作文，完成后会显示在这里。";
   return draft.optimizedBody || "AI 优化后会显示在这里。";
@@ -428,6 +432,19 @@ async function deleteEssay() {
             <span><CalendarDays :size="16" aria-hidden="true" />每日命题</span>
             <em>{{ dailyPrompt.sourceLabel }}</em>
           </header>
+          <div class="essay-daily-prompt-tabs" role="tablist" aria-label="每日作文题来源">
+            <button
+              v-for="prompt in dailyPrompts"
+              :key="prompt.sourceKey"
+              type="button"
+              role="tab"
+              :aria-selected="prompt.sourceKey === activeDailyPromptSource"
+              :class="{ active: prompt.sourceKey === activeDailyPromptSource }"
+              @click="activeDailyPromptSource = prompt.sourceKey"
+            >
+              {{ prompt.sourceKey === "gaokao" ? "高考" : "PET" }}
+            </button>
+          </div>
           <strong id="essay-daily-prompt-title">{{ dailyPrompt.title }}</strong>
           <p>{{ dailyPrompt.prompt }}</p>
           <footer>
