@@ -1,7 +1,7 @@
 {
-  "version": "BIZ-REL-20260801-011",
+  "version": "BIZ-REL-20260801-012",
   "releaseName": "Vue 全站版",
-  "pageVersion": "v20260801.11",
+  "pageVersion": "v20260801.12",
   "footerText": "SpeakEasy",
   "modules": [
     { "label": "首页", "version": "v20260728.2", "status": "优化" },
