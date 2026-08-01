@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Award as AwardIcon, Cat as CatIcon, ChevronLeft, ChevronRight, Hammer as HammerIcon, LockKeyhole as LockIcon, Shovel as ShovelIcon, X as XIcon } from "lucide-vue-next";
+import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, ChevronLeft, ChevronRight, Hammer as HammerIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MoveRight as MoveRightIcon, Shovel as ShovelIcon, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -80,8 +80,10 @@ const petBusyCatId = ref("");
 const roomCanPan = ref(false);
 const roomPanActive = ref(false);
 const busySceneId = ref("");
+const busyLocationItemId = ref("");
 const ambientEventCooldowns = new Map();
 const foodNibbleCooldowns = new Map();
+const catPositionSyncs = new Map();
 
 const catReactionTexts = [
   "收到摸摸指令，开心值上升",
@@ -113,6 +115,8 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleGlobalKeydown);
   window.removeEventListener("pagehide", endPlayTimeSession);
   document.removeEventListener("visibilitychange", handlePlayTimeVisibilityChange);
+  catPositionSyncs.forEach((entry) => window.clearTimeout(entry.timer));
+  catPositionSyncs.clear();
   catWorldGame.value?.destroy();
   catWorldGame.value = null;
 });
@@ -146,6 +150,7 @@ onMounted(async () => {
     onCatDrop: (_cat, interaction) => {
       if (interaction?.message) notice.value = interaction.message;
     },
+    onCatPositionChange: syncCatPosition,
     onDecorClick: handleDecorClick,
     onDecorSelect: (decorId) => {
       selectedDecorId.value = decorId || "";
@@ -278,6 +283,7 @@ const currentScene = computed(
 );
 const inventory = computed(() => state.value.inventory || {});
 const usableInventory = computed(() => state.value.usableInventory || inventory.value);
+const sceneInventory = computed(() => state.value.sceneInventory || inventory.value);
 const damagedItems = computed(() => state.value.damagedItems || {});
 const roomStyles = computed(() => state.value.roomStyles || {});
 const roomLayout = computed(() => state.value.roomLayout || {});
@@ -319,13 +325,21 @@ const currentBlindRarityLabel = computed(() => {
 const gameSettings = computed(() => payload.value.gameSettings || {});
 const shopById = computed(() => Object.fromEntries(shop.value.map((item) => [item.id, item])));
 const selectedCat = computed(() =>
-  catProfiles.value.find((cat) => cat.id === state.value.selectedCatProfile)
+  catProfiles.value.find((cat) => cat.id === state.value.selectedCatProfile && cat.currentSceneId === currentScene.value.id)
+  || catProfiles.value.find((cat) => cat.currentSceneId === currentScene.value.id)
+  || catProfiles.value.find((cat) => cat.id === state.value.selectedCatProfile)
   || catProfiles.value.find((cat) => cat.breedId === state.value.selectedCat)
   || cats.value.find((cat) => cat.id === state.value.selectedCat && ownedCats.value.includes(cat.id))
   || {},
 );
 const roomCats = computed(() => {
-  if (catProfiles.value.length) return catProfiles.value;
+  if (catProfiles.value.length) {
+    const roomIds = new Set(state.value.roomCatIds || []);
+    return catProfiles.value.filter((cat) =>
+      roomIds.size ? roomIds.has(cat.id) : cat.currentSceneId === currentScene.value.id,
+    );
+  }
+  if (currentScene.value.id && currentScene.value.id !== "main-room") return [];
   const owned = new Set(ownedCats.value);
   const visibleCats = cats.value.filter((cat) => owned.has(cat.id));
   return visibleCats;
@@ -413,7 +427,7 @@ const ownedFoodCount = computed(() =>
 const lastPlayLabel = computed(() => shopById.value[mood.value.lastPlayItem]?.label || "");
 const activeToolItems = computed(() => {
   if (activeToolCategory.value === "cat") {
-    return roomCats.value
+    return (catProfiles.value.length ? catProfiles.value : roomCats.value)
       .map((cat) => ({
         ...cat,
         category: "cat",
@@ -664,7 +678,7 @@ const gameDailyLogs = computed(() =>
   ),
 );
 const selectedProfileId = computed(() =>
-  state.value.selectedCatProfile
+  roomCats.value.find((cat) => cat.id === state.value.selectedCatProfile)?.id
   || roomCats.value.find((cat) => catBreedId(cat) === state.value.selectedCat)?.id
   || roomCats.value[0]?.id
   || "",
@@ -687,7 +701,7 @@ const gameActiveCare = computed(() => ({
 }));
 const gameSnapshot = computed(() => ({
   cats: roomCats.value,
-  inventory: inventory.value,
+  inventory: sceneInventory.value,
   damagedItems: damagedItems.value,
   layout: roomLayout.value,
   mood: mood.value,
@@ -795,6 +809,25 @@ function handlePlayTimeVisibilityChange() {
 function updateCatWorldGame() {
   catWorldGame.value?.update(gameSnapshot.value);
   roomCanPan.value = Boolean(catWorldGame.value?.canPan?.());
+}
+
+function syncCatPosition(cat, position) {
+  const profileId = cat?.profileId || cat?.id;
+  const sceneId = currentScene.value.id;
+  if (!profileId || !sceneId || cat?.currentSceneId !== sceneId || !position) return;
+  const previous = catPositionSyncs.get(profileId);
+  if (previous?.timer) window.clearTimeout(previous.timer);
+  const timer = window.setTimeout(() => {
+    const pending = catPositionSyncs.get(profileId);
+    if (!pending || pending.timer !== timer || pending.sceneId !== currentScene.value.id) return;
+    catPositionSyncs.delete(profileId);
+    fetchJson(routeApiPaths.catWorldCatPosition(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ profileId, sceneId: pending.sceneId, position: pending.position }),
+    }).catch(() => {});
+  }, 900);
+  catPositionSyncs.set(profileId, { timer, sceneId, position });
 }
 
 function panRoomBy(delta) {
@@ -1049,7 +1082,7 @@ function recordCatFoodNibble(cat, event = {}) {
 }
 
 function ownedToolCount(categoryKey) {
-  if (categoryKey === "cat") return roomCats.value.length;
+  if (categoryKey === "cat") return catProfiles.value.length || roomCats.value.length;
   return shop.value.filter((item) => item.category === categoryKey && itemCount(item.id) > 0).length;
 }
 
@@ -1057,9 +1090,10 @@ function ownedToolSubtext(item) {
   const damaged = damageInfo(item);
   if (damaged) return `损坏 · 维修需 1 把锤子 + ${damaged.repairCost || 0} 能量`;
   if (item.category === "cat") {
-    return [item.genderLabel, item.patternLabel, item.featureLabel].filter(Boolean).join(" · ")
+    const profile = [item.genderLabel, item.patternLabel, item.featureLabel].filter(Boolean).join(" · ")
       || item.personality
       || "正在陪读";
+    return `${profile} · 位于${item.currentSceneLabel || "一楼活动室"}`;
   }
   const suffix = item.favoriteLabel ? ` · ${item.favoriteLabel}` : "";
   if (item.category === "food") return `拥有 ${item.count} · ${foodTypeLabel(item)}${suffix}`;
@@ -1070,14 +1104,28 @@ function ownedToolSubtext(item) {
     if (item.useType === "litter-prevent") return `拥有 ${item.count} · 点击放进活动室`;
     if (item.useType === "cat-bath") return `拥有 ${item.count} · 给当前档案猫咪洗澡`;
     if (item.useType === "cat-rename") {
-      return renameMode.value ? `已装备 · 拥有 ${item.count}` : `拥有 ${item.count} · 点击装备`;
+      return renameMode.value ? `已选择 · 拥有 ${item.count}` : `拥有 ${item.count} · 点击改名`;
     }
     if (item.useType === "repair-tool") {
       return repairMode.value ? `已装备 · 拥有 ${item.count}` : `拥有 ${item.count} · 点击装备`;
     }
     return `拥有 ${item.count} · 使用一次消耗 1 个`;
   }
-  return `拥有 ${item.count}${suffix}`;
+  const location = item.locationLabel ? ` · ${item.locationLabel}` : "";
+  return `拥有 ${item.count}${location}${suffix}`;
+}
+
+function bringCatToCurrentScene(cat) {
+  closeCatDiary();
+  selectCat(cat, { carry: true });
+}
+
+function itemIsInCurrentScene(item) {
+  return item?.locationId === currentScene.value.id;
+}
+
+function itemCanEnterCurrentScene(item) {
+  return Boolean(item?.allowedInCurrentScene);
 }
 
 function foodFavoriteCat(item) {
@@ -1198,6 +1246,20 @@ function setRenameMode(enabled) {
     : "已收起改名卡。";
 }
 
+function openRenameCardModal() {
+  setRenameMode(true);
+  if (!renameMode.value) return;
+  const target = catForId(state.value.selectedCatProfile)
+    || selectedCat.value
+    || catProfiles.value[0];
+  if (!target?.id) {
+    renameMode.value = false;
+    notice.value = "还没有可以改名的猫咪。";
+    return;
+  }
+  openRenameModal(target);
+}
+
 function handlePagePointerMove(event) {
   if (!renameMode.value || renameModalOpen.value) return;
   renameCursorX.value = event.clientX;
@@ -1236,6 +1298,33 @@ function hideRoomToolCursor() {
   toolCursorVisible.value = false;
 }
 
+async function moveOwnedItem(item, locationId) {
+  if (!item?.id || busyLocationItemId.value) return;
+  if (roomEditMode.value || layoutDirty.value) {
+    notice.value = "请先保存当前布局，再移动物品所在区域。";
+    return;
+  }
+  busyLocationItemId.value = item.id;
+  notice.value = "";
+  try {
+    const nextPayload = await fetchJson(routeApiPaths.catWorldItemLocation(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ itemId: item.id, locationId }),
+    });
+    replacePayload(nextPayload);
+    selectedDecorId.value = "";
+    const effect = nextPayload.itemLocation || {};
+    notice.value = locationId === "storage"
+      ? `${effect.label || item.label} 已收进收纳箱。`
+      : `${effect.label || item.label} 已放到${effect.locationLabel || currentScene.value.label}，进入编辑模式后可以继续调整位置。`;
+  } catch (error) {
+    notice.value = error.message || "物品位置保存失败，请稍后再试。";
+  } finally {
+    busyLocationItemId.value = "";
+  }
+}
+
 function handleOwnedToolClick(item) {
   if (!item?.id || busyItemId.value) return;
   if (item.useType === "repair-tool") {
@@ -1247,11 +1336,15 @@ function handleOwnedToolClick(item) {
     return;
   }
   if (item.useType === "cat-rename") {
-    setRenameMode(!renameMode.value);
+    openRenameCardModal();
     return;
   }
   if (handleRepairTargetClick(item)) return;
   if (item.category === "decor") {
+    if (!itemIsInCurrentScene(item)) {
+      notice.value = `${item.label}现在${item.locationLabel || "在其他区域"}；可以用右侧按钮收纳或放到当前区域。`;
+      return;
+    }
     selectedDecorId.value = item.id;
     notice.value = roomEditMode.value
       ? `已选中 ${item.label}，在左侧房间里拖动它后点击保存并退出。`
@@ -1259,6 +1352,10 @@ function handleOwnedToolClick(item) {
     return;
   }
   if (item.category === "toy") {
+    if (!itemIsInCurrentScene(item)) {
+      notice.value = `${item.label}现在${item.locationLabel || "在其他区域"}；可以用右侧按钮收纳或放到当前区域。`;
+      return;
+    }
     selectedDecorId.value = item.id;
     notice.value = roomEditMode.value
       ? `${item.label} 可以在左侧房间拖动保存。`
@@ -1278,7 +1375,7 @@ function handleOwnedToolClick(item) {
     return;
   }
   if (item.category === "cat") {
-    selectCat(item.id);
+    selectCat(item, { carry: true });
   }
 }
 
@@ -1826,9 +1923,10 @@ async function applyDecorStyle(decorId, option) {
 }
 
 function openRenameModal(cat) {
-  if (!renameMode.value || !cat?.owned || !cat.id) return;
-  renameTargetCatId.value = cat.id;
-  renameDraft.value = cat.nickname || "";
+  const ownedProfile = catProfiles.value.find((profile) => profile.id === cat?.id);
+  if (!renameMode.value || !ownedProfile) return;
+  renameTargetCatId.value = ownedProfile.id;
+  renameDraft.value = ownedProfile.nickname || "";
   renameModalOpen.value = true;
   renameCursorVisible.value = false;
   nextTick(() => renameInputRef.value?.focus());
@@ -1908,7 +2006,7 @@ async function selectCat(catOrId, options = {}) {
     const nextPayload = await fetchJson(routeApiPaths.catWorldSelectCat(), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ catId, profileId }),
+      body: JSON.stringify({ catId, profileId, moveToCurrentScene: carry }),
     });
     replacePayload(nextPayload);
     const cat = profile || catForId(nextPayload.state?.selectedCatProfile) || catForId(catId);
@@ -1924,7 +2022,7 @@ async function selectCat(catOrId, options = {}) {
       showCatReaction(cat, carryInteraction?.carrying ? "被抱起来啦，带我去想去的地方吧。" : "镜头找到我啦，我会在这里陪着你。");
     }
     notice.value = carryInteraction?.message
-      || `${cat?.displayLabel || cat?.label || "猫咪"} 已设为主猫${locked ? "，活动室镜头已锁定" : ""}。`;
+      || `${cat?.displayLabel || cat?.label || "猫咪"}${nextPayload.catMoved ? ` 已来到${currentScene.value.label}` : " 已设为主猫"}${locked ? "，活动室镜头已锁定" : ""}。`;
   } catch (error) {
     notice.value = error.message || "切换猫咪失败，请稍后再试。";
   } finally {
@@ -2015,7 +2113,7 @@ async function selectCat(catOrId, options = {}) {
             <span>{{ scene.label }}</span>
             <small v-if="scene.enabled && !scene.unlocked">{{ Number(scene.purchaseCost || 0).toLocaleString() }} 能量</small>
             <small v-else-if="!scene.enabled">规划中</small>
-            <small v-else-if="scene.id !== currentScene.id">已拥有</small>
+            <small v-else>{{ scene.catCount || 0 }}只 · {{ scene.itemCount || 0 }}件</small>
           </button>
         </div>
         <div class="cat-world-room-head">
@@ -2242,7 +2340,7 @@ async function selectCat(catOrId, options = {}) {
               class="cat-world-owned-main"
               type="button"
               :aria-pressed="item.useType === 'repair-tool' ? repairMode : item.useType === 'litter-clean' ? scoopMode : item.useType === 'cat-rename' ? renameMode : null"
-              :disabled="busyItemId === item.id"
+              :disabled="busyItemId === item.id || busyLocationItemId === item.id"
               @click="handleOwnedToolClick(item)"
             >
               <CatWorldProductIcon :item="item" compact aria-hidden="true" />
@@ -2252,7 +2350,30 @@ async function selectCat(catOrId, options = {}) {
                 <small>{{ ownedToolSubtext(item) }}</small>
               </span>
             </button>
-            <div v-if="item.category === 'decor' && item.styleOptions?.length" class="cat-world-color-swatches" aria-label="已拥有配色">
+            <div v-if="['decor', 'toy'].includes(item.category)" class="cat-world-item-location-actions">
+              <em><MapPinIcon :size="14" :stroke-width="2.6" aria-hidden="true" />{{ item.locationLabel || "一楼活动室" }}</em>
+              <button
+                v-if="itemIsInCurrentScene(item)"
+                type="button"
+                title="收进收纳箱"
+                :disabled="busyLocationItemId === item.id"
+                @click.stop="moveOwnedItem(item, 'storage')"
+              >
+                <ArchiveIcon :size="15" :stroke-width="2.7" aria-hidden="true" />
+                <span>{{ busyLocationItemId === item.id ? "保存中" : "收纳" }}</span>
+              </button>
+              <button
+                v-else
+                type="button"
+                :title="itemCanEnterCurrentScene(item) ? `放到${currentScene.label}` : '这件物品不适合当前区域'"
+                :disabled="busyLocationItemId === item.id || !itemCanEnterCurrentScene(item)"
+                @click.stop="moveOwnedItem(item, currentScene.id)"
+              >
+                <MoveRightIcon :size="15" :stroke-width="2.7" aria-hidden="true" />
+                <span>{{ busyLocationItemId === item.id ? "保存中" : "放到这里" }}</span>
+              </button>
+            </div>
+            <div v-if="item.category === 'decor' && item.styleOptions?.length && itemIsInCurrentScene(item)" class="cat-world-color-swatches" aria-label="已拥有配色">
               <button
                 v-for="option in item.styleOptions"
                 :key="`${item.id}-${option.tone}`"
@@ -2294,7 +2415,7 @@ async function selectCat(catOrId, options = {}) {
                 <CatIcon :size="20" :stroke-width="2.5" aria-hidden="true" />
               </span>
               <strong>{{ cat.displayLabel || cat.label }}</strong>
-              <small>{{ cat.genderLabel }} · {{ cat.patternLabel }} · {{ cat.neglectCritical ? cat.neglectStatusLabel : cat.needsBath ? cat.hygieneStatusLabel : cat.dailyMoodLabel }}</small>
+              <small>{{ cat.currentSceneLabel }} · {{ cat.genderLabel }} · {{ cat.neglectCritical ? cat.neglectStatusLabel : cat.needsBath ? cat.hygieneStatusLabel : cat.dailyMoodLabel }}</small>
             </button>
           </div>
         </section>
@@ -2329,6 +2450,19 @@ async function selectCat(catOrId, options = {}) {
         :key="`active-diary-${activeCatDiary.id}`"
         class="cat-world-agent-card cat-world-agent-card-expanded"
       >
+        <div class="cat-world-cat-location-summary">
+          <span><MapPinIcon :size="17" :stroke-width="2.7" aria-hidden="true" />现在位于 <strong>{{ activeCatDiary.currentSceneLabel }}</strong></span>
+          <span>喜欢区域 <strong>{{ activeCatDiary.favoriteSceneLabel }}</strong></span>
+          <button
+            v-if="activeCatDiary.currentSceneId !== currentScene.id"
+            type="button"
+            :disabled="busyItemId === activeCatDiary.id"
+            @click="bringCatToCurrentScene(activeCatDiary)"
+          >
+            <MoveRightIcon :size="16" :stroke-width="2.7" aria-hidden="true" />带到{{ currentScene.label }}
+          </button>
+          <em v-else>正在当前区域活动</em>
+        </div>
         <header>
           <span>{{ activeCatDiary.displayLabel || activeCatDiary.label }}</span>
           <strong>{{ activeCatDiary.dailyMoodLabel }}</strong>
@@ -2712,6 +2846,10 @@ async function selectCat(catOrId, options = {}) {
           </div>
           <small>{{ cat.owned ? `${cat.patternLabel || "原生花纹"} · ${cat.featureLabel || "普通特点"} · 个性：${cat.personality || cat.englishName}` : cat.escaped ? `${cat.lostInfo.escapeLabel}，请去商店重新领养` : cat.description }}</small>
           <div v-if="cat.owned" class="cat-world-cat-agent-status">
+            <p class="cat-world-cat-card-location">
+              <b><MapPinIcon :size="14" :stroke-width="2.6" aria-hidden="true" />{{ cat.currentSceneLabel }}</b>
+              <em>喜欢 {{ cat.favoriteSceneLabel }}</em>
+            </p>
             <p>
               <b>{{ cat.dailyMoodLabel }}</b>
               <em>{{ cat.behaviorLabel }}</em>
@@ -2747,7 +2885,7 @@ async function selectCat(catOrId, options = {}) {
         </header>
         <div class="cat-world-rename-targets" role="list" aria-label="选择要改名的猫咪">
           <button
-            v-for="cat in roomCats"
+            v-for="cat in catProfiles"
             :key="cat.id"
             type="button"
             :class="{ active: renameTargetCatId === cat.id }"

@@ -577,6 +577,24 @@ class CatWorldScene extends Phaser.Scene {
     if (lockedCatId) this.focusCat(lockedCatId);
   }
 
+  rememberCatPosition(entry, options = {}) {
+    if (!entry?.container?.active) return null;
+    const position = {
+      x: clamp(entry.container.x, 38, GAME_WIDTH - 132),
+      y: clamp(entry.container.y, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+      facing: entry.container.scaleX < 0 ? -1 : 1,
+    };
+    this.owner.catPositions.set(entry.cat.id, position);
+    if (options.notify !== false) {
+      this.owner.handlers.onCatPositionChange?.(entry.cat, {
+        x: xToPercent(position.x),
+        y: yToPercent(position.y),
+        facing: position.facing,
+      });
+    }
+    return position;
+  }
+
   focusCat(catId) {
     if (this.isEditMode()) return false;
     const container = this.catContainers.get(catId);
@@ -1672,11 +1690,7 @@ class CatWorldScene extends Phaser.Scene {
           ease: "Bounce.easeOut",
           onComplete: () => {
             if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
-            this.owner.catPositions.set(entry.cat.id, {
-              x: target.x,
-              y: target.y,
-              facing: entry.container.scaleX < 0 ? -1 : 1,
-            });
+            this.rememberCatPosition(entry);
             this.spawnCatBubble(entry.container, entry.cat, action.message);
             this.holdCatInteraction(entry, action.itemId, Math.max(action.expiresAt - Date.now(), 500));
           },
@@ -1713,11 +1727,7 @@ class CatWorldScene extends Phaser.Scene {
           ease: "Bounce.easeOut",
           onComplete: () => {
             if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
-            this.owner.catPositions.set(entry.cat.id, {
-              x: target.x,
-              y: target.y,
-              facing: entry.container.scaleX < 0 ? -1 : 1,
-            });
+            this.rememberCatPosition(entry);
             this.spawnCatBubble(entry.container, entry.cat, action.message || interaction.catMessage);
             this.holdCatInteraction(
               entry,
@@ -2441,11 +2451,17 @@ class CatWorldScene extends Phaser.Scene {
 
   savedCatPosition(cat = {}) {
     const saved = this.owner.catPositions.get(cat.id);
-    if (!saved) return null;
+    const persisted = cat.scenePosition;
+    if (!saved && !persisted) return null;
+    const position = saved || {
+      x: (Number(persisted.x || 0) / 100) * GAME_WIDTH,
+      y: (Number(persisted.y || 0) / 100) * GAME_HEIGHT,
+      facing: persisted.facing,
+    };
     return {
-      x: clamp(saved.x, 38, GAME_WIDTH - 132),
-      y: clamp(saved.y, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
-      facing: saved.facing === -1 ? -1 : 1,
+      x: clamp(position.x, 38, GAME_WIDTH - 132),
+      y: clamp(position.y, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+      facing: position.facing === -1 ? -1 : 1,
     };
   }
 
@@ -3127,6 +3143,7 @@ class CatWorldScene extends Phaser.Scene {
         onUpdate: () => container.setDepth(CAT_INTERACTION_DEPTH + index),
         onComplete: () => {
           if (container.getData("interactionActive")) return;
+          this.rememberCatPosition({ cat, container, index });
           if (shouldVisitFood) {
             this.spawnFoodPlayBubble(container, cat, foodTarget);
           } else if (shouldVisitRest) {

@@ -117,8 +117,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260801-007"
-DEFAULT_PAGE_VERSION = "v20260801.7"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260801-008"
+DEFAULT_PAGE_VERSION = "v20260801.8"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -1564,6 +1564,10 @@ CAT_WORLD_SCENE_SEEDS = [
     },
 ]
 CAT_WORLD_SCENE_SEED_BY_KEY = {scene["sceneKey"]: scene for scene in CAT_WORLD_SCENE_SEEDS}
+CAT_WORLD_STORAGE_LOCATION = "storage"
+CAT_WORLD_SCENE_PREFERENCE_KEYS = tuple(
+    scene["sceneKey"] for scene in CAT_WORLD_SCENE_SEEDS if scene.get("isEnabled")
+)
 CAT_WORLD_PRICING_PLANS = [
     {
         "category": "food",
@@ -4721,6 +4725,14 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
             claim_cat_world_limited_item_stock(db, item_id)
         inventory[item_id] = 1
         state.inventory = encode_cat_world_inventory(inventory)
+        item_locations = parse_cat_world_item_locations(state.item_locations, inventory)
+        _, _, active_scene_config = cat_world_active_scene_context(db, state)
+        item_locations[item_id] = (
+            state.current_scene_key
+            if cat_world_layout_item_allowed(item_id, active_scene_config.get("itemRules"))
+            else CAT_WORLD_STORAGE_LOCATION
+        )
+        state.item_locations = encode_cat_world_item_locations(item_locations)
     else:
         if current["energy"]["available"] < int(item["cost"]):
             raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点。")
@@ -5353,16 +5365,18 @@ async def vue_cat_world_room_layout_api(request: Request, db: Session = Depends(
     if requested_scene_key != state.current_scene_key:
         raise HTTPException(status_code=409, detail="场景已经切换，请重新打开编辑模式后保存。")
     inventory = parse_cat_world_inventory(state.inventory)
-    _, active_user_scene, active_scene_config = cat_world_active_scene_context(db, state)
+    active_scene, active_user_scene, active_scene_config = cat_world_active_scene_context(db, state)
+    item_locations = parse_cat_world_item_locations(state.item_locations, inventory)
+    scene_inventory = cat_world_inventory_for_scene(inventory, item_locations, active_scene.scene_key)
     current_layout = parse_cat_world_room_layout(
         active_user_scene.layout,
-        inventory,
+        scene_inventory,
         active_scene_config.get("defaultLayout"),
         active_scene_config.get("itemRules"),
     )
     owned_layout_item_ids = {
         item_id
-        for item_id, count in inventory.items()
+        for item_id, count in scene_inventory.items()
         if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") in {"decor", "toy"}
         and cat_world_layout_item_allowed(item_id, active_scene_config.get("itemRules"))
     }
@@ -5377,9 +5391,14 @@ async def vue_cat_world_room_layout_api(request: Request, db: Session = Depends(
     save_cat_world_active_scene_layout(state, active_user_scene, saved_layout)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
+    usable_scene_inventory = cat_world_inventory_for_scene(
+        usable_inventory,
+        item_locations,
+        active_scene.scene_key,
+    )
     usable_layout = parse_cat_world_room_layout(
         active_user_scene.layout,
-        usable_inventory,
+        usable_scene_inventory,
         active_scene_config.get("defaultLayout"),
         active_scene_config.get("itemRules"),
     )
@@ -5423,6 +5442,118 @@ async def vue_cat_world_select_scene_api(request: Request, db: Session = Depends
     return {"ok": True, **serialize_cat_world_payload(db, state)}
 
 
+@app.post("/api/vue/cat-world/item-location")
+async def vue_cat_world_item_location_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="物品位置数据不是有效 JSON。") from exc
+    payload = payload if isinstance(payload, dict) else {}
+    item_id = str(payload.get("itemId") or "").strip()
+    target_location = str(payload.get("locationId") or "").strip()
+    item = CAT_WORLD_SHOP_BY_ID.get(item_id)
+    if not item or item.get("category") not in {"decor", "toy"}:
+        raise HTTPException(status_code=404, detail="没有找到可以移动的物品。")
+    state = cat_world_locked_state(db, phone)
+    inventory = parse_cat_world_inventory(state.inventory)
+    if inventory.get(item_id, 0) <= 0:
+        raise HTTPException(status_code=400, detail="还没有拥有这件物品。")
+    target_scene: CatWorldScene | None = None
+    target_user_scene: CatWorldUserScene | None = None
+    target_config: dict[str, Any] = {}
+    if target_location != CAT_WORLD_STORAGE_LOCATION:
+        target_scene = cat_world_scene_row(db, target_location)
+        if not target_scene or target_scene.scene_key != target_location or not target_scene.is_enabled:
+            raise HTTPException(status_code=404, detail="没有找到要放置物品的区域。")
+        target_user_scene, _ = get_or_create_cat_world_user_scene(db, state, target_scene)
+        if not target_user_scene.is_unlocked:
+            raise HTTPException(status_code=403, detail="请先解锁这个区域。")
+        target_config = cat_world_scene_config(target_scene)
+        if not cat_world_layout_item_allowed(item_id, target_config.get("itemRules")):
+            raise HTTPException(status_code=400, detail="这件物品不适合放在这个区域。")
+    locations = parse_cat_world_item_locations(state.item_locations, inventory)
+    previous_location = locations.get(item_id, CAT_WORLD_DEFAULT_SCENE_KEY)
+    if previous_location == target_location:
+        return {"ok": True, "alreadyPlaced": True, **serialize_cat_world_payload(db, state)}
+    user_scenes = db.scalars(
+        select(CatWorldUserScene).where(CatWorldUserScene.phone == state.phone)
+    ).all()
+    user_scene_by_key = {row.scene_key: row for row in user_scenes}
+    if target_scene and target_user_scene:
+        user_scene_by_key[target_scene.scene_key] = target_user_scene
+    for scene_key, user_scene in user_scene_by_key.items():
+        raw_layout = parse_cat_world_scene_json(user_scene.layout, {})
+        raw_layout.pop(item_id, None)
+        if target_scene and scene_key == target_scene.scene_key:
+            default_layout = target_config.get("defaultLayout") if isinstance(target_config.get("defaultLayout"), dict) else {}
+            default_position = default_layout.get(
+                item_id,
+                CAT_WORLD_ROOM_DEFAULT_LAYOUT.get(item_id, {"x": 8, "y": 58}),
+            )
+            normalized = normalize_cat_world_room_position(default_position)
+            if normalized:
+                raw_layout[item_id] = normalized
+        save_cat_world_active_scene_layout(state, user_scene, raw_layout)
+        db.add(user_scene)
+    locations[item_id] = target_location
+    state.item_locations = encode_cat_world_item_locations(locations)
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    destination_label = (
+        "收纳箱"
+        if target_location == CAT_WORLD_STORAGE_LOCATION
+        else str(target_config.get("label") or target_location)
+    )
+    return {
+        "ok": True,
+        "itemLocation": {
+            "itemId": item_id,
+            "label": str(item.get("label") or item_id),
+            "previousLocationId": previous_location,
+            "locationId": target_location,
+            "locationLabel": destination_label,
+        },
+        **serialize_cat_world_payload(db, state),
+    }
+
+
+@app.post("/api/vue/cat-world/cat/position")
+async def vue_cat_world_cat_position_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="猫咪位置数据不是有效 JSON。") from exc
+    payload = payload if isinstance(payload, dict) else {}
+    profile_id = str(payload.get("profileId") or "").strip()
+    scene_key = str(payload.get("sceneId") or "").strip()
+    position = normalize_cat_world_scene_position(payload.get("position"))
+    if not profile_id or not position:
+        raise HTTPException(status_code=400, detail="请提交有效的猫咪坐标。")
+    state = cat_world_locked_state(db, phone)
+    if scene_key != state.current_scene_key:
+        raise HTTPException(status_code=409, detail="场景已经切换，这次坐标没有保存。")
+    profile = db.scalar(
+        select(CatWorldCatProfile)
+        .where(
+            CatWorldCatProfile.phone == state.phone,
+            CatWorldCatProfile.profile_id == profile_id,
+            CatWorldCatProfile.is_active.is_(True),
+        )
+        .with_for_update()
+    )
+    if not profile or str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) != scene_key:
+        raise HTTPException(status_code=409, detail="猫咪已经不在这个区域。")
+    positions = parse_cat_world_scene_positions(profile.scene_positions)
+    positions[scene_key] = position
+    profile.scene_positions = encode_cat_world_scene_positions(positions)
+    db.add(profile)
+    db.commit()
+    return {"ok": True, "profileId": profile.profile_id, "sceneId": scene_key, "position": position}
+
+
 @app.post("/api/vue/cat-world/select-cat")
 async def vue_cat_world_select_cat_api(request: Request, db: Session = Depends(get_db)):
     phone = require_cat_world_phone(request)
@@ -5432,6 +5563,7 @@ async def vue_cat_world_select_cat_api(request: Request, db: Session = Depends(g
         raise HTTPException(status_code=400, detail="猫咪数据不是有效 JSON。") from exc
     requested_cat_id = str((payload or {}).get("catId") or "").strip()
     profile_id = str((payload or {}).get("profileId") or "").strip()
+    move_to_current_scene = bool((payload or {}).get("moveToCurrentScene"))
     state = get_or_create_cat_world_state(db, phone)
     if profile_id:
         profile = db.scalar(
@@ -5451,10 +5583,20 @@ async def vue_cat_world_select_cat_api(request: Request, db: Session = Depends(g
             raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
     state.selected_cat_profile = profile.profile_id
     state.selected_cat = profile.breed_id
+    moved_scene = False
+    if move_to_current_scene and str(profile.current_scene_key or "") != state.current_scene_key:
+        profile.current_scene_key = state.current_scene_key
+        db.add(profile)
+        moved_scene = True
     db.add(state)
     db.commit()
     db.refresh(state)
-    return {"ok": True, **serialize_cat_world_payload(db, state)}
+    return {
+        "ok": True,
+        "catMoved": moved_scene,
+        "catSceneId": state.current_scene_key,
+        **serialize_cat_world_payload(db, state),
+    }
 
 
 @app.post("/api/vue/cat-world/cat/rename")
@@ -13851,6 +13993,116 @@ def parse_cat_world_inventory(raw: str | None) -> dict[str, int]:
     return inventory
 
 
+def parse_cat_world_item_locations(
+    raw: str | None,
+    inventory: dict[str, int] | None = None,
+) -> dict[str, str]:
+    try:
+        loaded = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        loaded = {}
+    if not isinstance(loaded, dict):
+        loaded = {}
+    valid_locations = {CAT_WORLD_STORAGE_LOCATION, *CAT_WORLD_SCENE_SEED_BY_KEY.keys()}
+    locations: dict[str, str] = {}
+    for item_id, count in (inventory or {}).items():
+        item = CAT_WORLD_SHOP_BY_ID.get(item_id, {})
+        if count <= 0 or item.get("category") not in {"decor", "toy"}:
+            continue
+        location = str(loaded.get(item_id) or CAT_WORLD_DEFAULT_SCENE_KEY).strip()
+        locations[item_id] = location if location in valid_locations else CAT_WORLD_DEFAULT_SCENE_KEY
+    return locations
+
+
+def encode_cat_world_item_locations(locations: dict[str, str]) -> str:
+    valid_locations = {CAT_WORLD_STORAGE_LOCATION, *CAT_WORLD_SCENE_SEED_BY_KEY.keys()}
+    clean = {
+        str(item_id): str(location)
+        for item_id, location in locations.items()
+        if CAT_WORLD_SHOP_BY_ID.get(str(item_id), {}).get("category") in {"decor", "toy"}
+        and str(location) in valid_locations
+    }
+    return json.dumps(clean, ensure_ascii=False, sort_keys=True)
+
+
+def cat_world_inventory_for_scene(
+    inventory: dict[str, int],
+    item_locations: dict[str, str],
+    scene_key: str,
+) -> dict[str, int]:
+    scene_inventory: dict[str, int] = {}
+    for item_id, count in inventory.items():
+        item = CAT_WORLD_SHOP_BY_ID.get(item_id, {})
+        if item.get("category") in {"decor", "toy"}:
+            if item_locations.get(item_id, CAT_WORLD_DEFAULT_SCENE_KEY) != scene_key:
+                continue
+        scene_inventory[item_id] = count
+    return scene_inventory
+
+
+def cat_world_ensure_item_locations(
+    state: CatWorldState,
+    inventory: dict[str, int],
+) -> tuple[dict[str, str], bool]:
+    locations = parse_cat_world_item_locations(state.item_locations, inventory)
+    encoded = encode_cat_world_item_locations(locations)
+    changed = str(state.item_locations or "") != encoded
+    if changed:
+        state.item_locations = encoded
+    return locations, changed
+
+
+def normalize_cat_world_scene_position(value: Any) -> dict[str, float | int] | None:
+    if not isinstance(value, dict):
+        return None
+    try:
+        x = float(value.get("x"))
+        y = float(value.get("y"))
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(x) or not math.isfinite(y):
+        return None
+    try:
+        facing = -1 if int(value.get("facing") or 1) == -1 else 1
+    except (TypeError, ValueError):
+        facing = 1
+    return {
+        "x": round(min(max(x, 0.0), 100.0), 2),
+        "y": round(min(max(y, 0.0), 100.0), 2),
+        "facing": facing,
+    }
+
+
+def parse_cat_world_scene_positions(raw: str | None) -> dict[str, dict[str, float | int]]:
+    try:
+        loaded = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        loaded = {}
+    if not isinstance(loaded, dict):
+        return {}
+    positions: dict[str, dict[str, float | int]] = {}
+    for scene_key, value in loaded.items():
+        key = str(scene_key)
+        if key not in CAT_WORLD_SCENE_SEED_BY_KEY:
+            continue
+        normalized = normalize_cat_world_scene_position(value)
+        if normalized:
+            positions[key] = normalized
+    return positions
+
+
+def encode_cat_world_scene_positions(positions: dict[str, Any]) -> str:
+    clean: dict[str, dict[str, float | int]] = {}
+    for scene_key, value in positions.items():
+        key = str(scene_key)
+        if key not in CAT_WORLD_SCENE_SEED_BY_KEY:
+            continue
+        normalized = normalize_cat_world_scene_position(value)
+        if normalized:
+            clean[key] = normalized
+    return json.dumps(clean, ensure_ascii=False, sort_keys=True)
+
+
 def parse_cat_world_damaged_items(raw: str | None) -> dict[str, dict[str, Any]]:
     try:
         loaded = json.loads(raw or "{}")
@@ -14696,10 +14948,12 @@ def cat_world_active_scene_layout(
     state: CatWorldState,
     inventory: dict[str, int],
 ) -> dict[str, dict[str, float]]:
-    _, user_scene, config = cat_world_active_scene_context(db, state)
+    scene, user_scene, config = cat_world_active_scene_context(db, state)
+    item_locations = parse_cat_world_item_locations(state.item_locations, inventory)
+    scene_inventory = cat_world_inventory_for_scene(inventory, item_locations, scene.scene_key)
     return parse_cat_world_room_layout(
         user_scene.layout,
-        inventory,
+        scene_inventory,
         config.get("defaultLayout"),
         config.get("itemRules"),
     )
@@ -14740,6 +14994,17 @@ def save_cat_world_active_scene_styles(
 
 def cat_world_scene_catalog_payload(db: Session, state: CatWorldState) -> list[dict[str, Any]]:
     rows = db.scalars(select(CatWorldScene).order_by(CatWorldScene.sort_order, CatWorldScene.id)).all()
+    inventory = parse_cat_world_inventory(state.inventory)
+    item_locations = parse_cat_world_item_locations(state.item_locations, inventory)
+    profiles = cat_world_active_cat_profiles(db, state.phone)
+    item_counts: dict[str, int] = {}
+    for item_id, location in item_locations.items():
+        if inventory.get(item_id, 0) > 0:
+            item_counts[location] = item_counts.get(location, 0) + 1
+    cat_counts: dict[str, int] = {}
+    for profile in profiles:
+        location = str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+        cat_counts[location] = cat_counts.get(location, 0) + 1
     user_rows = {
         row.scene_key: row
         for row in db.scalars(select(CatWorldUserScene).where(CatWorldUserScene.phone == state.phone)).all()
@@ -14749,7 +15014,15 @@ def cat_world_scene_catalog_payload(db: Session, state: CatWorldState) -> list[d
         config = cat_world_scene_config(row)
         user_row = user_rows.get(row.scene_key)
         unlocked = bool(user_row.is_unlocked) if user_row else bool(config.get("unlockByDefault"))
-        payload.append({**config, "unlocked": unlocked, "available": bool(row.is_enabled and unlocked)})
+        payload.append(
+            {
+                **config,
+                "unlocked": unlocked,
+                "available": bool(row.is_enabled and unlocked),
+                "itemCount": item_counts.get(row.scene_key, 0),
+                "catCount": cat_counts.get(row.scene_key, 0),
+            }
+        )
     return payload
 
 
@@ -16588,6 +16861,7 @@ def create_cat_world_cat_profile(
 ) -> CatWorldCatProfile:
     if breed_id not in CAT_WORLD_CAT_BY_ID:
         raise HTTPException(status_code=404, detail="没有找到这个猫咪品种。")
+    favorite_scene_key = secrets.choice(CAT_WORLD_SCENE_PREFERENCE_KEYS or (CAT_WORLD_DEFAULT_SCENE_KEY,))
     profile = CatWorldCatProfile(
         profile_id=f"{breed_id}-{uuid4().hex[:10]}",
         phone=state.phone,
@@ -16595,6 +16869,9 @@ def create_cat_world_cat_profile(
         gender=cat_world_random_gender(db),
         pattern_key=secrets.choice(CAT_WORLD_CAT_PATTERNS)["key"],
         feature_key=secrets.choice(CAT_WORLD_CAT_FEATURES)["key"],
+        favorite_scene_key=favorite_scene_key,
+        current_scene_key=state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY,
+        scene_positions=encode_cat_world_scene_positions({}),
         source=source,
         is_active=True,
         adopted_at=datetime.utcnow(),
@@ -16646,6 +16923,11 @@ def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]
     personality_thoughts = personality.get("thoughts") if isinstance(personality.get("thoughts"), list) else []
     profile_code = str(profile.profile_id).rsplit("-", 1)[-1][:4].upper()
     nickname = str(profile.nickname or "").strip()
+    favorite_scene_key = str(profile.favorite_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+    current_scene_key = str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+    favorite_scene = CAT_WORLD_SCENE_SEED_BY_KEY.get(favorite_scene_key, {})
+    current_scene = CAT_WORLD_SCENE_SEED_BY_KEY.get(current_scene_key, {})
+    scene_positions = parse_cat_world_scene_positions(profile.scene_positions)
     return {
         **cat_world_cat_payload(breed),
         "id": profile.profile_id,
@@ -16665,6 +16947,12 @@ def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]
         "personality": personality_label,
         "traits": cat_world_profile_traits(profile, breed),
         "thoughts": personality_thoughts,
+        "favoriteSceneId": favorite_scene_key,
+        "favoriteSceneLabel": str(favorite_scene.get("label") or "一楼活动室"),
+        "currentSceneId": current_scene_key,
+        "currentSceneLabel": str(current_scene.get("label") or "一楼活动室"),
+        "scenePosition": scene_positions.get(current_scene_key),
+        "scenePositions": scene_positions,
         "source": profile.source,
         "adoptedAt": profile.adopted_at.replace(microsecond=0).isoformat() + "Z",
     }
@@ -16747,6 +17035,23 @@ def ensure_cat_world_cat_profiles(
             db.add(profile)
             changed = True
         changed = cat_world_assign_profile_personality(db, profile) or changed
+        if str(profile.favorite_scene_key or "") not in CAT_WORLD_SCENE_SEED_BY_KEY:
+            profile.favorite_scene_key = secrets.choice(
+                CAT_WORLD_SCENE_PREFERENCE_KEYS or (CAT_WORLD_DEFAULT_SCENE_KEY,)
+            )
+            db.add(profile)
+            changed = True
+        if str(profile.current_scene_key or "") not in CAT_WORLD_SCENE_SEED_BY_KEY:
+            profile.current_scene_key = CAT_WORLD_DEFAULT_SCENE_KEY
+            db.add(profile)
+            changed = True
+        clean_positions = encode_cat_world_scene_positions(
+            parse_cat_world_scene_positions(profile.scene_positions)
+        )
+        if str(profile.scene_positions or "") != clean_positions:
+            profile.scene_positions = clean_positions
+            db.add(profile)
+            changed = True
         if profile.personality_key:
             used_personality_keys.add(str(profile.personality_key))
     for breed_id in owned_cats:
@@ -18400,6 +18705,11 @@ def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
             if cat_id in CAT_WORLD_CAT_BY_ID
         ]
         owned_cats = parse_cat_world_cats(state.cats)
+        inventory = parse_cat_world_inventory(state.inventory)
+        _, item_locations_changed = cat_world_ensure_item_locations(state, inventory)
+        if item_locations_changed:
+            db.add(state)
+            changed = True
         restored_cats = list(dict.fromkeys([*owned_cats, *drawn_limited_cats]))
         if restored_cats != owned_cats:
             state.cats = encode_cat_world_cats(restored_cats)
@@ -18431,6 +18741,7 @@ def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
         cats=encode_cat_world_cats(initial_cats),
         room_styles=encode_cat_world_room_styles({}),
         room_layout=encode_cat_world_room_layout({}),
+        item_locations=encode_cat_world_item_locations({}),
         current_scene_key=CAT_WORLD_DEFAULT_SCENE_KEY,
         cat_bonds=encode_cat_world_bonds({}),
         cat_care=encode_cat_world_care({}),
@@ -18760,16 +19071,27 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
     _, active_user_scene, active_scene = cat_world_active_scene_context(db, state)
+    item_locations, item_locations_changed = cat_world_ensure_item_locations(state, inventory)
+    if item_locations_changed:
+        db.add(state)
+        db.commit()
+        db.refresh(state)
+    scene_inventory = cat_world_inventory_for_scene(inventory, item_locations, active_scene["id"])
+    usable_scene_inventory = cat_world_inventory_for_scene(
+        usable_inventory,
+        item_locations,
+        active_scene["id"],
+    )
     room_styles = parse_cat_world_room_styles(active_user_scene.room_styles, inventory)
     room_layout = parse_cat_world_room_layout(
         active_user_scene.layout,
-        usable_inventory,
+        usable_scene_inventory,
         active_scene.get("defaultLayout"),
         active_scene.get("itemRules"),
     )
     visual_room_layout = parse_cat_world_room_layout(
         active_user_scene.layout,
-        inventory,
+        scene_inventory,
         active_scene.get("defaultLayout"),
         active_scene.get("itemRules"),
     )
@@ -18781,16 +19103,23 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         cat_bonds = parse_cat_world_bonds(state.cat_bonds)
         usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
         _, active_user_scene, active_scene = cat_world_active_scene_context(db, state)
+        item_locations, _ = cat_world_ensure_item_locations(state, inventory)
+        scene_inventory = cat_world_inventory_for_scene(inventory, item_locations, active_scene["id"])
+        usable_scene_inventory = cat_world_inventory_for_scene(
+            usable_inventory,
+            item_locations,
+            active_scene["id"],
+        )
         room_styles = parse_cat_world_room_styles(active_user_scene.room_styles, inventory)
         room_layout = parse_cat_world_room_layout(
             active_user_scene.layout,
-            usable_inventory,
+            usable_scene_inventory,
             active_scene.get("defaultLayout"),
             active_scene.get("itemRules"),
         )
         visual_room_layout = parse_cat_world_room_layout(
             active_user_scene.layout,
-            inventory,
+            scene_inventory,
             active_scene.get("defaultLayout"),
             active_scene.get("itemRules"),
         )
@@ -18810,6 +19139,27 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         for decor_id, count in inventory.items()
         if count > 0 and CAT_WORLD_SHOP_BY_ID.get(decor_id, {}).get("category") == "decor"
     }
+    scene_labels = {
+        scene_key: str(scene.get("label") or scene_key)
+        for scene_key, scene in CAT_WORLD_SCENE_SEED_BY_KEY.items()
+    }
+    for item in shop:
+        if item.get("category") not in {"decor", "toy"}:
+            continue
+        location_id = item_locations.get(item["id"], CAT_WORLD_DEFAULT_SCENE_KEY)
+        item.update(
+            {
+                "locationId": location_id,
+                "locationLabel": "收纳中" if location_id == CAT_WORLD_STORAGE_LOCATION else scene_labels.get(location_id, location_id),
+                "inCurrentScene": location_id == active_scene["id"],
+                "allowedInCurrentScene": cat_world_layout_item_allowed(item["id"], active_scene.get("itemRules")),
+            }
+        )
+    room_cat_ids = [
+        profile.profile_id
+        for profile in cat_profiles
+        if str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) == active_scene["id"]
+    ]
     return {
         "playTime": play_time,
         "energy": {
@@ -18828,6 +19178,9 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         "state": {
             "inventory": inventory,
             "usableInventory": usable_inventory,
+            "sceneInventory": scene_inventory,
+            "sceneUsableInventory": usable_scene_inventory,
+            "itemLocations": item_locations,
             "damagedItems": damaged_items,
             "ownedCats": owned_cats,
             "lostCats": lost_cats,
@@ -18843,6 +19196,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "styleOptions": style_options,
             "selectedCat": state.selected_cat,
             "selectedCatProfile": state.selected_cat_profile or "",
+            "roomCatIds": room_cat_ids,
             "hygiene": litter_status,
             "activeCare": active_care,
             "dailyLogs": daily_logs,
@@ -19134,6 +19488,8 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN room_styles TEXT NULL"))
         if "cat_world_states" in table_names and "room_layout" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN room_layout TEXT NULL"))
+        if "cat_world_states" in table_names and "item_locations" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN item_locations TEXT NULL"))
         if "cat_world_states" in table_names and "current_scene_key" not in cat_world_state_columns:
             connection.execute(
                 text("ALTER TABLE cat_world_states ADD COLUMN current_scene_key VARCHAR(80) NOT NULL DEFAULT 'main-room'")
@@ -19186,6 +19542,14 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE cat_world_cat_profiles ADD COLUMN personality_traits TEXT NULL"))
         if "cat_world_cat_profiles" in table_names and "nickname" not in cat_world_cat_profile_columns:
             connection.execute(text("ALTER TABLE cat_world_cat_profiles ADD COLUMN nickname VARCHAR(40) NULL"))
+        if "cat_world_cat_profiles" in table_names and "favorite_scene_key" not in cat_world_cat_profile_columns:
+            connection.execute(text("ALTER TABLE cat_world_cat_profiles ADD COLUMN favorite_scene_key VARCHAR(80) NULL"))
+        if "cat_world_cat_profiles" in table_names and "current_scene_key" not in cat_world_cat_profile_columns:
+            connection.execute(
+                text("ALTER TABLE cat_world_cat_profiles ADD COLUMN current_scene_key VARCHAR(80) NOT NULL DEFAULT 'main-room'")
+            )
+        if "cat_world_cat_profiles" in table_names and "scene_positions" not in cat_world_cat_profile_columns:
+            connection.execute(text("ALTER TABLE cat_world_cat_profiles ADD COLUMN scene_positions TEXT NULL"))
         if "essay_entries" in table_names and "writing_score" not in essay_entry_columns:
             connection.execute(text("ALTER TABLE essay_entries ADD COLUMN writing_score INTEGER NOT NULL DEFAULT 0"))
         if "essay_entries" in table_names and "writing_score_breakdown" not in essay_entry_columns:
