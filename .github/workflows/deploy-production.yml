@@ -28,22 +28,23 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          RUNNER_REPOSITORY_CACHE: /home/qradmin/speakeasy-staging/repository-cache.git
         run: |
           set -euo pipefail
           [[ "${GITHUB_SHA}" =~ ^[0-9a-f]{40}$ ]]
 
-          # github.com Git transport is unavailable on the internal network, while
-          # api.github.com remains reachable. Materialize and verify the exact Git
-          # tree through the authenticated Git Data API instead.
+          # github.com Git transport is unavailable on the internal network. Keep
+          # a persistent Git object cache and add only missing blobs through the
+          # reachable API/raw endpoints, verifying the original tree SHA.
           find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
           python3 - <<'PY'
-          import base64
           import hashlib
           import json
           import os
-          import stat
+          import subprocess
           import time
           import urllib.error
+          import urllib.parse
           import urllib.request
           from concurrent.futures import ThreadPoolExecutor
           from pathlib import Path, PurePosixPath
@@ -53,15 +54,26 @@ jobs:
           commit_sha = os.environ["GITHUB_SHA"]
           token = os.environ["GH_TOKEN"]
           workspace = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
-          headers = {
+          cache = Path(os.environ["RUNNER_REPOSITORY_CACHE"]).resolve()
+          expected_cache = (
+              Path.home() / "speakeasy-staging" / "repository-cache.git"
+          ).resolve()
+          if cache != expected_cache or not cache.is_dir():
+              raise RuntimeError("The verified runner repository cache is unavailable.")
+          git_env = {**os.environ, "GIT_DIR": str(cache)}
+          api_headers = {
               "Accept": "application/vnd.github+json",
-              "Authorization": f"Bearer {token}",
               "User-Agent": "speakeasy-production-runner",
               "X-GitHub-Api-Version": "2022-11-28",
           }
+          if token:
+              api_headers["Authorization"] = f"Bearer {token}"
+          raw_headers = {"User-Agent": "speakeasy-production-runner"}
 
           def get_json(path):
-              request = urllib.request.Request(f"{api_base}{path}", headers=headers)
+              request = urllib.request.Request(
+                  f"{api_base}{path}", headers=api_headers
+              )
               for attempt in range(1, 6):
                   try:
                       with urllib.request.urlopen(request, timeout=45) as response:
@@ -71,6 +83,47 @@ jobs:
                           raise
                       time.sleep(attempt * 2)
 
+          def get_blob(entry):
+              encoded_path = urllib.parse.quote(entry["path"], safe="/")
+              request = urllib.request.Request(
+                  f"https://raw.githubusercontent.com/"
+                  f"{repository}/{commit_sha}/{encoded_path}",
+                  headers=raw_headers,
+              )
+              for attempt in range(1, 6):
+                  try:
+                      with urllib.request.urlopen(request, timeout=45) as response:
+                          return response.read()
+                  except (urllib.error.URLError, TimeoutError):
+                      if attempt == 5:
+                          raise
+                      time.sleep(attempt * 2)
+
+          def has_object(sha, kind):
+              result = subprocess.run(
+                  ["git", "cat-file", "-e", f"{sha}^{{{kind}}}"],
+                  env=git_env,
+                  stdout=subprocess.DEVNULL,
+                  stderr=subprocess.DEVNULL,
+                  check=False,
+              )
+              return result.returncode == 0
+
+          def write_object(kind, data, expected_sha):
+              result = subprocess.run(
+                  ["git", "hash-object", "-t", kind, "-w", "--stdin"],
+                  env=git_env,
+                  input=data,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.PIPE,
+                  check=True,
+              )
+              actual_sha = result.stdout.decode("ascii").strip()
+              if actual_sha != expected_sha:
+                  raise RuntimeError(
+                      f"Git {kind} verification failed: {actual_sha} != {expected_sha}"
+                  )
+
           commit = get_json(f"/repos/{repository}/git/commits/{commit_sha}")
           if commit.get("sha") != commit_sha:
               raise RuntimeError("GitHub API returned an unexpected commit.")
@@ -79,6 +132,8 @@ jobs:
           )
           if tree.get("truncated"):
               raise RuntimeError("GitHub API truncated the release tree.")
+          if tree.get("sha") != commit["tree"]["sha"]:
+              raise RuntimeError("GitHub API returned an unexpected root tree.")
 
           blobs = [entry for entry in tree["tree"] if entry["type"] == "blob"]
           unsupported = [
@@ -92,42 +147,68 @@ jobs:
                   "Submodules, symlinks, and special files are not supported in releases."
               )
 
-          def materialize(entry):
+          children = {}
+          for entry in tree["tree"]:
               relative = PurePosixPath(entry["path"])
               if relative.is_absolute() or ".." in relative.parts or "\\" in entry["path"]:
                   raise RuntimeError(f"Unsafe repository path: {entry['path']!r}")
-              payload = get_json(f"/repos/{repository}/git/blobs/{entry['sha']}")
-              if payload.get("encoding") != "base64":
-                  raise RuntimeError(f"Unsupported blob encoding for {entry['path']!r}")
-              encoded = "".join(payload["content"].split())
-              data = base64.b64decode(encoded, validate=True)
+              parent = "" if str(relative.parent) == "." else relative.parent.as_posix()
+              children.setdefault(parent, []).append(entry)
+
+          def cache_blob(entry):
+              data = get_blob(entry)
               digest = hashlib.sha1(
                   f"blob {len(data)}\0".encode("ascii") + data
               ).hexdigest()
               if digest != entry["sha"]:
                   raise RuntimeError(f"Blob verification failed for {entry['path']!r}")
-              target = workspace.joinpath(*relative.parts)
-              target.parent.mkdir(parents=True, exist_ok=True)
-              target.write_bytes(data)
-              target.chmod(
-                  stat.S_IRUSR
-                  | stat.S_IWUSR
-                  | stat.S_IRGRP
-                  | stat.S_IROTH
-                  | (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
-                     if entry["mode"] == "100755" else 0)
-              )
+              write_object("blob", data, entry["sha"])
 
-          with ThreadPoolExecutor(max_workers=8) as executor:
-              list(executor.map(materialize, blobs))
+          missing_blobs = [
+              entry for entry in blobs if not has_object(entry["sha"], "blob")
+          ]
+          with ThreadPoolExecutor(max_workers=4) as executor:
+              list(executor.map(cache_blob, missing_blobs))
 
-          workspace.joinpath(".release-commit").write_text(
-              f"{commit_sha}\n", encoding="ascii"
+          directories = {
+              entry["path"]: entry["sha"]
+              for entry in tree["tree"]
+              if entry["type"] == "tree"
+          }
+          directories[""] = tree["sha"]
+
+          def tree_sort_key(entry):
+              name = PurePosixPath(entry["path"]).name.encode("utf-8")
+              return name + (b"/" if entry["type"] == "tree" else b"\0")
+
+          for directory, expected_sha in sorted(
+              directories.items(),
+              key=lambda item: len(PurePosixPath(item[0]).parts) if item[0] else 0,
+              reverse=True,
+          ):
+              raw_tree = bytearray()
+              for entry in sorted(children.get(directory, []), key=tree_sort_key):
+                  mode = "40000" if entry["type"] == "tree" else entry["mode"]
+                  name = PurePosixPath(entry["path"]).name.encode("utf-8")
+                  raw_tree.extend(mode.encode("ascii") + b" " + name + b"\0")
+                  raw_tree.extend(bytes.fromhex(entry["sha"]))
+              write_object("tree", bytes(raw_tree), expected_sha)
+
+          workspace.joinpath(".release-tree").write_text(
+              f"{tree['sha']}\n", encoding="ascii"
           )
-          print(f"Materialized {len(blobs)} verified files for {commit_sha}.")
+          print(
+              f"Verified {len(blobs)} blobs for {commit_sha}; "
+              f"downloaded {len(missing_blobs)} missing objects."
+          )
           PY
           unset GH_TOKEN
 
+          tree_sha="$(cat .release-tree)"
+          [[ "${tree_sha}" =~ ^[0-9a-f]{40}$ ]]
+          git --git-dir="${RUNNER_REPOSITORY_CACHE}" archive "${tree_sha}" | tar -x -C .
+          rm -f .release-tree
+          printf '%s\n' "${GITHUB_SHA}" > .release-commit
           test "$(cat .release-commit)" = "${GITHUB_SHA}"
           test -f app/main.py
           test -f requirements.txt
