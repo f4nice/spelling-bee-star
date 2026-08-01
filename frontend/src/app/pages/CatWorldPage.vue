@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Award as AwardIcon, Cat as CatIcon, ChevronLeft, ChevronRight, LockKeyhole as LockIcon, X as XIcon } from "lucide-vue-next";
+import { Award as AwardIcon, Cat as CatIcon, ChevronLeft, ChevronRight, Hammer as HammerIcon, LockKeyhole as LockIcon, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -51,6 +51,10 @@ const selectedDecorId = ref("");
 const layoutDirty = ref(false);
 const savingRoomLayout = ref(false);
 const roomEditMode = ref(false);
+const repairMode = ref(false);
+const repairCursorVisible = ref(false);
+const repairCursorX = ref(0);
+const repairCursorY = ref(0);
 const activeToolCategory = ref("decor");
 const clockNow = ref(Date.now());
 const playTimeSyncedAt = ref(Date.now());
@@ -233,6 +237,8 @@ const playTimeCardState = computed(() => {
 watch(playTimeLocked, (locked) => {
   if (!locked) return;
   roomEditMode.value = false;
+  repairMode.value = false;
+  repairCursorVisible.value = false;
   selectedDecorId.value = "";
   layoutDirty.value = false;
   activeHandbook.value = "";
@@ -845,6 +851,11 @@ function closeCatDiary() {
 
 function handleGlobalKeydown(event) {
   if (event.key !== "Escape") return;
+  if (repairMode.value) {
+    setRepairMode(false);
+    notice.value = "已收起维修锤。";
+    return;
+  }
   const carryResult = catWorldGame.value?.cancelCatCarry?.();
   if (carryResult?.handled) {
     notice.value = carryResult.message || "猫咪已放回原处。";
@@ -880,8 +891,9 @@ function normalizeLayoutDraft(layout) {
 
 function handleDecorClick(decorId, interaction = null) {
   const item = shopById.value[decorId];
-  if (item && damageInfo(item)) {
-    repairItem(item);
+  if (item && handleRepairTargetClick(item)) return;
+  if (repairMode.value) {
+    notice.value = `${item?.label || "这个道具"}不需要维修，维修锤没有消耗。`;
     return;
   }
   if (!roomEditMode.value && interaction?.handled) {
@@ -901,8 +913,9 @@ function handleDecorClick(decorId, interaction = null) {
 function handleRoomToyClick(itemId, interaction = null) {
   const item = shopById.value[itemId];
   if (item && ["food", "toy"].includes(item.category)) {
-    if (damageInfo(item)) {
-      repairItem(item);
+    if (handleRepairTargetClick(item)) return;
+    if (repairMode.value) {
+      notice.value = `${item.label}不需要维修，维修锤没有消耗。`;
       return;
     }
     if (roomEditMode.value) {
@@ -1007,7 +1020,9 @@ function ownedToolSubtext(item) {
     if (item.useType === "litter-clean") return `拥有 ${item.count} · 点击猫屎时消耗`;
     if (item.useType === "litter-prevent") return `拥有 ${item.count} · 点击放进活动室`;
     if (item.useType === "cat-bath") return `拥有 ${item.count} · 给当前档案猫咪洗澡`;
-    if (item.useType === "repair-tool") return `拥有 ${item.count} · 维修成功时自动消耗`;
+    if (item.useType === "repair-tool") {
+      return repairMode.value ? `已装备 · 拥有 ${item.count}` : `拥有 ${item.count} · 点击装备`;
+    }
     return `拥有 ${item.count} · 使用一次消耗 1 个`;
   }
   return `拥有 ${item.count}${suffix}`;
@@ -1054,12 +1069,55 @@ function isDamagedItem(item) {
   return Boolean(damageInfo(item));
 }
 
-function handleOwnedToolClick(item) {
-  if (!item?.id || busyItemId.value) return;
-  if (isDamagedItem(item)) {
-    repairItem(item);
+function setRepairMode(enabled) {
+  const nextEnabled = Boolean(enabled);
+  if (nextEnabled && itemCount(REPAIR_HAMMER_ITEM_ID) <= 0) {
+    repairMode.value = false;
+    repairCursorVisible.value = false;
+    activeCategory.value = "consumable";
+    notice.value = "背包里没有维修锤，请先在消耗品商店购买。";
     return;
   }
+  if (nextEnabled && roomEditMode.value) {
+    notice.value = "请先完成物品编辑，再装备维修锤。";
+    return;
+  }
+  repairMode.value = nextEnabled;
+  repairCursorVisible.value = false;
+  selectedDecorId.value = "";
+  notice.value = nextEnabled ? "维修模式已开启。" : "已收起维修锤。";
+}
+
+function handleRepairTargetClick(item) {
+  if (!isDamagedItem(item)) return false;
+  if (!repairMode.value) {
+    activeToolCategory.value = "consumable";
+    notice.value = "请先在右侧消耗品里点击维修锤，再维修损坏的道具。";
+    return true;
+  }
+  repairItem(item);
+  return true;
+}
+
+function handleRepairPointerMove(event) {
+  if (!repairMode.value) return;
+  const rect = event.currentTarget.getBoundingClientRect();
+  repairCursorX.value = event.clientX - rect.left;
+  repairCursorY.value = event.clientY - rect.top;
+  repairCursorVisible.value = true;
+}
+
+function hideRepairCursor() {
+  repairCursorVisible.value = false;
+}
+
+function handleOwnedToolClick(item) {
+  if (!item?.id || busyItemId.value) return;
+  if (item.useType === "repair-tool") {
+    setRepairMode(!repairMode.value);
+    return;
+  }
+  if (handleRepairTargetClick(item)) return;
   if (item.category === "decor") {
     selectedDecorId.value = item.id;
     notice.value = roomEditMode.value
@@ -1087,10 +1145,6 @@ function handleOwnedToolClick(item) {
     }
     if (item.useType === "litter-prevent") {
       useConsumable(item);
-      return;
-    }
-    if (item.useType === "repair-tool") {
-      notice.value = "维修锤已放进背包；点击损坏的道具，维修成功时会自动消耗 1 把。";
       return;
     }
     useConsumable(item);
@@ -1169,6 +1223,7 @@ async function selectScene(scene) {
     });
     replacePayload(nextPayload);
     roomEditMode.value = false;
+    setRepairMode(false);
     layoutDirty.value = false;
     roomPanActive.value = false;
     notice.value = `已进入${nextPayload.state?.currentScene?.label || scene.label}。`;
@@ -1218,6 +1273,7 @@ async function purchaseScene() {
 
 function startRoomEditMode() {
   if (savingRoomLayout.value) return;
+  setRepairMode(false);
   roomEditMode.value = true;
   catReaction.value = "";
   catReactionAnchored.value = false;
@@ -1562,6 +1618,8 @@ async function repairItem(item) {
     const targetCat = cats.value.find((cat) => cat.id === repair.catId) || focusedCat.value;
     notice.value = `${repair.label || item.label} 已维修好，消耗 1 把维修锤和 ${cost} 能量，背包还剩 ${repair.hammerRemaining || 0} 把。`;
     showCatReaction(targetCat, `${repair.label || item.label}修好了，我会小心一点。`);
+    repairMode.value = false;
+    repairCursorVisible.value = false;
   } catch (error) {
     notice.value = error.message || "维修失败，请稍后再试。";
   } finally {
@@ -1753,12 +1811,39 @@ async function selectCat(catOrId) {
           </ul>
         </div>
 
-        <div :class="['cat-world-room', { 'is-editing': roomEditMode, 'is-panning': roomPanActive, 'can-pan': roomCanPan }]" :aria-label="`${currentScene.label || '猫咪房间'}场景`">
+        <div
+          :class="[
+            'cat-world-room',
+            {
+              'is-editing': roomEditMode,
+              'is-panning': roomPanActive,
+              'is-repairing': repairMode,
+              'can-pan': roomCanPan,
+            },
+          ]"
+          :aria-label="`${currentScene.label || '猫咪房间'}场景`"
+          @pointermove="handleRepairPointerMove"
+          @pointerleave="hideRepairCursor"
+        >
           <div
             class="cat-world-room-viewport"
             @wheel.capture="handleRoomWheel"
           >
             <div ref="gameMountRef" class="cat-world-game-stage"></div>
+          </div>
+          <span
+            v-if="repairMode && repairCursorVisible"
+            class="cat-world-repair-cursor"
+            :style="{ left: `${repairCursorX}px`, top: `${repairCursorY}px` }"
+            aria-hidden="true"
+          >
+            <HammerIcon :size="22" :stroke-width="3" />
+          </span>
+          <div v-if="repairMode" class="cat-world-repair-mode" role="status">
+            <span><HammerIcon :size="18" :stroke-width="3" aria-hidden="true" />维修模式</span>
+            <button type="button" title="收起维修锤" aria-label="收起维修锤" @click="setRepairMode(false)">
+              <XIcon :size="17" :stroke-width="3" aria-hidden="true" />
+            </button>
           </div>
           <button
             v-if="roomCanPan && !roomEditMode"
@@ -1883,6 +1968,7 @@ async function selectCat(catOrId) {
               'cat-world-owned-item',
               {
                 active: selectedDecorId === item.id || state.selectedCatProfile === item.id,
+                'repair-equipped': repairMode && item.useType === 'repair-tool',
                 damaged: item.damageInfo,
                 'has-color-swatches': item.category === 'decor' && item.styleOptions?.length,
               },
@@ -1891,6 +1977,7 @@ async function selectCat(catOrId) {
             <button
               class="cat-world-owned-main"
               type="button"
+              :aria-pressed="item.useType === 'repair-tool' ? repairMode : null"
               :disabled="busyItemId === item.id"
               @click="handleOwnedToolClick(item)"
             >

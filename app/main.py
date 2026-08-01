@@ -116,8 +116,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260801-004"
-DEFAULT_PAGE_VERSION = "v20260801.4"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260801-005"
+DEFAULT_PAGE_VERSION = "v20260801.5"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -5145,6 +5145,40 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
     }
 
 
+def cat_world_consume_repair_resources(
+    inventory: dict[str, int],
+    damaged_items: dict[str, dict[str, Any]],
+    item_id: str,
+) -> tuple[dict[str, Any], int]:
+    damaged = damaged_items.pop(item_id, None)
+    if not damaged:
+        raise HTTPException(status_code=400, detail="这个道具不需要维修。")
+    hammer_count = max(int(inventory.get(CAT_WORLD_REPAIR_HAMMER_ITEM_ID, 0) or 0), 0)
+    if hammer_count <= 0:
+        damaged_items[item_id] = damaged
+        raise HTTPException(status_code=400, detail="维修需要 1 把一次性维修锤，请先去消耗品商店购买。")
+    hammer_remaining = hammer_count - 1
+    if hammer_remaining > 0:
+        inventory[CAT_WORLD_REPAIR_HAMMER_ITEM_ID] = hammer_remaining
+    else:
+        inventory.pop(CAT_WORLD_REPAIR_HAMMER_ITEM_ID, None)
+    return damaged, hammer_remaining
+
+
+def cat_world_state_for_repair(db: Session, phone: str) -> CatWorldState:
+    normalized = normalize_login_phone(phone)
+    query = select(CatWorldState).where(CatWorldState.phone == normalized)
+    if db.get_bind().dialect.name == "sqlite":
+        db.execute(text("BEGIN IMMEDIATE"))
+        state = db.scalar(query)
+    else:
+        state = db.scalar(query.with_for_update())
+    if state:
+        return state
+    db.rollback()
+    return get_or_create_cat_world_state(db, normalized)
+
+
 @app.post("/api/vue/cat-world/repair")
 async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_db)):
     phone = require_cat_world_phone(request)
@@ -5153,7 +5187,7 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
     except Exception as exc:
         raise HTTPException(status_code=400, detail="维修数据不是有效 JSON。") from exc
     item_id = str((payload or {}).get("itemId") or "").strip()
-    state = get_or_create_cat_world_state(db, phone)
+    state = cat_world_state_for_repair(db, phone)
     inventory = parse_cat_world_inventory(state.inventory)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     damaged = damaged_items.get(item_id)
@@ -5176,11 +5210,8 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
     repair_cost = max(int(damaged.get("repairCost") or 0), 1)
     if available_energy < repair_cost:
         raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点再维修。")
-    inventory[CAT_WORLD_REPAIR_HAMMER_ITEM_ID] = hammer_count - 1
-    if inventory[CAT_WORLD_REPAIR_HAMMER_ITEM_ID] <= 0:
-        inventory.pop(CAT_WORLD_REPAIR_HAMMER_ITEM_ID, None)
+    damaged, hammer_remaining = cat_world_consume_repair_resources(inventory, damaged_items, item_id)
     state.inventory = encode_cat_world_inventory(inventory)
-    damaged_items.pop(item_id, None)
     state.damaged_items = encode_cat_world_damaged_items(damaged_items)
     state.energy_spent = max(int(state.energy_spent or 0), 0) + repair_cost
     repair_cat_id = str(damaged.get("catId") or state.selected_cat or CAT_WORLD_DEFAULT_CAT_ID)
@@ -5223,7 +5254,7 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
             "label": repair_label,
             "cost": repair_cost,
             "hammerItemId": CAT_WORLD_REPAIR_HAMMER_ITEM_ID,
-            "hammerRemaining": max(int(inventory.get(CAT_WORLD_REPAIR_HAMMER_ITEM_ID, 0) or 0), 0),
+            "hammerRemaining": hammer_remaining,
             "catId": repair_cat["id"],
             "catLabel": repair_cat["label"],
             "bond": bond,

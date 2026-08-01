@@ -13001,6 +13001,74 @@ select {
   user-select: none;
 }
 
+.cat-world-room.is-repairing .cat-world-room-viewport,
+.cat-world-room.is-repairing .cat-world-game-stage canvas {
+  cursor: none !important;
+}
+
+.cat-world-repair-cursor {
+  position: absolute;
+  z-index: 32;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 3px solid #2c2f3a;
+  border-radius: 3px;
+  color: #263047;
+  background: #fff07d;
+  box-shadow: 3px 3px 0 #2c2f3a;
+  pointer-events: none;
+  transform: translate(-7px, -27px) rotate(-16deg);
+  transform-origin: 50% 100%;
+}
+
+.cat-world-repair-mode {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 31;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 3px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 5px 6px 5px 9px;
+  color: #fff;
+  background: #236b55;
+  box-shadow: 3px 3px 0 #2c2f3a;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.cat-world-repair-mode > span,
+.cat-world-repair-mode button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cat-world-repair-mode > span {
+  gap: 5px;
+}
+
+.cat-world-repair-mode button {
+  width: 27px;
+  height: 27px;
+  border: 2px solid #2c2f3a;
+  border-radius: 2px;
+  padding: 0;
+  color: #263047;
+  background: #fff8df;
+  cursor: pointer;
+}
+
+.cat-world-repair-mode button:hover,
+.cat-world-repair-mode button:focus-visible {
+  color: #fff;
+  background: #236b55;
+}
+
 .cat-world-room-pan-button {
   position: absolute;
   top: 50%;
@@ -13331,6 +13399,15 @@ select {
 
 .cat-world-owned-item.active {
   background: #fff07d;
+}
+
+.cat-world-owned-item.repair-equipped {
+  color: #fff;
+  background: #236b55;
+}
+
+.cat-world-owned-item.repair-equipped .cat-world-owned-main :where(span, strong, small) {
+  color: #fff;
 }
 
 .cat-world-owned-item:disabled {
