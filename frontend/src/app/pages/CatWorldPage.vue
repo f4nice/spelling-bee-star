@@ -204,6 +204,7 @@ const catIconColors = {
 
 const energy = computed(() => payload.value.energy || {});
 const todayEnergy = computed(() => Math.max(Number(energy.value.today || 0), 0));
+const todayEnergySources = computed(() => Array.isArray(energy.value.todaySources) ? energy.value.todaySources : []);
 const playTime = computed(() => payload.value.playTime || {});
 const playTimeRemainingSeconds = computed(() =>
   projectCatWorldPlayTime(
@@ -2423,7 +2424,7 @@ async function selectCat(catOrId) {
           <div>
             <p class="section-kicker">Energy</p>
             <h2 id="cat-world-energy-title">学习产能</h2>
-            <p>学习积分、作文成绩和运营活动都会形成能量，猫粮、玩具、装修和配色会消耗这里的能量。</p>
+            <p>这里仅显示今天通过学习、作文、AI Debate 和运营活动获得的能量。</p>
           </div>
           <button class="secondary-button compact-button" type="button" @click="energyModalOpen = false">关闭</button>
         </header>
@@ -2433,13 +2434,14 @@ async function selectCat(catOrId) {
           <span>累计 {{ energy.earned || 0 }}</span>
           <span>已用 {{ energy.spent || 0 }}</span>
         </div>
-        <div class="cat-world-energy-list">
-          <div v-for="source in energy.sources || []" :key="source.key" class="cat-world-energy-row">
+        <div v-if="todayEnergySources.length" class="cat-world-energy-list">
+          <div v-for="source in todayEnergySources" :key="source.key" class="cat-world-energy-row">
             <span>{{ source.label }}</span>
             <strong>{{ source.energy }}</strong>
             <small>{{ source.detail || `${source.value}${source.unit} x ${source.energyPerUnit}` }}</small>
           </div>
         </div>
+        <p v-else class="cat-world-energy-empty">今天还没有获取猫咪能量，完成拼写、作文或 AI Debate 后会显示在这里。</p>
       </section>
     </div>
   </section>

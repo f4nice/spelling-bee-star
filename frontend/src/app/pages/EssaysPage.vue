@@ -1,5 +1,7 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from "vue";
+import { CalendarDays, PenLine } from "lucide-vue-next";
+import { essayDailyPromptForDate } from "../essayDailyPrompt.js";
 import { sortEssaysNewestFirst } from "../essaySorting.js";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
@@ -17,6 +19,7 @@ const notice = ref("");
 const busyAction = ref("");
 const deletePassword = ref("");
 const deletePasswordInput = ref(null);
+const bodyInput = ref(null);
 const isDeleteConfirmOpen = ref(false);
 const draft = reactive(emptyDraft());
 let isApplyingDraft = false;
@@ -25,6 +28,7 @@ const titleMaxChars = computed(() => Number(props.data?.limits?.titleMaxChars ||
 const bodyMaxChars = computed(() => Number(props.data?.limits?.bodyMaxChars || 30000));
 const currentWordCount = computed(() => countEssayWords(draft.body));
 const hasEssayInput = computed(() => Boolean(draft.body.trim()));
+const dailyPrompt = computed(() => essayDailyPromptForDate(new Date()));
 const aiVersionText = computed(() => {
   if (busyAction.value === "optimize") return "AI 正在优化这篇作文，完成后会显示在这里。";
   return draft.optimizedBody || "AI 优化后会显示在这里。";
@@ -204,6 +208,14 @@ function startNewEssay() {
   notice.value = "";
   resetDeleteConfirm();
   loadDraft(null);
+}
+
+async function startDailyPrompt() {
+  startNewEssay();
+  draft.title = dailyPrompt.value.title;
+  notice.value = `今日命题已载入：${dailyPrompt.value.sourceLabel} · ${dailyPrompt.value.typeLabel}`;
+  await nextTick();
+  bodyInput.value?.focus();
 }
 
 watch(
@@ -411,6 +423,21 @@ async function deleteEssay() {
 
     <div class="essays-layout">
       <aside class="panel essays-list-panel">
+        <section class="essay-daily-prompt" aria-labelledby="essay-daily-prompt-title">
+          <header>
+            <span><CalendarDays :size="16" aria-hidden="true" />每日命题</span>
+            <em>{{ dailyPrompt.sourceLabel }}</em>
+          </header>
+          <strong id="essay-daily-prompt-title">{{ dailyPrompt.title }}</strong>
+          <p>{{ dailyPrompt.prompt }}</p>
+          <footer>
+            <small>{{ dailyPrompt.typeLabel }} · {{ dailyPrompt.wordRange }}</small>
+            <button type="button" class="secondary-button" @click="startDailyPrompt">
+              <PenLine :size="16" aria-hidden="true" />
+              开始写作
+            </button>
+          </footer>
+        </section>
         <div class="essays-list-head">
           <strong>作文</strong>
           <span>{{ essays.length }} 篇</span>
@@ -448,6 +475,7 @@ async function deleteEssay() {
         </div>
 
         <textarea
+          ref="bodyInput"
           v-model="draft.body"
           class="essay-body-input"
           :maxlength="bodyMaxChars"

@@ -7089,6 +7089,75 @@ button.calendar-day {
   top: 82px;
 }
 
+.essay-daily-prompt {
+  display: grid;
+  gap: 9px;
+  margin: 0 -16px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 14px 16px;
+  background: #f2faf6;
+}
+
+.essay-daily-prompt header,
+.essay-daily-prompt footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.essay-daily-prompt header span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.essay-daily-prompt header em {
+  color: #70591a;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.essay-daily-prompt > strong {
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.essay-daily-prompt > p {
+  margin: 0;
+  color: #445568;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.essay-daily-prompt footer {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.essay-daily-prompt footer small {
+  flex: 1 1 120px;
+  color: var(--muted);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.essay-daily-prompt footer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 8px 10px;
+}
+
 .essays-list-head {
   display: flex;
   align-items: center;
@@ -7110,7 +7179,8 @@ button.calendar-day {
 .essays-list {
   display: grid;
   gap: 10px;
-  max-height: calc(100vh - 210px);
+  max-height: calc(100vh - 500px);
+  min-height: 140px;
   overflow: auto;
   padding-right: 2px;
 }
@@ -8629,6 +8699,7 @@ button.calendar-day {
 
   .essays-list {
     max-height: none;
+    min-height: 0;
   }
 
   .essay-cover-column {
@@ -15636,6 +15707,16 @@ select {
   background: #fff;
   font: inherit;
   font-weight: 800;
+}
+
+.cat-world-energy-empty {
+  margin: 0;
+  border: 3px dashed #7f8ea3;
+  padding: 18px;
+  color: #526178;
+  background: #eef8f4;
+  font-weight: 900;
+  text-align: center;
 }
 
 .admin-play-time-grant-panel {

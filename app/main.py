@@ -116,8 +116,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260801-001"
-DEFAULT_PAGE_VERSION = "v20260801.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260801-002"
+DEFAULT_PAGE_VERSION = "v20260801.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -251,6 +251,7 @@ GROWTH_BADGE_CONFIG = [
 ]
 
 CAT_WORLD_DEFAULT_CAT_ID = "mimi"
+CAT_WORLD_DEBATE_ENERGY_GRANT_SOURCE = "system:debate"
 CAT_WORLD_MOVEMENT_SPEED_SETTING_KEY = "movement_speed"
 CAT_WORLD_DEFAULT_MOVEMENT_SPEED = 1.0
 CAT_WORLD_MIN_MOVEMENT_SPEED = 0.4
@@ -7141,7 +7142,7 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
                     phone=session.phone,
                     amount=energy_gain,
                     reason=f"AI辩论赛 {session.debate_date.isoformat()} {session.topic[:80]}",
-                    granted_by_phone="system:debate",
+                    granted_by_phone=CAT_WORLD_DEBATE_ENERGY_GRANT_SOURCE,
                     created_at=now,
                 )
             )
@@ -13395,21 +13396,31 @@ def cat_world_growth_source_rows(growth: dict[str, Any]) -> list[dict[str, Any]]
     return rows
 
 
-def cat_world_essay_energy_source(db: Session, phone: str) -> dict[str, Any]:
+def cat_world_essay_energy_source(
+    db: Session,
+    phone: str,
+    today: date | None = None,
+) -> dict[str, Any]:
     raw_rows = db.execute(
         select(
             EssayEntry.best_writing_points,
             EssayEntry.writing_score,
             EssayEntry.writing_score_breakdown,
+            EssayEntry.created_at,
         ).where(EssayEntry.phone == phone)
     ).all()
+    source_date = today or date.today()
     essay_points: list[int] = []
-    for best_writing_points, writing_score, raw_breakdown in raw_rows:
+    today_points: list[int] = []
+    for best_writing_points, writing_score, raw_breakdown, created_at in raw_rows:
         stored_best = min(max(int(best_writing_points or 0), 0), 500)
         effective_points = stored_best or essay_writing_points_from_values(writing_score, raw_breakdown)
         if effective_points > 0:
             essay_points.append(effective_points)
+            if created_at and created_at.date() == source_date:
+                today_points.append(effective_points)
     total_points = sum(essay_points)
+    today_total = sum(today_points)
     return {
         "key": "essay_scores",
         "label": "作文五项积分",
@@ -13418,23 +13429,61 @@ def cat_world_essay_energy_source(db: Session, phone: str) -> dict[str, Any]:
         "energyPerUnit": 1,
         "energy": total_points,
         "essayCount": len(essay_points),
+        "todayValue": today_total,
+        "todayEnergy": today_total,
+        "todayEssayCount": len(today_points),
+        "todayDetail": f"今天 {len(today_points)} 篇作文" if today_points else "今天暂无作文能量",
     }
 
 
-def cat_world_operating_energy_source(db: Session, phone: str) -> dict[str, Any]:
+def cat_world_debate_energy_source(
+    db: Session,
+    phone: str,
+    today: date | None = None,
+) -> dict[str, Any]:
     grants = db.scalars(
         select(CatWorldEnergyGrant)
         .where(CatWorldEnergyGrant.phone == phone)
+        .where(CatWorldEnergyGrant.granted_by_phone == CAT_WORLD_DEBATE_ENERGY_GRANT_SOURCE)
+        .order_by(CatWorldEnergyGrant.created_at.desc(), CatWorldEnergyGrant.id.desc())
+    ).all()
+    source_date = today or date.today()
+    today_grants = [grant for grant in grants if grant.created_at and grant.created_at.date() == source_date]
+    total_energy = sum(max(int(grant.amount or 0), 0) for grant in grants)
+    today_energy = sum(max(int(grant.amount or 0), 0) for grant in today_grants)
+    latest_today = today_grants[0] if today_grants else None
+    return {
+        "key": "ai_debate",
+        "label": "AI Debate",
+        "value": total_energy,
+        "unit": "能量",
+        "energyPerUnit": 1,
+        "energy": total_energy,
+        "grantCount": len(grants),
+        "todayValue": today_energy,
+        "todayEnergy": today_energy,
+        "todayGrantCount": len(today_grants),
+        "todayDetail": latest_today.reason if latest_today else "今天暂无 Debate 能量",
+    }
+
+
+def cat_world_operating_energy_source(
+    db: Session,
+    phone: str,
+    today: date | None = None,
+) -> dict[str, Any]:
+    grants = db.scalars(
+        select(CatWorldEnergyGrant)
+        .where(CatWorldEnergyGrant.phone == phone)
+        .where(CatWorldEnergyGrant.granted_by_phone != CAT_WORLD_DEBATE_ENERGY_GRANT_SOURCE)
         .order_by(CatWorldEnergyGrant.created_at.desc(), CatWorldEnergyGrant.id.desc())
     ).all()
     total_energy = sum(max(int(grant.amount or 0), 0) for grant in grants)
-    today = date.today()
-    today_energy = sum(
-        max(int(grant.amount or 0), 0)
-        for grant in grants
-        if grant.created_at and grant.created_at.date() == today
-    )
+    source_date = today or date.today()
+    today_grants = [grant for grant in grants if grant.created_at and grant.created_at.date() == source_date]
+    today_energy = sum(max(int(grant.amount or 0), 0) for grant in today_grants)
     latest = grants[0] if grants else None
+    latest_today = today_grants[0] if today_grants else None
     return {
         "key": "operating_activity",
         "label": "运营活动",
@@ -13443,7 +13492,10 @@ def cat_world_operating_energy_source(db: Session, phone: str) -> dict[str, Any]
         "energyPerUnit": 1,
         "energy": total_energy,
         "grantCount": len(grants),
+        "todayValue": today_energy,
         "todayEnergy": today_energy,
+        "todayGrantCount": len(today_grants),
+        "todayDetail": f"今天：{latest_today.reason}" if latest_today else "今天暂无运营活动发放",
         "detail": f"最近：{latest.reason}" if latest else "暂无运营活动发放",
     }
 
@@ -13451,10 +13503,12 @@ def cat_world_operating_energy_source(db: Session, phone: str) -> dict[str, Any]
 def cat_world_earned_energy(db: Session, phone: str, growth: dict[str, Any] | None = None) -> int:
     growth = growth or learning_growth_summary(db)
     essay_source = cat_world_essay_energy_source(db, phone)
+    debate_source = cat_world_debate_energy_source(db, phone)
     operating_source = cat_world_operating_energy_source(db, phone)
     return (
         max(int(growth.get("points") or 0), 0)
         + int(essay_source["energy"])
+        + int(debate_source["energy"])
         + int(operating_source["energy"])
     )
 
@@ -13465,6 +13519,43 @@ def cat_world_today_energy(growth: dict[str, Any]) -> int:
     spelling_count = int(missions.get("today_spelling", {}).get("value") or 0)
     spelling_points = int(rules.get("spelling_words", {}).get("points") or 0)
     return max(spelling_count * spelling_points, 0)
+
+
+def cat_world_today_energy_source_rows(
+    growth: dict[str, Any],
+    essay_source: dict[str, Any],
+    debate_source: dict[str, Any],
+    operating_source: dict[str, Any],
+) -> list[dict[str, Any]]:
+    rules = {item["key"]: item for item in growth.get("scoreRules", []) if isinstance(item, dict)}
+    missions = {item["key"]: item for item in growth.get("dailyMissions", []) if isinstance(item, dict)}
+    spelling_count = max(int(missions.get("today_spelling", {}).get("value") or 0), 0)
+    spelling_energy_per_unit = max(int(rules.get("spelling_words", {}).get("points") or 0), 0)
+    spelling_energy = spelling_count * spelling_energy_per_unit
+    rows = [
+        {
+            "key": "spelling_words",
+            "label": "拼写挑战",
+            "value": spelling_count,
+            "unit": "题",
+            "energyPerUnit": spelling_energy_per_unit,
+            "energy": spelling_energy,
+        }
+    ]
+    for source in (essay_source, debate_source, operating_source):
+        today_energy = max(int(source.get("todayEnergy") or 0), 0)
+        rows.append(
+            {
+                "key": source.get("key") or "energy_source",
+                "label": source.get("label") or "学习能量",
+                "value": max(int(source.get("todayValue") or today_energy), 0),
+                "unit": source.get("unit") or "能量",
+                "energyPerUnit": max(int(source.get("energyPerUnit") or 1), 1),
+                "energy": today_energy,
+                "detail": source.get("todayDetail") or "",
+            }
+        )
+    return [row for row in rows if int(row.get("energy") or 0) > 0]
 
 
 def cat_world_today_spelling_count(db: Session, today: date | None = None) -> int:
@@ -18356,13 +18447,21 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         reward_seconds=int(play_time_reward_source["seconds"]),
     )
     essay_energy_source = cat_world_essay_energy_source(db, state.phone)
+    debate_energy_source = cat_world_debate_energy_source(db, state.phone)
     operating_energy_source = cat_world_operating_energy_source(db, state.phone)
     earned_energy = (
         max(int(growth.get("points") or 0), 0)
         + int(essay_energy_source["energy"])
+        + int(debate_energy_source["energy"])
         + int(operating_energy_source["energy"])
     )
-    today_energy = cat_world_today_energy(growth) + int(operating_energy_source["todayEnergy"])
+    today_energy_sources = cat_world_today_energy_source_rows(
+        growth,
+        essay_energy_source,
+        debate_energy_source,
+        operating_energy_source,
+    )
+    today_energy = sum(int(source["energy"]) for source in today_energy_sources)
     spent_energy = max(int(state.energy_spent or 0), 0)
     available_energy = max(earned_energy - spent_energy, 0)
     inventory = parse_cat_world_inventory(state.inventory)
@@ -18491,8 +18590,10 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "sources": [
                 *cat_world_growth_source_rows(growth),
                 essay_energy_source,
+                debate_energy_source,
                 operating_energy_source,
             ],
+            "todaySources": today_energy_sources,
         },
         "state": {
             "inventory": inventory,
