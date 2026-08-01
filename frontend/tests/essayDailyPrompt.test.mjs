@@ -18,3 +18,13 @@ test("daily essay prompts rotate between Gaokao and PET styles", () => {
 
   assert.deepEqual([...sources].sort(), ["PET Writing", "高考英语作文"].sort());
 });
+
+test("daily essay instructions are written in English", () => {
+  const prompts = Array.from({ length: 8 }, (_, offset) => essayDailyPromptForDate(new Date(2026, 7, 1 + offset)));
+
+  for (const prompt of prompts) {
+    assert.doesNotMatch(prompt.typeLabel, /[\u3400-\u9fff]/);
+    assert.doesNotMatch(prompt.prompt, /[\u3400-\u9fff]/);
+    assert.match(prompt.wordRange, /words/);
+  }
+});
