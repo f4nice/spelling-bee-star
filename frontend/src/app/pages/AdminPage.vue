@@ -21,6 +21,7 @@ const catWorldPricing = ref(normalizeCatWorldPricing(props.data.catWorldPricing 
 const savingPriceItemId = ref("");
 const savingScenePriceId = ref("");
 const savingCatWorldSettings = ref(false);
+const savingLimitedItemId = ref("");
 const catWorldResetPassword = ref("");
 const resettingCatWorld = ref(false);
 const catMovementSpeedDraft = ref(Number(catWorldPricing.value.settings?.movementSpeed || 1));
@@ -42,6 +43,12 @@ const priceDrafts = ref(
 );
 const scenePriceDrafts = ref(
   Object.fromEntries((catWorldPricing.value.scenes || []).map((scene) => [scene.id, Number(scene.cost || 0)])),
+);
+const limitedItemStockDrafts = ref(
+  Object.fromEntries((catWorldPricing.value.limitedItems || []).map((item) => [
+    item.itemId,
+    { totalStock: Number(item.totalStock || 0), isActive: Boolean(item.isActive) },
+  ])),
 );
 const adminSections = [
   { key: "planning", label: "规划", description: "登录、权限、AI 和积分体系的管理蓝图。" },
@@ -124,6 +131,7 @@ function normalizeCatWorldPricing(source = {}) {
     plans: Array.isArray(source.plans) ? source.plans : [],
     items: Array.isArray(source.items) ? source.items : [],
     scenes: Array.isArray(source.scenes) ? source.scenes : [],
+    limitedItems: Array.isArray(source.limitedItems) ? source.limitedItems : [],
     settings: {
       ...rawSettings,
       movementSpeed: normalizedSpeed(rawSettings.movementSpeed, 1, speedLimits.min, speedLimits.max),
@@ -166,6 +174,10 @@ function applyCatWorldPricing(nextPricing) {
   scenePriceDrafts.value = Object.fromEntries(
     (catWorldPricing.value.scenes || []).map((scene) => [scene.id, Number(scene.cost || 0)]),
   );
+  limitedItemStockDrafts.value = Object.fromEntries((catWorldPricing.value.limitedItems || []).map((item) => [
+    item.itemId,
+    { totalStock: Number(item.totalStock || 0), isActive: Boolean(item.isActive) },
+  ]));
   catMovementSpeedDraft.value = Number(catWorldPricing.value.settings?.movementSpeed || 1);
   catGenderWeightDrafts.value = {
     male: Number(catWorldPricing.value.settings?.genderDrawWeights?.male ?? 50),
@@ -354,6 +366,34 @@ async function saveCatWorldSettings() {
     notice.value = error.message || "猫咪世界设置保存失败。";
   } finally {
     savingCatWorldSettings.value = false;
+  }
+}
+
+async function saveLimitedItemStock(item) {
+  const draft = limitedItemStockDrafts.value[item.itemId] || {};
+  const totalStock = Math.round(Number(draft.totalStock));
+  if (!Number.isFinite(totalStock) || totalStock < Number(item.claimedCount || 0) || totalStock > 100000) {
+    notice.value = `总库存需要在已领取 ${item.claimedCount || 0} 件到 100000 件之间。`;
+    return;
+  }
+  savingLimitedItemId.value = item.itemId;
+  notice.value = "";
+  try {
+    const result = await fetchJson(routeApiPaths.adminCatWorldLimitedItemStock(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        itemId: item.itemId,
+        totalStock,
+        isActive: draft.isActive !== false,
+      }),
+    });
+    applyCatWorldPricing(result.catWorldPricing);
+    notice.value = `${item.label}库存已保存。`;
+  } catch (error) {
+    notice.value = error.message || "限定礼物库存保存失败。";
+  } finally {
+    savingLimitedItemId.value = "";
   }
 }
 
@@ -737,6 +777,39 @@ async function resetCatWorldData() {
               <p>调整活动室运行参数，或清理当前账号的测试数据。</p>
             </div>
           </div>
+
+          <section
+            v-for="item in catWorldPricing.limitedItems || []"
+            :key="item.itemId"
+            class="admin-cat-world-settings-panel admin-limited-item-settings-panel"
+          >
+            <div>
+              <strong>限定盲盒与礼物库存</strong>
+              <p>{{ item.label }} · 每个账号最多 {{ item.maxOwned || 1 }} 件；已领取 {{ item.claimedCount || 0 }} 件。</p>
+            </div>
+            <label class="admin-cat-speed-number">
+              <span>全站总库存</span>
+              <input
+                v-model.number="limitedItemStockDrafts[item.itemId].totalStock"
+                type="number"
+                :min="item.claimedCount || 0"
+                max="100000"
+                step="1"
+              >
+            </label>
+            <label class="admin-limited-item-toggle">
+              <input v-model="limitedItemStockDrafts[item.itemId].isActive" type="checkbox">
+              <span>{{ limitedItemStockDrafts[item.itemId].isActive ? "正在上架" : "暂停领取" }}</span>
+            </label>
+            <button
+              class="challenge-button compact-button"
+              type="button"
+              :disabled="savingLimitedItemId === item.itemId"
+              @click="saveLimitedItemStock(item)"
+            >
+              {{ savingLimitedItemId === item.itemId ? "保存中" : `保存 · 剩余 ${item.remainingStock || 0}` }}
+            </button>
+          </section>
 
           <section class="admin-cat-world-settings-panel">
             <div>

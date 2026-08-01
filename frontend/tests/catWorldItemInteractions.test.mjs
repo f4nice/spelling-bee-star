@@ -9,6 +9,8 @@ import {
   floorDropPosition,
   interactionMoveDuration,
   itemInteractionFor,
+  timedInteractionLabel,
+  timedInteractionProgress,
   wandChaseJoinDecision,
 } from "../src/app/catWorldItemInteractions.js";
 
@@ -18,6 +20,18 @@ test("interactive room items use the expected controlled behavior", () => {
   assert.equal(itemInteractionFor("bubble-bathtub", "decor")?.behavior, "walk-and-bathe");
   assert.equal(itemInteractionFor("feather-wand", "toy")?.behavior, "pointer-follow");
   assert.equal(itemInteractionFor("feather-wand", "decor"), null);
+});
+
+test("timed furniture interactions expose a label and stable countdown progress", () => {
+  assert.equal(timedInteractionLabel("bubble-bathtub"), "泡泡洗澡");
+  assert.equal(timedInteractionLabel("window-hammock"), "吊床休息");
+  assert.equal(timedInteractionLabel("future-item"), "互动中");
+  assert.deepEqual(timedInteractionProgress(1000, 5000, 3000), {
+    progress: 0.5,
+    remainingMs: 2000,
+    remainingSeconds: 2,
+  });
+  assert.equal(timedInteractionProgress(1000, 5000, 9000).progress, 1);
 });
 
 test("carried cats recognize furniture drop interactions", () => {

@@ -39,6 +39,7 @@ from app.models import (
     CatWorldEnergyGrant,
     CatWorldGameSetting,
     CatWorldLimitedCatStock,
+    CatWorldLimitedItemStock,
     CatWorldPlayTimeGrant,
     CatWorldScene,
     CatWorldShopSetting,
@@ -116,8 +117,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260801-006"
-DEFAULT_PAGE_VERSION = "v20260801.6"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260801-007"
+DEFAULT_PAGE_VERSION = "v20260801.7"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -269,6 +270,8 @@ CAT_WORLD_CAT_GRASS_ITEM_ID = "cat-grass-pot"
 CAT_WORLD_BATH_ITEM_ID = "cat-bath-kit"
 CAT_WORLD_REPAIR_HAMMER_ITEM_ID = "repair-hammer"
 CAT_WORLD_RENAME_CARD_ITEM_ID = "cat-rename-card"
+CAT_WORLD_LIMITED_GIFT_ITEM_ID = "limited-gift-toy"
+CAT_WORLD_LIMITED_GIFT_INITIAL_STOCK = 12
 CAT_WORLD_PET_REWARD_COOLDOWN_SECONDS = 60 * 60
 CAT_WORLD_PLAY_TIME_TIERS = ((200, 20 * 60), (100, 10 * 60))
 CAT_WORLD_PLAY_TIME_HEARTBEAT_GRACE_SECONDS = 30
@@ -651,6 +654,17 @@ CAT_WORLD_SHOP = [
         "cost": 130,
         "mood": 11,
         "description": "一篮不会滚远的彩色毛线球，适合慢慢拨着玩。",
+    },
+    {
+        "id": CAT_WORLD_LIMITED_GIFT_ITEM_ID,
+        "category": "toy",
+        "label": "限定礼物玩具",
+        "englishName": "Limited Gift Toy",
+        "cost": 100,
+        "mood": 13,
+        "limited": True,
+        "maxOwned": 1,
+        "description": "每期限量上架的小礼物盒，每个账号最多拥有 1 件，布偶猫尤其喜欢靠近它玩。",
     },
     {
         "id": "cloud-rug",
@@ -1292,6 +1306,7 @@ CAT_WORLD_TOY_FAVORITE_CAT = {
     "feather-wand": "maine-coon",
     "scratch-board": "british-shorthair",
     "yarn-basket": CAT_WORLD_DEFAULT_CAT_ID,
+    CAT_WORLD_LIMITED_GIFT_ITEM_ID: "ragdoll",
 }
 CAT_WORLD_FOOD_FAVORITE_CAT = {
     "salmon-bowl": CAT_WORLD_DEFAULT_CAT_ID,
@@ -1324,6 +1339,7 @@ CAT_WORLD_TOY_DEFAULT_LAYOUT = {
     "scratch-board": {"x": 7, "y": 75},
     "feather-wand": {"x": 83, "y": 45},
     "yarn-basket": {"x": 55, "y": 78},
+    CAT_WORLD_LIMITED_GIFT_ITEM_ID: {"x": 66, "y": 73},
 }
 CAT_WORLD_ROOM_DEFAULT_LAYOUT = {
     **CAT_WORLD_DECOR_DEFAULT_LAYOUT,
@@ -3910,6 +3926,7 @@ def startup() -> None:
         backfill_essay_best_writing_results(db)
         seed_cat_world_scenes(db)
         seed_cat_world_limited_cat_stock(db)
+        seed_cat_world_limited_item_stock(db)
         seed_daily_quotes(db)
         ensure_default_word_list(db)
         seed_word_resource_pool(db)
@@ -4690,10 +4707,18 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
         save_cat_world_active_scene_styles(state, active_user_scene, room_styles)
         db.add(active_user_scene)
     elif item["category"] in {"toy", "decor"}:
+        if item.get("limited"):
+            state = db.scalar(
+                select(CatWorldState).where(CatWorldState.id == state.id).with_for_update()
+            ) or state
+            inventory = parse_cat_world_inventory(state.inventory)
         if inventory.get(item_id, 0) > 0:
             return {"ok": True, **serialize_cat_world_payload(db, state)}
-        if current["energy"]["available"] < int(item["cost"]):
+        available_energy = max(int(current["energy"]["earned"]) - max(int(state.energy_spent or 0), 0), 0)
+        if available_energy < int(item["cost"]):
             raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点。")
+        if item.get("limited"):
+            claim_cat_world_limited_item_stock(db, item_id)
         inventory[item_id] = 1
         state.inventory = encode_cat_world_inventory(inventory)
     else:
@@ -5693,6 +5718,40 @@ async def vue_admin_cat_world_settings_api(request: Request, db: Session = Depen
             gender_weights.get("male"),
             gender_weights.get("female"),
         )
+    db.commit()
+    return {"ok": True, "catWorldPricing": admin_cat_world_pricing_payload(db)}
+
+
+@app.post("/api/vue/admin/cat-world/limited-item-stock")
+async def vue_admin_cat_world_limited_item_stock_api(request: Request, db: Session = Depends(get_db)):
+    require_admin_panel_access(request, db)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="限定礼物库存数据不是有效 JSON。") from exc
+    item_id = str((payload or {}).get("itemId") or "").strip()
+    item = CAT_WORLD_SHOP_BY_ID.get(item_id)
+    if not item or not item.get("limited") or item.get("category") != "toy":
+        raise HTTPException(status_code=404, detail="没有找到这件限定礼物。")
+    stock = db.scalar(
+        select(CatWorldLimitedItemStock)
+        .where(CatWorldLimitedItemStock.item_id == item_id)
+        .with_for_update()
+    )
+    if not stock:
+        stock = CatWorldLimitedItemStock(item_id=item_id, total_stock=0, claimed_count=0, is_active=True)
+        db.add(stock)
+        db.flush()
+    try:
+        total_stock = int((payload or {}).get("totalStock"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="请输入有效的限定库存。") from exc
+    claimed_count = max(int(stock.claimed_count or 0), 0)
+    if total_stock < claimed_count or total_stock > 100000:
+        raise HTTPException(status_code=400, detail=f"总库存需要在已领取 {claimed_count} 件到 100000 件之间。")
+    stock.total_stock = total_stock
+    stock.is_active = bool((payload or {}).get("isActive", True))
+    db.add(stock)
     db.commit()
     return {"ok": True, "catWorldPricing": admin_cat_world_pricing_payload(db)}
 
@@ -14489,6 +14548,60 @@ def seed_cat_world_limited_cat_stock(db: Session) -> None:
         db.commit()
 
 
+def seed_cat_world_limited_item_stock(db: Session) -> None:
+    stock = db.scalar(
+        select(CatWorldLimitedItemStock).where(
+            CatWorldLimitedItemStock.item_id == CAT_WORLD_LIMITED_GIFT_ITEM_ID
+        )
+    )
+    if stock:
+        return
+    db.add(
+        CatWorldLimitedItemStock(
+            item_id=CAT_WORLD_LIMITED_GIFT_ITEM_ID,
+            total_stock=CAT_WORLD_LIMITED_GIFT_INITIAL_STOCK,
+            claimed_count=0,
+            is_active=True,
+        )
+    )
+    db.commit()
+
+
+def cat_world_limited_item_stock_payload(db: Session, item_id: str) -> dict[str, Any]:
+    stock = db.scalar(
+        select(CatWorldLimitedItemStock).where(CatWorldLimitedItemStock.item_id == item_id)
+    )
+    item = CAT_WORLD_SHOP_BY_ID.get(item_id, {})
+    total_stock = max(int(stock.total_stock or 0), 0) if stock else 0
+    claimed_count = max(int(stock.claimed_count or 0), 0) if stock else 0
+    return {
+        "itemId": item_id,
+        "label": str(item.get("label") or item_id),
+        "englishName": str(item.get("englishName") or item_id),
+        "totalStock": total_stock,
+        "claimedCount": claimed_count,
+        "remainingStock": max(total_stock - claimed_count, 0),
+        "isActive": bool(stock.is_active) if stock else False,
+        "maxOwned": max(int(item.get("maxOwned") or 1), 1),
+    }
+
+
+def claim_cat_world_limited_item_stock(db: Session, item_id: str) -> CatWorldLimitedItemStock:
+    stock = db.scalar(
+        select(CatWorldLimitedItemStock)
+        .where(CatWorldLimitedItemStock.item_id == item_id)
+        .with_for_update()
+    )
+    if not stock or not stock.is_active:
+        raise HTTPException(status_code=409, detail="这件限定礼物暂时没有开放领取。")
+    remaining_stock = max(int(stock.total_stock or 0) - int(stock.claimed_count or 0), 0)
+    if remaining_stock <= 0:
+        raise HTTPException(status_code=409, detail="这件限定礼物已经售罄。")
+    stock.claimed_count = max(int(stock.claimed_count or 0), 0) + 1
+    db.add(stock)
+    return stock
+
+
 def cat_world_scene_row(db: Session, scene_key: str | None = None, enabled_only: bool = False) -> CatWorldScene | None:
     normalized = str(scene_key or CAT_WORLD_DEFAULT_SCENE_KEY).strip() or CAT_WORLD_DEFAULT_SCENE_KEY
     statement = select(CatWorldScene).where(CatWorldScene.scene_key == normalized)
@@ -18606,6 +18719,14 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
                 "drawnCatId": current_blind_series.get("drawnCatId") or "",
             }
         )
+    limited_gift_item = shop_by_id.get(CAT_WORLD_LIMITED_GIFT_ITEM_ID)
+    if limited_gift_item is not None:
+        limited_gift_item.update(
+            {
+                **cat_world_limited_item_stock_payload(db, CAT_WORLD_LIMITED_GIFT_ITEM_ID),
+                "owned": inventory.get(CAT_WORLD_LIMITED_GIFT_ITEM_ID, 0) > 0,
+            }
+        )
     cat_care, cat_care_changed = cat_world_ensure_profile_care_records(state, cat_profiles)
     litter_status = cat_world_refresh_litter(state, inventory, owned_cats)
     active_care = cat_world_active_care_payload(db, state)
@@ -18785,6 +18906,7 @@ def admin_cat_world_pricing_payload(db: Session) -> dict[str, Any]:
     return {
         "plans": CAT_WORLD_PRICING_PLANS,
         "items": cat_world_effective_shop(db),
+        "limitedItems": [cat_world_limited_item_stock_payload(db, CAT_WORLD_LIMITED_GIFT_ITEM_ID)],
         "scenes": admin_cat_world_scene_pricing_payload(db),
         "settings": cat_world_game_settings_payload(db),
     }

@@ -21,6 +21,7 @@ export const routeApiPaths = {
   adminCatWorldPricing: () => "/api/vue/admin/cat-world/pricing",
   adminCatWorldScenePricing: () => "/api/vue/admin/cat-world/scene-pricing",
   adminCatWorldSettings: () => "/api/vue/admin/cat-world/settings",
+  adminCatWorldLimitedItemStock: () => "/api/vue/admin/cat-world/limited-item-stock",
   adminCatWorldEnergyGrant: () => "/api/vue/admin/cat-world/energy-grant",
   adminCatWorldPlayTimeGrant: () => "/api/vue/admin/cat-world/play-time-grant",
   adminCatWorldReset: () => "/api/vue/admin/cat-world/reset",

@@ -185,6 +185,36 @@ export function floorDropPosition(pointer = {}, spec = {}, world = {}) {
   };
 }
 
+const TIMED_INTERACTION_LABELS = Object.freeze({
+  "bubble-bathtub": "泡泡洗澡",
+  "study-desk": "书桌陪读",
+  "reading-lamp": "灯下陪读",
+  "window-hammock": "吊床休息",
+  "felt-cat-bed": "猫窝休息",
+  "moon-cushion": "软垫休息",
+  "cloud-rug": "地毯打滚",
+  "cat-climbing-tree": "爬架巡视",
+  "mini-fountain": "饮水时间",
+  "sun-window": "窗边晒太阳",
+});
+
+export function timedInteractionLabel(itemId, fallback = "互动中") {
+  return TIMED_INTERACTION_LABELS[itemId] || fallback;
+}
+
+export function timedInteractionProgress(startedAt, endsAt, now = Date.now()) {
+  const start = Number(startedAt) || 0;
+  const end = Math.max(Number(endsAt) || start, start);
+  const current = Math.min(Math.max(Number(now) || start, start), end);
+  const duration = Math.max(end - start, 1);
+  const remainingMs = Math.max(end - current, 0);
+  return {
+    progress: Math.min(Math.max((current - start) / duration, 0), 1),
+    remainingMs,
+    remainingSeconds: Math.ceil(remainingMs / 1000),
+  };
+}
+
 export function catFloorDropPosition(pointer = {}, world = {}) {
   const worldWidth = Math.max(Number(world.width) || 100, 100);
   const floorTop = Number(world.floorTop) || 0;

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Award as AwardIcon, Cat as CatIcon, ChevronLeft, ChevronRight, ContactRound as RenameCardIcon, Hammer as HammerIcon, LockKeyhole as LockIcon, Shovel as ShovelIcon, X as XIcon } from "lucide-vue-next";
+import { Award as AwardIcon, Cat as CatIcon, ChevronLeft, ChevronRight, Hammer as HammerIcon, LockKeyhole as LockIcon, Shovel as ShovelIcon, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -27,6 +27,7 @@ import {
 } from "../catWorldPlayTime.js";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
+import CatWorldProductIcon from "../components/CatWorldProductIcon.vue";
 
 const props = defineProps({
   data: {
@@ -185,6 +186,11 @@ const categories = [
 const REPAIR_HAMMER_ITEM_ID = "repair-hammer";
 const LITTER_SCOOP_ITEM_ID = "litter-scoop";
 const CAT_RENAME_CARD_ITEM_ID = "cat-rename-card";
+const toolIconItems = Object.freeze({
+  repair: { id: REPAIR_HAMMER_ITEM_ID, category: "consumable", label: "一次性维修锤" },
+  scoop: { id: LITTER_SCOOP_ITEM_ID, category: "consumable", label: "一次性铲屎铲" },
+  rename: { id: CAT_RENAME_CARD_ITEM_ID, category: "consumable", label: "猫咪改名卡" },
+});
 
 const toolCategories = [
   { key: "decor", label: "装饰" },
@@ -1447,6 +1453,9 @@ function isOneTimeOwned(item) {
 function canPurchase(item) {
   if (!item?.id) return false;
   if (item.category === "blind-box") return !item.drawn && Number(item.remainingStock || 0) > 0 && canAfford(item);
+  if (item.limited) {
+    return !isOneTimeOwned(item) && item.isActive !== false && Number(item.remainingStock || 0) > 0 && canAfford(item);
+  }
   if (item.category === "cat") return canAfford(item);
   if (item.category === "color") return targetDecorOwned(item) && (itemCount(item.id) > 0 || canAfford(item));
   if (item.category === "handbook") return !isOneTimeOwned(item) && canAfford(item);
@@ -1458,6 +1467,12 @@ function purchaseHint(item) {
   if (!item?.id) return "";
   if (item.category === "handbook" && isOneTimeOwned(item)) {
     return "已永久拥有，点击打开手册";
+  }
+  if (item.limited) {
+    if (isOneTimeOwned(item)) return "已拥有 1 件，本期不能重复购买";
+    if (item.isActive === false) return "这件限定礼物暂时没有上架";
+    if (Number(item.remainingStock || 0) <= 0) return "这件限定礼物已经售罄";
+    return `全站仅剩 ${item.remainingStock} 件 · 每个账号限购 ${item.maxOwned || 1} 件`;
   }
   if (item.category === "cat") {
     const weights = gameSettings.value.genderDrawWeights || {};
@@ -1514,6 +1529,9 @@ function purchaseHint(item) {
 function purchaseButtonText(item) {
   if (busyItemId.value === item.id) return "处理中...";
   if (item.category === "handbook" && isOneTimeOwned(item)) return "打开手册";
+  if (item.limited && isOneTimeOwned(item)) return "已拥有 1 件";
+  if (item.limited && item.isActive === false) return "暂停领取";
+  if (item.limited && Number(item.remainingStock || 0) <= 0) return "已售罄";
   if (item.category === "cat" && lostCats.value[item.id]) return canAfford(item) ? `扣 ${item.cost} 能量重新领养` : "能量不足";
   if (item.category === "cat" && ownsCat(item.id)) return canAfford(item) ? `再领养一只` : "能量不足";
   if (item.category === "color" && !targetDecorOwned(item)) return "先买家具";
@@ -1927,7 +1945,7 @@ async function selectCat(catOrId, options = {}) {
       :style="{ left: `${renameCursorX}px`, top: `${renameCursorY}px` }"
       aria-hidden="true"
     >
-      <RenameCardIcon :size="23" :stroke-width="2.6" />
+      <CatWorldProductIcon :item="toolIconItems.rename" compact aria-hidden="true" />
     </span>
     <section class="cat-world-hero">
       <div class="cat-world-copy">
@@ -2067,7 +2085,7 @@ async function selectCat(catOrId, options = {}) {
             :style="{ left: `${toolCursorX}px`, top: `${toolCursorY}px` }"
             aria-hidden="true"
           >
-            <HammerIcon :size="22" :stroke-width="3" />
+            <CatWorldProductIcon :item="toolIconItems.repair" compact aria-hidden="true" />
           </span>
           <span
             v-if="scoopMode && toolCursorVisible"
@@ -2075,7 +2093,7 @@ async function selectCat(catOrId, options = {}) {
             :style="{ left: `${toolCursorX}px`, top: `${toolCursorY}px` }"
             aria-hidden="true"
           >
-            <ShovelIcon :size="23" :stroke-width="3" />
+            <CatWorldProductIcon :item="toolIconItems.scoop" compact aria-hidden="true" />
           </span>
           <div v-if="repairMode" class="cat-world-repair-mode" role="status">
             <span><HammerIcon :size="18" :stroke-width="3" aria-hidden="true" />维修模式</span>
@@ -2227,9 +2245,12 @@ async function selectCat(catOrId, options = {}) {
               :disabled="busyItemId === item.id"
               @click="handleOwnedToolClick(item)"
             >
-              <span>{{ item.englishName || item.rarity || item.category }}</span>
-              <strong>{{ item.label }}</strong>
-              <small>{{ ownedToolSubtext(item) }}</small>
+              <CatWorldProductIcon :item="item" compact aria-hidden="true" />
+              <span class="cat-world-owned-copy">
+                <span>{{ item.englishName || item.rarity || item.category }}</span>
+                <strong>{{ item.label }}</strong>
+                <small>{{ ownedToolSubtext(item) }}</small>
+              </span>
             </button>
             <div v-if="item.category === 'decor' && item.styleOptions?.length" class="cat-world-color-swatches" aria-label="已拥有配色">
               <button
@@ -2408,8 +2429,13 @@ async function selectCat(catOrId, options = {}) {
       <div class="cat-world-shop-grid">
         <article v-for="item in selectedItems" :key="item.id" class="cat-world-shop-card">
           <div>
-            <span>{{ item.englishName }}</span>
-            <h3>{{ item.label }}</h3>
+            <div class="cat-world-shop-title">
+              <CatWorldProductIcon :item="item" />
+              <div>
+                <span>{{ item.englishName }}</span>
+                <h3>{{ item.label }}</h3>
+              </div>
+            </div>
             <div v-if="item.category === 'food'" class="cat-world-food-tags">
               <span :class="{ specialty: item.foodType === 'specialty' }">{{ foodTypeLabel(item) }}</span>
               <span v-if="item.foodType === 'specialty' && item.favoriteCatLabel" class="favorite">
@@ -2425,6 +2451,11 @@ async function selectCat(catOrId, options = {}) {
               <span v-else-if="item.useType === 'cat-bath'">当前档案猫咪使用</span>
               <span v-else-if="item.useType === 'repair-tool'">维修时自动消耗</span>
               <span v-else>点击背包使用</span>
+            </div>
+            <div v-else-if="item.limited" class="cat-world-food-tags cat-world-limited-gift-tags">
+              <span>限定礼物</span>
+              <span>账号限购 {{ item.maxOwned || 1 }} 件</span>
+              <span>全站剩余 {{ item.remainingStock || 0 }}</span>
             </div>
             <div v-else-if="item.category === 'blind-box'" class="cat-world-food-tags cat-world-blind-box-tags">
               <span>{{ item.region }}地区</span>
@@ -2456,6 +2487,7 @@ async function selectCat(catOrId, options = {}) {
             </span>
             <span v-else-if="item.category === 'color' && item.targetDecorLabel">用于 {{ item.targetDecorLabel }}</span>
             <span v-else-if="item.category === 'blind-box'">全站剩余 {{ item.remainingStock || 0 }}</span>
+            <span v-else-if="item.limited">全站剩余 {{ item.remainingStock || 0 }}</span>
             <span v-else-if="item.category === 'handbook' && itemCount(item.id)">已永久解锁</span>
             <span v-else-if="item.category !== 'cat' && itemCount(item.id)">已有 {{ itemCount(item.id) }}</span>
             <span v-else>心情 +{{ item.mood }}</span>

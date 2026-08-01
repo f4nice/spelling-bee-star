@@ -11,6 +11,8 @@ import {
   floorDropPosition,
   interactionMoveDuration,
   itemInteractionFor,
+  timedInteractionLabel,
+  timedInteractionProgress,
   wandChaseJoinDecision,
 } from "./catWorldItemInteractions.js";
 import {
@@ -50,6 +52,7 @@ const ROOM_TOY_TARGETS = {
   "scratch-board": { label: "猫抓板", width: 150, height: 48, defaultX: 90, defaultY: 418, focusX: 74, focusY: 22 },
   "feather-wand": { label: "逗猫棒", width: 172, height: 70, defaultX: GAME_WIDTH - 208, defaultY: 250, focusX: 88, focusY: 52 },
   "yarn-basket": { label: "彩色毛线篮", width: 112, height: 72, defaultX: 670, defaultY: 432, focusX: 58, focusY: 36 },
+  "limited-gift-toy": { label: "限定礼物玩具", width: 90, height: 72, defaultX: 810, defaultY: 410, focusX: 45, focusY: 34 },
 };
 
 const DECOR_SPECS = {
@@ -984,6 +987,17 @@ class CatWorldScene extends Phaser.Scene {
       graphics.strokeCircle(35, 25, 17);
       graphics.strokeCircle(62, 21, 18);
       graphics.strokeCircle(84, 28, 15);
+    } else if (itemId === "limited-gift-toy") {
+      graphics.fillStyle(0x2c2f3a, 0.22);
+      graphics.fillEllipse(45, 62, 76, 12);
+      drawPixelRect(graphics, 12, 24, 66, 38, 0xfff07d);
+      drawPixelRect(graphics, 8, 18, 74, 12, 0xff8cad);
+      drawPixelRect(graphics, 39, 18, 12, 44, 0xe45b83);
+      drawPixelRect(graphics, 27, 7, 15, 12, 0x87d9ff);
+      drawPixelRect(graphics, 50, 7, 15, 12, 0xa9e8c8);
+      graphics.lineStyle(3, INK, 1);
+      graphics.strokeRect(12, 24, 66, 38);
+      graphics.strokeRect(8, 18, 74, 12);
     }
     const activeLabel = itemId === "feather-wand" && this.owner.wandMode ? `${spec.label} · 跟随中` : spec.label;
     const label = this.add
@@ -1592,7 +1606,7 @@ class CatWorldScene extends Phaser.Scene {
       const action = {
         kind: "carried-bathtub",
         itemId: decorId,
-        expiresAt: Date.now() + 18000,
+        expiresAt: Date.now() + 30000,
       };
       this.owner.catItemActions.set(entry.cat.id, action);
       this.startCarriedBathtubAction(entry, action);
@@ -1610,6 +1624,7 @@ class CatWorldScene extends Phaser.Scene {
       itemId: decorId,
       message: noBathKit ? "浴缸里还没有泡泡浴用品，先在这里等一等。" : interaction.catMessage,
       expiresAt: Date.now() + (noBathKit ? 5200 : interaction.holdMs),
+      showTimedStatus: !noBathKit,
     };
     this.owner.catItemActions.set(entry.cat.id, action);
     this.startManualDecorAction(entry, action);
@@ -1704,7 +1719,12 @@ class CatWorldScene extends Phaser.Scene {
               facing: entry.container.scaleX < 0 ? -1 : 1,
             });
             this.spawnCatBubble(entry.container, entry.cat, action.message || interaction.catMessage);
-            this.holdCatInteraction(entry, action.itemId, Math.max(action.expiresAt - Date.now(), 500));
+            this.holdCatInteraction(
+              entry,
+              action.itemId,
+              Math.max(action.expiresAt - Date.now(), 500),
+              { showStatus: action.showTimedStatus !== false },
+            );
           },
         });
       },
@@ -1740,8 +1760,10 @@ class CatWorldScene extends Phaser.Scene {
           onComplete: () => {
             if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
             const overlay = this.createBathtubBubbleOverlay({ x: decor.x, y: decor.y }, spec, entry.index);
+            const washDuration = 12000;
+            this.showTimedInteractionStatus(entry, action.itemId, washDuration);
             this.spawnCatBubble(entry.container, entry.cat, interaction.catMessage);
-            const timer = this.time.delayedCall(2800, () => {
+            const timer = this.time.delayedCall(washDuration, () => {
               overlay?.destroy?.();
               if (this.owner.catItemActions.get(entry.cat.id) !== action) return;
               this.owner.catItemActions.delete(entry.cat.id);
@@ -1887,6 +1909,7 @@ class CatWorldScene extends Phaser.Scene {
               if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
               this.spawnCatBubble(entry.container, entry.cat, "跳上书桌啦，我在这里陪你学习。");
               const holdMs = Math.min(Math.max(action.expiresAt - Date.now(), 500), 6000);
+              this.showTimedInteractionStatus(entry, decorId, holdMs);
               const timer = this.time.delayedCall(holdMs, () => this.jumpCatOffDesk(entry, decorId, approach, action));
               entry.container.setData("interactionTimer", timer);
             },
@@ -1925,7 +1948,7 @@ class CatWorldScene extends Phaser.Scene {
     const action = {
       kind: "bathtub",
       itemId: decorId,
-      expiresAt: Date.now() + 18000,
+      expiresAt: Date.now() + 30000,
     };
     this.owner.catItemActions.set(target.cat.id, action);
     this.startBathtubAction(target, decorId, action);
@@ -1962,16 +1985,26 @@ class CatWorldScene extends Phaser.Scene {
             onComplete: () => {
               if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
               const overlay = this.createBathtubBubbleOverlay(bathtub, spec, entry.index);
+              const washDuration = 12000;
+              this.showTimedInteractionStatus(entry, decorId, washDuration);
               this.spawnCatBubble(entry.container, entry.cat, "泡泡好多，洗得香香的。");
-              const timer = this.time.delayedCall(2800, () => {
+              const timer = this.time.delayedCall(washDuration, () => {
                 overlay?.destroy?.();
+                if (this.owner.catItemActions.get(entry.cat.id) !== action) return;
+                this.owner.catItemActions.delete(entry.cat.id);
                 const result = this.owner.handlers.onBathtubBath?.({
                   catId: entry.cat.id,
                   catLabel: entry.cat.label,
                   decorId,
                 });
                 Promise.resolve(result).finally(() => {
-                  if (entry.container?.active) this.resumeCatAutonomy(entry, decorId);
+                  const currentEntry = this.roomCatEntries().find((candidate) => candidate.cat.id === entry.cat.id);
+                  if (
+                    currentEntry?.container?.active
+                    && currentEntry.container.getData("interactionItemId") === decorId
+                  ) {
+                    this.resumeCatAutonomy(currentEntry, decorId);
+                  }
                 });
               });
               entry.container.setData("interactionTimer", timer);
@@ -2005,6 +2038,79 @@ class CatWorldScene extends Phaser.Scene {
         });
       },
     );
+    return overlay;
+  }
+
+  drawTimedInteractionCatAvatar(graphics, cat, x, y) {
+    const colors = CAT_COLORS[cat?.breedId || cat?.id] || CAT_COLORS.mimi;
+    drawPixelRect(graphics, x, y, 28, 28, CREAM, INK, 2);
+    graphics.fillStyle(colors.body, 1);
+    graphics.fillTriangle(x + 4, y + 9, x + 8, y + 2, x + 12, y + 10);
+    graphics.fillTriangle(x + 16, y + 10, x + 21, y + 2, x + 25, y + 10);
+    graphics.fillRect(x + 5, y + 8, 19, 15);
+    graphics.fillStyle(colors.shade, 1);
+    graphics.fillRect(x + 5, y + 8, 5, 6);
+    graphics.fillRect(x + 19, y + 8, 5, 6);
+    graphics.fillStyle(INK, 1);
+    graphics.fillRect(x + 10, y + 15, 3, 3);
+    graphics.fillRect(x + 18, y + 15, 3, 3);
+    graphics.fillStyle(colors.nose, 1);
+    graphics.fillRect(x + 14, y + 19, 3, 2);
+  }
+
+  clearTimedInteractionStatus(entry) {
+    const overlay = entry?.container?.getData("interactionStatusOverlay");
+    if (!overlay) return;
+    overlay.getData?.("progressTimer")?.remove?.(false);
+    overlay.destroy?.();
+    entry.container.setData("interactionStatusOverlay", null);
+  }
+
+  showTimedInteractionStatus(entry, itemId, durationMs) {
+    const spec = DECOR_SPECS[itemId];
+    const decor = this.decorContainers.get(itemId);
+    if (!entry?.container?.active || !spec || !decor?.active) return null;
+    this.clearTimedInteractionStatus(entry);
+    const duration = Math.max(Number(durationMs) || 0, 500);
+    const startedAt = Date.now();
+    const endsAt = startedAt + duration;
+    const xOffset = ((entry.index % 3) - 1) * 68;
+    const overlay = this.add.container(
+      clamp(decor.x + spec.width / 2 + xOffset, 74, GAME_WIDTH - 74),
+      Math.max(decor.y - 42, 48),
+    );
+    overlay.setDepth(CAT_INTERACTION_DEPTH + 260 + entry.index);
+    const graphics = makeLocalGraphics(this, overlay);
+    graphics.fillStyle(INK, 0.2);
+    graphics.fillRect(-62, -18, 128, 47);
+    drawPixelRect(graphics, -65, -22, 128, 46, CREAM, INK, 3);
+    this.drawTimedInteractionCatAvatar(graphics, entry.cat, -58, -17);
+    const catLabel = String(entry.cat.displayLabel || entry.cat.label || "猫咪").slice(0, 8);
+    const title = this.add.text(-24, -16, catLabel, {
+      color: "#263047",
+      fontFamily: "Consolas, monospace",
+      fontSize: "10px",
+      fontStyle: "bold",
+    });
+    const countdown = this.add.text(-24, -2, "", {
+      color: "#236b55",
+      fontFamily: "Consolas, monospace",
+      fontSize: "9px",
+      fontStyle: "bold",
+    });
+    const track = this.add.rectangle(-57, 17, 112, 6, INK, 1).setOrigin(0, 0.5);
+    const fill = this.add.rectangle(-55, 17, 108, 3, 0x37a779, 1).setOrigin(0, 0.5);
+    overlay.add([title, countdown, track, fill]);
+    const update = () => {
+      if (!overlay.active) return;
+      const state = timedInteractionProgress(startedAt, endsAt, Date.now());
+      fill.setScale(Math.max(state.progress, 0.02), 1);
+      countdown.setText(`${timedInteractionLabel(itemId)} · ${state.remainingSeconds}秒`);
+    };
+    update();
+    const progressTimer = this.time.addEvent({ delay: 100, loop: true, callback: update });
+    overlay.setData("progressTimer", progressTimer);
+    entry.container.setData("interactionStatusOverlay", overlay);
     return overlay;
   }
 
@@ -2202,6 +2308,7 @@ class CatWorldScene extends Phaser.Scene {
 
   interruptCatAutonomy(entry, itemId) {
     if (!entry?.container?.active) return;
+    this.clearTimedInteractionStatus(entry);
     entry.container.getData("walkTimer")?.remove?.(false);
     entry.container.getData("interactionTimer")?.remove?.(false);
     entry.container.setData("walkTimer", null);
@@ -2230,7 +2337,8 @@ class CatWorldScene extends Phaser.Scene {
     });
   }
 
-  holdCatInteraction(entry, itemId, holdMs) {
+  holdCatInteraction(entry, itemId, holdMs, options = {}) {
+    if (options.showStatus !== false) this.showTimedInteractionStatus(entry, itemId, holdMs);
     const timer = this.time.delayedCall(holdMs, () => this.resumeCatAutonomy(entry, itemId));
     entry.container.setData("interactionTimer", timer);
   }
@@ -2238,6 +2346,7 @@ class CatWorldScene extends Phaser.Scene {
   resumeCatAutonomy(entry, itemId) {
     if (!entry?.container?.active) return;
     if (itemId && entry.container.getData("interactionItemId") !== itemId) return;
+    this.clearTimedInteractionStatus(entry);
     entry.container.getData("interactionTimer")?.remove?.(false);
     entry.container.setData("interactionTimer", null);
     entry.container.setData("interactionActive", false);
