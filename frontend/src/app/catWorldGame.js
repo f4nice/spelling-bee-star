@@ -189,6 +189,7 @@ function normalizeSnapshot(snapshot = {}) {
     gameSettings: snapshot.gameSettings || {},
     scene: normalizeCatWorldScene(snapshot.scene),
     editMode: Boolean(snapshot.editMode),
+    toolMode: ["repair", "scoop"].includes(snapshot.toolMode) ? snapshot.toolMode : "",
   };
 }
 
@@ -410,6 +411,10 @@ class CatWorldScene extends Phaser.Scene {
     return Boolean(this.owner.snapshot?.editMode);
   }
 
+  isToolMode() {
+    return Boolean(this.owner.snapshot?.toolMode);
+  }
+
   syncCamera() {
     this.cameras.main.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
     const nextScroll = Number.isFinite(this.owner.cameraScrollX)
@@ -535,11 +540,11 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   renderSnapshot() {
-    if (this.owner.snapshot.editMode && this.owner.carriedCat) {
+    if ((this.owner.snapshot.editMode || this.owner.snapshot.toolMode) && this.owner.carriedCat) {
       this.cancelCarriedCat({ notify: false });
     }
     this.cacheCatPositions();
-    if (this.owner.snapshot.editMode && this.owner.wandMode) {
+    if ((this.owner.snapshot.editMode || this.owner.snapshot.toolMode) && this.owner.wandMode) {
       this.stopFeatherWandMode({ notify: false, resume: false });
     }
     const lockedCatId = this.owner.cameraLockedCatId;
@@ -614,6 +619,7 @@ class CatWorldScene extends Phaser.Scene {
 
   drawOwnedDecor(snapshot) {
     const editMode = Boolean(snapshot.editMode);
+    const repairMode = snapshot.toolMode === "repair";
     for (const [decorId, spec] of Object.entries(DECOR_SPECS)) {
       if (!owned(snapshot.inventory, decorId)) continue;
       if (!sceneAllowsItem(snapshot.scene, decorId, "decor")) continue;
@@ -629,7 +635,16 @@ class CatWorldScene extends Phaser.Scene {
       container.setData("width", spec.width);
       container.setData("height", spec.height);
       container.setDepth(position.y + 20);
-      container.setInteractive(new Phaser.Geom.Rectangle(0, 0, spec.width, spec.height), Phaser.Geom.Rectangle.Contains);
+      const hitPadding = damaged && repairMode ? 20 : 0;
+      container.setInteractive(
+        new Phaser.Geom.Rectangle(
+          -hitPadding,
+          -hitPadding,
+          spec.width + hitPadding * 2,
+          spec.height + hitPadding * 2,
+        ),
+        Phaser.Geom.Rectangle.Contains,
+      );
       if (container.input) container.input.cursor = editMode ? "grab" : "pointer";
       if (!damaged && editMode) {
         this.input.setDraggable(container);
@@ -832,7 +847,16 @@ class CatWorldScene extends Phaser.Scene {
         });
       }
       if (!snapshot.editMode) {
-        container.setInteractive(new Phaser.Geom.Rectangle(0, 0, 86, 76), Phaser.Geom.Rectangle.Contains);
+        const hitPadding = snapshot.toolMode === "scoop" ? 16 : 0;
+        container.setInteractive(
+          new Phaser.Geom.Rectangle(
+            -hitPadding,
+            -hitPadding,
+            86 + hitPadding * 2,
+            76 + hitPadding * 2,
+          ),
+          Phaser.Geom.Rectangle.Contains,
+        );
         if (container.input) container.input.cursor = "pointer";
         container.on("pointerdown", (pointer, _localX, _localY, event) => {
           if (this.handleCarriedCatPointerDown(pointer, event)) return;
@@ -868,7 +892,16 @@ class CatWorldScene extends Phaser.Scene {
     container.setData("height", spec.height);
     this.toyContainers.set(itemId, container);
     container.setDepth(position.y + 95);
-    container.setInteractive(new Phaser.Geom.Rectangle(0, 0, spec.width, spec.height), Phaser.Geom.Rectangle.Contains);
+    const hitPadding = damaged && snapshot.toolMode === "repair" ? 20 : 0;
+    container.setInteractive(
+      new Phaser.Geom.Rectangle(
+        -hitPadding,
+        -hitPadding,
+        spec.width + hitPadding * 2,
+        spec.height + hitPadding * 2,
+      ),
+      Phaser.Geom.Rectangle.Contains,
+    );
     if (!damaged && editMode) {
       this.input.setDraggable(container);
     }
@@ -1191,6 +1224,7 @@ class CatWorldScene extends Phaser.Scene {
         Phaser.Geom.Rectangle.Contains,
       );
       if (container.input) container.input.cursor = "pointer";
+      if (snapshot.toolMode) container.disableInteractive();
       container.on("pointerdown", (pointer, _localX, _localY, event) => {
         if (this.isEditMode()) {
           this.stopPointerEvent(event);
@@ -1262,7 +1296,7 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   startCatCarry(catId, pointer) {
-    if (this.isEditMode()) return null;
+    if (this.isEditMode() || this.isToolMode()) return null;
     const entry = this.roomCatEntries().find((candidate) => candidate.cat.id === catId);
     if (!entry?.container?.active) return null;
     const activeAction = this.owner.catItemActions.get(catId);
@@ -1272,7 +1306,7 @@ class CatWorldScene extends Phaser.Scene {
         carrying: false,
         catId,
         catMessage: "我还在洗澡，等泡泡冲干净再抱我。",
-        message: `${entry.cat.label}正在洗澡，结束后才能抱起来。`,
+        message: `${entry.cat.displayLabel || entry.cat.label}正在洗澡，结束后才能抱起来。`,
       };
     }
     if (this.owner.wandMode) this.stopFeatherWandMode({ notify: false });
@@ -1295,8 +1329,23 @@ class CatWorldScene extends Phaser.Scene {
       carrying: true,
       catId,
       catMessage: "被抱起来啦，点地板或发光家具把我放下。",
-      message: `已抱起${entry.cat.label}，移动鼠标后点击地板或发光家具放下；按 Esc 可放回原处。`,
+      message: `已抱起${entry.cat.displayLabel || entry.cat.label}，移动鼠标后点击地板或发光家具放下；按 Esc 可放回原处。`,
     };
+  }
+
+  carryCat(catId) {
+    if (this.isEditMode() || this.isToolMode()) return null;
+    if (this.owner.carriedCat?.catId === catId) {
+      return {
+        handled: true,
+        carrying: true,
+        catId,
+        message: "这只猫已经被抱起来了，点击地板或发光家具放下。",
+      };
+    }
+    if (this.owner.carriedCat) this.cancelCarriedCat({ notify: false });
+    this.focusCat(catId);
+    return this.startCatCarry(catId, null);
   }
 
   applyCarriedCatVisual(entry) {
@@ -3737,6 +3786,10 @@ export class CatWorldGame {
 
   focusCat(catId) {
     return Boolean(this.game.scene.getScene("CatWorldScene")?.focusCat(catId));
+  }
+
+  carryCat(catId) {
+    return this.game.scene.getScene("CatWorldScene")?.carryCat(catId) || null;
   }
 
   cancelCatCarry() {

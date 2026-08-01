@@ -3,6 +3,7 @@ import unittest
 from datetime import UTC, date, datetime
 
 from sqlalchemy import create_engine
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 
@@ -10,9 +11,13 @@ os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
 
 from app.database import Base
 from app.main import (
+    CAT_WORLD_RENAME_CARD_ITEM_ID,
+    CAT_WORLD_SHOP_BY_ID,
     cat_world_apply_cat_bond,
     cat_world_apply_pet_effect,
     cat_world_cat_profile_payload,
+    cat_world_consume_rename_card,
+    cat_world_normalize_nickname,
     create_cat_world_cat_profile,
     encode_cat_world_bonds,
     encode_cat_world_care,
@@ -30,6 +35,45 @@ def utc_now() -> datetime:
 
 
 class CatWorldIndividualProfileTest(unittest.TestCase):
+    def test_nickname_is_individual_and_validated(self):
+        self.assertEqual(CAT_WORLD_SHOP_BY_ID[CAT_WORLD_RENAME_CARD_ITEM_ID]["cost"], 200)
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+
+        with Session(engine) as db:
+            state = CatWorldState(
+                phone="13900000001",
+                cats=encode_cat_world_cats(["siamese"]),
+                selected_cat="siamese",
+                inventory="{}",
+            )
+            db.add(state)
+            db.flush()
+            first = create_cat_world_cat_profile(db, state, "siamese", "test")
+            second = create_cat_world_cat_profile(db, state, "siamese", "test")
+            first.nickname = cat_world_normalize_nickname("  小闪电  ")
+            db.flush()
+
+            first_payload = cat_world_cat_profile_payload(first)
+            second_payload = cat_world_cat_profile_payload(second)
+            self.assertEqual(first_payload["nickname"], "小闪电")
+            self.assertEqual(first_payload["displayLabel"], "小闪电")
+            self.assertEqual(second_payload["nickname"], "")
+            self.assertIn("暹罗猫", second_payload["displayLabel"])
+
+        with self.assertRaises(HTTPException):
+            cat_world_normalize_nickname("")
+        with self.assertRaises(HTTPException):
+            cat_world_normalize_nickname("名字超过十二个字符就不可以保存")
+        with self.assertRaises(HTTPException):
+            cat_world_normalize_nickname("坏\n名字")
+
+        inventory = {CAT_WORLD_RENAME_CARD_ITEM_ID: 1}
+        self.assertEqual(cat_world_consume_rename_card(inventory), 0)
+        self.assertNotIn(CAT_WORLD_RENAME_CARD_ITEM_ID, inventory)
+        with self.assertRaises(HTTPException):
+            cat_world_consume_rename_card(inventory)
+
     def test_same_breed_cats_keep_individual_personality_and_state(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(engine)

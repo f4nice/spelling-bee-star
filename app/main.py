@@ -116,8 +116,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260801-005"
-DEFAULT_PAGE_VERSION = "v20260801.5"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260801-006"
+DEFAULT_PAGE_VERSION = "v20260801.6"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -268,6 +268,7 @@ CAT_WORLD_LITTER_SCOOP_ITEM_ID = "litter-scoop"
 CAT_WORLD_CAT_GRASS_ITEM_ID = "cat-grass-pot"
 CAT_WORLD_BATH_ITEM_ID = "cat-bath-kit"
 CAT_WORLD_REPAIR_HAMMER_ITEM_ID = "repair-hammer"
+CAT_WORLD_RENAME_CARD_ITEM_ID = "cat-rename-card"
 CAT_WORLD_PET_REWARD_COOLDOWN_SECONDS = 60 * 60
 CAT_WORLD_PLAY_TIME_TIERS = ((200, 20 * 60), (100, 10 * 60))
 CAT_WORLD_PLAY_TIME_HEARTBEAT_GRACE_SECONDS = 30
@@ -604,6 +605,16 @@ CAT_WORLD_SHOP = [
         "cost": 100,
         "mood": 0,
         "description": "维修损坏道具时自动消耗 1 把；只有维修成功后才会从背包扣除。",
+    },
+    {
+        "id": CAT_WORLD_RENAME_CARD_ITEM_ID,
+        "category": "consumable",
+        "useType": "cat-rename",
+        "label": "猫咪改名卡",
+        "englishName": "Cat Rename Card",
+        "cost": 200,
+        "mood": 0,
+        "description": "装备后点击自己的猫咪卡片，为这只猫设置一个新名字。",
     },
     {
         "id": "rolling-ball",
@@ -4776,15 +4787,10 @@ async def vue_cat_world_food_nibble_api(request: Request, db: Session = Depends(
 @app.post("/api/vue/cat-world/litter/clean")
 async def vue_cat_world_clean_litter_api(request: Request, db: Session = Depends(get_db)):
     phone = require_cat_world_phone(request)
-    state = get_or_create_cat_world_state(db, phone)
+    state = cat_world_locked_state(db, phone)
     inventory = parse_cat_world_inventory(state.inventory)
     owned_cats = parse_cat_world_cats(state.cats)
-    hygiene = cat_world_refresh_litter(state, inventory, owned_cats)
-    if hygiene.get("changed"):
-        db.add(state)
-        db.commit()
-        db.refresh(state)
-        inventory = parse_cat_world_inventory(state.inventory)
+    cat_world_refresh_litter(state, inventory, owned_cats)
     if int(state.litter_count or 0) <= 0:
         raise HTTPException(status_code=400, detail="活动室里现在没有需要清理的猫屎。")
     scoop_count = max(int(inventory.get(CAT_WORLD_LITTER_SCOOP_ITEM_ID, 0) or 0), 0)
@@ -4831,6 +4837,8 @@ async def vue_cat_world_use_consumable_api(request: Request, db: Session = Depen
         raise HTTPException(status_code=400, detail="请直接点击活动室里的猫屎来使用铲子。")
     if use_type == "repair-tool":
         raise HTTPException(status_code=400, detail="维修锤会在维修损坏道具时自动消耗，请直接点击损坏的道具。")
+    if use_type == "cat-rename":
+        raise HTTPException(status_code=400, detail="请先装备改名卡，再点击自己的猫咪卡片。")
     state = get_or_create_cat_world_state(db, phone)
     inventory = parse_cat_world_inventory(state.inventory)
     if inventory.get(item_id, 0) <= 0:
@@ -5165,7 +5173,7 @@ def cat_world_consume_repair_resources(
     return damaged, hammer_remaining
 
 
-def cat_world_state_for_repair(db: Session, phone: str) -> CatWorldState:
+def cat_world_locked_state(db: Session, phone: str) -> CatWorldState:
     normalized = normalize_login_phone(phone)
     query = select(CatWorldState).where(CatWorldState.phone == normalized)
     if db.get_bind().dialect.name == "sqlite":
@@ -5187,7 +5195,7 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
     except Exception as exc:
         raise HTTPException(status_code=400, detail="维修数据不是有效 JSON。") from exc
     item_id = str((payload or {}).get("itemId") or "").strip()
-    state = cat_world_state_for_repair(db, phone)
+    state = cat_world_locked_state(db, phone)
     inventory = parse_cat_world_inventory(state.inventory)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     damaged = damaged_items.get(item_id)
@@ -5422,6 +5430,52 @@ async def vue_cat_world_select_cat_api(request: Request, db: Session = Depends(g
     db.commit()
     db.refresh(state)
     return {"ok": True, **serialize_cat_world_payload(db, state)}
+
+
+@app.post("/api/vue/cat-world/cat/rename")
+async def vue_cat_world_rename_cat_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="猫咪改名数据不是有效 JSON。") from exc
+    payload = payload if isinstance(payload, dict) else {}
+    profile_id = str(payload.get("profileId") or "").strip()
+    nickname = cat_world_normalize_nickname(payload.get("nickname"))
+    state = cat_world_locked_state(db, phone)
+    inventory = parse_cat_world_inventory(state.inventory)
+    rename_card_count = max(int(inventory.get(CAT_WORLD_RENAME_CARD_ITEM_ID, 0) or 0), 0)
+    if rename_card_count <= 0:
+        raise HTTPException(status_code=400, detail="背包里没有猫咪改名卡，请先去消耗品商店购买。")
+    profile = db.scalar(
+        select(CatWorldCatProfile).where(
+            CatWorldCatProfile.phone == state.phone,
+            CatWorldCatProfile.profile_id == profile_id,
+            CatWorldCatProfile.is_active.is_(True),
+        )
+    )
+    if not profile:
+        raise HTTPException(status_code=400, detail="没有找到要改名的猫咪个体。")
+    previous = cat_world_cat_profile_payload(profile)
+    if str(profile.nickname or "").strip() == nickname:
+        raise HTTPException(status_code=400, detail="新名字和现在的名字一样，改名卡没有消耗。")
+    remaining = cat_world_consume_rename_card(inventory)
+    profile.nickname = nickname
+    state.inventory = encode_cat_world_inventory(inventory)
+    db.add(profile)
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return {
+        "ok": True,
+        "effect": {
+            "profileId": profile.profile_id,
+            "nickname": nickname,
+            "previousLabel": previous.get("displayLabel") or previous.get("label") or "猫咪",
+            "remaining": remaining,
+        },
+        **serialize_cat_world_payload(db, state),
+    }
 
 
 @app.post("/api/vue/cat-world/scene/purchase")
@@ -16449,6 +16503,27 @@ def cat_world_active_cat_profiles(db: Session, phone: str) -> list[CatWorldCatPr
     ).all()
 
 
+def cat_world_normalize_nickname(value: Any) -> str:
+    nickname = str(value or "").strip()
+    if not nickname or len(nickname) > 12:
+        raise HTTPException(status_code=400, detail="猫咪名字需要 1 至 12 个字符。")
+    if any(not character.isprintable() for character in nickname):
+        raise HTTPException(status_code=400, detail="猫咪名字不能包含换行或控制字符。")
+    return nickname
+
+
+def cat_world_consume_rename_card(inventory: dict[str, int]) -> int:
+    card_count = max(int(inventory.get(CAT_WORLD_RENAME_CARD_ITEM_ID, 0) or 0), 0)
+    if card_count <= 0:
+        raise HTTPException(status_code=400, detail="背包里没有猫咪改名卡，请先去消耗品商店购买。")
+    remaining = card_count - 1
+    if remaining > 0:
+        inventory[CAT_WORLD_RENAME_CARD_ITEM_ID] = remaining
+    else:
+        inventory.pop(CAT_WORLD_RENAME_CARD_ITEM_ID, None)
+    return remaining
+
+
 def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]:
     breed = CAT_WORLD_CAT_BY_ID.get(profile.breed_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     pattern = CAT_WORLD_CAT_PATTERN_BY_KEY.get(profile.pattern_key, CAT_WORLD_CAT_PATTERNS[0])
@@ -16457,13 +16532,16 @@ def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]
     personality_label = str(profile.personality_label or personality.get("label") or breed.get("personality") or "独立个性猫咪")
     personality_thoughts = personality.get("thoughts") if isinstance(personality.get("thoughts"), list) else []
     profile_code = str(profile.profile_id).rsplit("-", 1)[-1][:4].upper()
+    nickname = str(profile.nickname or "").strip()
     return {
         **cat_world_cat_payload(breed),
         "id": profile.profile_id,
         "breedId": breed["id"],
+        "breedLabel": breed["label"],
         "profileId": profile.profile_id,
         "profileCode": profile_code,
-        "displayLabel": f"{breed['label']} · {profile_code}",
+        "displayLabel": nickname or f"{breed['label']} · {profile_code}",
+        "nickname": nickname,
         "gender": profile.gender,
         "genderLabel": "公猫" if profile.gender == "male" else "母猫",
         "patternKey": pattern["key"],
@@ -18984,6 +19062,8 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE cat_world_cat_profiles ADD COLUMN personality_label VARCHAR(120) NULL"))
         if "cat_world_cat_profiles" in table_names and "personality_traits" not in cat_world_cat_profile_columns:
             connection.execute(text("ALTER TABLE cat_world_cat_profiles ADD COLUMN personality_traits TEXT NULL"))
+        if "cat_world_cat_profiles" in table_names and "nickname" not in cat_world_cat_profile_columns:
+            connection.execute(text("ALTER TABLE cat_world_cat_profiles ADD COLUMN nickname VARCHAR(40) NULL"))
         if "essay_entries" in table_names and "writing_score" not in essay_entry_columns:
             connection.execute(text("ALTER TABLE essay_entries ADD COLUMN writing_score INTEGER NOT NULL DEFAULT 0"))
         if "essay_entries" in table_names and "writing_score_breakdown" not in essay_entry_columns:

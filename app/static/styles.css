@@ -12702,7 +12702,8 @@ select {
 }
 
 .cat-world-scene-purchase-modal,
-.cat-world-blind-result-modal {
+.cat-world-blind-result-modal,
+.cat-world-rename-modal {
   width: min(520px, calc(100vw - 28px));
   border: 4px solid #2c2f3a;
   border-radius: 6px;
@@ -12712,9 +12713,78 @@ select {
 }
 
 .cat-world-scene-purchase-modal > p,
-.cat-world-blind-result-modal > p {
+.cat-world-blind-result-modal > p,
+.cat-world-rename-modal > p {
   color: #52627a;
   line-height: 1.55;
+}
+
+.cat-world-rename-modal {
+  display: grid;
+  gap: 15px;
+}
+
+.cat-world-rename-modal > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cat-world-rename-modal h2,
+.cat-world-rename-modal p {
+  margin: 0;
+}
+
+.cat-world-rename-targets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.cat-world-rename-targets button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border: 3px solid #2c2f3a;
+  border-radius: 4px;
+  padding: 9px 10px;
+  color: #263047;
+  background: #fff;
+  box-shadow: 2px 2px 0 #2c2f3a;
+  cursor: pointer;
+}
+
+.cat-world-rename-targets button span {
+  overflow: hidden;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cat-world-rename-targets button.active,
+.cat-world-rename-targets button:hover,
+.cat-world-rename-targets button:focus-visible {
+  color: #fff;
+  background: #236b55;
+}
+
+.cat-world-rename-input {
+  display: grid;
+  gap: 6px;
+  color: #263047;
+  font-weight: 900;
+}
+
+.cat-world-rename-input input {
+  width: 100%;
+  border: 3px solid #2c2f3a;
+  border-radius: 4px;
+  padding: 11px 12px;
+  color: #263047;
+  background: #fff;
+  font: inherit;
 }
 
 .cat-world-scene-purchase-summary {
@@ -13002,11 +13072,13 @@ select {
 }
 
 .cat-world-room.is-repairing .cat-world-room-viewport,
-.cat-world-room.is-repairing .cat-world-game-stage canvas {
+.cat-world-room.is-repairing .cat-world-game-stage canvas,
+.cat-world-room.is-scooping .cat-world-room-viewport,
+.cat-world-room.is-scooping .cat-world-game-stage canvas {
   cursor: none !important;
 }
 
-.cat-world-repair-cursor {
+.cat-world-tool-cursor {
   position: absolute;
   z-index: 32;
   display: grid;
@@ -13016,11 +13088,19 @@ select {
   border: 3px solid #2c2f3a;
   border-radius: 3px;
   color: #263047;
-  background: #fff07d;
   box-shadow: 3px 3px 0 #2c2f3a;
   pointer-events: none;
-  transform: translate(-7px, -27px) rotate(-16deg);
   transform-origin: 50% 100%;
+}
+
+.cat-world-repair-cursor {
+  background: #fff07d;
+  transform: translate(-7px, -27px) rotate(-16deg);
+}
+
+.cat-world-scoop-cursor {
+  background: #9ee8d8;
+  transform: translate(-6px, -28px) rotate(13deg);
 }
 
 .cat-world-repair-mode {
@@ -13067,6 +13147,27 @@ select {
 .cat-world-repair-mode button:focus-visible {
   color: #fff;
   background: #236b55;
+}
+
+.cat-world-page.is-renaming,
+.cat-world-page.is-renaming :where(button, a, input, canvas) {
+  cursor: none !important;
+}
+
+.cat-world-rename-cursor {
+  position: fixed;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 29px;
+  border: 3px solid #2c2f3a;
+  border-radius: 3px;
+  color: #263047;
+  background: #bfe8ff;
+  box-shadow: 3px 3px 0 #2c2f3a;
+  pointer-events: none;
+  transform: translate(-6px, -25px) rotate(-5deg);
 }
 
 .cat-world-room-pan-button {
@@ -13401,12 +13502,16 @@ select {
   background: #fff07d;
 }
 
-.cat-world-owned-item.repair-equipped {
+.cat-world-owned-item.repair-equipped,
+.cat-world-owned-item.scoop-equipped,
+.cat-world-owned-item.rename-equipped {
   color: #fff;
   background: #236b55;
 }
 
-.cat-world-owned-item.repair-equipped .cat-world-owned-main :where(span, strong, small) {
+.cat-world-owned-item.repair-equipped .cat-world-owned-main :where(span, strong, small),
+.cat-world-owned-item.scoop-equipped .cat-world-owned-main :where(span, strong, small),
+.cat-world-owned-item.rename-equipped .cat-world-owned-main :where(span, strong, small) {
   color: #fff;
 }
 

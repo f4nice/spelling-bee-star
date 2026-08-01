@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Award as AwardIcon, Cat as CatIcon, ChevronLeft, ChevronRight, Hammer as HammerIcon, LockKeyhole as LockIcon, X as XIcon } from "lucide-vue-next";
+import { Award as AwardIcon, Cat as CatIcon, ChevronLeft, ChevronRight, ContactRound as RenameCardIcon, Hammer as HammerIcon, LockKeyhole as LockIcon, Shovel as ShovelIcon, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -52,9 +52,19 @@ const layoutDirty = ref(false);
 const savingRoomLayout = ref(false);
 const roomEditMode = ref(false);
 const repairMode = ref(false);
-const repairCursorVisible = ref(false);
-const repairCursorX = ref(0);
-const repairCursorY = ref(0);
+const scoopMode = ref(false);
+const renameMode = ref(false);
+const toolCursorVisible = ref(false);
+const toolCursorX = ref(0);
+const toolCursorY = ref(0);
+const renameCursorVisible = ref(false);
+const renameCursorX = ref(0);
+const renameCursorY = ref(0);
+const renameModalOpen = ref(false);
+const renameTargetCatId = ref("");
+const renameDraft = ref("");
+const renameInputRef = ref(null);
+const renameBusy = ref(false);
 const activeToolCategory = ref("decor");
 const clockNow = ref(Date.now());
 const playTimeSyncedAt = ref(Date.now());
@@ -125,7 +135,9 @@ onMounted(async () => {
   if (!gameMountActive || !gameMountRef.value) return;
   catWorldGame.value = new CatWorldGame(gameMountRef.value, {
     onCatPet: (cat, message) => {
-      if (!roomEditMode.value) petCat(cat, { message, anchor: false });
+      if (!roomEditMode.value && !repairMode.value && !scoopMode.value) {
+        petCat(cat, { message, anchor: false });
+      }
     },
     onCatCarryStart: (_cat, interaction) => {
       if (interaction?.message) notice.value = interaction.message;
@@ -171,6 +183,8 @@ const categories = [
   { key: "handbook", label: "收藏手册" },
 ];
 const REPAIR_HAMMER_ITEM_ID = "repair-hammer";
+const LITTER_SCOOP_ITEM_ID = "litter-scoop";
+const CAT_RENAME_CARD_ITEM_ID = "cat-rename-card";
 
 const toolCategories = [
   { key: "decor", label: "装饰" },
@@ -238,7 +252,11 @@ watch(playTimeLocked, (locked) => {
   if (!locked) return;
   roomEditMode.value = false;
   repairMode.value = false;
-  repairCursorVisible.value = false;
+  scoopMode.value = false;
+  renameMode.value = false;
+  toolCursorVisible.value = false;
+  renameCursorVisible.value = false;
+  renameModalOpen.value = false;
   selectedDecorId.value = "";
   layoutDirty.value = false;
   activeHandbook.value = "";
@@ -678,6 +696,7 @@ const gameSnapshot = computed(() => ({
   gameSettings: gameSettings.value,
   scene: currentScene.value,
   editMode: roomEditMode.value,
+  toolMode: repairMode.value ? "repair" : scoopMode.value ? "scoop" : "",
 }));
 
 watch(
@@ -851,9 +870,23 @@ function closeCatDiary() {
 
 function handleGlobalKeydown(event) {
   if (event.key !== "Escape") return;
+  if (renameModalOpen.value) {
+    closeRenameModal();
+    return;
+  }
+  if (renameMode.value) {
+    setRenameMode(false);
+    notice.value = "已收起改名卡。";
+    return;
+  }
   if (repairMode.value) {
     setRepairMode(false);
     notice.value = "已收起维修锤。";
+    return;
+  }
+  if (scoopMode.value) {
+    setScoopMode(false);
+    notice.value = "已收起铲子。";
     return;
   }
   const carryResult = catWorldGame.value?.cancelCatCarry?.();
@@ -896,6 +929,10 @@ function handleDecorClick(decorId, interaction = null) {
     notice.value = `${item?.label || "这个道具"}不需要维修，维修锤没有消耗。`;
     return;
   }
+  if (scoopMode.value) {
+    notice.value = `${item?.label || "这个道具"}不是猫屎，铲子没有消耗。`;
+    return;
+  }
   if (!roomEditMode.value && interaction?.handled) {
     selectedDecorId.value = decorId;
     notice.value = interaction.message || `${item?.label || "道具"} 已互动。`;
@@ -916,6 +953,10 @@ function handleRoomToyClick(itemId, interaction = null) {
     if (handleRepairTargetClick(item)) return;
     if (repairMode.value) {
       notice.value = `${item.label}不需要维修，维修锤没有消耗。`;
+      return;
+    }
+    if (scoopMode.value) {
+      notice.value = `${item.label}不是猫屎，铲子没有消耗。`;
       return;
     }
     if (roomEditMode.value) {
@@ -1017,9 +1058,14 @@ function ownedToolSubtext(item) {
   const suffix = item.favoriteLabel ? ` · ${item.favoriteLabel}` : "";
   if (item.category === "food") return `拥有 ${item.count} · ${foodTypeLabel(item)}${suffix}`;
   if (item.category === "consumable") {
-    if (item.useType === "litter-clean") return `拥有 ${item.count} · 点击猫屎时消耗`;
+    if (item.useType === "litter-clean") {
+      return scoopMode.value ? `已装备 · 拥有 ${item.count}` : `拥有 ${item.count} · 点击装备`;
+    }
     if (item.useType === "litter-prevent") return `拥有 ${item.count} · 点击放进活动室`;
     if (item.useType === "cat-bath") return `拥有 ${item.count} · 给当前档案猫咪洗澡`;
+    if (item.useType === "cat-rename") {
+      return renameMode.value ? `已装备 · 拥有 ${item.count}` : `拥有 ${item.count} · 点击装备`;
+    }
     if (item.useType === "repair-tool") {
       return repairMode.value ? `已装备 · 拥有 ${item.count}` : `拥有 ${item.count} · 点击装备`;
     }
@@ -1073,7 +1119,7 @@ function setRepairMode(enabled) {
   const nextEnabled = Boolean(enabled);
   if (nextEnabled && itemCount(REPAIR_HAMMER_ITEM_ID) <= 0) {
     repairMode.value = false;
-    repairCursorVisible.value = false;
+    toolCursorVisible.value = false;
     activeCategory.value = "consumable";
     notice.value = "背包里没有维修锤，请先在消耗品商店购买。";
     return;
@@ -1082,14 +1128,87 @@ function setRepairMode(enabled) {
     notice.value = "请先完成物品编辑，再装备维修锤。";
     return;
   }
+  if (nextEnabled) {
+    scoopMode.value = false;
+    renameMode.value = false;
+    renameCursorVisible.value = false;
+  }
   repairMode.value = nextEnabled;
-  repairCursorVisible.value = false;
+  toolCursorVisible.value = false;
   selectedDecorId.value = "";
   notice.value = nextEnabled ? "维修模式已开启。" : "已收起维修锤。";
 }
 
+function setScoopMode(enabled) {
+  const nextEnabled = Boolean(enabled);
+  if (nextEnabled && itemCount(LITTER_SCOOP_ITEM_ID) <= 0) {
+    scoopMode.value = false;
+    toolCursorVisible.value = false;
+    activeToolCategory.value = "consumable";
+    notice.value = "背包里没有铲子，请先在消耗品商店购买。";
+    return;
+  }
+  if (nextEnabled && roomEditMode.value) {
+    notice.value = "请先完成物品编辑，再装备铲子。";
+    return;
+  }
+  if (nextEnabled) {
+    repairMode.value = false;
+    renameMode.value = false;
+    renameCursorVisible.value = false;
+  }
+  scoopMode.value = nextEnabled;
+  toolCursorVisible.value = false;
+  selectedDecorId.value = "";
+  notice.value = nextEnabled
+    ? "铲屎模式已开启，请点击房间里冒烟的猫屎。"
+    : "已收起铲子。";
+}
+
+function setRenameMode(enabled) {
+  const nextEnabled = Boolean(enabled);
+  if (nextEnabled && itemCount(CAT_RENAME_CARD_ITEM_ID) <= 0) {
+    renameMode.value = false;
+    renameCursorVisible.value = false;
+    activeToolCategory.value = "consumable";
+    notice.value = "背包里没有改名卡，请先在消耗品商店购买。";
+    return;
+  }
+  if (nextEnabled && roomEditMode.value) {
+    notice.value = "请先完成物品编辑，再使用改名卡。";
+    return;
+  }
+  if (nextEnabled) {
+    repairMode.value = false;
+    scoopMode.value = false;
+    toolCursorVisible.value = false;
+    catWorldGame.value?.cancelCatCarry?.();
+  }
+  renameMode.value = nextEnabled;
+  renameCursorVisible.value = false;
+  renameModalOpen.value = false;
+  notice.value = nextEnabled
+    ? "改名卡已拿起，请点击下方“我的猫咪”中的一张猫卡。"
+    : "已收起改名卡。";
+}
+
+function handlePagePointerMove(event) {
+  if (!renameMode.value || renameModalOpen.value) return;
+  renameCursorX.value = event.clientX;
+  renameCursorY.value = event.clientY;
+  renameCursorVisible.value = true;
+}
+
+function hideRenameCursor() {
+  renameCursorVisible.value = false;
+}
+
 function handleRepairTargetClick(item) {
   if (!isDamagedItem(item)) return false;
+  if (scoopMode.value) {
+    notice.value = `${item.label}需要维修锤，铲子没有消耗。`;
+    return true;
+  }
   if (!repairMode.value) {
     activeToolCategory.value = "consumable";
     notice.value = "请先在右侧消耗品里点击维修锤，再维修损坏的道具。";
@@ -1099,22 +1218,30 @@ function handleRepairTargetClick(item) {
   return true;
 }
 
-function handleRepairPointerMove(event) {
-  if (!repairMode.value) return;
+function handleRoomToolPointerMove(event) {
+  if (!repairMode.value && !scoopMode.value) return;
   const rect = event.currentTarget.getBoundingClientRect();
-  repairCursorX.value = event.clientX - rect.left;
-  repairCursorY.value = event.clientY - rect.top;
-  repairCursorVisible.value = true;
+  toolCursorX.value = event.clientX - rect.left;
+  toolCursorY.value = event.clientY - rect.top;
+  toolCursorVisible.value = true;
 }
 
-function hideRepairCursor() {
-  repairCursorVisible.value = false;
+function hideRoomToolCursor() {
+  toolCursorVisible.value = false;
 }
 
 function handleOwnedToolClick(item) {
   if (!item?.id || busyItemId.value) return;
   if (item.useType === "repair-tool") {
     setRepairMode(!repairMode.value);
+    return;
+  }
+  if (item.useType === "litter-clean") {
+    setScoopMode(!scoopMode.value);
+    return;
+  }
+  if (item.useType === "cat-rename") {
+    setRenameMode(!renameMode.value);
     return;
   }
   if (handleRepairTargetClick(item)) return;
@@ -1137,12 +1264,6 @@ function handleOwnedToolClick(item) {
     return;
   }
   if (item.category === "consumable") {
-    if (item.useType === "litter-clean") {
-      notice.value = hygiene.value.count
-        ? "请直接点击活动室里冒烟的猫屎，每堆会消耗一把铲子。"
-        : "铲子已经放进背包；有猫屎时直接点击猫屎清理。";
-      return;
-    }
     if (item.useType === "litter-prevent") {
       useConsumable(item);
       return;
@@ -1224,6 +1345,8 @@ async function selectScene(scene) {
     replacePayload(nextPayload);
     roomEditMode.value = false;
     setRepairMode(false);
+    setScoopMode(false);
+    setRenameMode(false);
     layoutDirty.value = false;
     roomPanActive.value = false;
     notice.value = `已进入${nextPayload.state?.currentScene?.label || scene.label}。`;
@@ -1274,6 +1397,8 @@ async function purchaseScene() {
 function startRoomEditMode() {
   if (savingRoomLayout.value) return;
   setRepairMode(false);
+  setScoopMode(false);
+  setRenameMode(false);
   roomEditMode.value = true;
   catReaction.value = "";
   catReactionAnchored.value = false;
@@ -1372,13 +1497,15 @@ function purchaseHint(item) {
       ? "放进活动室，猫咪使用后自动消失"
       : item.useType === "litter-clean"
         ? "可清理一堆猫屎"
-        : item.useType === "repair-tool"
-          ? "维修损坏道具时自动消耗 1 把"
-        : item.useType === "cat-bath"
-          ? `给当前猫洗澡、解除炸毛并增加心情 +${item.mood || 0}`
-        : item.useType === "room-care"
-          ? `所有猫心情 +${item.mood || 0}`
-          : `当前猫心情 +${item.mood || 0}`;
+        : item.useType === "cat-rename"
+          ? "选择一只自己的猫咪修改名字"
+          : item.useType === "repair-tool"
+            ? "维修损坏道具时自动消耗 1 把"
+            : item.useType === "cat-bath"
+              ? `给当前猫洗澡、解除炸毛并增加心情 +${item.mood || 0}`
+              : item.useType === "room-care"
+                ? `所有猫心情 +${item.mood || 0}`
+                : `当前猫心情 +${item.mood || 0}`;
     return `扣 ${item.cost} 能量 · ${effect} · 剩余 ${remaining}`;
   }
   return `将扣 ${item.cost} 积分 · 购买后剩余 ${remaining}`;
@@ -1554,6 +1681,18 @@ async function play(item) {
 
 async function cleanLitter() {
   if (roomEditMode.value || busyItemId.value) return;
+  if (!scoopMode.value) {
+    activeToolCategory.value = "consumable";
+    notice.value = repairMode.value
+      ? "猫屎需要用铲子清理，维修锤没有消耗。"
+      : "请先在右侧消耗品里点击铲子，再清理猫屎。";
+    return;
+  }
+  if (itemCount(LITTER_SCOOP_ITEM_ID) <= 0) {
+    setScoopMode(false);
+    notice.value = "背包里没有铲子，请先在消耗品商店购买。";
+    return;
+  }
   busyItemId.value = "litter-clean";
   notice.value = "";
   try {
@@ -1561,6 +1700,8 @@ async function cleanLitter() {
     replacePayload(nextPayload);
     const effect = nextPayload.effect || {};
     notice.value = `${effect.message || "猫屎已经清理好了。"} 剩余 ${effect.remainingLitter || 0} 堆，铲子 ${effect.scoopRemaining || 0} 把。`;
+    scoopMode.value = false;
+    toolCursorVisible.value = false;
   } catch (error) {
     notice.value = error.message || "清理失败，请先检查铲子库存。";
   } finally {
@@ -1619,7 +1760,7 @@ async function repairItem(item) {
     notice.value = `${repair.label || item.label} 已维修好，消耗 1 把维修锤和 ${cost} 能量，背包还剩 ${repair.hammerRemaining || 0} 把。`;
     showCatReaction(targetCat, `${repair.label || item.label}修好了，我会小心一点。`);
     repairMode.value = false;
-    repairCursorVisible.value = false;
+    toolCursorVisible.value = false;
   } catch (error) {
     notice.value = error.message || "维修失败，请稍后再试。";
   } finally {
@@ -1666,11 +1807,83 @@ async function applyDecorStyle(decorId, option) {
   }
 }
 
-async function selectCat(catOrId) {
+function openRenameModal(cat) {
+  if (!renameMode.value || !cat?.owned || !cat.id) return;
+  renameTargetCatId.value = cat.id;
+  renameDraft.value = cat.nickname || "";
+  renameModalOpen.value = true;
+  renameCursorVisible.value = false;
+  nextTick(() => renameInputRef.value?.focus());
+}
+
+function chooseRenameTarget(cat) {
+  if (!cat?.id || renameBusy.value) return;
+  renameTargetCatId.value = cat.id;
+  renameDraft.value = cat.nickname || "";
+  nextTick(() => renameInputRef.value?.focus());
+}
+
+function closeRenameModal() {
+  if (renameBusy.value) return;
+  renameModalOpen.value = false;
+  renameMode.value = false;
+  renameCursorVisible.value = false;
+  renameTargetCatId.value = "";
+  renameDraft.value = "";
+  notice.value = "已收起改名卡，卡片没有消耗。";
+}
+
+async function submitCatRename() {
+  const targetCat = catForId(renameTargetCatId.value);
+  const nickname = renameDraft.value.trim();
+  if (!targetCat?.id || renameBusy.value) return;
+  if (!nickname || nickname.length > 12) {
+    notice.value = "猫咪名字需要 1 至 12 个字符。";
+    renameInputRef.value?.focus();
+    return;
+  }
+  renameBusy.value = true;
+  notice.value = "";
+  try {
+    const nextPayload = await fetchJson(routeApiPaths.catWorldRenameCat(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ profileId: targetCat.id, nickname }),
+    });
+    replacePayload(nextPayload);
+    const effect = nextPayload.effect || {};
+    renameModalOpen.value = false;
+    renameMode.value = false;
+    renameCursorVisible.value = false;
+    renameTargetCatId.value = "";
+    renameDraft.value = "";
+    notice.value = `${effect.previousLabel || targetCat.displayLabel || targetCat.label} 已改名为 ${effect.nickname || nickname}，还剩 ${effect.remaining || 0} 张改名卡。`;
+  } catch (error) {
+    notice.value = error.message || "改名失败，请稍后再试。";
+  } finally {
+    renameBusy.value = false;
+  }
+}
+
+function handleCatCardClick(cat) {
+  if (renameMode.value) {
+    openRenameModal(cat);
+    return;
+  }
+  selectCat(cat, { carry: true });
+}
+
+async function selectCat(catOrId, options = {}) {
   const profile = typeof catOrId === "object" ? catOrId : catForId(catOrId);
   const catId = catBreedId(profile) || String(catOrId || "");
   const profileId = profile?.profileId || (profile?.breedId ? profile.id : "");
   if (!catId || busyItemId.value) return;
+  const carry = Boolean(options.carry);
+  if (carry) {
+    repairMode.value = false;
+    scoopMode.value = false;
+    toolCursorVisible.value = false;
+  }
   busyItemId.value = profileId || catId;
   notice.value = "";
   try {
@@ -1684,12 +1897,16 @@ async function selectCat(catOrId) {
     const roomCatId = profileId || cat?.id || catId;
     focusedCatId.value = roomCatId;
     await nextTick();
-    const locked = Boolean(catWorldGame.value?.focusCat?.(roomCatId));
+    const carryInteraction = carry ? catWorldGame.value?.carryCat?.(roomCatId) : null;
+    const locked = carry
+      ? Boolean(carryInteraction?.handled)
+      : Boolean(catWorldGame.value?.focusCat?.(roomCatId));
     if (locked) {
       gameMountRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
-      showCatReaction(cat, "镜头找到我啦，我会在这里陪着你。");
+      showCatReaction(cat, carryInteraction?.carrying ? "被抱起来啦，带我去想去的地方吧。" : "镜头找到我啦，我会在这里陪着你。");
     }
-    notice.value = `${cat?.displayLabel || cat?.label || "猫咪"} 已设为主猫${locked ? "，活动室镜头已锁定" : ""}。`;
+    notice.value = carryInteraction?.message
+      || `${cat?.displayLabel || cat?.label || "猫咪"} 已设为主猫${locked ? "，活动室镜头已锁定" : ""}。`;
   } catch (error) {
     notice.value = error.message || "切换猫咪失败，请稍后再试。";
   } finally {
@@ -1699,7 +1916,19 @@ async function selectCat(catOrId) {
 </script>
 
 <template>
-  <section class="cat-world-page">
+  <section
+    :class="['cat-world-page', { 'is-renaming': renameMode && !renameModalOpen }]"
+    @pointermove="handlePagePointerMove"
+    @pointerleave="hideRenameCursor"
+  >
+    <span
+      v-if="renameMode && !renameModalOpen && renameCursorVisible"
+      class="cat-world-rename-cursor"
+      :style="{ left: `${renameCursorX}px`, top: `${renameCursorY}px` }"
+      aria-hidden="true"
+    >
+      <RenameCardIcon :size="23" :stroke-width="2.6" />
+    </span>
     <section class="cat-world-hero">
       <div class="cat-world-copy">
         <p class="section-kicker">Cat World</p>
@@ -1818,12 +2047,13 @@ async function selectCat(catOrId) {
               'is-editing': roomEditMode,
               'is-panning': roomPanActive,
               'is-repairing': repairMode,
+              'is-scooping': scoopMode,
               'can-pan': roomCanPan,
             },
           ]"
           :aria-label="`${currentScene.label || '猫咪房间'}场景`"
-          @pointermove="handleRepairPointerMove"
-          @pointerleave="hideRepairCursor"
+          @pointermove="handleRoomToolPointerMove"
+          @pointerleave="hideRoomToolCursor"
         >
           <div
             class="cat-world-room-viewport"
@@ -1832,16 +2062,30 @@ async function selectCat(catOrId) {
             <div ref="gameMountRef" class="cat-world-game-stage"></div>
           </div>
           <span
-            v-if="repairMode && repairCursorVisible"
-            class="cat-world-repair-cursor"
-            :style="{ left: `${repairCursorX}px`, top: `${repairCursorY}px` }"
+            v-if="repairMode && toolCursorVisible"
+            class="cat-world-tool-cursor cat-world-repair-cursor"
+            :style="{ left: `${toolCursorX}px`, top: `${toolCursorY}px` }"
             aria-hidden="true"
           >
             <HammerIcon :size="22" :stroke-width="3" />
           </span>
+          <span
+            v-if="scoopMode && toolCursorVisible"
+            class="cat-world-tool-cursor cat-world-scoop-cursor"
+            :style="{ left: `${toolCursorX}px`, top: `${toolCursorY}px` }"
+            aria-hidden="true"
+          >
+            <ShovelIcon :size="23" :stroke-width="3" />
+          </span>
           <div v-if="repairMode" class="cat-world-repair-mode" role="status">
             <span><HammerIcon :size="18" :stroke-width="3" aria-hidden="true" />维修模式</span>
             <button type="button" title="收起维修锤" aria-label="收起维修锤" @click="setRepairMode(false)">
+              <XIcon :size="17" :stroke-width="3" aria-hidden="true" />
+            </button>
+          </div>
+          <div v-if="scoopMode" class="cat-world-repair-mode cat-world-scoop-mode" role="status">
+            <span><ShovelIcon :size="18" :stroke-width="3" aria-hidden="true" />铲屎模式</span>
+            <button type="button" title="收起铲子" aria-label="收起铲子" @click="setScoopMode(false)">
               <XIcon :size="17" :stroke-width="3" aria-hidden="true" />
             </button>
           </div>
@@ -1969,6 +2213,8 @@ async function selectCat(catOrId) {
               {
                 active: selectedDecorId === item.id || state.selectedCatProfile === item.id,
                 'repair-equipped': repairMode && item.useType === 'repair-tool',
+                'scoop-equipped': scoopMode && item.useType === 'litter-clean',
+                'rename-equipped': renameMode && item.useType === 'cat-rename',
                 damaged: item.damageInfo,
                 'has-color-swatches': item.category === 'decor' && item.styleOptions?.length,
               },
@@ -1977,7 +2223,7 @@ async function selectCat(catOrId) {
             <button
               class="cat-world-owned-main"
               type="button"
-              :aria-pressed="item.useType === 'repair-tool' ? repairMode : null"
+              :aria-pressed="item.useType === 'repair-tool' ? repairMode : item.useType === 'litter-clean' ? scoopMode : item.useType === 'cat-rename' ? renameMode : null"
               :disabled="busyItemId === item.id"
               @click="handleOwnedToolClick(item)"
             >
@@ -2175,6 +2421,7 @@ async function selectCat(catOrId) {
               <span>一次性</span>
               <span v-if="item.useType === 'litter-prevent'">点击放置</span>
               <span v-else-if="item.useType === 'litter-clean'">点击猫屎使用</span>
+              <span v-else-if="item.useType === 'cat-rename'">选择猫咪改名</span>
               <span v-else-if="item.useType === 'cat-bath'">当前档案猫咪使用</span>
               <span v-else-if="item.useType === 'repair-tool'">维修时自动消耗</span>
               <span v-else>点击背包使用</span>
@@ -2400,10 +2647,10 @@ async function selectCat(catOrId) {
             },
           ]"
           :disabled="!cat.owned || busyItemId === cat.id"
-          @click="selectCat(cat)"
+          @click="handleCatCardClick(cat)"
         >
           <div class="cat-world-cat-chip-head">
-            <span>{{ cat.owned ? `${cat.genderLabel || "性别待定"} · ${cat.profileCode || cat.rarity || cat.englishName}` : cat.escaped ? "已离家" : "未解锁" }}</span>
+            <span>{{ cat.owned ? `${cat.genderLabel || "性别待定"} · ${cat.breedLabel || cat.label} · ${cat.profileCode || cat.rarity || cat.englishName}` : cat.escaped ? "已离家" : "未解锁" }}</span>
             <strong>{{ cat.displayLabel || cat.label }}</strong>
             <div class="cat-world-cat-identity">
               <figure
@@ -2453,6 +2700,53 @@ async function selectCat(catOrId) {
       </div>
     </section>
       </div>
+    </div>
+
+    <div v-if="renameModalOpen" class="cat-world-modal-backdrop" @click.self="closeRenameModal">
+      <section class="cat-world-rename-modal panel" role="dialog" aria-modal="true" aria-labelledby="cat-world-rename-title">
+        <header>
+          <div>
+            <p class="section-kicker">Rename Card</p>
+            <h2 id="cat-world-rename-title">给猫咪改名</h2>
+          </div>
+          <button class="secondary-button compact-button" type="button" aria-label="关闭" :disabled="renameBusy" @click="closeRenameModal">
+            <XIcon :size="18" aria-hidden="true" />
+          </button>
+        </header>
+        <div class="cat-world-rename-targets" role="list" aria-label="选择要改名的猫咪">
+          <button
+            v-for="cat in roomCats"
+            :key="cat.id"
+            type="button"
+            :class="{ active: renameTargetCatId === cat.id }"
+            :disabled="renameBusy"
+            @click="chooseRenameTarget(cat)"
+          >
+            <CatIcon :size="22" :stroke-width="2.6" aria-hidden="true" />
+            <span>{{ cat.displayLabel || cat.label }}</span>
+          </button>
+        </div>
+        <label class="cat-world-rename-input">
+          <span>新名字</span>
+          <input
+            ref="renameInputRef"
+            v-model="renameDraft"
+            type="text"
+            maxlength="12"
+            autocomplete="off"
+            placeholder="输入 1 至 12 个字符"
+            :disabled="renameBusy"
+            @keydown.enter.prevent="submitCatRename"
+          />
+        </label>
+        <p>本次会消耗 1 张改名卡；品种、个性、花纹和成长状态不会改变。</p>
+        <div class="cat-world-modal-actions">
+          <button class="secondary-button" type="button" :disabled="renameBusy" @click="closeRenameModal">取消</button>
+          <button class="primary-action-button" type="button" :disabled="renameBusy || !renameDraft.trim()" @click="submitCatRename">
+            {{ renameBusy ? "改名中..." : "确认改名" }}
+          </button>
+        </div>
+      </section>
     </div>
 
     <div v-if="scenePurchaseTarget" class="cat-world-modal-backdrop" @click.self="scenePurchaseTarget = null">

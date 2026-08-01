@@ -292,6 +292,7 @@ class CatWorldCatProfile(Base):
     personality_key: Mapped[str | None] = mapped_column(String(40))
     personality_label: Mapped[str | None] = mapped_column(String(120))
     personality_traits: Mapped[str | None] = mapped_column(Text)
+    nickname: Mapped[str | None] = mapped_column(String(40))
     source: Mapped[str] = mapped_column(String(40), default="shop", server_default="shop", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1", nullable=False)
     adopted_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
