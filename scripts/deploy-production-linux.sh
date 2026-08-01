@@ -23,11 +23,10 @@ if [[ "$public_base_url" != https://* ]]; then
   exit 2
 fi
 
-for command_name in git rsync tar curl systemctl journalctl; do
+for command_name in rsync tar curl systemctl journalctl; do
   command -v "$command_name" >/dev/null
 done
 
-test -d "$source_dir/.git"
 test -f "$source_dir/app/main.py"
 test -f "$source_dir/requirements.txt"
 test -d "$project"
@@ -42,13 +41,31 @@ if [ "$source_dir" = "$project" ]; then
   exit 2
 fi
 
-commit="${GITHUB_SHA:-$(git -C "$source_dir" rev-parse HEAD)}"
+commit="${GITHUB_SHA:-}"
+if [ -z "$commit" ] && [ -f "$source_dir/.release-commit" ]; then
+  commit=$(tr -d '\r\n' < "$source_dir/.release-commit")
+fi
+if [ -z "$commit" ] && [ -d "$source_dir/.git" ]; then
+  command -v git >/dev/null
+  commit=$(git -C "$source_dir" rev-parse HEAD)
+fi
 if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
   echo "Unable to resolve the 40-character release commit." >&2
   exit 2
 fi
-if [ "$(git -C "$source_dir" rev-parse HEAD)" != "$commit" ]; then
-  echo "Runner checkout does not match the requested release commit." >&2
+if [ -f "$source_dir/.release-commit" ]; then
+  if [ "$(tr -d '\r\n' < "$source_dir/.release-commit")" != "$commit" ]; then
+    echo "Runner snapshot does not match the requested release commit." >&2
+    exit 2
+  fi
+elif [ -d "$source_dir/.git" ]; then
+  command -v git >/dev/null
+  if [ "$(git -C "$source_dir" rev-parse HEAD)" != "$commit" ]; then
+    echo "Runner checkout does not match the requested release commit." >&2
+    exit 2
+  fi
+else
+  echo "Release source has neither a verified snapshot nor a Git checkout." >&2
   exit 2
 fi
 
@@ -65,7 +82,13 @@ cleanup() {
 trap cleanup EXIT
 
 echo "==> Preparing release $commit"
-git -C "$source_dir" archive "$commit" | tar -x -C "$release_dir"
+if [ -d "$source_dir/.git" ]; then
+  git -C "$source_dir" archive "$commit" | tar -x -C "$release_dir"
+else
+  rsync -a \
+    --exclude=.release-commit \
+    "$source_dir/" "$release_dir/"
+fi
 test -f "$release_dir/PROJECT_STATUS.md"
 test -f "$release_dir/scripts/deploy-production-linux.sh"
 

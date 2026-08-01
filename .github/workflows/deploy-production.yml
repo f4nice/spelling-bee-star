@@ -32,36 +32,105 @@ jobs:
           set -euo pipefail
           [[ "${GITHUB_SHA}" =~ ^[0-9a-f]{40}$ ]]
 
-          if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-            git init .
-          fi
+          # github.com Git transport is unavailable on the internal network, while
+          # api.github.com remains reachable. Materialize and verify the exact Git
+          # tree through the authenticated Git Data API instead.
+          find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import os
+          import stat
+          import time
+          import urllib.error
+          import urllib.request
+          from concurrent.futures import ThreadPoolExecutor
+          from pathlib import Path, PurePosixPath
 
-          repository_url="https://github.com/${GITHUB_REPOSITORY}.git"
-          if git remote get-url origin >/dev/null 2>&1; then
-            git remote set-url origin "${repository_url}"
-          else
-            git remote add origin "${repository_url}"
-          fi
+          api_base = "https://api.github.com"
+          repository = os.environ["GITHUB_REPOSITORY"]
+          commit_sha = os.environ["GITHUB_SHA"]
+          token = os.environ["GH_TOKEN"]
+          workspace = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": f"Bearer {token}",
+              "User-Agent": "speakeasy-production-runner",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
 
-          auth_header="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          fetch_succeeded=0
-          for attempt in 1 2 3 4; do
-            echo "Fetching release commit (attempt ${attempt}/4)..."
-            if timeout 120s git \
-              -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
-              fetch --no-tags --prune --depth=1 origin "${GITHUB_SHA}"; then
-              fetch_succeeded=1
-              break
-            fi
-            if [[ "${attempt}" -lt 4 ]]; then
-              sleep $((attempt * 10))
-            fi
-          done
-          unset auth_header GH_TOKEN
-          [[ "${fetch_succeeded}" -eq 1 ]]
+          def get_json(path):
+              request = urllib.request.Request(f"{api_base}{path}", headers=headers)
+              for attempt in range(1, 6):
+                  try:
+                      with urllib.request.urlopen(request, timeout=45) as response:
+                          return json.load(response)
+                  except (urllib.error.URLError, TimeoutError):
+                      if attempt == 5:
+                          raise
+                      time.sleep(attempt * 2)
 
-          git checkout --force --detach "${GITHUB_SHA}"
-          git clean -ffdx
+          commit = get_json(f"/repos/{repository}/git/commits/{commit_sha}")
+          if commit.get("sha") != commit_sha:
+              raise RuntimeError("GitHub API returned an unexpected commit.")
+          tree = get_json(
+              f"/repos/{repository}/git/trees/{commit['tree']['sha']}?recursive=1"
+          )
+          if tree.get("truncated"):
+              raise RuntimeError("GitHub API truncated the release tree.")
+
+          blobs = [entry for entry in tree["tree"] if entry["type"] == "blob"]
+          unsupported = [
+              entry
+              for entry in tree["tree"]
+              if entry["type"] == "commit"
+              or (entry["type"] == "blob" and entry["mode"] not in {"100644", "100755"})
+          ]
+          if unsupported:
+              raise RuntimeError(
+                  "Submodules, symlinks, and special files are not supported in releases."
+              )
+
+          def materialize(entry):
+              relative = PurePosixPath(entry["path"])
+              if relative.is_absolute() or ".." in relative.parts or "\\" in entry["path"]:
+                  raise RuntimeError(f"Unsafe repository path: {entry['path']!r}")
+              payload = get_json(f"/repos/{repository}/git/blobs/{entry['sha']}")
+              if payload.get("encoding") != "base64":
+                  raise RuntimeError(f"Unsupported blob encoding for {entry['path']!r}")
+              encoded = "".join(payload["content"].split())
+              data = base64.b64decode(encoded, validate=True)
+              digest = hashlib.sha1(
+                  f"blob {len(data)}\0".encode("ascii") + data
+              ).hexdigest()
+              if digest != entry["sha"]:
+                  raise RuntimeError(f"Blob verification failed for {entry['path']!r}")
+              target = workspace.joinpath(*relative.parts)
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_bytes(data)
+              target.chmod(
+                  stat.S_IRUSR
+                  | stat.S_IWUSR
+                  | stat.S_IRGRP
+                  | stat.S_IROTH
+                  | (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+                     if entry["mode"] == "100755" else 0)
+              )
+
+          with ThreadPoolExecutor(max_workers=8) as executor:
+              list(executor.map(materialize, blobs))
+
+          workspace.joinpath(".release-commit").write_text(
+              f"{commit_sha}\n", encoding="ascii"
+          )
+          print(f"Materialized {len(blobs)} verified files for {commit_sha}.")
+          PY
+          unset GH_TOKEN
+
+          test "$(cat .release-commit)" = "${GITHUB_SHA}"
+          test -f app/main.py
+          test -f requirements.txt
 
       - name: Verify the deployment script
         shell: bash
