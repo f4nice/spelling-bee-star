@@ -15494,6 +15494,11 @@ select {
   background: rgba(255, 255, 255, 0.18);
 }
 
+.cat-world-tabs button:not(.active):not(:disabled):hover,
+.cat-world-tabs button:not(.active):not(:disabled):hover :where(span, strong, small, em, b, i) {
+  color: #17805f;
+}
+
 .cat-world-product-icon {
   --product-icon-bg: #fff0ad;
   --product-icon-accent: #c98227;

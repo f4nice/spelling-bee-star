@@ -271,6 +271,7 @@ class CatWorldState(Base):
     litter_ready_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     litter_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
     litter_started_at: Mapped[datetime | None] = mapped_column(DateTime)
+    litter_scenes: Mapped[str | None] = mapped_column(Text)
     damaged_items: Mapped[str | None] = mapped_column(Text)
     play_time_date: Mapped[date | None] = mapped_column(Date)
     play_time_used_seconds: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)

@@ -1,7 +1,7 @@
 {
-  "version": "BIZ-REL-20260802-001",
+  "version": "BIZ-REL-20260802-002",
   "releaseName": "Vue 全站版",
-  "pageVersion": "v20260802.1",
+  "pageVersion": "v20260802.2",
   "footerText": "SpeakEasy",
   "modules": [
     { "label": "首页", "version": "v20260728.2", "status": "优化" },
@@ -18,6 +18,6 @@
     { "label": "音频管理", "version": "v20260728.2", "status": "优化" },
     { "label": "图片管理", "version": "v20260728.2", "status": "优化" },
     { "label": "成长体系", "version": "v20260728.2", "status": "优化" },
-    { "label": "猫咪世界", "version": "v20260801.7", "status": "优化" }
+    { "label": "猫咪世界", "version": "v20260802.1", "status": "优化" }
   ]
 }
