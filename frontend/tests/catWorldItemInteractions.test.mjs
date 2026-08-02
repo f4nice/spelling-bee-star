@@ -41,6 +41,22 @@ test("carried cats recognize furniture drop interactions", () => {
   assert.equal(catDropInteractionFor("word-gallery"), null);
 });
 
+test("all five new window ledges support distinct perch interactions", () => {
+  const expected = new Map([
+    ["moon-window", "窗边看月亮"],
+    ["rain-window", "窗边听雨"],
+    ["garden-window", "窗边看花"],
+    ["snow-window", "窗边看雪"],
+    ["sea-window", "窗边看海"],
+  ]);
+
+  for (const [itemId, label] of expected) {
+    assert.equal(catDropInteractionFor(itemId)?.behavior, "perch");
+    assert.equal(catDropInteractionFor(itemId)?.actionLabel, "放到窗台");
+    assert.equal(timedInteractionLabel(itemId), label);
+  }
+});
+
 test("floor drop positions a held toy around the clicked floor point", () => {
   assert.deepEqual(
     floorDropPosition(

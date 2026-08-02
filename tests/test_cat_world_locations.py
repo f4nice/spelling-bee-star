@@ -6,9 +6,13 @@ import unittest
 os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
 
 from app.main import (
+    CAT_WORLD_DECOR_DEFAULT_LAYOUT,
     CAT_WORLD_DEFAULT_SCENE_KEY,
+    CAT_WORLD_SCENE_SEED_BY_KEY,
+    CAT_WORLD_SHOP_BY_ID,
     CAT_WORLD_STORAGE_LOCATION,
     cat_world_inventory_for_scene,
+    cat_world_layout_item_allowed,
     encode_cat_world_item_locations,
     encode_cat_world_scene_positions,
     normalize_cat_world_scene_position,
@@ -18,6 +22,22 @@ from app.main import (
 
 
 class CatWorldLocationTest(unittest.TestCase):
+    def test_five_new_window_ledges_are_complete_indoor_decor(self):
+        window_ids = [
+            "moon-window",
+            "rain-window",
+            "garden-window",
+            "snow-window",
+            "sea-window",
+        ]
+
+        self.assertEqual([CAT_WORLD_SHOP_BY_ID[item_id]["cost"] for item_id in window_ids], [240, 260, 280, 300, 320])
+        self.assertTrue(all(CAT_WORLD_SHOP_BY_ID[item_id]["category"] == "decor" for item_id in window_ids))
+        self.assertTrue(all(item_id in CAT_WORLD_DECOR_DEFAULT_LAYOUT for item_id in window_ids))
+
+        yard_rules = CAT_WORLD_SCENE_SEED_BY_KEY["yard"]["itemRules"]
+        self.assertTrue(all(not cat_world_layout_item_allowed(item_id, yard_rules) for item_id in window_ids))
+
     def test_old_inventory_defaults_furniture_and_toys_to_main_room(self):
         inventory = {
             "cloud-rug": 1,

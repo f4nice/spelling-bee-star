@@ -82,11 +82,11 @@ class CatWorldLimitedCatTest(unittest.TestCase):
     def test_turkish_cats_have_region_specific_decor_preferences(self):
         self.assertEqual(
             set(cat_world_cat_favorite_decor_ids("turkish-van")),
-            {"mini-fountain", "bubble-bathtub"},
+            {"mini-fountain", "bubble-bathtub", "sea-window"},
         )
         self.assertEqual(
             set(cat_world_cat_favorite_decor_ids("turkish-angora")),
-            {"sun-window", "book-shelf"},
+            {"sun-window", "book-shelf", "snow-window"},
         )
 
 

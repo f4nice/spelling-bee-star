@@ -21,6 +21,20 @@ export const CAT_WORLD_ITEM_INTERACTIONS = Object.freeze({
   }),
 });
 
+function windowPerchInteraction(label, catMessage, holdMs = 9500) {
+  return Object.freeze({
+    behavior: "perch",
+    label,
+    actionLabel: "放到窗台",
+    catMessage,
+    anchorX: 0.5,
+    anchorY: 0.55,
+    offsetX: -48,
+    offsetY: 0,
+    holdMs,
+  });
+}
+
 export const CAT_WORLD_CAT_DROP_INTERACTIONS = Object.freeze({
   "study-desk": Object.freeze({
     behavior: "perch",
@@ -88,17 +102,12 @@ export const CAT_WORLD_CAT_DROP_INTERACTIONS = Object.freeze({
     offsetY: -48,
     holdMs: 8000,
   }),
-  "sun-window": Object.freeze({
-    behavior: "perch",
-    label: "阳光窗台",
-    actionLabel: "放到窗台",
-    catMessage: "窗边暖暖的，我在这里晒一会儿太阳。",
-    anchorX: 0.5,
-    anchorY: 0.55,
-    offsetX: -48,
-    offsetY: 0,
-    holdMs: 9500,
-  }),
+  "sun-window": windowPerchInteraction("阳光窗台", "窗边暖暖的，我在这里晒一会儿太阳。"),
+  "moon-window": windowPerchInteraction("月光窗台", "月亮挂在窗外，我想在这里安静看一会儿星星。", 10000),
+  "rain-window": windowPerchInteraction("雨声窗台", "雨点轻轻敲着玻璃，我在这里听一会儿雨。", 10500),
+  "garden-window": windowPerchInteraction("花园窗台", "窗外有花和蝴蝶，我要坐高一点认真观察。", 9500),
+  "snow-window": windowPerchInteraction("雪景窗台", "外面在下雪，窗台里面暖暖的。", 11000),
+  "sea-window": windowPerchInteraction("海风窗台", "远处有小帆船，我想坐在这里看看海。", 10500),
   "cat-climbing-tree": Object.freeze({
     behavior: "climb",
     label: "原木猫爬架",
@@ -196,6 +205,11 @@ const TIMED_INTERACTION_LABELS = Object.freeze({
   "cat-climbing-tree": "爬架巡视",
   "mini-fountain": "饮水时间",
   "sun-window": "窗边晒太阳",
+  "moon-window": "窗边看月亮",
+  "rain-window": "窗边听雨",
+  "garden-window": "窗边看花",
+  "snow-window": "窗边看雪",
+  "sea-window": "窗边看海",
 });
 
 export function timedInteractionLabel(itemId, fallback = "互动中") {

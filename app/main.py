@@ -117,8 +117,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260802-002"
-DEFAULT_PAGE_VERSION = "v20260802.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260802-003"
+DEFAULT_PAGE_VERSION = "v20260802.3"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -683,6 +683,51 @@ CAT_WORLD_SHOP = [
         "cost": 220,
         "mood": 8,
         "description": "猫咪最喜欢晒太阳的安静角落。",
+    },
+    {
+        "id": "moon-window",
+        "category": "decor",
+        "label": "月光窗台",
+        "englishName": "Moonlit Window",
+        "cost": 240,
+        "mood": 9,
+        "description": "能看见月亮和星星的静谧窗台，适合夜晚安静发呆。",
+    },
+    {
+        "id": "rain-window",
+        "category": "decor",
+        "label": "雨声窗台",
+        "englishName": "Rainy Window",
+        "cost": 260,
+        "mood": 10,
+        "description": "雨点敲着玻璃，猫咪可以窝在窗边听一会儿雨。",
+    },
+    {
+        "id": "garden-window",
+        "category": "decor",
+        "label": "花园窗台",
+        "englishName": "Garden Window",
+        "cost": 280,
+        "mood": 11,
+        "description": "窗外开着小花，偶尔还有蝴蝶从猫咪眼前飞过。",
+    },
+    {
+        "id": "snow-window",
+        "category": "decor",
+        "label": "雪景窗台",
+        "englishName": "Snowy Window",
+        "cost": 300,
+        "mood": 12,
+        "description": "窗外飘着像素雪花，窗台里面依然暖烘烘的。",
+    },
+    {
+        "id": "sea-window",
+        "category": "decor",
+        "label": "海风窗台",
+        "englishName": "Seaside Window",
+        "cost": 320,
+        "mood": 13,
+        "description": "能看见蓝色海面和小帆船，适合喜欢远眺的猫咪。",
     },
     {
         "id": "book-shelf",
@@ -1287,6 +1332,11 @@ CAT_WORLD_DECOR_FAVORITE_CAT = {
     "book-shelf": CAT_WORLD_DEFAULT_CAT_ID,
     "cloud-rug": "ragdoll",
     "sun-window": "british-shorthair",
+    "moon-window": "siamese",
+    "rain-window": "ragdoll",
+    "garden-window": CAT_WORLD_DEFAULT_CAT_ID,
+    "snow-window": "turkish-angora",
+    "sea-window": "turkish-van",
     "study-desk": "siamese",
     "reading-lamp": "maine-coon",
     "word-gallery": CAT_WORLD_DEFAULT_CAT_ID,
@@ -1322,6 +1372,11 @@ CAT_WORLD_ITEM_FAVORITE_CAT = {
 }
 CAT_WORLD_DECOR_DEFAULT_LAYOUT = {
     "sun-window": {"x": 5, "y": 5},
+    "moon-window": {"x": 16, "y": 5},
+    "rain-window": {"x": 27, "y": 19},
+    "garden-window": {"x": 39, "y": 5},
+    "snow-window": {"x": 51, "y": 19},
+    "sea-window": {"x": 63, "y": 5},
     "book-shelf": {"x": 73, "y": 8},
     "cloud-rug": {"x": 17, "y": 77},
     "study-desk": {"x": 43, "y": 62},
@@ -1426,7 +1481,18 @@ CAT_WORLD_SCENE_SEEDS = [
             "grid": "#31544d",
         },
         "features": {"cats": True, "food": True, "care": True, "hygiene": True},
-        "itemRules": {"allowedCategories": ["decor", "toy"], "excludedItemIds": ["sun-window", "window-hammock"]},
+        "itemRules": {
+            "allowedCategories": ["decor", "toy"],
+            "excludedItemIds": [
+                "sun-window",
+                "moon-window",
+                "rain-window",
+                "garden-window",
+                "snow-window",
+                "sea-window",
+                "window-hammock",
+            ],
+        },
         "spawnPoints": {
             "activeFood": {"x": 1920, "y": 408, "width": 118, "height": 46},
             "activeCare": {"x": 760, "y": 426, "width": 68, "height": 70},

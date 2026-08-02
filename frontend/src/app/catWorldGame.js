@@ -57,6 +57,11 @@ const ROOM_TOY_TARGETS = {
 
 const DECOR_SPECS = {
   "sun-window": { label: "阳光窗台", width: 150, height: 88, defaultX: 146, defaultY: 34 },
+  "moon-window": { label: "月光窗台", width: 150, height: 88, defaultX: 410, defaultY: 34 },
+  "rain-window": { label: "雨声窗台", width: 150, height: 88, defaultX: 690, defaultY: 102 },
+  "garden-window": { label: "花园窗台", width: 150, height: 88, defaultX: 998, defaultY: 34 },
+  "snow-window": { label: "雪景窗台", width: 150, height: 88, defaultX: 1306, defaultY: 102 },
+  "sea-window": { label: "海风窗台", width: 150, height: 88, defaultX: 1612, defaultY: 34 },
   "book-shelf": { label: "英文书架", width: 170, height: 78, defaultX: 1010, defaultY: 46 },
   "cloud-rug": { label: "云朵地毯", width: 380, height: 78, defaultX: 790, defaultY: 432 },
   "study-desk": { label: "英文书桌", width: 200, height: 96, defaultX: 496, defaultY: 348 },
@@ -69,6 +74,15 @@ const DECOR_SPECS = {
   "mini-fountain": { label: "循环饮水机", width: 100, height: 82, defaultX: 694, defaultY: 432 },
   "bubble-bathtub": { label: "泡泡浴缸", width: 180, height: 108, defaultX: 940, defaultY: 332 },
 };
+
+const WINDOW_DECOR_VARIANTS = Object.freeze({
+  "sun-window": Object.freeze({ view: "sun", sky: 0x87d9ff }),
+  "moon-window": Object.freeze({ view: "moon", sky: 0x53618f }),
+  "rain-window": Object.freeze({ view: "rain", sky: 0x91b8c9 }),
+  "garden-window": Object.freeze({ view: "garden", sky: 0x9de5ff }),
+  "snow-window": Object.freeze({ view: "snow", sky: 0xb8e4f7 }),
+  "sea-window": Object.freeze({ view: "sea", sky: 0x87d9ff }),
+});
 
 const CAT_PIXEL_SIZE = 2;
 
@@ -318,6 +332,64 @@ function makeLocalGraphics(scene, container) {
   const graphics = scene.add.graphics();
   container.add(graphics);
   return graphics;
+}
+
+function drawWindowDecor(graphics, spec, colors, variant) {
+  drawPixelRect(graphics, 0, 0, spec.width, spec.height, 0xfff8df);
+  graphics.fillStyle(variant.sky, 1);
+  graphics.fillRect(8, 8, spec.width - 16, spec.height - 22);
+
+  if (variant.view === "sun") {
+    graphics.fillStyle(0xfff07d, 1);
+    graphics.fillCircle(29, 27, 13);
+  } else if (variant.view === "moon") {
+    graphics.fillStyle(0xfff2a6, 1);
+    graphics.fillCircle(32, 26, 13);
+    graphics.fillStyle(variant.sky, 1);
+    graphics.fillCircle(38, 21, 11);
+    graphics.fillStyle(0xffffff, 1);
+    graphics.fillRect(88, 20, 4, 4);
+    graphics.fillRect(111, 39, 5, 5);
+    graphics.fillRect(72, 48, 3, 3);
+  } else if (variant.view === "rain") {
+    graphics.fillStyle(0xe9f4f8, 1);
+    graphics.fillEllipse(42, 25, 44, 18);
+    graphics.lineStyle(3, 0x3f7891, 1);
+    for (let x = 25; x <= 122; x += 24) graphics.lineBetween(x, 40, x - 5, 52);
+  } else if (variant.view === "garden") {
+    graphics.fillStyle(0x67aa55, 1);
+    graphics.fillRect(8, 48, spec.width - 16, 18);
+    graphics.lineStyle(3, 0x2f6738, 1);
+    for (let x = 26; x <= 124; x += 24) graphics.lineBetween(x, 44, x, 61);
+    [0xff7ca8, 0xffd166, 0xb58cff, 0xff8a65, 0xffffff].forEach((color, index) => {
+      graphics.fillStyle(color, 1);
+      graphics.fillCircle(26 + index * 24, 42 - (index % 2) * 5, 6);
+    });
+  } else if (variant.view === "snow") {
+    graphics.fillStyle(0xf8fdff, 1);
+    graphics.fillTriangle(8, 56, 58, 39, 94, 66);
+    graphics.fillTriangle(60, 66, 112, 42, spec.width - 8, 66);
+    graphics.fillCircle(28, 24, 4);
+    graphics.fillCircle(72, 18, 3);
+    graphics.fillCircle(108, 31, 4);
+    graphics.fillCircle(128, 16, 3);
+  } else if (variant.view === "sea") {
+    graphics.fillStyle(0x3e9bc8, 1);
+    graphics.fillRect(8, 43, spec.width - 16, 23);
+    graphics.lineStyle(3, 0xd9f6ff, 1);
+    graphics.lineBetween(14, 51, 46, 51);
+    graphics.lineBetween(58, 58, 91, 58);
+    graphics.lineBetween(102, 49, 136, 49);
+    graphics.lineStyle(3, 0x754926, 1);
+    graphics.lineBetween(78, 21, 78, 49);
+    graphics.fillStyle(0xfff8df, 1);
+    graphics.fillTriangle(80, 22, 80, 43, 103, 43);
+  }
+
+  graphics.lineStyle(4, INK, 1);
+  graphics.lineBetween(spec.width / 2, 8, spec.width / 2, spec.height - 14);
+  graphics.lineBetween(8, (spec.height - 6) / 2, spec.width - 8, (spec.height - 6) / 2);
+  drawPixelRect(graphics, -4, spec.height - 14, spec.width + 8, 14, colors.main);
 }
 
 class CatWorldScene extends Phaser.Scene {
@@ -1090,15 +1162,8 @@ class CatWorldScene extends Phaser.Scene {
 
   drawDecorShape(container, decorId, spec, colors) {
     const graphics = makeLocalGraphics(this, container);
-    if (decorId === "sun-window") {
-      drawPixelRect(graphics, 0, 0, spec.width, spec.height, 0xfff8df);
-      graphics.fillStyle(colors.accent, 1);
-      graphics.fillRect(8, 8, spec.width - 16, spec.height - 16);
-      graphics.lineStyle(4, INK, 1);
-      graphics.lineBetween(spec.width / 2, 8, spec.width / 2, spec.height - 8);
-      graphics.lineBetween(8, spec.height / 2, spec.width - 8, spec.height / 2);
-      graphics.fillStyle(0xfff07d, 1);
-      graphics.fillCircle(29, 27, 13);
+    if (WINDOW_DECOR_VARIANTS[decorId]) {
+      drawWindowDecor(graphics, spec, colors, WINDOW_DECOR_VARIANTS[decorId]);
     } else if (decorId === "book-shelf") {
       graphics.fillStyle(colors.main, 1);
       graphics.fillRect(8, 8, 28, 48);
