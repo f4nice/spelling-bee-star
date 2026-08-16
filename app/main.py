@@ -52,6 +52,7 @@ from app.models import (
     AdminUserSetting,
     DailyQuote,
     DebateSession,
+    DiaryEntry,
     EssayEntry,
     LearningGrowthMetric,
     Word,
@@ -117,8 +118,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260802-003"
-DEFAULT_PAGE_VERSION = "v20260802.3"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260816-001"
+DEFAULT_PAGE_VERSION = "v20260816.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -132,6 +133,10 @@ SCIENCE_PUBLIC_CONTENT_VERSION = "v6"
 SCIENCE_PUBLIC_CONTENT_TTL = timedelta(days=3650)
 ESSAY_TITLE_MAX_CHARS = 120
 ESSAY_BODY_MAX_CHARS = 30000
+DIARY_TITLE_MAX_CHARS = 120
+DIARY_BODY_MAX_CHARS = 12000
+DIARY_MIN_WORDS = 100
+DIARY_REWARD_MINUTES = 10
 SCIENCE_SOURCE_MODE_DEFAULT = "science"
 SCIENCE_SOURCE_MODE_PUBLIC_BOOKS = "public-books"
 SCIENCE_SOURCE_MODES = [
@@ -4064,6 +4069,11 @@ def newspaper_article_page(
     return vue_shell(request, db, f"newspaper/{section_key}/{article_index}")
 
 
+@app.get("/diary", response_class=HTMLResponse)
+def diary_page(request: Request, db: Session = Depends(get_db)):
+    return vue_shell(request, db, "diary")
+
+
 @app.get("/essays", response_class=HTMLResponse)
 def essays_page(request: Request, db: Session = Depends(get_db)):
     return vue_shell(request, db, "essays")
@@ -6584,6 +6594,341 @@ def parse_essay_optimization_result(text_value: str, body: str) -> tuple[str, di
 
 def chat_completion_text(data: dict[str, Any]) -> str:
     return str(((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+
+
+DIARY_GUIDANCE_SYSTEM_PROMPT = (
+    "You are a warm, specific English diary coach for a student. "
+    "Read the student's diary as a personal reflection, respect their voice and privacy, and give practical teaching feedback. "
+    "Comment on meaning, organization, grammar, and natural vocabulary without rewriting the whole diary or inventing events. "
+    "Return only one valid JSON object with this exact shape: "
+    '{"score":0,"overall":"中文总体意见","strengths":["中文优点"],'
+    '"suggestions":[{"title":"中文短标题","guidance":"中文具体建议","example":"英文参考例句"}],'
+    '"corrections":[{"original":"原文英文","better":"修改后的英文","reason":"中文原因"}],'
+    '"nextFocus":"下一篇日记可关注的一个中文目标"}. '
+    "Score is an integer from 0 to 100. Give 2 to 3 real strengths, 3 practical suggestions, and up to 5 corrections. "
+    "Examples must preserve the student's intended meaning. Do not use vague praise, diagnose the student, or include markdown."
+)
+
+
+def diary_english_word_count(text_value: str | None) -> int:
+    return len(re.findall(r"[A-Za-z]+(?:[-'][A-Za-z]+)*", str(text_value or "")))
+
+
+def clean_diary_title(value: Any, diary_date: date) -> str:
+    title = " ".join(str(value or "").split())[:DIARY_TITLE_MAX_CHARS]
+    return title or f"My Diary - {diary_date.isoformat()}"
+
+
+def clean_diary_body(value: Any) -> str:
+    return str(value or "").replace("\r\n", "\n").replace("\r", "\n").strip()[:DIARY_BODY_MAX_CHARS]
+
+
+def diary_guidance_messages(*, title: str, body: str, diary_date: date) -> list[dict[str, str]]:
+    return [
+        {"role": "system", "content": DIARY_GUIDANCE_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": f"Diary date: {diary_date.isoformat()}\nTitle: {title}\n\nStudent diary:\n{body}",
+        },
+    ]
+
+
+def normalize_diary_guidance(value: Any) -> dict[str, Any]:
+    source = value if isinstance(value, dict) else {}
+
+    def text_value(raw: Any, limit: int = 800) -> str:
+        return re.sub(r"\s+", " ", str(raw or "").strip())[:limit]
+
+    raw_strengths = source.get("strengths") if isinstance(source.get("strengths"), list) else []
+    strengths = [text_value(item, 400) for item in raw_strengths if text_value(item, 400)][:3]
+    suggestions = []
+    raw_suggestions = source.get("suggestions") if isinstance(source.get("suggestions"), list) else []
+    for item in raw_suggestions:
+        if not isinstance(item, dict):
+            continue
+        guidance = text_value(item.get("guidance"), 700)
+        if not guidance:
+            continue
+        suggestions.append(
+            {
+                "title": text_value(item.get("title"), 120) or "写作建议",
+                "guidance": guidance,
+                "example": text_value(item.get("example"), 500),
+            }
+        )
+        if len(suggestions) >= 3:
+            break
+    corrections = []
+    raw_corrections = source.get("corrections") if isinstance(source.get("corrections"), list) else []
+    for item in raw_corrections:
+        if not isinstance(item, dict):
+            continue
+        original = text_value(item.get("original"), 500)
+        better = text_value(item.get("better"), 500)
+        if not original or not better:
+            continue
+        corrections.append(
+            {
+                "original": original,
+                "better": better,
+                "reason": text_value(item.get("reason"), 500),
+            }
+        )
+        if len(corrections) >= 5:
+            break
+    try:
+        score = min(max(int(round(float(source.get("score", 0)))), 0), 100)
+    except (TypeError, ValueError):
+        score = 0
+    return {
+        "score": score,
+        "overall": text_value(source.get("overall"), 1200),
+        "strengths": strengths,
+        "suggestions": suggestions,
+        "corrections": corrections,
+        "nextFocus": text_value(source.get("nextFocus") or source.get("next_focus"), 500),
+    }
+
+
+def parse_diary_guidance_result(text_value: str) -> dict[str, Any]:
+    raw = str(text_value or "").strip()
+    json_text = raw
+    if raw.startswith("```"):
+        json_text = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.IGNORECASE | re.DOTALL).strip()
+    try:
+        parsed = json.loads(json_text)
+    except json.JSONDecodeError:
+        start = raw.find("{")
+        end = raw.rfind("}")
+        try:
+            parsed = json.loads(raw[start:end + 1]) if start >= 0 and end > start else None
+        except json.JSONDecodeError:
+            parsed = None
+    guidance = normalize_diary_guidance(parsed)
+    if not guidance["overall"] or not guidance["suggestions"]:
+        raise RuntimeError("AI 没有返回有效的日记指导。")
+    return guidance
+
+
+async def guide_diary_with_provider(
+    provider: str,
+    *,
+    title: str,
+    body: str,
+    diary_date: date,
+) -> tuple[dict[str, Any], str]:
+    if provider == "openai":
+        api_key = settings.openai_api_key.strip()
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY is not configured on the server.")
+        model = (settings.openai_text_model or "gpt-4o-mini").strip()
+        endpoint = "https://api.openai.com/v1/chat/completions"
+    else:
+        api_key = settings.dashscope_api_key.strip()
+        if not api_key:
+            raise RuntimeError("DASHSCOPE_API_KEY is not configured on the server.")
+        model = (settings.dashscope_text_model or "qwen-plus").strip()
+        endpoint = (
+            settings.dashscope_text_endpoint
+            or "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+        ).strip()
+    payload = {
+        "model": model,
+        "messages": diary_guidance_messages(title=title, body=body, diary_date=diary_date),
+        "temperature": 0.2,
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=90) as client:
+        response = await client.post(endpoint, headers=headers, json=payload)
+        response.raise_for_status()
+    return parse_diary_guidance_result(chat_completion_text(response.json())), f"{provider}:{model}"
+
+
+async def guide_diary_with_ai(*, title: str, body: str, diary_date: date) -> tuple[dict[str, Any], str]:
+    preferred = (settings.ai_text_provider or "dashscope").strip().lower()
+    providers = ["openai", "dashscope"] if preferred == "openai" else ["dashscope", "openai"]
+    configuration_errors: list[str] = []
+    for provider in providers:
+        try:
+            return await guide_diary_with_provider(
+                provider,
+                title=title,
+                body=body,
+                diary_date=diary_date,
+            )
+        except RuntimeError as exc:
+            detail = str(exc)
+            if "not configured" in detail:
+                configuration_errors.append(detail)
+                continue
+            raise
+    raise RuntimeError("；".join(configuration_errors) or "没有可用的 AI 文本模型。")
+
+
+def serialize_diary_entry(entry: DiaryEntry) -> dict[str, Any]:
+    try:
+        guidance = json.loads(entry.ai_guidance or "{}")
+    except (json.JSONDecodeError, TypeError):
+        guidance = {}
+    return {
+        "id": entry.id,
+        "date": entry.diary_date.isoformat(),
+        "title": entry.title,
+        "body": entry.body,
+        "wordCount": max(int(entry.word_count or 0), 0),
+        "guidance": normalize_diary_guidance(guidance),
+        "aiModel": entry.ai_model or "",
+        "completedAt": entry.completed_at.isoformat() if entry.completed_at else "",
+        "rewardedAt": entry.rewarded_at.isoformat() if entry.rewarded_at else "",
+        "createdAt": entry.created_at.isoformat() if entry.created_at else "",
+        "updatedAt": entry.updated_at.isoformat() if entry.updated_at else "",
+    }
+
+
+def diary_entries_for_phone(db: Session, phone: str) -> list[DiaryEntry]:
+    return db.scalars(
+        select(DiaryEntry)
+        .where(DiaryEntry.phone == phone)
+        .order_by(DiaryEntry.diary_date.desc(), DiaryEntry.id.desc())
+        .limit(90)
+    ).all()
+
+
+def diary_payload(db: Session, request: Request) -> dict[str, Any]:
+    user = current_admin_user(request, db)
+    today = date.today()
+    entries = diary_entries_for_phone(db, user.phone)
+    return {
+        "today": today.isoformat(),
+        "entries": [serialize_diary_entry(entry) for entry in entries],
+        "rules": {
+            "minimumWords": DIARY_MIN_WORDS,
+            "rewardMinutes": DIARY_REWARD_MINUTES,
+            "titleMaxChars": DIARY_TITLE_MAX_CHARS,
+            "bodyMaxChars": DIARY_BODY_MAX_CHARS,
+        },
+    }
+
+
+def save_daily_diary(
+    db: Session,
+    phone: str,
+    payload: dict[str, Any],
+    diary_date: date | None = None,
+) -> DiaryEntry:
+    entry_date = diary_date or date.today()
+    body = clean_diary_body(payload.get("body"))
+    title = clean_diary_title(payload.get("title"), entry_date)
+    entry = db.scalar(
+        select(DiaryEntry).where(DiaryEntry.phone == phone, DiaryEntry.diary_date == entry_date)
+    )
+    if entry is None:
+        entry = DiaryEntry(phone=phone, diary_date=entry_date, title=title, body=body)
+    content_changed = entry.title != title or entry.body != body
+    entry.title = title
+    entry.body = body
+    entry.word_count = diary_english_word_count(body)
+    if content_changed:
+        entry.ai_guidance = None
+        entry.ai_model = None
+        entry.completed_at = None
+    db.add(entry)
+    return entry
+
+
+def award_diary_play_time(db: Session, entry: DiaryEntry, now: datetime | None = None) -> bool:
+    if entry.rewarded_at is not None:
+        return False
+    awarded_at = now or datetime.utcnow()
+    entry.rewarded_at = awarded_at
+    db.add(
+        CatWorldPlayTimeGrant(
+            phone=entry.phone,
+            reward_date=entry.diary_date,
+            minutes=DIARY_REWARD_MINUTES,
+            reason="英文日记完成奖励",
+            granted_by_phone=entry.phone,
+            created_at=awarded_at,
+        )
+    )
+    db.add(entry)
+    return True
+
+
+@app.get("/api/vue/diary")
+def vue_diary_api(request: Request, db: Session = Depends(get_db)):
+    return diary_payload(db, request)
+
+
+@app.post("/api/vue/diary")
+async def vue_save_diary_api(request: Request, db: Session = Depends(get_db)):
+    user = current_admin_user(request, db)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="日记数据不是有效 JSON。") from exc
+    entry = save_daily_diary(db, user.phone, payload or {})
+    db.commit()
+    db.refresh(entry)
+    response = diary_payload(db, request)
+    response["entry"] = serialize_diary_entry(entry)
+    return response
+
+
+@app.post("/api/vue/diary/complete")
+async def vue_complete_diary_api(request: Request, db: Session = Depends(get_db)):
+    user = current_admin_user(request, db)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="日记数据不是有效 JSON。") from exc
+    entry = save_daily_diary(db, user.phone, payload or {})
+    if entry.word_count < DIARY_MIN_WORDS:
+        raise HTTPException(status_code=400, detail=f"英文日记至少需要 {DIARY_MIN_WORDS} 词。")
+    db.commit()
+    db.refresh(entry)
+    try:
+        guidance, model = await guide_diary_with_ai(
+            title=entry.title,
+            body=entry.body,
+            diary_date=entry.diary_date,
+        )
+    except RuntimeError as exc:
+        detail = str(exc)
+        if "not configured" in detail:
+            raise HTTPException(status_code=400, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=f"AI 日记指导失败: {detail}") from exc
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text[:400] if exc.response is not None else str(exc)
+        if is_ai_quota_error(detail):
+            raise HTTPException(status_code=402, detail="额度已经用完") from exc
+        raise HTTPException(status_code=502, detail=f"AI 日记指导失败: {detail}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AI 日记指导失败: {exc}") from exc
+
+    entry = db.scalar(
+        select(DiaryEntry)
+        .where(DiaryEntry.id == entry.id, DiaryEntry.phone == user.phone)
+        .with_for_update()
+    )
+    if entry is None:
+        raise HTTPException(status_code=404, detail="没有找到今天的英文日记。")
+    completed_at = datetime.utcnow()
+    entry.ai_guidance = json.dumps(guidance, ensure_ascii=False)
+    entry.ai_model = model
+    entry.completed_at = completed_at
+    reward_granted = award_diary_play_time(db, entry, completed_at)
+    db.commit()
+    db.refresh(entry)
+    response = diary_payload(db, request)
+    response.update(
+        {
+            "entry": serialize_diary_entry(entry),
+            "rewardGranted": reward_granted,
+            "playTimeRewards": cat_world_play_time_reward_source(db, user.phone),
+        }
+    )
+    return response
 
 
 ESSAY_TRANSLATION_SYSTEM_PROMPT = (

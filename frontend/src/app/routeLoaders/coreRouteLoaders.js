@@ -18,6 +18,10 @@ export const coreRouteLoaders = {
     data.value = await fetchJson(routeApiPaths.essays(), { skipCache: true });
   },
 
+  async diary({ data }) {
+    data.value = await fetchJson(routeApiPaths.diary(), { skipCache: true });
+  },
+
   async debate({ data }) {
     data.value = await fetchJson(routeApiPaths.debate(), { skipCache: true });
   },

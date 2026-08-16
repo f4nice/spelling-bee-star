@@ -134,6 +134,24 @@ class EssayEntry(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class DiaryEntry(Base):
+    __tablename__ = "diary_entries"
+    __table_args__ = (UniqueConstraint("phone", "diary_date", name="uq_diary_entries_phone_date"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    diary_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    body: Mapped[str] = mapped_column(Text().with_variant(mysql.LONGTEXT, "mysql"), nullable=False)
+    word_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    ai_guidance: Mapped[str | None] = mapped_column(Text().with_variant(mysql.LONGTEXT, "mysql"))
+    ai_model: Mapped[str | None] = mapped_column(String(120))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    rewarded_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class DebateSession(Base):
     __tablename__ = "debate_sessions"
     __table_args__ = (UniqueConstraint("phone", "debate_date", name="uq_debate_sessions_phone_date"),)
