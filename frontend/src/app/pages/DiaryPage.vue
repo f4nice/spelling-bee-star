@@ -10,7 +10,7 @@ import {
   Save,
   Sparkles,
 } from "lucide-vue-next";
-import { countDiaryWords, diaryWordsRemaining, diaryWritingProgress } from "../diaryWriting.js";
+import { countDiaryCharacters, diaryCharactersRemaining, diaryWritingProgress } from "../diaryWriting.js";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
 
@@ -30,15 +30,15 @@ const draft = reactive(emptyDraft());
 const rules = computed(() => payload.value?.rules || {});
 const today = computed(() => String(payload.value?.today || ""));
 const entries = computed(() => (Array.isArray(payload.value?.entries) ? payload.value.entries : []));
-const minimumWords = computed(() => Number(rules.value.minimumWords || 100));
+const minimumCharacters = computed(() => Number(rules.value.minimumCharacters || 100));
 const rewardMinutes = computed(() => Number(rules.value.rewardMinutes || 10));
 const titleMaxChars = computed(() => Number(rules.value.titleMaxChars || 120));
 const bodyMaxChars = computed(() => Number(rules.value.bodyMaxChars || 12000));
 const isToday = computed(() => selectedDate.value === today.value);
-const wordCount = computed(() => countDiaryWords(draft.body));
-const wordsRemaining = computed(() => diaryWordsRemaining(draft.body, minimumWords.value));
-const writingProgress = computed(() => `${diaryWritingProgress(draft.body, minimumWords.value) * 100}%`);
-const canComplete = computed(() => isToday.value && wordCount.value >= minimumWords.value && !busyAction.value);
+const characterCount = computed(() => countDiaryCharacters(draft.body));
+const charactersRemaining = computed(() => diaryCharactersRemaining(draft.body, minimumCharacters.value));
+const writingProgress = computed(() => `${diaryWritingProgress(draft.body, minimumCharacters.value) * 100}%`);
+const canComplete = computed(() => isToday.value && characterCount.value >= minimumCharacters.value && !busyAction.value);
 const guidance = computed(() => draft.guidance || emptyGuidance());
 const hasGuidance = computed(() => Boolean(guidance.value.overall || guidance.value.suggestions?.length));
 const hasReward = computed(() => Boolean(draft.rewardedAt));
@@ -67,7 +67,7 @@ function emptyDraft(dateValue = "") {
     date: dateValue,
     title: "",
     body: "",
-    wordCount: 0,
+    characterCount: 0,
     guidance: emptyGuidance(),
     aiModel: "",
     completedAt: "",
@@ -152,7 +152,7 @@ function formatDate(value) {
 
 function entryStatus(entry) {
   if (entry.completedAt) return "已完成";
-  return `${Number(entry.wordCount || 0)} 词`;
+  return `${Number(entry.characterCount || 0)} 字`;
 }
 </script>
 
@@ -162,13 +162,13 @@ function entryStatus(entry) {
       <div class="diary-hero-title">
         <span class="diary-hero-icon"><BookOpen :size="28" aria-hidden="true" /></span>
         <div>
-          <p class="section-kicker">English Diary</p>
-          <h1>英文日记本</h1>
+          <p class="section-kicker">中文日记</p>
+          <h1>我的日记本</h1>
         </div>
       </div>
       <div class="diary-rule-strip" aria-label="日记完成规则">
         <span><CalendarDays :size="18" aria-hidden="true" /> 每日一篇</span>
-        <span><CheckCircle2 :size="18" aria-hidden="true" /> {{ minimumWords }}+ 词</span>
+        <span><CheckCircle2 :size="18" aria-hidden="true" /> {{ minimumCharacters }}+ 字</span>
         <span><Clock3 :size="18" aria-hidden="true" /> 完成 +{{ rewardMinutes }} 分钟</span>
       </div>
     </header>
@@ -179,7 +179,7 @@ function entryStatus(entry) {
       <section class="panel diary-editor-panel" aria-labelledby="diary-editor-title">
         <header class="diary-panel-head">
           <div>
-            <p class="section-kicker">{{ isToday ? "Today" : "Archive" }}</p>
+            <p class="section-kicker">{{ isToday ? "今日日记" : "日记回顾" }}</p>
             <h2 id="diary-editor-title">{{ formatDate(selectedDate) }}</h2>
           </div>
           <div class="diary-editor-actions">
@@ -193,30 +193,30 @@ function entryStatus(entry) {
         </header>
 
         <label class="diary-title-field">
-          <span>Title</span>
+          <span>标题</span>
           <input
             v-model="draft.title"
             type="text"
             :maxlength="titleMaxChars"
             :readonly="!isToday"
-            placeholder="A small moment from today"
+            placeholder="记录今天的一件小事"
           >
         </label>
         <label class="diary-body-field">
-          <span class="sr-only">Diary</span>
+          <span class="sr-only">日记正文</span>
           <textarea
             v-model="draft.body"
             :maxlength="bodyMaxChars"
             :readonly="!isToday"
-            placeholder="Today I..."
+            placeholder="今天，我……"
           />
         </label>
 
         <footer class="diary-editor-footer">
           <div class="diary-progress-block">
             <div class="diary-progress-copy">
-              <strong>{{ wordCount }} / {{ minimumWords }} words</strong>
-              <span v-if="wordsRemaining">还差 {{ wordsRemaining }} 词</span>
+              <strong>{{ characterCount }} / {{ minimumCharacters }} 字</strong>
+              <span v-if="charactersRemaining">还差 {{ charactersRemaining }} 字</span>
               <span v-else>已达到完成字数</span>
             </div>
             <div class="diary-progress-track" aria-hidden="true">
@@ -239,7 +239,7 @@ function entryStatus(entry) {
       <aside class="panel diary-feedback-panel" aria-labelledby="diary-feedback-title">
         <header class="diary-panel-head">
           <div>
-            <p class="section-kicker">AI Writing Coach</p>
+            <p class="section-kicker">AI 日记助手</p>
             <h2 id="diary-feedback-title">写作意见</h2>
           </div>
           <strong v-if="hasGuidance" class="diary-score">{{ guidance.score }}</strong>
@@ -281,7 +281,7 @@ function entryStatus(entry) {
         <div v-else class="diary-feedback-empty">
           <Sparkles :size="32" aria-hidden="true" />
           <strong>{{ draft.completedAt ? "AI 指导正在准备" : "写完后，AI 老师会在这里留下意见" }}</strong>
-          <span>会指出亮点、具体修改方法和可参考的英文句子。</span>
+          <span>会指出亮点、具体修改方法和可参考的中文句子。</span>
         </div>
       </aside>
     </div>

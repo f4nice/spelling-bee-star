@@ -9,11 +9,11 @@ os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
 
 from app.database import Base
 from app.main import (
-    DIARY_MIN_WORDS,
+    DIARY_MIN_CHARACTERS,
     DIARY_REWARD_MINUTES,
     award_diary_play_time,
     cat_world_play_time_reward_source,
-    diary_english_word_count,
+    diary_chinese_character_count,
     parse_diary_guidance_result,
     save_daily_diary,
 )
@@ -28,9 +28,9 @@ class DiaryTest(unittest.TestCase):
     def tearDown(self):
         self.engine.dispose()
 
-    def test_diary_counts_only_english_words(self):
-        self.assertEqual(diary_english_word_count("Today I'm happy. 今天很好。 2026"), 3)
-        self.assertEqual(diary_english_word_count("well-written can't stop"), 3)
+    def test_diary_counts_only_chinese_characters(self):
+        self.assertEqual(diary_chinese_character_count("Today I'm happy. 今天很好。 2026"), 4)
+        self.assertEqual(diary_chinese_character_count("春风，细雨！"), 4)
 
     def test_guidance_parser_accepts_structured_json_fence(self):
         guidance = parse_diary_guidance_result(
@@ -40,10 +40,10 @@ class DiaryTest(unittest.TestCase):
               "overall": "内容真诚，时间顺序清楚。",
               "strengths": ["具体写出了放学后的感受。"],
               "suggestions": [
-                {"title": "补充连接词", "guidance": "用 because 说明原因。", "example": "I smiled because I felt proud."}
+                {"title": "补充感受", "guidance": "写出开心的原因。", "example": "想到今天的努力有了结果，我忍不住笑了。"}
               ],
               "corrections": [
-                {"original": "I am go home.", "better": "I went home.", "reason": "日记讲过去的事情时使用过去时。"}
+                {"original": "我高兴的回家。", "better": "我高兴地回家。", "reason": "修饰动作时使用“地”。"}
               ],
               "nextFocus": "下一篇可以多写一个声音或动作细节。"
             }
@@ -51,22 +51,22 @@ class DiaryTest(unittest.TestCase):
         )
 
         self.assertEqual(guidance["score"], 88)
-        self.assertEqual(guidance["suggestions"][0]["example"], "I smiled because I felt proud.")
-        self.assertEqual(guidance["corrections"][0]["better"], "I went home.")
+        self.assertEqual(guidance["suggestions"][0]["example"], "想到今天的努力有了结果，我忍不住笑了。")
+        self.assertEqual(guidance["corrections"][0]["better"], "我高兴地回家。")
 
     def test_daily_diary_reward_is_granted_only_once(self):
         diary_date = date(2026, 8, 16)
         phone = "13900000000"
-        body = " ".join(f"word{index}" for index in range(DIARY_MIN_WORDS))
+        body = "今" * DIARY_MIN_CHARACTERS
         with Session(self.engine) as db:
             entry = save_daily_diary(
                 db,
                 phone,
-                {"title": "A Busy Sunday", "body": body},
+                {"title": "忙碌的星期天", "body": body},
                 diary_date,
             )
             entry.completed_at = datetime(2026, 8, 16, 20, 0)
-            self.assertEqual(entry.word_count, DIARY_MIN_WORDS)
+            self.assertEqual(entry.word_count, DIARY_MIN_CHARACTERS)
             self.assertTrue(award_diary_play_time(db, entry, datetime(2026, 8, 16, 20, 1)))
             self.assertFalse(award_diary_play_time(db, entry, datetime(2026, 8, 16, 20, 2)))
             db.commit()

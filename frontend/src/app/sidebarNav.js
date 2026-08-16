@@ -4,7 +4,7 @@ export const sidebarNavItems = [
   { label: "我的作文集", path: "/essays", routes: ["essays"] },
   { label: "AI Debate", path: "/debate", routes: ["debate"] },
   { label: "英文小报", path: "/newspaper", routePrefix: "newspaper" },
-  { label: "英文日记本", path: "/diary", routes: ["diary"] },
+  { label: "日记本", path: "/diary", routes: ["diary"] },
   { label: "好词好句", path: "/booklearner", routes: ["booklearner", "booklearnerQuotes", "booklearnerUpload", "booklearnerDetail"] },
   { label: "SPB-个人赛冠军词库", path: "/spb", routes: ["spb"], collection: "individual" },
   { label: "我的生词本", path: "/wrong-words", routes: ["wrongWords"], countKey: "wrongWordCount" },

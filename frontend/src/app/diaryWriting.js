@@ -1,11 +1,11 @@
-export function countDiaryWords(value) {
-  return (String(value || "").match(/[A-Za-z]+(?:[-'][A-Za-z]+)*/g) || []).length;
+export function countDiaryCharacters(value) {
+  return (String(value || "").match(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/g) || []).length;
 }
 
-export function diaryWordsRemaining(value, minimumWords = 100) {
-  return Math.max(Number(minimumWords || 0) - countDiaryWords(value), 0);
+export function diaryCharactersRemaining(value, minimumCharacters = 100) {
+  return Math.max(Number(minimumCharacters || 0) - countDiaryCharacters(value), 0);
 }
 
-export function diaryWritingProgress(value, minimumWords = 100) {
-  return Math.min(countDiaryWords(value) / Math.max(Number(minimumWords || 0), 1), 1);
+export function diaryWritingProgress(value, minimumCharacters = 100) {
+  return Math.min(countDiaryCharacters(value) / Math.max(Number(minimumCharacters || 0), 1), 1);
 }

@@ -118,8 +118,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260816-001"
-DEFAULT_PAGE_VERSION = "v20260816.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260816-002"
+DEFAULT_PAGE_VERSION = "v20260816.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -135,7 +135,7 @@ ESSAY_TITLE_MAX_CHARS = 120
 ESSAY_BODY_MAX_CHARS = 30000
 DIARY_TITLE_MAX_CHARS = 120
 DIARY_BODY_MAX_CHARS = 12000
-DIARY_MIN_WORDS = 100
+DIARY_MIN_CHARACTERS = 100
 DIARY_REWARD_MINUTES = 10
 SCIENCE_SOURCE_MODE_DEFAULT = "science"
 SCIENCE_SOURCE_MODE_PUBLIC_BOOKS = "public-books"
@@ -6597,26 +6597,29 @@ def chat_completion_text(data: dict[str, Any]) -> str:
 
 
 DIARY_GUIDANCE_SYSTEM_PROMPT = (
-    "You are a warm, specific English diary coach for a student. "
-    "Read the student's diary as a personal reflection, respect their voice and privacy, and give practical teaching feedback. "
-    "Comment on meaning, organization, grammar, and natural vocabulary without rewriting the whole diary or inventing events. "
+    "You are a warm, specific Chinese diary coach for a student. "
+    "The diary is written in Simplified Chinese. Read it as a personal reflection, respect the student's voice and privacy, "
+    "and give practical teaching feedback in Simplified Chinese. "
+    "Comment on content, sequence, concrete details, emotion, sentence clarity, word choice, and punctuation without rewriting "
+    "the whole diary or inventing events. "
     "Return only one valid JSON object with this exact shape: "
     '{"score":0,"overall":"中文总体意见","strengths":["中文优点"],'
-    '"suggestions":[{"title":"中文短标题","guidance":"中文具体建议","example":"英文参考例句"}],'
-    '"corrections":[{"original":"原文英文","better":"修改后的英文","reason":"中文原因"}],'
+    '"suggestions":[{"title":"中文短标题","guidance":"中文具体建议","example":"中文参考例句"}],'
+    '"corrections":[{"original":"原文中文","better":"修改后的中文","reason":"中文原因"}],'
     '"nextFocus":"下一篇日记可关注的一个中文目标"}. '
     "Score is an integer from 0 to 100. Give 2 to 3 real strengths, 3 practical suggestions, and up to 5 corrections. "
-    "Examples must preserve the student's intended meaning. Do not use vague praise, diagnose the student, or include markdown."
+    "All examples and corrections must be in Chinese and preserve the student's intended meaning. "
+    "Do not use vague praise, diagnose the student, or include markdown."
 )
 
 
-def diary_english_word_count(text_value: str | None) -> int:
-    return len(re.findall(r"[A-Za-z]+(?:[-'][A-Za-z]+)*", str(text_value or "")))
+def diary_chinese_character_count(text_value: str | None) -> int:
+    return len(re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]", str(text_value or "")))
 
 
 def clean_diary_title(value: Any, diary_date: date) -> str:
     title = " ".join(str(value or "").split())[:DIARY_TITLE_MAX_CHARS]
-    return title or f"My Diary - {diary_date.isoformat()}"
+    return title or f"{diary_date.month}月{diary_date.day}日 日记"
 
 
 def clean_diary_body(value: Any) -> str:
@@ -6628,7 +6631,7 @@ def diary_guidance_messages(*, title: str, body: str, diary_date: date) -> list[
         {"role": "system", "content": DIARY_GUIDANCE_SYSTEM_PROMPT},
         {
             "role": "user",
-            "content": f"Diary date: {diary_date.isoformat()}\nTitle: {title}\n\nStudent diary:\n{body}",
+            "content": f"日记日期：{diary_date.isoformat()}\n标题：{title}\n\n学生日记：\n{body}",
         },
     ]
 
@@ -6775,7 +6778,7 @@ def serialize_diary_entry(entry: DiaryEntry) -> dict[str, Any]:
         "date": entry.diary_date.isoformat(),
         "title": entry.title,
         "body": entry.body,
-        "wordCount": max(int(entry.word_count or 0), 0),
+        "characterCount": diary_chinese_character_count(entry.body),
         "guidance": normalize_diary_guidance(guidance),
         "aiModel": entry.ai_model or "",
         "completedAt": entry.completed_at.isoformat() if entry.completed_at else "",
@@ -6802,7 +6805,7 @@ def diary_payload(db: Session, request: Request) -> dict[str, Any]:
         "today": today.isoformat(),
         "entries": [serialize_diary_entry(entry) for entry in entries],
         "rules": {
-            "minimumWords": DIARY_MIN_WORDS,
+            "minimumCharacters": DIARY_MIN_CHARACTERS,
             "rewardMinutes": DIARY_REWARD_MINUTES,
             "titleMaxChars": DIARY_TITLE_MAX_CHARS,
             "bodyMaxChars": DIARY_BODY_MAX_CHARS,
@@ -6827,7 +6830,7 @@ def save_daily_diary(
     content_changed = entry.title != title or entry.body != body
     entry.title = title
     entry.body = body
-    entry.word_count = diary_english_word_count(body)
+    entry.word_count = diary_chinese_character_count(body)
     if content_changed:
         entry.ai_guidance = None
         entry.ai_model = None
@@ -6846,7 +6849,7 @@ def award_diary_play_time(db: Session, entry: DiaryEntry, now: datetime | None =
             phone=entry.phone,
             reward_date=entry.diary_date,
             minutes=DIARY_REWARD_MINUTES,
-            reason="英文日记完成奖励",
+            reason="中文日记完成奖励",
             granted_by_phone=entry.phone,
             created_at=awarded_at,
         )
@@ -6883,8 +6886,8 @@ async def vue_complete_diary_api(request: Request, db: Session = Depends(get_db)
     except Exception as exc:
         raise HTTPException(status_code=400, detail="日记数据不是有效 JSON。") from exc
     entry = save_daily_diary(db, user.phone, payload or {})
-    if entry.word_count < DIARY_MIN_WORDS:
-        raise HTTPException(status_code=400, detail=f"英文日记至少需要 {DIARY_MIN_WORDS} 词。")
+    if entry.word_count < DIARY_MIN_CHARACTERS:
+        raise HTTPException(status_code=400, detail=f"中文日记至少需要 {DIARY_MIN_CHARACTERS} 字。")
     db.commit()
     db.refresh(entry)
     try:
@@ -6912,7 +6915,7 @@ async def vue_complete_diary_api(request: Request, db: Session = Depends(get_db)
         .with_for_update()
     )
     if entry is None:
-        raise HTTPException(status_code=404, detail="没有找到今天的英文日记。")
+        raise HTTPException(status_code=404, detail="没有找到今天的日记。")
     completed_at = datetime.utcnow()
     entry.ai_guidance = json.dumps(guidance, ensure_ascii=False)
     entry.ai_model = model

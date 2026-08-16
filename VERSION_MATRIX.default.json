@@ -1,7 +1,7 @@
 {
-  "version": "BIZ-REL-20260816-001",
+  "version": "BIZ-REL-20260816-002",
   "releaseName": "Vue 全站版",
-  "pageVersion": "v20260816.1",
+  "pageVersion": "v20260816.2",
   "footerText": "SpeakEasy",
   "modules": [
     { "label": "首页", "version": "v20260728.2", "status": "优化" },
@@ -10,7 +10,7 @@
     { "label": "我的作文集", "version": "v20260801.3", "status": "优化" },
     { "label": "AI Debate", "version": "v20260729.3", "status": "优化" },
     { "label": "英文小报", "version": "v20260728.2", "status": "优化" },
-    { "label": "英文日记本", "version": "v20260816.1", "status": "新增" },
+    { "label": "日记本", "version": "v20260816.2", "status": "优化" },
     { "label": "好词好句", "version": "v20260728.2", "status": "优化" },
     { "label": "SPB", "version": "v20260728.2", "status": "优化" },
     { "label": "我的生词本", "version": "v20260728.2", "status": "优化" },
