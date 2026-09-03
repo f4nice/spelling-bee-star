@@ -41,6 +41,7 @@ const activeGroup = computed(
 const totalSyncedWords = computed(() => syncedGroups.value.reduce((total, group) => total + Number(group.total_count || 0), 0));
 const totalSyncedLists = computed(() => syncedGroups.value.reduce((total, group) => total + Number(group.list_count || 0), 0));
 const activeSyncJob = computed(() => {
+  if (syncJob.value?.key === "__all__") return syncJob.value;
   if (!syncJob.value || syncJob.value.key !== activeGroup.value?.key) return null;
   return syncJob.value;
 });
@@ -171,7 +172,7 @@ function applyRunningSyncJob(job, notice = "") {
   if (!job?.id || !ACTIVE_SYNC_STATUSES.has(job.status)) return false;
   syncJob.value = job;
   syncingKey.value = job.key || "";
-  if (job.key) activeKey.value = job.key;
+  if (job.key && job.key !== "__all__") activeKey.value = job.key;
   syncNotice.value = notice || job.message || "正在恢复同步进度...";
   rememberSyncJob(job);
   pollSyncJob(job.id, job.key || activeKey.value);
@@ -216,7 +217,7 @@ async function pollSyncJob(jobId, groupKey) {
     }
     if (payload.collection) {
       pageData.value = payload;
-      activeKey.value = payload.job?.key || groupKey;
+      if (payload.job?.key !== "__all__") activeKey.value = payload.job?.key || groupKey;
     }
     const status = payload.job?.status;
     if (status === "complete") {
@@ -238,6 +239,26 @@ async function pollSyncJob(jobId, groupKey) {
     }
     syncingKey.value = "";
     syncNotice.value = error.message || "同步状态获取失败，请稍后再试。";
+  }
+}
+
+async function refreshAllGroups() {
+  if (syncingKey.value) return;
+  syncingKey.value = "__all__";
+  syncNotice.value = "正在创建获取任务…";
+  try {
+    const payload = await fetchJson(routeApiPaths.spbRefreshAll(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ collection: activeCollection.value.key || INDIVIDUAL_COLLECTION_KEY }),
+      skipCache: true,
+    });
+    syncJob.value = payload.job;
+    rememberSyncJob(payload.job);
+    pollSyncJob(payload.job.id, "__all__");
+  } catch (error) {
+    syncingKey.value = "";
+    syncNotice.value = error.message || "获取失败，请稍后重试。";
   }
 }
 
@@ -286,6 +307,21 @@ onBeforeUnmount(clearSyncPoll);
 
 <template>
   <section class="spb-page">
+    <section class="panel" aria-label="获取全部最新词库">
+      <button type="button" :disabled="Boolean(syncingKey)" @click="refreshAllGroups">
+        {{ syncingKey === '__all__' ? '获取中…' : '获取最新词库' }}
+      </button>
+      <p>一次获取全部组别的最新词表，补入新增单词，保留原分表和学习记录。音频和释义可在各组“更新详情”。</p>
+      <p v-if="syncNotice" role="status">{{ syncNotice }}</p>
+      <template v-if="syncJob?.key === '__all__'">
+        <p role="status">{{ syncJob.message }}（{{ syncJob.processed || 0 }} / {{ syncJob.total || 0 }} 组）</p>
+        <ul v-if="syncJob.results?.length">
+          <li v-for="result in syncJob.results" :key="result.key">
+            {{ result.title }}：{{ result.status === 'complete' ? `线上 ${result.source_count} 词，新增 ${result.added_count} 词` : result.message }}
+          </li>
+        </ul>
+      </template>
+    </section>
     <section class="panel app-page-heading spb-heading">
       <div class="page-heading-title">
         <p class="section-kicker">SPB</p>
@@ -343,7 +379,7 @@ onBeforeUnmount(clearSyncPoll);
             v-if="canSyncGroup(activeGroup)"
             class="primary-action-button"
             type="button"
-            :disabled="syncingKey === activeGroup.key"
+            :disabled="Boolean(syncingKey)"
             @click="syncGroup(activeGroup)"
           >
             {{ syncButtonText(activeGroup) }}

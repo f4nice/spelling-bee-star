@@ -13,6 +13,32 @@ from app.models import Word, WordList, WordListItem
 
 
 class SpbRefreshTest(unittest.TestCase):
+    def test_fetch_previously_unsynced_group_splits_at_500(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        group = m.spb_collection_group_by_keys("individual", "intermediate")[1]
+        with Session(engine) as db:
+            self.assertEqual(m.append_missing_spb_words(db, group, [{"word": f"new{i}"} for i in range(501)]), 501)
+            lists = m.spb_word_lists_for_group(db, group)
+            counts = [db.scalar(select(func.count(WordListItem.id)).where(WordListItem.word_list_id == wl.id)) for wl in lists]
+            self.assertEqual(counts, [500, 1])
+        engine.dispose()
+
+    def test_all_groups_continue_after_failure(self):
+        groups = [{"key": key, "title": key} for key in ["beginner", "intermediate", "advanced"]]
+        job_id = "test-refresh-all"
+        m.SPB_SYNC_JOBS[job_id] = {"status": "queued"}
+        try:
+            with patch.object(m, "SessionLocal"), patch.object(m, "spb_collection_by_key", return_value={"groups": groups}), patch.object(m, "fetch_spb_source_rows_from_miniprogram", side_effect=[([{"word": "one"}], Path()), ([], Path()), ([{"word": "two"}], Path())]), patch.object(m, "append_missing_spb_words", return_value=1) as append:
+                m.run_spb_refresh_all_job(job_id, "individual")
+            job = m.spb_sync_job_snapshot(job_id)
+            self.assertEqual(job["status"], "failed")
+            self.assertEqual(job["processed"], 3)
+            self.assertEqual([r["status"] for r in job["results"]], ["complete", "failed", "complete"])
+            self.assertEqual(append.call_count, 2)
+        finally:
+            m.SPB_SYNC_JOBS.pop(job_id, None)
+
     def test_live_api_precedes_old_public_file(self):
         live = ([{"word": str(i)} for i in range(2400)], Path("live.json"))
         with patch.object(m, "fetch_spb_source_rows_from_miniprogram", return_value=live), patch.object(m, "fetch_spb_source_rows_from_url") as public:

@@ -9503,6 +9503,59 @@ def run_spb_sync_job(
         db.close()
 
 
+def run_spb_refresh_all_job(job_id: str, collection_key: str) -> None:
+    db = SessionLocal()
+    results = []
+    groups = spb_collection_by_key(collection_key).get("groups", [])
+    try:
+        for index, group in enumerate(groups):
+            update_spb_sync_job(job_id, status="running", current_word=group["title"],
+                                message=f"正在获取 {group['title']} 的最新词表…")
+            try:
+                if group.get("status") == "locked":
+                    raise ValueError("该组尚未开放")
+                # Explicit refresh must not claim stale public files are current.
+                rows, source = fetch_spb_source_rows_from_miniprogram(group)
+                if not rows:
+                    raise ValueError("实时接口未返回词表，请检查小程序授权后重试")
+                added = append_missing_spb_words(db, group, rows)
+                results.append({"key": group["key"], "title": group["title"],
+                                "status": "complete", "source_count": len(rows), "added_count": added})
+            except Exception:
+                db.rollback()
+                results.append({"key": group["key"], "title": group["title"],
+                                "status": "failed", "message": "未能获取或写入最新词表，请检查授权后重试；已有数据保留。"})
+            update_spb_sync_job(job_id, processed=index + 1, results=list(results))
+        failed = sum(row["status"] == "failed" for row in results)
+        added = sum(row.get("added_count", 0) for row in results)
+        update_spb_sync_job(job_id, status="failed" if failed else "complete", current_word="",
+                            message=f"已检查 {len(groups)} 个组别，补入 {added} 个新词。" +
+                            (f"{failed} 个组别失败，可重试；成功组别已保存。" if failed else "全部词表已获取；原有学习记录保留。"))
+    except Exception:
+        db.rollback()
+        update_spb_sync_job(job_id, status="failed", message="获取中断，请重试；已保存的词表保留。")
+    finally:
+        db.close()
+
+
+@app.post("/api/vue/spb/refresh-all")
+async def vue_spb_refresh_all_api(request: Request, db: Session = Depends(get_db)):
+    payload = await request.json()
+    collection = spb_collection_by_key(str(payload.get("collection") or "individual"))
+    job_id = uuid4().hex
+    with IMAGE_SYNC_LOCK:
+        if any(job.get("collection") == collection["key"] and job.get("status") in {"queued", "running"}
+               for job in SPB_SYNC_JOBS.values()):
+            raise HTTPException(status_code=409, detail="已有同步任务运行中，请完成后再获取全部词库。")
+        job = {"id": job_id, "collection": collection["key"], "key": "__all__",
+               "status": "queued", "stage": "refresh_all", "total": len(collection.get("groups", [])),
+               "processed": 0, "results": [], "message": "准备获取全部组别的最新词表…",
+               "created_at": datetime.utcnow().isoformat(), "updated_at": datetime.utcnow().isoformat()}
+        SPB_SYNC_JOBS[job_id] = job
+    Thread(target=run_spb_refresh_all_job, args=(job_id, collection["key"]), daemon=True).start()
+    return {"job": spb_sync_job_snapshot(job_id)}
+
+
 @app.get("/api/vue/spb")
 def vue_spb_api(collection: str = Query(default="individual"), db: Session = Depends(get_db)):
     return spb_payload(db, collection)
@@ -9517,6 +9570,9 @@ async def vue_spb_sync_api(request: Request, db: Session = Depends(get_db)):
     collection_key = str(payload.get("collection") or "individual").strip() or "individual"
     group_key = str(payload.get("key") or "").strip()
     collection, group = spb_collection_group_by_keys(collection_key, group_key)
+    active = spb_active_sync_job_for_collection(collection["key"])
+    if active and active.get("key") == "__all__":
+        raise HTTPException(status_code=409, detail="正在获取全部词库，请完成后再更新详情。")
     if group.get("status") == "locked":
         raise HTTPException(status_code=400, detail="这组还在小程序里锁定，暂时不能同步")
 
@@ -9585,6 +9641,9 @@ async def vue_spb_backfill_details_api(request: Request, db: Session = Depends(g
     collection_key = str(payload.get("collection") or "individual").strip() or "individual"
     group_key = str(payload.get("key") or "").strip()
     collection, group = spb_collection_group_by_keys(collection_key, group_key)
+    active = spb_active_sync_job_for_collection(collection["key"])
+    if active and active.get("key") == "__all__":
+        raise HTTPException(status_code=409, detail="正在获取全部词库，请完成后再更新详情。")
     words = spb_words_for_group(db, group)
     if not words:
         raise HTTPException(status_code=404, detail="这组还没有同步到 SpeakEasy，先同步词库后再补全详情。")

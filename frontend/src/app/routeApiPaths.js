@@ -41,6 +41,7 @@ export const routeApiPaths = {
   debateTurn: (id) => `/api/vue/debate/${id}/turn`,
   spb: (route = {}) => `/api/vue/spb?collection=${encodeURIComponent(route.params?.collection || "individual")}`,
   spbSync: () => "/api/vue/spb/sync",
+  spbRefreshAll: () => "/api/vue/spb/refresh-all",
   spbSyncStatus: (jobId) => `/api/vue/spb/sync/${encodeURIComponent(jobId)}`,
   spbBackfillDetails: () => "/api/vue/spb/backfill-details",
   lists: () => "/api/vue/lists",
