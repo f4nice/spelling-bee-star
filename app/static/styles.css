@@ -7096,6 +7096,73 @@ button.calendar-day {
   gap: 10px;
 }
 
+.spb-fetch-feedback {
+  padding: 18px 22px;
+  border: 1px solid #cee7dc;
+  background: linear-gradient(120deg, #f1faf6, #fff);
+}
+
+.spb-fetch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #16664e;
+}
+
+.spb-fetch-count {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #dff3ea;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.spb-fetch-feedback > p {
+  margin: 8px 0 12px;
+  color: #526176;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.spb-fetch-progress {
+  display: block;
+  width: 100%;
+  height: 7px;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  accent-color: #218365;
+}
+.spb-fetch-progress::-webkit-progress-bar { background: #e2eee8; }
+.spb-fetch-progress::-webkit-progress-value { background: #218365; border-radius: 999px; }
+.spb-fetch-progress::-moz-progress-bar { background: #218365; }
+
+.spb-fetch-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 8px;
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+}
+.spb-fetch-results li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e0ece6;
+  font-size: 13px;
+  color: #526176;
+}
+.spb-fetch-results strong { color: #243c32; }
+.spb-fetch-results em { color: #177052; font-style: normal; margin-left: auto; }
+.spb-fetch-results .has-error { border-color: #efcfb0; background: #fff8f0; }
+
 .essay-daily-prompt {
   display: grid;
   gap: 9px;

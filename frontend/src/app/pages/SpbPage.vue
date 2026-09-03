@@ -307,17 +307,6 @@ onBeforeUnmount(clearSyncPoll);
 
 <template>
   <section class="spb-page">
-    <section v-if="syncNotice || syncJob?.key === '__all__'" class="panel spb-fetch-feedback" aria-label="获取全部最新词库">
-      <p v-if="syncNotice" role="status">{{ syncNotice }}</p>
-      <template v-if="syncJob?.key === '__all__'">
-        <p role="status">{{ syncJob.message }}（{{ syncJob.processed || 0 }} / {{ syncJob.total || 0 }} 组）</p>
-        <ul v-if="syncJob.results?.length">
-          <li v-for="result in syncJob.results" :key="result.key">
-            {{ result.title }}：{{ result.status === 'complete' ? `线上 ${result.source_count} 词，新增 ${result.added_count} 词` : result.message }}
-          </li>
-        </ul>
-      </template>
-    </section>
     <section class="panel app-page-heading spb-heading">
       <div class="page-heading-title">
         <p class="section-kicker">SPB</p>
@@ -339,6 +328,27 @@ onBeforeUnmount(clearSyncPoll);
          {{ syncingKey === '__all__' ? '获取中…' : '获取最新词库' }}
        </button>
       </div>
+    </section>
+
+    <section v-if="syncNotice || syncJob?.key === '__all__'" class="panel spb-fetch-feedback" aria-label="获取全部最新词库">
+      <header class="spb-fetch-head">
+        <strong>{{ syncJob?.key === '__all__' && syncJob.status === 'complete' ? '词库获取完成' : '词库获取进度' }}</strong>
+        <span v-if="syncJob?.key === '__all__'" class="spb-fetch-count">{{ syncJob.processed || 0 }} / {{ syncJob.total || 0 }} 组</span>
+      </header>
+      <p role="status">{{ syncJob?.key === '__all__' ? syncJob.message : syncNotice }}</p>
+      <template v-if="syncJob?.key === '__all__'">
+        <progress class="spb-fetch-progress" :value="syncJob.processed || 0" :max="syncJob.total || 1" aria-label="全部词库获取进度"></progress>
+        <ul v-if="syncJob.results?.length" class="spb-fetch-results">
+          <li v-for="result in syncJob.results" :key="result.key" :class="{ 'has-error': result.status !== 'complete' }">
+            <strong>{{ result.title }}</strong>
+            <template v-if="result.status === 'complete'">
+              <span>线上 {{ result.source_count }} 词</span>
+              <em>新增 {{ result.added_count }} 词</em>
+            </template>
+            <span v-else>{{ result.message }}</span>
+          </li>
+        </ul>
+      </template>
     </section>
 
     <section v-if="groups.length" class="panel spb-category-panel">
