@@ -9592,8 +9592,12 @@ async def vue_spb_backfill_details_api(request: Request, db: Session = Depends(g
     force_audio_download = bool(payload.get("force_audio_download") or payload.get("forceAudioDownload"))
     if collection["key"] == "individual" and str(group.get("source_url") or "").strip():
         force_audio_download = True
-    resource_applied = apply_word_resources(db, words, include_image=False)
     source_rows, _source_path = load_spb_source_rows(group)
+    if not source_rows:
+        raise HTTPException(status_code=502, detail="未能获取 SPB 词表，请稍后重试。")
+    added_count = append_missing_spb_words(db, group, source_rows)
+    words = spb_words_for_group(db, group)
+    resource_applied = apply_word_resources(db, words, include_image=False)
     source_rows_by_word = {normalize_resource_word(row.get("word")): row for row in source_rows}
     if force_audio_download:
         repair_words = [
@@ -9636,7 +9640,7 @@ async def vue_spb_backfill_details_api(request: Request, db: Session = Depends(g
             "source": "spb-public-detail-audio",
             "force_audio_download": force_audio_download,
             "message": (
-                f"已从公共资源表补齐 {resource_applied} 个；准备{action_label} {len(queued_ids)} 个单词的 SPB 详情和音频来源。"
+                f"已补入 {added_count} 个新词；已从公共资源表补齐 {resource_applied} 个；准备{action_label} {len(queued_ids)} 个单词的 SPB 详情和音频来源。"
             ),
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat(),
@@ -10295,13 +10299,15 @@ def fetch_spb_source_rows_from_url(group: dict[str, Any]) -> tuple[list[dict[str
 
 
 def load_spb_source_rows(group: dict[str, Any]) -> tuple[list[dict[str, Any]], Path]:
-    url_rows, url_source = fetch_spb_source_rows_from_url(group)
-    if url_rows:
-        return url_rows, url_source
-
+    # The authenticated API tracks the current edition; public download URLs
+    # can still point at an older edition with fewer words.
     api_rows, api_source = fetch_spb_source_rows_from_miniprogram(group)
     if api_rows:
         return api_rows, api_source
+
+    url_rows, url_source = fetch_spb_source_rows_from_url(group)
+    if url_rows:
+        return url_rows, url_source
 
     path = spb_cached_source_path(group)
     if path.exists():
@@ -11311,6 +11317,45 @@ def apply_spb_text_fields_to_word(word: Word, row: dict[str, Any]) -> bool:
         word.chinese_definition_locked = True
         changed = True
     return changed
+
+
+def append_missing_spb_words(db: Session, group: dict[str, Any], source_rows: list[dict[str, Any]]) -> int:
+    """Append new edition words without rebuilding lists or changing old IDs."""
+    known = {normalize_resource_word(word.word) for word in spb_words_for_group(db, group)}
+    missing = []
+    for row in source_rows:
+        key = normalize_resource_word(row.get("word"))
+        if key and key not in known:
+            missing.append(row)
+            known.add(key)
+    if not missing:
+        return 0
+    lists = spb_word_lists_for_group(db, group)
+    base_name = clean_list_name(str(group["prefix"]))
+    added = 0
+    while missing:
+        target = lists[-1] if lists else None
+        count = db.scalar(select(func.count(WordListItem.id)).where(
+            WordListItem.word_list_id == target.id
+        )) if target else 500
+        if count >= 500:
+            split_group = get_or_create_word_list_group_by_name(db, base_name)
+            number = len(lists) + 1
+            target = get_or_create_spb_word_list(
+                db, f"{base_name}-{number}", group_id=split_group.id,
+                sequence_offset=(number - 1) * 500,
+            )
+            lists.append(target)
+            count = 0
+        batch, missing = missing[:500 - count], missing[500 - count:]
+        rows = [{**row, "row_number": count + index + 1,
+                 "note": f"SPB {group['title']} {group['subtitle']}"}
+                for index, row in enumerate(batch)]
+        ids = import_rows(rows, db, target)
+        if len(ids) != len(rows):
+            raise HTTPException(status_code=500, detail="SPB 新词未全部导入，请重试；已有学习记录已保留。")
+        added += len(ids)
+    return added
 
 
 def import_spb_word_bank_rows(db: Session, group: dict[str, Any], source_rows: list[dict[str, Any]]) -> tuple[list[int], list[WordList]]:
