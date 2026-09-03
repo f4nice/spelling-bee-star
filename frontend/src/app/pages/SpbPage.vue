@@ -262,6 +262,12 @@ async function refreshAllGroups() {
   }
 }
 
+function listLabel(card) {
+  const name = String(card?.list?.name || "");
+  if (!card.is_new) return name;
+  return name.replace(/^SPB个人赛冠军词库-/, "").replace(/-新增$/, "");
+}
+
 async function syncGroup(group) {
   if (!canSyncGroup(group) || syncingKey.value) return;
   clearSyncPoll();
@@ -421,11 +427,9 @@ onBeforeUnmount(clearSyncPoll);
       </div>
 
       <div v-if="activeGroup.cards?.length" class="spb-list-grid">
-        <article v-for="card in activeGroup.cards" :key="card.list.id" class="spb-list-card" :class="{ 'spb-list-card-new': card.is_new }">
+        <article v-for="card in activeGroup.cards" :key="card.list.id" class="spb-list-card">
           <button class="plain-card-button spb-list-main" type="button" @click="openList(card)">
-            <span v-if="card.is_new" class="spb-new-badge">NEW</span>
-            <strong v-if="card.is_new">新增 +{{ card.count }} 个</strong>
-            <span>{{ card.list.name }}</span>
+            <span><b v-if="card.is_new" class="spb-new-badge">NEW</b>{{ listLabel(card) }}</span>
             <small v-if="challengeRemain(card) > 0">剩余 {{ challengeRemain(card) }} 个待挑战</small>
             <small v-else>可复习</small>
           </button>

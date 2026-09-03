@@ -7163,15 +7163,15 @@ button.calendar-day {
 .spb-fetch-results em { color: #177052; font-style: normal; margin-left: auto; }
 .spb-fetch-results .has-error { border-color: #efcfb0; background: #fff8f0; }
 
-.spb-list-card.spb-list-card-new { border-color: #8dceb3; background: #f2fbf6; }
 .spb-new-badge {
   display: inline-block;
   width: fit-content;
-  padding: 3px 8px;
-  border-radius: 6px;
+  margin-right: 6px;
+  padding: 2px 5px;
+  border-radius: 4px;
   background: #187756;
   color: #fff;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
 }
