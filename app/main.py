@@ -10142,7 +10142,7 @@ def serialize_spb_word_bank_group(db: Session, group: dict[str, Any]) -> dict[st
     word_lists = spb_word_lists_for_group(db, group)
     cards = [serialize_word_list_card(word_list_card(db, word_list)) for word_list in word_lists]
     for card, word_list in zip(cards, word_lists):
-        card["is_new"] = "-新增-" in word_list.name
+        card["is_new"] = is_spb_incremental_list(word_list)
     total_count = len(spb_words_for_group(db, group))
     synced = total_count > 0
     cached_source_count = count_spb_cached_source_words(group)
@@ -11380,6 +11380,10 @@ def apply_spb_text_fields_to_word(word: Word, row: dict[str, Any]) -> bool:
     return changed
 
 
+def is_spb_incremental_list(word_list: WordList) -> bool:
+    return "-新增-" in word_list.name or word_list.name.endswith("-新增")
+
+
 def append_missing_spb_words(db: Session, group: dict[str, Any], source_rows: list[dict[str, Any]]) -> int:
     """Append new edition words without rebuilding lists or changing old IDs."""
     known = {normalize_resource_word(word.word) for word in spb_words_for_group(db, group)}
@@ -11396,7 +11400,7 @@ def append_missing_spb_words(db: Session, group: dict[str, Any], source_rows: li
     # First import uses regular 500-word lists. Later additions get dedicated
     # lists so learners can review only the new vocabulary.
     incremental = bool(lists)
-    targets = [item for item in lists if "-新增-" in item.name] if incremental else lists
+    targets = [item for item in lists if is_spb_incremental_list(item)] if incremental else lists
     added = 0
     while missing:
         target = targets[-1] if targets else None
@@ -11405,10 +11409,10 @@ def append_missing_spb_words(db: Session, group: dict[str, Any], source_rows: li
         )) if target else 500
         if count >= 500:
             split_group = get_or_create_word_list_group_by_name(db, base_name)
-            number = len(targets) + 1
             offset = max((item.sequence_offset for item in lists), default=-500) + 500
+            number = max(len(lists) + 1, offset // 500 + 1)
             target = get_or_create_spb_word_list(
-                db, f"{base_name}-{'新增-' if incremental else ''}{number}", group_id=split_group.id,
+                db, f"{base_name}-{number}{'-新增' if incremental else ''}", group_id=split_group.id,
                 sequence_offset=offset,
             )
             if targets is not lists:

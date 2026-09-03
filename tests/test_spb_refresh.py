@@ -71,11 +71,16 @@ class SpbRefreshTest(unittest.TestCase):
             self.assertEqual(m.append_missing_spb_words(db, group, rows), 100)
             self.assertEqual(len(m.spb_words_for_group(db, group)), 2400)
             self.assertEqual(db.scalar(select(func.count(WordListItem.id)).where(WordListItem.word_list_id == lists[-1].id)), 300)
-            new_lists = [wl for wl in m.spb_word_lists_for_group(db, group) if "-新增-" in wl.name]
+            new_lists = [wl for wl in m.spb_word_lists_for_group(db, group) if m.is_spb_incremental_list(wl)]
             self.assertEqual(len(new_lists), 1)
+            self.assertEqual(new_lists[0].name, f"{group['prefix']}-6-新增")
             self.assertEqual(db.scalar(select(func.count(WordListItem.id)).where(WordListItem.word_list_id == new_lists[0].id)), 100)
             self.assertTrue(set(before).issubset(set(db.execute(select(WordListItem.id, WordListItem.word_id, WordListItem.word_list_id)).all())))
             self.assertEqual(m.append_missing_spb_words(db, group, rows), 0)
+            self.assertEqual(m.append_missing_spb_words(db, group, [{"word": f"term{i}"} for i in range(2901)]), 501)
+            all_lists = m.spb_word_lists_for_group(db, group)
+            self.assertEqual(all_lists[-1].name, f"{group['prefix']}-7-新增")
+            self.assertEqual([db.scalar(select(func.count(WordListItem.id)).where(WordListItem.word_list_id == wl.id)) for wl in all_lists[-2:]], [500, 101])
         engine.dispose()
 
 
