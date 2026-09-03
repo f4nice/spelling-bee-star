@@ -70,7 +70,10 @@ class SpbRefreshTest(unittest.TestCase):
             rows = [{"word": f"term{i}"} for i in range(2400)]
             self.assertEqual(m.append_missing_spb_words(db, group, rows), 100)
             self.assertEqual(len(m.spb_words_for_group(db, group)), 2400)
-            self.assertEqual(db.scalar(select(func.count(WordListItem.id)).where(WordListItem.word_list_id == lists[-1].id)), 400)
+            self.assertEqual(db.scalar(select(func.count(WordListItem.id)).where(WordListItem.word_list_id == lists[-1].id)), 300)
+            new_lists = [wl for wl in m.spb_word_lists_for_group(db, group) if "-新增-" in wl.name]
+            self.assertEqual(len(new_lists), 1)
+            self.assertEqual(db.scalar(select(func.count(WordListItem.id)).where(WordListItem.word_list_id == new_lists[0].id)), 100)
             self.assertTrue(set(before).issubset(set(db.execute(select(WordListItem.id, WordListItem.word_id, WordListItem.word_list_id)).all())))
             self.assertEqual(m.append_missing_spb_words(db, group, rows), 0)
         engine.dispose()

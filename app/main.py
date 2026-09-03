@@ -10141,7 +10141,9 @@ def spb_missing_detail_count(db: Session, group: dict[str, Any]) -> int:
 def serialize_spb_word_bank_group(db: Session, group: dict[str, Any]) -> dict[str, Any]:
     word_lists = spb_word_lists_for_group(db, group)
     cards = [serialize_word_list_card(word_list_card(db, word_list)) for word_list in word_lists]
-    total_count = sum(int(card.get("count") or 0) for card in cards)
+    for card, word_list in zip(cards, word_lists):
+        card["is_new"] = "-新增-" in word_list.name
+    total_count = len(spb_words_for_group(db, group))
     synced = total_count > 0
     cached_source_count = count_spb_cached_source_words(group)
     source_url_configured = bool(str(group.get("source_url") or "").strip())
@@ -11391,20 +11393,27 @@ def append_missing_spb_words(db: Session, group: dict[str, Any], source_rows: li
         return 0
     lists = spb_word_lists_for_group(db, group)
     base_name = clean_list_name(str(group["prefix"]))
+    # First import uses regular 500-word lists. Later additions get dedicated
+    # lists so learners can review only the new vocabulary.
+    incremental = bool(lists)
+    targets = [item for item in lists if "-新增-" in item.name] if incremental else lists
     added = 0
     while missing:
-        target = lists[-1] if lists else None
+        target = targets[-1] if targets else None
         count = db.scalar(select(func.count(WordListItem.id)).where(
             WordListItem.word_list_id == target.id
         )) if target else 500
         if count >= 500:
             split_group = get_or_create_word_list_group_by_name(db, base_name)
-            number = len(lists) + 1
+            number = len(targets) + 1
+            offset = max((item.sequence_offset for item in lists), default=-500) + 500
             target = get_or_create_spb_word_list(
-                db, f"{base_name}-{number}", group_id=split_group.id,
-                sequence_offset=(number - 1) * 500,
+                db, f"{base_name}-{'新增-' if incremental else ''}{number}", group_id=split_group.id,
+                sequence_offset=offset,
             )
-            lists.append(target)
+            if targets is not lists:
+                lists.append(target)
+            targets.append(target)
             count = 0
         batch, missing = missing[:500 - count], missing[500 - count:]
         rows = [{**row, "row_number": count + index + 1,

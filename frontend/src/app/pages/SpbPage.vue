@@ -421,8 +421,10 @@ onBeforeUnmount(clearSyncPoll);
       </div>
 
       <div v-if="activeGroup.cards?.length" class="spb-list-grid">
-        <article v-for="card in activeGroup.cards" :key="card.list.id" class="spb-list-card">
+        <article v-for="card in activeGroup.cards" :key="card.list.id" class="spb-list-card" :class="{ 'spb-list-card-new': card.is_new }">
           <button class="plain-card-button spb-list-main" type="button" @click="openList(card)">
+            <span v-if="card.is_new" class="spb-new-badge">NEW</span>
+            <strong v-if="card.is_new">新增 +{{ card.count }} 个</strong>
             <span>{{ card.list.name }}</span>
             <small v-if="challengeRemain(card) > 0">剩余 {{ challengeRemain(card) }} 个待挑战</small>
             <small v-else>可复习</small>
