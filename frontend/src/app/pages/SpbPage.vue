@@ -307,11 +307,7 @@ onBeforeUnmount(clearSyncPoll);
 
 <template>
   <section class="spb-page">
-    <section class="panel" aria-label="获取全部最新词库">
-      <button type="button" :disabled="Boolean(syncingKey)" @click="refreshAllGroups">
-        {{ syncingKey === '__all__' ? '获取中…' : '获取最新词库' }}
-      </button>
-      <p>一次获取全部组别的最新词表，补入新增单词，保留原分表和学习记录。音频和释义可在各组“更新详情”。</p>
+    <section v-if="syncNotice || syncJob?.key === '__all__'" class="panel spb-fetch-feedback" aria-label="获取全部最新词库">
       <p v-if="syncNotice" role="status">{{ syncNotice }}</p>
       <template v-if="syncJob?.key === '__all__'">
         <p role="status">{{ syncJob.message }}（{{ syncJob.processed || 0 }} / {{ syncJob.total || 0 }} 组）</p>
@@ -328,7 +324,8 @@ onBeforeUnmount(clearSyncPoll);
         <h1>{{ activeCollection.name || "个人赛冠军词库" }}</h1>
         <p>{{ activeCollection.subtitle || "Champion Word Bank for Individual Competitions" }}</p>
       </div>
-      <div class="spb-heading-stats" aria-label="SPB 词库同步状态">
+      <div class="spb-heading-actions">
+       <div class="spb-heading-stats" aria-label="SPB 词库同步状态">
         <span>
           <strong>{{ totalSyncedWords }}</strong>
           已同步单词
@@ -337,6 +334,10 @@ onBeforeUnmount(clearSyncPoll);
           <strong>{{ totalSyncedLists }}</strong>
           分表
         </span>
+       </div>
+       <button type="button" :disabled="Boolean(syncingKey)" @click="refreshAllGroups">
+         {{ syncingKey === '__all__' ? '获取中…' : '获取最新词库' }}
+       </button>
       </div>
     </section>
 
