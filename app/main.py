@@ -125,7 +125,7 @@ LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
 SPB_DETAIL_BACKFILL_BATCH_LIMIT = 300
 SPB_WORD_AUDIO_SOURCE_RULE_VERSION = "lexicon-v1"
-SPB_DETAIL_AUDIO_SOURCE_RULE_VERSION = "compound-v1"
+SPB_DETAIL_AUDIO_SOURCE_RULE_VERSION = "lexicon-v2"
 SCIENCE_DISCOVERY_CACHE_DIR = MEDIA_DIR / "science-discoveries"
 SCIENCE_IMAGE_VERSION = "20260629-no-text-1"
 SCIENCE_DISCOVERY_DATA_VERSION = "20260629-source-mode-1"
@@ -10600,6 +10600,12 @@ def spb_audio_urls_from_payload(payload: Any) -> dict[str, str]:
     example_url = spb_example_audio_url_from_payload(payload)
     definition_url = spb_definition_audio_url_from_payload(payload)
     result: dict[str, str] = {}
+    # Explicitly clear cached audio from the compound entry when the selected
+    # top-level text has no matching lexicon audio.
+    if spb_find_preferred_field(payload, ("exp",)):
+        result["english_example_audio_url"] = example_url or ""
+    if spb_find_preferred_field(payload, ("def",)):
+        result["english_definition_audio_url"] = definition_url or ""
     if spb_looks_like_audio_url(example_url):
         result["english_example_audio_url"] = example_url
     if spb_looks_like_audio_url(definition_url):
@@ -10623,6 +10629,9 @@ def spb_audio_urls_from_payload(payload: Any) -> dict[str, str]:
 
 
 def spb_definition_audio_url_from_payload(payload: Any) -> str | None:
+    if spb_find_preferred_field(payload, ("def",)):
+        lexicon_url = spb_find_preferred_field(payload, ("durl",))
+        return lexicon_url if spb_looks_like_audio_url(lexicon_url) else None
     compound_url = spb_word_compound_audio_url(payload, ("definitionUrl", "definition_url"))
     if spb_looks_like_audio_url(compound_url) and not spb_looks_like_example_audio_url(compound_url):
         return compound_url
@@ -10687,6 +10696,9 @@ def spb_definition_audio_url_from_payload(payload: Any) -> str | None:
 
 
 def spb_example_audio_url_from_payload(payload: Any) -> str | None:
+    if spb_find_preferred_field(payload, ("exp",)):
+        lexicon_url = spb_find_preferred_field(payload, ("eurl",))
+        return lexicon_url if spb_looks_like_audio_url(lexicon_url) else None
     compound_url = spb_word_compound_audio_url(payload, ("sentenceUrl", "sentence_url"))
     if spb_looks_like_audio_url(compound_url):
         return compound_url
@@ -10880,6 +10892,7 @@ def spb_text_fields_from_payload(payload: Any) -> dict[str, str]:
     english_example = spb_find_preferred_field(
         payload,
         (
+            "exp",
             "Sentence",
             "sentence",
             "sentenceEn",
@@ -10891,7 +10904,6 @@ def spb_text_fields_from_payload(payload: Any) -> dict[str, str]:
             "exampleSentence",
             "example",
             "examples",
-            "exp",
             "例句",
         ),
     )
@@ -10934,7 +10946,7 @@ def spb_example_audio_source_key(group: dict[str, Any], word: str | None, exampl
     source_url = str(audio_url or "").strip()
     text = "|".join(part for part in (text, source_url) if part) or str(word or "").strip()
     digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
-    return f"{spb_detail_audio_source_key_prefix(group, 'example')}-{digest}"
+    return spb_detail_audio_source_key_prefix(group, f"example-{digest}")
 
 
 def spb_definition_audio_source_key(
@@ -10947,7 +10959,7 @@ def spb_definition_audio_source_key(
     source_url = str(audio_url or "").strip()
     text = "|".join(part for part in (text, source_url) if part) or str(word or "").strip()
     digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
-    return f"{spb_detail_audio_source_key_prefix(group, 'definition')}-{digest}"
+    return spb_detail_audio_source_key_prefix(group, f"definition-{digest}")
 
 
 def local_audio_url_matches_source_key(audio_url: str | None, source_key: str | None) -> bool:
@@ -11041,7 +11053,7 @@ async def prepare_spb_rows_with_local_audio(
                     if detail_audio_fields.get("english_example_audio_url"):
                         prepared["english_example_audio_url_source"] = "spb-miniprogram"
                     for key, value in {**detail_audio_fields, **detail_text_fields}.items():
-                        if value:
+                        if value or key.endswith("_audio_url"):
                             prepared[key] = value
             for accent, field_name in (("us", "american_audio_url"), ("gb", "british_audio_url")):
                 audio_url = str(prepared.get(field_name) or "").strip()

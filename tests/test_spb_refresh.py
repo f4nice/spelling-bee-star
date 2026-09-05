@@ -27,7 +27,7 @@ class SpbRefreshTest(unittest.TestCase):
         self.assertEqual(fields["english_definition"], payload["def"])
         self.assertEqual(fields["chinese_definition"], payload["chinesemeaning"].strip())
         self.assertEqual(fields["phonetic"], payload["internationalPhoneticAlphabet"])
-        self.assertEqual(fields["english_example"], "Opinions diverge.")
+        self.assertEqual(fields["english_example"], payload["exp"])
         word = Word(word="diverge")
         self.assertTrue(m.apply_spb_text_fields_to_word(word, {**fields, "spb_text_source": "spb-miniprogram"}))
         self.assertEqual(word.english_definition, payload["def"])
@@ -44,6 +44,45 @@ class SpbRefreshTest(unittest.TestCase):
         self.assertEqual(fields["chinese_definition"], "分离")
         self.assertEqual(fields["phonetic"], "/test/")
         self.assertEqual(fields["english_example"], "An example.")
+
+    def test_top_level_meaning_uses_matching_lexicon_audio(self):
+        payload = {
+            "def": "to stretch the neck to see better",
+            "chinesemeaning": "伸长脖子",
+            "exp": "She craned her neck to get a better view.",
+            "durl": "https://cdn.spbcn.org/audio/lexicon/1/crane2.mp3",
+            "eurl": "https://cdn.spbcn.org/audio/lexicon/1/crane3.mp3",
+            "wordCompoundAudio": {
+                "definition": "a big machine for lifting heavy things",
+                "sentence": "The little hut was lifted away by a huge crane.",
+                "definitionUrl": "https://cdn.spbcn.org/crane-definition.mp3",
+                "sentenceUrl": "https://cdn.spbcn.org/crane-sentence.mp3",
+            },
+        }
+        for wrapped in (payload, {"data": payload}):
+            fields = m.spb_text_fields_from_payload(wrapped)
+            audio = m.spb_audio_urls_from_payload(wrapped)
+            self.assertEqual(fields["english_example"], payload["exp"])
+            self.assertEqual(audio["english_definition_audio_url"], payload["durl"])
+            self.assertEqual(audio["english_example_audio_url"], payload["eurl"])
+        payload.pop("eurl")
+        payload.pop("durl")
+        audio = m.spb_audio_urls_from_payload(payload)
+        self.assertEqual(audio["english_example_audio_url"], "")
+        self.assertEqual(audio["english_definition_audio_url"], "")
+        payload["exp"] = " "
+        payload["def"] = ""
+        self.assertEqual(m.spb_text_fields_from_payload(payload)["english_example"], payload["wordCompoundAudio"]["sentence"])
+        self.assertEqual(m.spb_example_audio_url_from_payload(payload), payload["wordCompoundAudio"]["sentenceUrl"])
+
+    def test_detail_audio_cache_keys_keep_text_identity_after_filename_limit(self):
+        group = {"key": "x" * 100}
+        for make_key in (m.spb_example_audio_source_key, m.spb_definition_audio_source_key):
+            old_key = make_key(group, "crane", "A lifting machine.", "https://cdn.spbcn.org/old.mp3")
+            new_key = make_key(group, "crane", "She craned her neck.", "https://cdn.spbcn.org/new.mp3")
+            old_url = f"/media/audio/spb-crane-{old_key[:80]}.mp3"
+            self.assertTrue(m.local_audio_url_matches_source_key(old_url, old_key))
+            self.assertFalse(m.local_audio_url_matches_source_key(old_url, new_key))
 
     def test_fetch_previously_unsynced_group_splits_at_500(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")
