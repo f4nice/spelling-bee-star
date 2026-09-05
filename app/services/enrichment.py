@@ -9,6 +9,7 @@ from app.services.dictionary import FreeDictionaryAudioClient, FreeDictionaryCli
 from app.services.image_storage import is_local_media_url, store_word_image
 from app.services.images import ImageClient
 from app.services.translation import TranslationClient
+from app.services.web_dictionary import CambridgeDictionaryClient
 
 
 UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads"
@@ -39,33 +40,41 @@ async def enrich_word(db: Session, word: Word, *, include_images: bool = True) -
     images = ImageClient()
 
     try:
-        if settings.merriam_webster_api_key:
-            try:
-                entry = await merriam_webster.lookup(word.word)
-            except Exception:
+        try:
+            if settings.merriam_webster_api_key:
+                try:
+                    entry = await merriam_webster.lookup(word.word)
+                except Exception:
+                    entry = await free_dictionary.lookup(word.word)
+            else:
                 entry = await free_dictionary.lookup(word.word)
-        else:
-            entry = await free_dictionary.lookup(word.word)
+        except Exception:
+            entry = await CambridgeDictionaryClient().lookup(word.word)
 
         word.phonetic = word.phonetic or entry.phonetic
         word.part_of_speech = word.part_of_speech or entry.part_of_speech
         if not word.american_audio_locked:
-            word.american_audio_url = entry.american_audio_url
+            word.american_audio_url = word.american_audio_url or entry.american_audio_url
         if not word.british_audio_locked:
-            word.british_audio_url = entry.british_audio_url
+            word.british_audio_url = word.british_audio_url or entry.british_audio_url
         if entry.english_definition and not word.english_definition_locked:
             word.english_definition = word.english_definition or entry.english_definition
         if entry.english_example and not word.english_example_locked:
             word.english_example = word.english_example or entry.english_example
-        word.source = entry.source
+        word.source = word.source or entry.source
 
-        american_audio, british_audio = await audio_client.lookup_audio(word.word)
+        optional_errors: list[str] = []
+        american_audio, british_audio = None, None
+        if (not word.american_audio_url and not word.american_audio_locked) or (not word.british_audio_url and not word.british_audio_locked):
+            try:
+                american_audio, british_audio = await audio_client.lookup_audio(word.word)
+            except Exception:
+                optional_errors.append("在线词典音频暂不可用，将尝试其他发音来源。")
         if not word.american_audio_locked:
             word.american_audio_url = word.american_audio_url or american_audio
         if not word.british_audio_locked:
             word.british_audio_url = word.british_audio_url or british_audio
 
-        optional_errors: list[str] = []
         current_chinese_definition = word.chinese_definition
         natural_definition = naturalize_chinese_definition(word.word, entry.english_definition, None)
         if natural_definition and should_refresh_chinese_definition(
@@ -79,7 +88,7 @@ async def enrich_word(db: Session, word: Word, *, include_images: bool = True) -
             and should_refresh_chinese_definition(word.word, current_chinese_definition, entry.english_definition)
         ):
             try:
-                translated_definition = await translator.translate_definition(entry.english_definition)
+                translated_definition = entry.chinese_definition or await translator.translate_definition(word.english_definition)
                 word.chinese_definition = (
                     naturalize_chinese_definition(word.word, entry.english_definition, translated_definition)
                     or translated_definition

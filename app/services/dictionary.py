@@ -16,6 +16,7 @@ class DictionaryEntry:
     english_definition: str | None = None
     english_example: str | None = None
     source: str | None = None
+    chinese_definition: str | None = None
 
 
 class MerriamWebsterClient:
