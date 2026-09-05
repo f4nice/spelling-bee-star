@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models import Word
-from app.services.audio_storage import is_local_audio_url, store_first_available_audio
+from app.services.audio_storage import is_local_audio_url, store_audio_candidate, store_first_available_audio
 from app.services.dictionary import FreeDictionaryAudioClient, FreeDictionaryClient, MerriamWebsterClient
 from app.services.image_storage import is_local_media_url, store_word_image
 from app.services.images import ImageClient
@@ -112,12 +112,12 @@ async def enrich_word(db: Session, word: Word, *, include_images: bool = True) -
 
         if not word.american_audio_locked and not is_local_audio_url(word.american_audio_url):
             try:
-                word.american_audio_url = await store_first_available_audio(word.word, "us", AUDIO_DIR) or word.american_audio_url
+                word.american_audio_url = await _store_dictionary_audio(word.word, "us", word.american_audio_url) or word.american_audio_url
             except Exception as exc:
                 optional_errors.append(f"美式音频本地化暂不可用: {exc}")
         if not word.british_audio_locked and not is_local_audio_url(word.british_audio_url):
             try:
-                word.british_audio_url = await store_first_available_audio(word.word, "gb", AUDIO_DIR) or word.british_audio_url
+                word.british_audio_url = await _store_dictionary_audio(word.word, "gb", word.british_audio_url) or word.british_audio_url
             except Exception as exc:
                 optional_errors.append(f"英式音频本地化暂不可用: {exc}")
 
@@ -131,6 +131,17 @@ async def enrich_word(db: Session, word: Word, *, include_images: bool = True) -
     db.commit()
     db.refresh(word)
     return word
+
+
+async def _store_dictionary_audio(word: str, accent: str, remote_url: str | None) -> str | None:
+    if remote_url:
+        try:
+            local_url = await store_audio_candidate(word, accent, "online-dictionary", remote_url, AUDIO_DIR)
+            if local_url:
+                return local_url
+        except Exception:
+            pass
+    return await store_first_available_audio(word, accent, AUDIO_DIR)
 
 
 def _friendly_enrichment_error(error: str) -> str:

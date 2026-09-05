@@ -23,6 +23,13 @@ class _Node:
     def text(self):
         return "".join(child.text() if isinstance(child, _Node) else child for child in self.children)
 
+    def tags(self, tag):
+        if self.tag == tag:
+            yield self
+        for child in self.children:
+            if isinstance(child, _Node):
+                yield from child.tags(tag)
+
 
 class _Tree(HTMLParser):
     def __init__(self):
@@ -76,9 +83,21 @@ def parse_cambridge_entry(html, word, source_url):
             english_definition=definition.rstrip(": "),
             english_example=_text(sense, "eg"),
             chinese_definition=_text(sense, "trans"),
+            american_audio_url=_audio(entry, "us"),
+            british_audio_url=_audio(entry, "uk"),
             source=source_url,
         )
     raise RuntimeError("备用词典未收录这个词，或返回的词条不匹配。")
+
+
+def _audio(entry, region):
+    pronunciation = next(entry.find(region), None)
+    if pronunciation:
+        for source in pronunciation.tags("source"):
+            path = source.attrs.get("src", "")
+            if source.attrs.get("type") == "audio/mpeg" and path.startswith("/media/english/"):
+                return "https://dictionary.cambridge.org" + path
+    return None
 
 
 class CambridgeDictionaryClient:

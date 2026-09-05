@@ -15,7 +15,7 @@ from app.services.web_dictionary import parse_cambridge_entry
 class WebDictionaryTest(unittest.TestCase):
     def test_exact_headword_and_same_sense(self):
         html = '''<div class="entry-body__el"><span class="hw">spondylitis</span>
-        <span class="pos">noun</span><span class="us"><span class="ipa">spɒn</span></span>
+        <span class="pos">noun</span><span class="us"><span class="ipa">spɒn</span><audio><source type="audio/mpeg" src="/media/english/us_pron/test.mp3"/></audio></span>
         <div class="def-block"><div class="def">Inflammation of <a>spinal bones</a>:</div>
         <span class="trans">脊柱炎</span><span class="eg">The report mentioned spondylitis.</span></div>
         <div class="def-block"><div class="def">Another sense</div><span class="eg">Wrong sense.</span></div></div>'''
@@ -24,6 +24,8 @@ class WebDictionaryTest(unittest.TestCase):
         self.assertEqual(entry.english_example, "The report mentioned spondylitis.")
         self.assertEqual(entry.chinese_definition, "脊柱炎")
         self.assertEqual(entry.phonetic, "/spɒn/")
+        self.assertEqual(entry.american_audio_url, "https://dictionary.cambridge.org/media/english/us_pron/test.mp3")
+        self.assertIsNone(entry.british_audio_url)
         with self.assertRaises(RuntimeError):
             parse_cambridge_entry(html, "other", "test")
         with self.assertRaises(RuntimeError):
