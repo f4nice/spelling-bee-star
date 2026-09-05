@@ -8150,6 +8150,23 @@ def vue_challenge_day_api(day: str, db: Session = Depends(get_db)):
     return challenge_calendar_day_payload(db, challenge_date)
 
 
+def word_membership_tags(db: Session, word_id: int, current_list_id: int | None = None) -> list[dict[str, Any]]:
+    rows = db.execute(
+        select(WordList, WordListGroup.name)
+        .join(WordListItem, WordListItem.word_list_id == WordList.id)
+        .outerjoin(WordListGroup, WordListGroup.id == WordList.group_id)
+        .where(WordListItem.word_id == word_id)
+        .order_by(WordList.display_order.asc(), WordList.id.asc())
+    ).all()
+    tags = [
+        {"id": word_list.id, "name": word_list.name, "group_name": group_name,
+         "is_current": word_list.id == current_list_id}
+        for word_list, group_name in rows
+        if not is_wrong_word_list_name(word_list.name)
+    ]
+    return sorted(tags, key=lambda tag: not tag["is_current"])
+
+
 @app.get("/api/vue/words/{word_id}")
 def vue_word_detail_api(
     word_id: int,
@@ -8193,6 +8210,7 @@ def vue_word_detail_api(
         "audio_sources": audio_sources,
         "media_sources": word_media_sources(db, word, audio_sources=audio_sources),
         "navigation": nav,
+        "word_lists": word_membership_tags(db, word.id, nav.get("list_id")),
     }
 
 

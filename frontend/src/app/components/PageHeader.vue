@@ -28,6 +28,19 @@ const isDeleteOpen = ref(false);
 const isDeleting = ref(false);
 const passwordInput = ref(null);
 
+const membershipTags = computed(() => props.route?.name === "wordDetail" ? props.data?.word_lists || [] : []);
+
+function membershipLabel(tag) {
+  const name = String(tag.name || "").replace(/^SPB个人赛冠军词库-/, "");
+  return String(tag.group_name || tag.name || "").startsWith("SPB个人赛冠军词库") ? `SPB · ${name}` : name;
+}
+
+function openMembership(event, tag) {
+  if (!props.go || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  props.go(`/lists/${tag.id}`);
+}
+
 const returnList = computed(() => {
   if (props.route?.name !== "wordDetail") return null;
   const nav = props.data?.navigation || {};
@@ -140,6 +153,16 @@ async function removeWordFromList() {
     <div class="page-heading-title">
       <p class="section-kicker">SpeakEasy</p>
       <h1>{{ routeTitle }}</h1>
+      <nav v-if="membershipTags.length" class="word-membership-tags" aria-label="所属词表">
+        <span class="word-membership-label">所属</span>
+        <a v-for="tag in membershipTags" :key="tag.id" :href="`/lists/${tag.id}`"
+          class="word-membership-tag" :class="{ 'is-current': tag.is_current }"
+          :title="[tag.group_name, tag.name].filter(Boolean).join(' / ')"
+          @click="openMembership($event, tag)">
+          {{ membershipLabel(tag) }}<span v-if="tag.is_current" class="word-membership-current">当前</span>
+        </a>
+      </nav>
+      <p v-else-if="route?.name === 'wordDetail' && data?.word && data?.word_lists" class="word-membership-empty">暂未加入单词表</p>
     </div>
     <div v-if="returnTarget || canRemoveWordFromList" class="page-heading-actions">
       <button
@@ -239,6 +262,13 @@ async function removeWordFromList() {
   font-size: 34px;
   line-height: 1.08;
 }
+
+.word-membership-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 3px; }
+.word-membership-label, .word-membership-empty { color: #718079; font-size: 12px; margin: 0; }
+.word-membership-tag { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 5px 10px; border: 1px solid #d6e5de; border-radius: 999px; background: #fff; color: #536b60; text-decoration: none; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.word-membership-tag.is-current { border-color: #acd7c4; background: #e7f6ee; color: #116d4f; }
+.word-membership-tag:hover, .word-membership-tag:focus-visible { border-color: #16845f; color: #0e694a; background: #ddf2e7; }
+.word-membership-current { flex-shrink: 0; font-size: 10px; font-weight: 700; opacity: .8; }
 
 .page-heading-return-button {
   flex: 0 0 auto;
