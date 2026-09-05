@@ -9,12 +9,16 @@ export function useWordDetailLifecycle({ data, loadRoute, resetImageTools, reset
   }
 
   async function refreshWord() {
+    const wordId = data.value.word.id;
+    const query = window.location.search;
     const form = createWordEditTokenForm();
     if (data.value.navigation?.list_id) {
       form.append("list_id", data.value.navigation.list_id);
     }
-    await fetchJson(wordApiPaths.refresh(data.value.word.id), { method: "POST", body: form });
-    await loadRoute();
+    const result = await fetchJson(wordApiPaths.refresh(wordId), { method: "POST", body: form });
+    const updated = await fetchJson(`/api/vue/words/${wordId}${query}`, { skipCache: true });
+    if (data.value.word?.id === wordId) data.value = updated;
+    return result;
   }
 
   return {
