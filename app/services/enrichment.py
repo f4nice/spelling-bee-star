@@ -61,14 +61,24 @@ async def enrich_word(
                 setattr(word, field, None)
 
     try:
+        free_dictionary_failed = False
+
+        async def lookup_free_dictionary():
+            nonlocal free_dictionary_failed
+            try:
+                return await free_dictionary.lookup(word.word)
+            except Exception:
+                free_dictionary_failed = True
+                raise
+
         try:
             if settings.merriam_webster_api_key:
                 try:
                     entry = await merriam_webster.lookup(word.word)
                 except Exception:
-                    entry = await free_dictionary.lookup(word.word)
+                    entry = await lookup_free_dictionary()
             else:
-                entry = await free_dictionary.lookup(word.word)
+                entry = await lookup_free_dictionary()
         except Exception:
             entry = await CambridgeDictionaryClient().lookup(word.word)
 
@@ -86,7 +96,7 @@ async def enrich_word(
 
         optional_errors: list[str] = []
         american_audio, british_audio = None, None
-        if (not word.american_audio_url and not word.american_audio_locked) or (not word.british_audio_url and not word.british_audio_locked):
+        if not free_dictionary_failed and ((not word.american_audio_url and not word.american_audio_locked) or (not word.british_audio_url and not word.british_audio_locked)):
             try:
                 american_audio, british_audio = await audio_client.lookup_audio(word.word)
             except Exception:
@@ -149,6 +159,8 @@ async def enrich_word(
                 optional_errors.append(f"英式音频本地化暂不可用: {exc}")
 
         word.enrichment_status = "done"
+        if word.american_audio_url and word.british_audio_url:
+            optional_errors = [error for error in optional_errors if error != "在线词典音频暂不可用，将尝试其他发音来源。"]
         word.enrichment_error = "\n".join(optional_errors) or None
     except Exception as exc:
         word.enrichment_status = "failed"

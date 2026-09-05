@@ -95,7 +95,7 @@ def _audio(entry, region):
     if pronunciation:
         for source in pronunciation.tags("source"):
             path = source.attrs.get("src", "")
-            if source.attrs.get("type") == "audio/mpeg" and path.startswith("/media/english/"):
+            if source.attrs.get("type") == "audio/mpeg" and path.startswith(("/media/english/", "/media/english-chinese-simplified/")):
                 return "https://dictionary.cambridge.org" + path
     return None
 

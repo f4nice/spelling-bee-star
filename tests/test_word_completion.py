@@ -41,6 +41,11 @@ class WordCompletionTest(unittest.TestCase):
         self.db.close()
         self.engine.dispose()
 
+    def test_detail_payload_exposes_completion_state_for_recovery_reads(self):
+        for status in ("pending", "done", "failed"):
+            self.word.enrichment_status = status
+            self.assertEqual(m.serialize_word(self.word)["enrichment_status"], status)
+
     def test_complete_spb_skips_online_lookup_and_clears_old_failure(self):
         self.word.enrichment_status = "failed"
         self.word.enrichment_error = "old error"

@@ -8483,6 +8483,10 @@ async def vue_refresh_word(
 
 async def complete_word_from_sources(db: Session, word: Word, *, list_id: int | None = None) -> None:
     """Current-word completion always prefers SPB; the web only fills gaps."""
+    word.enrichment_status = "pending"
+    word.enrichment_error = None
+    db.add(word)
+    db.commit()
     apply_word_resource(db, word, commit=False, include_image=False)
     try:
         await apply_spb_details_to_word(db, word, list_id=list_id, search_all_groups=True)
@@ -10049,6 +10053,8 @@ def serialize_word(word: Word) -> dict[str, Any]:
         "has_playable_audio": has_playable_audio,
         "audio_issue": word.audio_issue,
         "image_issue": word.image_issue,
+        "enrichment_status": word.enrichment_status,
+        "enrichment_error": word.enrichment_error,
     }
 
 
