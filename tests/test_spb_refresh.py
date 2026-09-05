@@ -13,6 +13,38 @@ from app.models import Word, WordList, WordListItem
 
 
 class SpbRefreshTest(unittest.TestCase):
+    def test_miniprogram_detail_fields_include_definitions_and_phonetic(self):
+        payload = {
+            "def": "to move or extend in different directions from a common point : draw apart",
+            "internationalPhoneticAlphabet": "/dɪvɜːrdʒ/",
+            "websterPhoneticAlphabet": "other",
+            "chinesemeaning": " 分叉；相悖；分歧；背离；偏离",
+            "chinesedef": "分离",
+            "exp": "An alternative example.",
+            "wordCompoundAudio": {"definition": "", "sentence": "Opinions diverge."},
+        }
+        fields = m.spb_text_fields_from_payload(payload)
+        self.assertEqual(fields["english_definition"], payload["def"])
+        self.assertEqual(fields["chinese_definition"], payload["chinesemeaning"].strip())
+        self.assertEqual(fields["phonetic"], payload["internationalPhoneticAlphabet"])
+        self.assertEqual(fields["english_example"], "Opinions diverge.")
+        word = Word(word="diverge")
+        self.assertTrue(m.apply_spb_text_fields_to_word(word, {**fields, "spb_text_source": "spb-miniprogram"}))
+        self.assertEqual(word.english_definition, payload["def"])
+        self.assertEqual(word.chinese_definition, payload["chinesemeaning"].strip())
+        self.assertTrue(word.english_definition_locked)
+        self.assertTrue(word.chinese_definition_locked)
+
+    def test_miniprogram_text_fallbacks(self):
+        fields = m.spb_text_fields_from_payload({"data": {
+            "chinesemeaning": " ", "chinesedef": "分离",
+            "internationalPhoneticAlphabet": "", "websterPhoneticAlphabet": "/test/",
+            "exp": "An example.",
+        }})
+        self.assertEqual(fields["chinese_definition"], "分离")
+        self.assertEqual(fields["phonetic"], "/test/")
+        self.assertEqual(fields["english_example"], "An example.")
+
     def test_fetch_previously_unsynced_group_splits_at_500(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(engine)

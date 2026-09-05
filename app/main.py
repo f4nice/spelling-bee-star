@@ -10801,6 +10801,8 @@ def spb_text_fields_from_payload(payload: Any) -> dict[str, str]:
     phonetic = spb_find_preferred_field(
         payload,
         (
+            "internationalPhoneticAlphabet",
+            "websterPhoneticAlphabet",
             "phonetic",
             "phoneticSymbol",
             "phonetic_symbol",
@@ -10836,6 +10838,7 @@ def spb_text_fields_from_payload(payload: Any) -> dict[str, str]:
     english_definition = spb_find_preferred_field(
         payload,
         (
+            "def",
             "Definition",
             "english_definition",
             "englishDefinition",
@@ -10853,6 +10856,8 @@ def spb_text_fields_from_payload(payload: Any) -> dict[str, str]:
     chinese_definition = spb_find_preferred_field(
         payload,
         (
+            "chinesemeaning",
+            "chinesedef",
             "chinese_definition",
             "chineseDefinition",
             "cnDefinition",
@@ -10886,6 +10891,7 @@ def spb_text_fields_from_payload(payload: Any) -> dict[str, str]:
             "exampleSentence",
             "example",
             "examples",
+            "exp",
             "例句",
         ),
     )
