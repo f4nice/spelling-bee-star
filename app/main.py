@@ -62,7 +62,7 @@ from app.models import (
     WordResourcePool,
     WrongWord,
 )
-from app.services.enrichment import enrich_word, naturalize_chinese_definition, should_refresh_chinese_definition
+from app.services.enrichment import enrich_word, missing_dictionary_fields, naturalize_chinese_definition, should_refresh_chinese_definition
 from app.services.excel_importer import parse_preview_from_excel, parse_words_from_preview
 from app.services.audio_storage import audio_candidates_with_dictionary, is_local_audio_url, store_audio_candidate
 from app.services.ai_image_generation import generate_dashscope_prompt_image, generate_word_image
@@ -8477,14 +8477,29 @@ async def vue_refresh_word(
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
+    await complete_word_from_sources(db, word, list_id=list_id)
+    return {"ok": True, "word": serialize_word(word)}
+
+
+async def complete_word_from_sources(db: Session, word: Word, *, list_id: int | None = None) -> None:
+    """Current-word completion always prefers SPB; the web only fills gaps."""
     apply_word_resource(db, word, commit=False, include_image=False)
-    await apply_spb_details_to_word(db, word, list_id=list_id)
+    try:
+        await apply_spb_details_to_word(db, word, list_id=list_id, search_all_groups=True)
+    except (httpx.HTTPError, OSError, ValueError, RuntimeError):
+        # A temporarily unavailable upstream must not prevent online fallback.
+        # Do not include exception text here: requests can contain auth details.
+        logging.getLogger("speakeasy.enrichment").warning("SPB lookup unavailable for word id %s; using missing-field fallback", word.id)
     db.add(word)
     db.commit()
     db.refresh(word)
-    await enrich_word(db, word, include_images=False)
+    if missing_dictionary_fields(word):
+        await enrich_word(db, word, include_images=False, only_missing=True)
+    else:
+        word.enrichment_status = "done"
+        word.enrichment_error = None
+        db.commit()
     remember_word_resource(db, word, commit=True)
-    return {"ok": True, "word": serialize_word(word)}
 
 
 @app.get("/api/vue/newspaper")
@@ -11257,6 +11272,30 @@ def find_spb_source_row_for_word(group: dict[str, Any], word_text: str | None) -
     return next((row for row in rows if normalize_resource_word(row.get("word")) == normalized_word), None)
 
 
+def spb_catalog_groups_for_word(word_text: str | None) -> list[dict[str, Any]]:
+    """Resolve SPB IDs even when the word belongs only to an ordinary list.
+
+    Local source files are the catalog/index, not the detail result: matching
+    groups still go through the live miniprogram lookup below.
+    """
+    normalized = normalize_resource_word(word_text)
+    if not normalized:
+        return []
+    groups = []
+    for group in all_spb_word_bank_groups():
+        path = spb_cached_source_path(group)
+        if not path.is_file():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            rows = normalize_spb_word_rows(extract_spb_word_values(payload), group)
+        except (OSError, ValueError):
+            continue
+        if any(normalize_resource_word(row.get("word")) == normalized for row in rows):
+            groups.append(group)
+    return groups
+
+
 async def apply_spb_details_to_word(
     db: Session,
     word: Word,
@@ -11264,6 +11303,7 @@ async def apply_spb_details_to_word(
     list_id: int | None = None,
     preferred_group: dict[str, Any] | None = None,
     force_audio_download: bool = False,
+    search_all_groups: bool = False,
 ) -> bool:
     changed = False
     candidate_groups: list[dict[str, Any]] = []
@@ -11272,9 +11312,13 @@ async def apply_spb_details_to_word(
     for group in spb_candidate_groups_for_word(db, word, list_id):
         if all(existing.get("prefix") != group.get("prefix") for existing in candidate_groups):
             candidate_groups.append(group)
+    if search_all_groups:
+        for group in spb_catalog_groups_for_word(word.word):
+            if all(existing.get("prefix") != group.get("prefix") for existing in candidate_groups):
+                candidate_groups.append(group)
 
     for group in candidate_groups:
-        row = find_spb_source_row_for_word(group, word.word)
+        row = await asyncio.to_thread(find_spb_source_row_for_word, group, word.word)
         if not row:
             continue
         prepared = dict(row)
@@ -11328,7 +11372,9 @@ async def apply_spb_details_to_word(
                 ),
                 commit=False,
             )
-            return True
+        # Keep the first matching group's sense, even if it was already up to
+        # date. A second group can use a different definition/example.
+        return changed
     return changed
 
 

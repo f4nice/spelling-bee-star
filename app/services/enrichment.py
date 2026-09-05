@@ -31,13 +31,34 @@ BAD_CHINESE_DEFINITION_PATTERNS = (
 )
 
 
-async def enrich_word(db: Session, word: Word, *, include_images: bool = True) -> Word:
+DICTIONARY_FIELDS = (
+    "phonetic", "part_of_speech", "english_definition", "chinese_definition",
+    "english_example", "american_audio_url", "british_audio_url",
+)
+
+
+def missing_dictionary_fields(word: Word) -> list[str]:
+    return [
+        field for field in DICTIONARY_FIELDS
+        if not str(getattr(word, field, None) or "").strip()
+        and not getattr(word, field.removesuffix("_url") + "_locked", False)
+    ]
+
+
+async def enrich_word(
+    db: Session, word: Word, *, include_images: bool = True, only_missing: bool = False,
+) -> Word:
     settings = get_settings()
     merriam_webster = MerriamWebsterClient(settings)
     free_dictionary = FreeDictionaryClient()
     audio_client = FreeDictionaryAudioClient()
     translator = TranslationClient(settings)
     images = ImageClient()
+
+    if only_missing:
+        for field in missing_dictionary_fields(word):
+            if isinstance(getattr(word, field, None), str):
+                setattr(word, field, None)
 
     try:
         try:
@@ -77,20 +98,26 @@ async def enrich_word(db: Session, word: Word, *, include_images: bool = True) -
 
         current_chinese_definition = word.chinese_definition
         natural_definition = naturalize_chinese_definition(word.word, entry.english_definition, None)
-        if natural_definition and should_refresh_chinese_definition(
+        may_update_chinese = not word.chinese_definition_locked and (
+            not only_missing or not (current_chinese_definition or "").strip()
+        )
+        if may_update_chinese and natural_definition and should_refresh_chinese_definition(
             word.word,
             current_chinese_definition,
             entry.english_definition,
         ):
             word.chinese_definition = natural_definition
         elif (
-            not word.chinese_definition_locked
+            may_update_chinese
             and should_refresh_chinese_definition(word.word, current_chinese_definition, entry.english_definition)
         ):
             try:
-                translated_definition = entry.chinese_definition or await translator.translate_definition(word.english_definition)
+                # A fallback dictionary may describe a different sense. Translate
+                # the retained (SPB) definition instead of mixing the two senses.
+                same_definition = (word.english_definition or "").strip() == (entry.english_definition or "").strip()
+                translated_definition = (entry.chinese_definition if same_definition else None) or await translator.translate_definition(word.english_definition)
                 word.chinese_definition = (
-                    naturalize_chinese_definition(word.word, entry.english_definition, translated_definition)
+                    naturalize_chinese_definition(word.word, word.english_definition, translated_definition)
                     or translated_definition
                     or word.chinese_definition
                 )
