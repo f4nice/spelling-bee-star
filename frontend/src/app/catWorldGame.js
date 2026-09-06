@@ -1359,6 +1359,7 @@ class CatWorldScene extends Phaser.Scene {
       });
       this.drawCatShape(container, cat, snapshot.selectedCatId === cat.id, snapshot, behavior);
       this.catContainers.set(cat.id, container);
+      this.scheduleCatMicroAnimation(container, index, cat);
       this.scheduleCatWalk(container, index, cat);
     });
   }
@@ -2654,6 +2655,8 @@ class CatWorldScene extends Phaser.Scene {
   drawCatShape(container, cat, selected, snapshot, behavior = {}) {
     const colors = CAT_COLORS[cat.breedId || cat.id] || CAT_COLORS.mimi;
     const graphics = makeLocalGraphics(this, container);
+    graphics.setData("catBody", true);
+    container.setData("catBody", graphics);
     const energyScore = catEnergyForSnapshot(snapshot, cat);
     const moodScore = catMoodForSnapshot(snapshot, cat);
     graphics.fillStyle(0x203041, 0.18);
@@ -3168,19 +3171,23 @@ class CatWorldScene extends Phaser.Scene {
       const foodTarget = this.foodTargetForCat(cat);
       const restTarget = this.restTargetForCat(cat, index, latestBehavior);
       const careNeedTarget = this.careNeedTarget(cat, index, latestBehavior);
+      const socialTarget = this.socialTargetForCat(cat, index, latestBehavior);
       const goalTarget = this.agentGoalTarget(cat);
       const favoriteTarget = this.favoriteItemTarget(cat);
       const shouldVisitFood = Boolean(foodTarget && Phaser.Math.Between(1, 100) <= foodTarget.priority);
       const shouldVisitRest = !shouldVisitFood && Boolean(restTarget && Phaser.Math.Between(1, 100) <= restTarget.priority);
       const shouldVisitCareNeed = !shouldVisitFood && !shouldVisitRest && Boolean(careNeedTarget && Phaser.Math.Between(1, 100) <= careNeedTarget.priority);
-      const shouldVisitGoal = !shouldVisitFood && !shouldVisitRest && !shouldVisitCareNeed && Boolean(goalTarget && Phaser.Math.Between(1, 100) <= goalTarget.priority);
-      const shouldVisitFavorite = !shouldVisitFood && !shouldVisitRest && !shouldVisitCareNeed && !shouldVisitGoal && Boolean(favoriteTarget && Phaser.Math.Between(1, 100) <= favoriteTarget.priority);
+      const shouldVisitSocial = !shouldVisitFood && !shouldVisitRest && !shouldVisitCareNeed && Boolean(socialTarget && Phaser.Math.Between(1, 100) <= socialTarget.priority);
+      const shouldVisitGoal = !shouldVisitFood && !shouldVisitRest && !shouldVisitCareNeed && !shouldVisitSocial && Boolean(goalTarget && Phaser.Math.Between(1, 100) <= goalTarget.priority);
+      const shouldVisitFavorite = !shouldVisitFood && !shouldVisitRest && !shouldVisitCareNeed && !shouldVisitSocial && !shouldVisitGoal && Boolean(favoriteTarget && Phaser.Math.Between(1, 100) <= favoriteTarget.priority);
       const nextX = shouldVisitFood
         ? foodTarget.x
         : shouldVisitRest
           ? restTarget.x
         : shouldVisitCareNeed
           ? careNeedTarget.x
+        : shouldVisitSocial
+          ? socialTarget.x
         : shouldVisitGoal
           ? goalTarget.x
           : shouldVisitFavorite
@@ -3192,6 +3199,8 @@ class CatWorldScene extends Phaser.Scene {
           ? restTarget.y
         : shouldVisitCareNeed
           ? careNeedTarget.y
+        : shouldVisitSocial
+          ? socialTarget.y
         : shouldVisitGoal
           ? goalTarget.y
           : shouldVisitFavorite
@@ -3220,6 +3229,8 @@ class CatWorldScene extends Phaser.Scene {
             });
           } else if (shouldVisitCareNeed) {
             this.spawnCareNeedBubble(container, cat, careNeedTarget);
+          } else if (shouldVisitSocial) {
+            this.startCatSocialMoment({ cat, index, container, behavior: latestBehavior }, socialTarget);
           } else if (shouldVisitGoal) {
             if (goalTarget.kind === "mischief") {
               this.spawnMischiefBubble(container, cat, goalTarget);
@@ -3234,6 +3245,103 @@ class CatWorldScene extends Phaser.Scene {
       });
     });
     container.setData("walkTimer", walkTimer);
+  }
+
+  scheduleCatMicroAnimation(container, index, cat = {}) {
+    if (!container?.active) return;
+    container.getData("microTimer")?.remove?.(false);
+    const behavior = this.catBehavior(cat, index);
+    const delay = behavior.sleeping
+      ? Phaser.Math.Between(3800, 6200)
+      : Phaser.Math.Between(2600, 5600) + index * 180;
+    const timer = this.time.delayedCall(delay, () => {
+      container.setData("microTimer", null);
+      if (container.active && !container.getData("interactionActive") && this.owner.carriedCat?.catId !== cat.id) {
+        this.playCatMicroAnimation(container, cat, this.catBehavior(cat, index));
+      }
+      if (container.active) this.scheduleCatMicroAnimation(container, index, cat);
+    });
+    container.setData("microTimer", timer);
+  }
+
+  catMicroAnimationKind(cat = {}, behavior = {}) {
+    if (behavior.sleeping) return Phaser.Math.RND.pick(["breathe", "dream", "ear"]);
+    const temperament = String(behavior.temperament || cat.traits?.temperament || "balanced");
+    const pools = {
+      calm: ["blink", "breathe", "listen", "groom"],
+      gentle: ["blink", "groom", "breathe", "tail"],
+      chatty: ["listen", "tail", "blink", "stretch"],
+      guardian: ["listen", "ear", "stretch", "blink"],
+      clingy: ["tail", "blink", "groom", "listen"],
+    };
+    const pool = pools[temperament] || ["blink", "tail", "groom", "stretch", "listen", "breathe"];
+    return Phaser.Math.RND.pick(pool);
+  }
+
+  playCatMicroAnimation(container, cat = {}, behavior = {}) {
+    const body = container.getData("catBody");
+    if (!body?.active) return;
+    const colors = CAT_COLORS[cat.breedId || cat.id] || CAT_COLORS.mimi;
+    const kind = this.catMicroAnimationKind(cat, behavior);
+    const cue = this.add.graphics();
+    cue.setData("catMicroCue", true);
+    container.add(cue);
+
+    if (kind === "blink") {
+      cue.fillStyle(colors.body, 1);
+      cue.fillRect(76, 23, 4, 4);
+      cue.fillRect(88, 23, 4, 4);
+      cue.fillStyle(INK, 1);
+      cue.fillRect(76, 26, 4, 2);
+      cue.fillRect(88, 26, 4, 2);
+      this.time.delayedCall(190, () => cue.destroy());
+      return;
+    }
+
+    if (kind === "tail") {
+      cue.lineStyle(3, colors.shade, 0.92);
+      cue.lineBetween(5, 20, -4, 13);
+      cue.lineBetween(7, 28, -5, 29);
+      this.tweens.add({ targets: cue, x: -5, yoyo: true, repeat: 2, duration: 150, onComplete: () => cue.destroy() });
+      return;
+    }
+
+    if (kind === "groom") {
+      cue.fillStyle(0x87d9ff, 1);
+      cue.fillRect(91, 37, 5, 5);
+      cue.fillRect(101, 45, 4, 4);
+      cue.fillStyle(0xfff07d, 1);
+      cue.fillRect(96, 30, 4, 4);
+      this.tweens.add({ targets: cue, y: -8, alpha: 0, duration: 760, ease: "Cubic.easeOut", onComplete: () => cue.destroy() });
+      return;
+    }
+
+    if (kind === "listen" || kind === "ear") {
+      cue.lineStyle(3, kind === "listen" ? 0xfff07d : colors.shade, 1);
+      cue.lineBetween(78, 4, 72, -4);
+      cue.lineBetween(91, 4, 97, -4);
+      cue.lineBetween(84, 1, 84, -8);
+      this.tweens.add({ targets: cue, alpha: 0, y: -4, duration: 620, ease: "Sine.easeOut", onComplete: () => cue.destroy() });
+      return;
+    }
+
+    cue.destroy();
+    const stretch = kind === "stretch";
+    this.tweens.add({
+      targets: body,
+      y: stretch ? 3 : -2,
+      scaleX: stretch ? 1.06 : 1,
+      scaleY: stretch ? 0.94 : 0.98,
+      yoyo: true,
+      repeat: stretch ? 1 : 2,
+      duration: stretch ? 360 : 520,
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        if (!body.active) return;
+        body.setPosition(0, 0);
+        body.setScale(1);
+      },
+    });
   }
 
   shouldCatIdle(behavior = {}) {
@@ -3269,6 +3377,87 @@ class CatWorldScene extends Phaser.Scene {
     if (behavior.key === "slow") return "今天想慢慢走。";
     if (behavior.key === "night-watch") return "夜巡路线确认中。";
     return Phaser.Math.Between(1, 100) <= 45 ? "停下来观察房间。" : "";
+  }
+
+  socialTargetForCat(cat = {}, index = 0, behavior = {}) {
+    if (!behavior.canWalk || behavior.sleeping || behavior.energy < Number(behavior.restThreshold || 34) + 8) return null;
+    const source = this.catContainers.get(cat.id);
+    if (!source?.active) return null;
+    const candidates = this.roomCatEntries()
+      .filter((entry) => entry.cat.id !== cat.id && entry.behavior.canWalk && !entry.container.getData("interactionActive"))
+      .sort((left, right) => (
+        Phaser.Math.Distance.Between(source.x, source.y, left.container.x, left.container.y)
+        - Phaser.Math.Distance.Between(source.x, source.y, right.container.x, right.container.y)
+      ));
+    const partner = candidates[0];
+    if (!partner) return null;
+    const socialNeed = Number(behavior.socialNeed || 50);
+    const moodBonus = Number(behavior.mood || 0) >= 72 ? 8 : 0;
+    const temperamentBonus = ["clingy", "gentle", "chatty"].includes(behavior.temperament) ? 9 : 0;
+    const approachFromLeft = source.x <= partner.container.x;
+    return {
+      partnerCatId: partner.cat.id,
+      priority: clamp(9 + socialNeed * 0.3 + moodBonus + temperamentBonus, 18, 54),
+      x: clamp(partner.container.x + (approachFromLeft ? -76 : 76), 38, GAME_WIDTH - 132),
+      y: clamp(partner.container.y + Phaser.Math.Between(-12, 12), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+    };
+  }
+
+  startCatSocialMoment(entry, target = {}) {
+    const partner = this.roomCatEntries().find((candidate) => candidate.cat.id === target.partnerCatId);
+    if (!entry?.container?.active || !partner?.container?.active || partner.container.getData("interactionActive")) return false;
+    const pairKey = `social:${[entry.cat.id, partner.cat.id].sort().join(":")}`;
+    const combinedActivity = Number(entry.behavior.activityBias || 50) + Number(partner.behavior.activityBias || 50);
+    const combinedSocial = Number(entry.behavior.socialNeed || 50) + Number(partner.behavior.socialNeed || 50);
+    const styleSeed = Math.abs(hashText(`${entry.cat.id}:${partner.cat.id}:${new Date().getHours()}`)) % 3;
+    const kind = combinedActivity >= 145 || styleSeed === 2 ? "chase" : combinedSocial >= 132 || styleSeed === 1 ? "nuzzle" : "greet";
+    const messages = {
+      chase: ["来追我呀！", "看谁先绕过地毯！"],
+      nuzzle: ["轻轻蹭一下，今天一起待着。", "靠近一点就很安心。"],
+      greet: ["闻闻你，今天也见面啦。", "碰个鼻子，再各自散步。"],
+    };
+    const replies = {
+      chase: "等等我，我也来！",
+      nuzzle: "好呀，一起安静待会儿。",
+      greet: "你好呀，巡逻顺利。",
+    };
+    this.interruptCatAutonomy(entry, pairKey);
+    this.interruptCatAutonomy(partner, pairKey);
+    this.turnCat(entry.container, partner.container.x);
+    this.turnCat(partner.container, entry.container.x);
+    this.spawnCatBubble(entry.container, entry.cat, Phaser.Math.RND.pick(messages[kind]));
+    this.spawnCatBubble(partner.container, partner.cat, replies[kind]);
+    this.spawnCatSocialCue(entry.container, partner.container, kind);
+    const motion = kind === "chase" ? 13 : 5;
+    this.tweens.add({ targets: entry.container, x: entry.container.x + motion, yoyo: true, repeat: kind === "chase" ? 2 : 0, duration: 310, ease: "Sine.easeInOut" });
+    this.tweens.add({ targets: partner.container, x: partner.container.x - motion, yoyo: true, repeat: kind === "chase" ? 2 : 0, duration: 310, ease: "Sine.easeInOut" });
+    const holdMs = kind === "chase" ? 4200 : 3400;
+    this.holdCatInteraction(entry, pairKey, holdMs, { showStatus: false });
+    this.holdCatInteraction(partner, pairKey, holdMs, { showStatus: false });
+    return true;
+  }
+
+  spawnCatSocialCue(left, right, kind) {
+    const x = (left.x + right.x) / 2 + 44;
+    const y = Math.min(left.y, right.y) - 12;
+    const cue = this.add.graphics();
+    cue.setDepth(CAT_INTERACTION_DEPTH + 150);
+    const color = kind === "chase" ? 0xfff07d : kind === "nuzzle" ? 0xff6f9f : 0x87d9ff;
+    cue.fillStyle(color, 1);
+    [[0, 0], [8, -8], [17, 1]].forEach(([offsetX, offsetY], index) => {
+      const size = index === 1 ? 7 : 5;
+      cue.fillRect(x + offsetX, y + offsetY, size, size);
+      cue.fillRect(x + offsetX + size, y + offsetY, size, size);
+      cue.fillRect(x + offsetX + Math.floor(size / 2), y + offsetY + size, size, size);
+    });
+    this.tweens.add({
+      targets: cue,
+      y: -22,
+      alpha: 0,
+      duration: 1500,
+      ease: "Cubic.easeOut",
+      onComplete: () => cue.destroy(),
+    });
   }
 
   agentGoalTarget(cat = {}) {

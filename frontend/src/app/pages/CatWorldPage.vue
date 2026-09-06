@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, ChevronLeft, ChevronRight, Hammer as HammerIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MoveRight as MoveRightIcon, Shovel as ShovelIcon, X as XIcon } from "lucide-vue-next";
+import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, ChevronDown, ChevronLeft, ChevronRight, Hammer as HammerIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MoveRight as MoveRightIcon, Shovel as ShovelIcon, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -81,6 +81,7 @@ const selectedCollectionCatId = ref("");
 const petBusyCatId = ref("");
 const roomCanPan = ref(false);
 const roomPanActive = ref(false);
+const catOsExpanded = ref(false);
 const busySceneId = ref("");
 const busyLocationItemId = ref("");
 const ambientEventCooldowns = new Map();
@@ -2071,19 +2072,31 @@ async function selectCat(catOrId, options = {}) {
       <div v-if="playTimeLocked" class="cat-world-play-lock" role="status" aria-live="polite">
         <section class="cat-world-play-lock-card" aria-labelledby="cat-world-play-lock-title">
           <span class="cat-world-play-lock-icon" aria-hidden="true">
-            <LockIcon :size="34" :stroke-width="2.8" />
+            <LockIcon :size="22" :stroke-width="2.8" />
           </span>
-          <p class="section-kicker">Play Time Ended</p>
-          <h2 id="cat-world-play-lock-title">今日陪伴时间结束</h2>
-          <p>完成今日拼写任务或等待后台发放奖励时间后，猫咪活动区会自动解锁。</p>
-          <strong>{{ playTimeProgressLabel }}</strong>
+          <div>
+            <p class="section-kicker">Observation Mode</p>
+            <h2 id="cat-world-play-lock-title">观察模式</h2>
+            <p>猫咪仍会照常生活；完成学习任务后即可抱猫、喂食和玩耍。</p>
+          </div>
+          <div class="cat-world-observation-actions">
+            <strong>{{ playTimeProgressLabel }}</strong>
+            <span v-if="roomCanPan" aria-label="观察房间镜头">
+              <button type="button" title="观察上一屏" aria-label="观察房间上一屏" @click="panRoomPage(-1)">
+                <ChevronLeft :size="19" :stroke-width="3" aria-hidden="true" />
+              </button>
+              <button type="button" title="观察下一屏" aria-label="观察房间下一屏" @click="panRoomPage(1)">
+                <ChevronRight :size="19" :stroke-width="3" aria-hidden="true" />
+              </button>
+            </span>
+          </div>
         </section>
       </div>
 
       <div
         class="cat-world-play-content"
         :inert="playTimeLocked ? '' : null"
-        :aria-hidden="playTimeLocked ? 'true' : null"
+        :aria-label="playTimeLocked ? '猫咪世界观察模式，互动暂时锁定' : null"
       >
       <p v-if="notice" class="cat-world-notice" aria-live="polite">{{ notice }}</p>
       <div v-if="lostCatRows.length" class="cat-world-lost-alert" role="status">
@@ -2135,21 +2148,35 @@ async function selectCat(catOrId, options = {}) {
           </div>
         </div>
 
-        <div class="cat-world-ai-panel" aria-live="polite">
-          <span>CAT-OS</span>
-          <strong>{{ focusedCat.displayLabel || focusedCat.label || "暂无猫咪" }} · {{ focusedCat.personality || "等待重新领养" }}</strong>
+        <div class="cat-world-ai-panel" :class="{ expanded: catOsExpanded }" aria-live="polite">
+          <header class="cat-world-ai-panel-head">
+            <div>
+              <span>CAT-OS</span>
+              <strong>{{ focusedCat.displayLabel || focusedCat.label || "暂无猫咪" }} · {{ focusedCat.personality || "等待重新领养" }}</strong>
+            </div>
+            <button
+              type="button"
+              :aria-expanded="catOsExpanded"
+              :aria-label="catOsExpanded ? '收起猫咪详细状态' : '展开猫咪详细状态'"
+              @click="catOsExpanded = !catOsExpanded"
+            >
+              <ChevronDown :size="18" :stroke-width="2.8" aria-hidden="true" />
+            </button>
+          </header>
           <p>{{ focusedCatThought }}</p>
-          <div v-if="focusedAgentProfileTags.length" class="cat-world-agent-profile-tags">
-            <span v-for="tag in focusedAgentProfileTags" :key="tag">{{ tag }}</span>
+          <div v-if="catOsExpanded" class="cat-world-ai-panel-details">
+            <div v-if="focusedAgentProfileTags.length" class="cat-world-agent-profile-tags">
+              <span v-for="tag in focusedAgentProfileTags" :key="tag">{{ tag }}</span>
+            </div>
+            <small>{{ focusedCatDailyNote }}</small>
+            <ul v-if="focusedAgentEvents.length" class="cat-world-agent-events">
+              <li v-for="event in focusedAgentEvents" :key="`${event.time}-${event.kind}-${event.message}`">
+                <b>{{ event.time }}</b>
+                <span>{{ event.label }}</span>
+                <em>{{ event.message }}</em>
+              </li>
+            </ul>
           </div>
-          <small>{{ focusedCatDailyNote }}</small>
-          <ul v-if="focusedAgentEvents.length" class="cat-world-agent-events">
-            <li v-for="event in focusedAgentEvents" :key="`${event.time}-${event.kind}-${event.message}`">
-              <b>{{ event.time }}</b>
-              <span>{{ event.label }}</span>
-              <em>{{ event.message }}</em>
-            </li>
-          </ul>
         </div>
 
         <div

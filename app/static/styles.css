@@ -13024,7 +13024,7 @@ select {
 
 .cat-world-ai-panel {
   display: grid;
-  gap: 4px;
+  gap: 5px;
   margin-bottom: 10px;
   border: 4px solid #2c2f3a;
   border-radius: 4px;
@@ -13037,6 +13037,60 @@ select {
   background-size: 12px 12px;
   box-shadow: 4px 4px 0 #2c2f3a;
   font-family: Consolas, "Courier New", monospace;
+}
+
+.cat-world-ai-panel-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.cat-world-ai-panel-head > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cat-world-ai-panel-head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cat-world-ai-panel-head button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 2px solid #65ffc8;
+  border-radius: 3px;
+  padding: 0;
+  color: #d6fff0;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+
+.cat-world-ai-panel-head button:hover,
+.cat-world-ai-panel-head button:focus-visible {
+  color: #fff;
+  background: #65ffc8;
+}
+
+.cat-world-ai-panel-head button svg {
+  transition: transform 180ms ease;
+}
+
+.cat-world-ai-panel.expanded .cat-world-ai-panel-head button svg {
+  transform: rotate(180deg);
+}
+
+.cat-world-ai-panel-details {
+  display: grid;
+  gap: 4px;
+  padding-top: 2px;
 }
 
 .cat-world-ai-panel span {
@@ -15827,31 +15881,25 @@ select {
 }
 
 .cat-world-play-lock {
-  position: absolute;
-  inset: 0;
-  z-index: 70;
-  padding: 18px;
-  cursor: not-allowed;
-  background: rgba(32, 48, 64, 0.72);
+  position: sticky;
+  top: 76px;
+  z-index: 68;
+  padding: 0 16px;
 }
 
 .cat-world-play-lock-card {
-  position: fixed;
-  top: 50%;
-  left: 50%;
   display: grid;
-  justify-items: center;
-  gap: 8px;
-  width: min(460px, calc(100vw - 48px));
-  margin: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0 auto;
   border: 4px solid #2c2f3a;
-  border-radius: 6px;
-  padding: 22px;
+  border-radius: 4px;
+  padding: 10px 12px;
   color: #203040;
   background: #fff8df;
-  box-shadow: 8px 8px 0 #2c2f3a;
-  text-align: center;
-  transform: translate(-50%, -50%);
+  box-shadow: 5px 5px 0 #2c2f3a;
 }
 
 .cat-world-play-lock-card h2,
@@ -15863,24 +15911,58 @@ select {
   max-width: 38em;
   color: #526178;
   font-weight: 800;
-  line-height: 1.55;
+  line-height: 1.4;
 }
 
-.cat-world-play-lock-card > strong {
+.cat-world-observation-actions {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  border-left: 2px solid #d7cfb5;
+  padding-left: 12px;
+}
+
+.cat-world-observation-actions > strong {
   color: #176f58;
   font-size: 13px;
+  white-space: nowrap;
+}
+
+.cat-world-observation-actions > span {
+  display: flex;
+  gap: 6px;
+}
+
+.cat-world-observation-actions button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 28px;
+  border: 2px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 0;
+  color: #263047;
+  background: #fff07d;
+  box-shadow: 2px 2px 0 #2c2f3a;
+  cursor: pointer;
+}
+
+.cat-world-observation-actions button:hover,
+.cat-world-observation-actions button:focus-visible {
+  color: #fff;
+  background: #1d7f5b;
 }
 
 .cat-world-play-lock-icon {
   display: grid;
   place-items: center;
-  width: 58px;
-  height: 58px;
+  width: 40px;
+  height: 40px;
   border: 3px solid #2c2f3a;
   border-radius: 4px;
   color: #2c2f3a;
   background: #fff07d;
-  box-shadow: 4px 4px 0 #2c2f3a;
+  box-shadow: 3px 3px 0 #2c2f3a;
 }
 
 @media (max-width: 1120px) {
@@ -15901,12 +15983,29 @@ select {
   }
 
   .cat-world-play-lock {
-    padding: 12px;
+    top: 68px;
+    padding: 0 8px;
   }
 
   .cat-world-play-lock-card {
-    width: min(100%, calc(100vw - 40px));
-    padding: 18px 14px;
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 9px;
+  }
+
+  .cat-world-observation-actions {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    justify-items: start;
+    width: 100%;
+    border-top: 2px solid #d7cfb5;
+    border-left: 0;
+    padding-top: 7px;
+    padding-left: 0;
+  }
+
+  .cat-world-observation-actions > strong {
+    white-space: normal;
   }
 }
 
