@@ -341,6 +341,7 @@ const roomLayout = computed(() => state.value.roomLayout || {});
 const styleOptions = computed(() => state.value.styleOptions || {});
 const dailyLogs = computed(() => state.value.dailyLogs || {});
 const catBonds = computed(() => state.value.catBonds || {});
+const catSocial = computed(() => state.value.catSocial || {});
 const lostCats = computed(() => state.value.lostCats || {});
 const lostCatRows = computed(() => Object.values(lostCats.value));
 const hygiene = computed(() => state.value.hygiene || {});
@@ -710,6 +711,10 @@ const catAgentDiaries = computed(() =>
         : [];
       const hygieneInfo = log.hygiene || agent.hygiene || {};
       const neglect = log.neglect || agent.neglect || {};
+      const social = catSocial.value[cat.id] || {};
+      const socialCompanionLabel = social.favoritePartnerId
+        ? `${social.favoritePartnerLabel} · ${social.favoritePartnerLevelLabel} ${social.favoritePartnerScore}`
+        : "还没有猫咪伙伴";
       return {
         ...cat,
         attention: clampCatScore(agent.attention ?? 0),
@@ -737,6 +742,7 @@ const catAgentDiaries = computed(() =>
         voiceLine: agent.voiceLine || "",
         playStyleLabel: agent.playStyleLabel || "玩耍节奏稳定",
         socialStyleLabel: agent.socialStyleLabel || "陪伴需求稳定",
+        socialCompanionLabel,
         carePreferenceLabel: traits.label || agent.carePreferenceLabel || "",
         sleepLabel: traits.nightOwl ? `夜猫子 · ${sleepStart}-${sleepEnd}` : `${sleepStart}-${sleepEnd}`,
         routineLabel: traits.routine || agent.routine || "观察房间里的学习节奏",
@@ -755,7 +761,7 @@ const catAgentDiaries = computed(() =>
         comfortLabel: agent.comfortLabel || "暂无道具减耗",
         favoriteItemLabel,
         activeFavoriteLabel: activeFavoriteLabels.length ? activeFavoriteLabels.join("、") : "喜欢的家具还没摆出来",
-        countsLabel: `食物 ${log.foodCount || 0} · 玩具 ${log.toyCount || 0} · 摸摸 ${agent.petCount || 0}`,
+        countsLabel: `食物 ${log.foodCount || 0} · 玩具 ${log.toyCount || 0} · 摸摸 ${agent.petCount || 0} · 同伴 ${social.todayEventCount || 0}`,
         bondLabel: `${cat.bondLabel} · ${cat.bondScore}/100`,
         bondDetailLabel: cat.bondDetailLabel,
         damageLabel: damagedItem
@@ -812,6 +818,7 @@ const gameSnapshot = computed(() => ({
   activeCare: gameActiveCare.value,
   hygiene: hygiene.value,
   dailyLogs: gameDailyLogs.value,
+  socialCircle: catSocial.value,
   ownedCats: roomCats.value.map((cat) => cat.id),
   ownedFoodCount: ownedFoodCount.value,
   roomStyles: roomStyles.value,
@@ -3159,6 +3166,7 @@ async function selectCat(catOrId, options = {}) {
           <div><dt>今日参数</dt><dd>{{ activeCatDiary.personaLabel }} · {{ activeCatDiary.dailyProfileLabel || "状态稳定" }}</dd></div>
           <div><dt>今日愿望</dt><dd>{{ activeCatDiary.dailyWish || "想安静陪你学习" }}</dd></div>
           <div><dt>相处方式</dt><dd>{{ activeCatDiary.socialStyleLabel }}</dd></div>
+          <div><dt>猫咪伙伴</dt><dd>{{ activeCatDiary.socialCompanionLabel }}</dd></div>
           <div><dt>玩耍倾向</dt><dd>{{ activeCatDiary.playStyleLabel }}</dd></div>
           <div><dt>照顾偏好</dt><dd>{{ activeCatDiary.carePreferenceLabel || "保持房间稳定整洁" }}</dd></div>
           <div><dt>卫生性格</dt><dd>{{ activeCatDiary.cleanlinessLabel }} · {{ activeCatDiary.cleanliness }}/100</dd></div>

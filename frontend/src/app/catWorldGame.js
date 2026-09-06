@@ -35,6 +35,7 @@ const INK = 0x2c2f3a;
 const CREAM = 0xfff8df;
 const CAT_INTERACTION_DEPTH = 980;
 const CAMERA_DRAG_THRESHOLD = 6;
+const CAT_SOCIAL_PAIR_COOLDOWN_MS = 45 * 60 * 1000;
 const CAT_HITBOX = { x: -58, y: -74, width: 232, height: 184 };
 const FEATHER_WAND_CURSOR = 'url("/static/cursors/feather-wand-cursor.svg") 4 28, crosshair';
 const CAT_CARRY_CURSOR = "grabbing";
@@ -222,6 +223,7 @@ function normalizeSnapshot(snapshot = {}) {
     activeCare: snapshot.activeCare || {},
     hygiene: snapshot.hygiene || {},
     dailyLogs: snapshot.dailyLogs || {},
+    socialCircle: snapshot.socialCircle || {},
     damagedItems: snapshot.damagedItems || {},
     ownedCats: Array.isArray(snapshot.ownedCats) ? snapshot.ownedCats : [],
     ownedFoodCount: Number(snapshot.ownedFoodCount || 0),
@@ -3750,6 +3752,9 @@ class CatWorldScene extends Phaser.Scene {
     ) return null;
     const source = this.catContainers.get(cat.id);
     if (!source?.active) return null;
+    const socialProfile = this.owner.snapshot.socialCircle?.[cat.id] || {};
+    const partnerProfiles = socialProfile.partners || {};
+    const now = Date.now();
     const candidates = this.roomCatEntries()
       .filter((entry) => (
         entry.cat.id !== cat.id
@@ -3759,20 +3764,32 @@ class CatWorldScene extends Phaser.Scene {
         && entry.behavior.energy >= Number(entry.behavior.restThreshold || 34) + 8
         && !entry.container.getData("interactionActive")
       ))
-      .sort((left, right) => (
-        Phaser.Math.Distance.Between(source.x, source.y, left.container.x, left.container.y)
-        - Phaser.Math.Distance.Between(source.x, source.y, right.container.x, right.container.y)
-      ));
+      .map((entry) => {
+        const relationship = partnerProfiles[entry.cat.id] || {};
+        const lastAt = Date.parse(String(relationship.lastAt || ""));
+        const coolingDown = Number.isFinite(lastAt) && now - lastAt < CAT_SOCIAL_PAIR_COOLDOWN_MS;
+        const distance = Phaser.Math.Distance.Between(source.x, source.y, entry.container.x, entry.container.y);
+        const chemistry = clamp(Number(relationship.score || 50), 0, 100);
+        const selectionScore = chemistry - Math.min(distance / 42, 18) - Number(relationship.todayCount || 0) * 3;
+        return { ...entry, relationship, coolingDown, selectionScore };
+      })
+      .filter((entry) => !entry.coolingDown)
+      .sort((left, right) => right.selectionScore - left.selectionScore);
     const partner = candidates[0];
     if (!partner) return null;
     const socialNeed = Number(behavior.socialNeed || 50);
     const moodBonus = Number(behavior.mood || 0) >= 72 ? 8 : 0;
     const temperamentBonus = ["clingy", "gentle", "chatty"].includes(behavior.temperament) ? 9 : 0;
     const habitBonus = Number(cat.individualHabit?.socialBonus || 0);
+    const chemistryBonus = Math.round((Number(partner.relationship.score || 50) - 50) / 4);
     const approachFromLeft = source.x <= partner.container.x;
     return {
       partnerCatId: partner.cat.id,
-      priority: clamp(9 + socialNeed * 0.3 + moodBonus + temperamentBonus + habitBonus, 18, 72),
+      partnerLabel: partner.relationship.catLabel || partner.cat.displayLabel || partner.cat.label || "猫咪伙伴",
+      chemistryScore: Number(partner.relationship.score || 50),
+      chemistryLabel: partner.relationship.levelLabel || "慢慢熟悉",
+      preferredKind: partner.relationship.preferredKind || "",
+      priority: clamp(9 + socialNeed * 0.3 + moodBonus + temperamentBonus + habitBonus + chemistryBonus, 16, 78),
       x: clamp(partner.container.x + (approachFromLeft ? -76 : 76), 38, GAME_WIDTH - 132),
       y: clamp(partner.container.y + Phaser.Math.Between(-12, 12), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
     };
@@ -3812,7 +3829,9 @@ class CatWorldScene extends Phaser.Scene {
     const combinedActivity = Number(entry.behavior.activityBias || 50) + Number(partner.behavior.activityBias || 50);
     const combinedSocial = Number(entry.behavior.socialNeed || 50) + Number(partner.behavior.socialNeed || 50);
     const styleSeed = Math.abs(hashText(`${entry.cat.id}:${partner.cat.id}:${new Date().getHours()}`)) % 3;
-    const kind = combinedActivity >= 145 || styleSeed === 2 ? "chase" : combinedSocial >= 132 || styleSeed === 1 ? "nuzzle" : "greet";
+    const preferredKind = ["greet", "nuzzle", "chase"].includes(target.preferredKind) ? target.preferredKind : "";
+    const kind = preferredKind
+      || (combinedActivity >= 145 || styleSeed === 2 ? "chase" : combinedSocial >= 132 || styleSeed === 1 ? "nuzzle" : "greet");
     const messages = {
       chase: ["来追我呀！", "看谁先绕过地毯！"],
       nuzzle: ["轻轻蹭一下，今天一起待着。", "靠近一点就很安心。"],

@@ -154,10 +154,38 @@ class CatWorldAgentEventTest(unittest.TestCase):
             expected_token = f"cat-social:{':'.join(sorted((source.profile_id, partner.profile_id)))}"
             for log in logs:
                 agent_state = m.parse_cat_world_agent_state(log.agent_state)
+                other_id = partner.profile_id if log.cat_id == source.profile_id else source.profile_id
                 self.assertEqual(agent_state["ambientEffectCount"], 1)
                 self.assertEqual(agent_state["socialEventCount"], 1)
                 self.assertIn(expected_token, agent_state["ambientEventAt"])
                 self.assertEqual(agent_state["events"][-1]["kind"], "cat-social")
+                self.assertEqual(agent_state["events"][-1]["partnerCatId"], other_id)
+                self.assertGreaterEqual(agent_state["events"][-1]["chemistryScore"], 28)
+                self.assertEqual(agent_state["socialPartners"][other_id]["count"], 1)
+
+    def test_social_chemistry_is_individual_stable_and_symmetric(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+
+        with Session(engine) as db:
+            _, source, partner = self.create_social_pair(db, "13900000025")
+            source_cat = m.cat_world_cat_profile_payload(source)
+            partner_cat = m.cat_world_cat_profile_payload(partner)
+
+            forward = m.cat_world_social_chemistry(source_cat, partner_cat)
+            reverse = m.cat_world_social_chemistry(partner_cat, source_cat)
+            circle = m.cat_world_social_circle_payload([source_cat, partner_cat], {})
+
+            self.assertEqual(forward, reverse)
+            self.assertGreaterEqual(forward["score"], 28)
+            self.assertLessEqual(forward["score"], 96)
+            self.assertIn(forward["preferredKind"], {"greet", "nuzzle", "chase"})
+            self.assertEqual(circle[source.profile_id]["favoritePartnerId"], partner.profile_id)
+            self.assertEqual(circle[partner.profile_id]["favoritePartnerId"], source.profile_id)
+            self.assertEqual(
+                circle[source.profile_id]["partners"][partner.profile_id]["score"],
+                forward["score"],
+            )
 
     def test_social_event_has_a_pair_cooldown(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")

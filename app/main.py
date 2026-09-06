@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-025"
-DEFAULT_PAGE_VERSION = "v20260906.25"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-026"
+DEFAULT_PAGE_VERSION = "v20260906.26"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -16833,24 +16833,40 @@ def cat_world_agent_event(kind: str, label: str, message: str, now: datetime | N
     }
 
 
-def cat_world_trim_agent_events(events: Any) -> list[dict[str, str]]:
+def cat_world_trim_agent_events(events: Any) -> list[dict[str, Any]]:
     if not isinstance(events, list):
         return []
-    clean: list[dict[str, str]] = []
+    clean: list[dict[str, Any]] = []
     for event in events[-10:]:
         if not isinstance(event, dict):
             continue
         message = str(event.get("message") or "").strip()
         if not message:
             continue
-        clean.append(
-            {
-                "kind": str(event.get("kind") or "note"),
-                "time": str(event.get("time") or ""),
-                "label": str(event.get("label") or "状态记录"),
-                "message": message,
-            }
-        )
+        kind = str(event.get("kind") or "note")
+        row: dict[str, Any] = {
+            "kind": kind,
+            "time": str(event.get("time") or ""),
+            "label": str(event.get("label") or "状态记录"),
+            "message": message,
+        }
+        if kind == "cat-social":
+            partner_cat_id = cat_world_individual_state_key(event.get("partnerCatId"))
+            social_kind = str(event.get("socialKind") or "")
+            if partner_cat_id:
+                row["partnerCatId"] = partner_cat_id
+            if event.get("partnerLabel"):
+                row["partnerLabel"] = str(event.get("partnerLabel"))
+            if social_kind in CAT_WORLD_SOCIAL_EVENT_KINDS:
+                row["socialKind"] = social_kind
+            if event.get("chemistryScore") is not None:
+                try:
+                    row["chemistryScore"] = clamp_cat_world_score(int(event.get("chemistryScore") or 0))
+                except (TypeError, ValueError):
+                    row["chemistryScore"] = 0
+            if event.get("chemistryLabel"):
+                row["chemistryLabel"] = str(event.get("chemistryLabel"))
+        clean.append(row)
     return clean[-8:]
 
 
@@ -17233,6 +17249,7 @@ CAT_WORLD_AGENT_STATE_CARRY_KEYS = {
     "sceneRoamReason",
     "sceneRoamTo",
     "socialEventCount",
+    "socialPartners",
 }
 
 
@@ -18830,6 +18847,152 @@ def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]
         "source": profile.source,
         "adoptedAt": profile.adopted_at.replace(microsecond=0).isoformat() + "Z",
     }
+
+
+def cat_world_social_chemistry(
+    left_cat: dict[str, Any],
+    right_cat: dict[str, Any],
+) -> dict[str, Any]:
+    left_id = str(left_cat.get("id") or left_cat.get("profileId") or "")
+    right_id = str(right_cat.get("id") or right_cat.get("profileId") or "")
+    if not left_id or not right_id or left_id == right_id:
+        return {
+            "score": 0,
+            "levelLabel": "独自活动",
+            "preferredKind": "greet",
+            "sharedPreferenceLabels": [],
+        }
+
+    pair_ids = sorted((left_id, right_id))
+    pair_seed = f"cat-social-chemistry:{pair_ids[0]}:{pair_ids[1]}"
+    score = 44 + round(cat_world_stable_ratio(pair_seed) * 26)
+    left_traits = left_cat.get("traits") if isinstance(left_cat.get("traits"), dict) else {}
+    right_traits = right_cat.get("traits") if isinstance(right_cat.get("traits"), dict) else {}
+    temperaments = tuple(
+        sorted(
+            (
+                str(left_traits.get("temperament") or "balanced"),
+                str(right_traits.get("temperament") or "balanced"),
+            )
+        )
+    )
+    temperament_bonus = {
+        ("calm", "gentle"): 12,
+        ("clingy", "gentle"): 10,
+        ("chatty", "clingy"): 8,
+        ("calm", "guardian"): 7,
+        ("chatty", "chatty"): 6,
+        ("guardian", "guardian"): 5,
+        ("gentle", "gentle"): 5,
+        ("chatty", "guardian"): 2,
+    }.get(temperaments, 0)
+    if temperaments[0] == temperaments[1] and temperament_bonus == 0:
+        temperament_bonus = 4
+    score += temperament_bonus
+
+    left_scene = str(left_cat.get("favoriteSceneId") or "")
+    right_scene = str(right_cat.get("favoriteSceneId") or "")
+    if left_scene and left_scene == right_scene:
+        score += 6
+
+    left_favorites = {str(item_id) for item_id in left_cat.get("favoriteItemIds") or []}
+    right_favorites = {str(item_id) for item_id in right_cat.get("favoriteItemIds") or []}
+    shared_ids = sorted(left_favorites.intersection(right_favorites))
+    score += min(len(shared_ids) * 4, 8)
+    score = int(min(max(score, 28), 96))
+
+    activities = {
+        str(left_traits.get("activity") or "balanced"),
+        str(right_traits.get("activity") or "balanced"),
+    }
+    if activities.intersection({"playful", "adventurous", "chatty"}) and score >= 62:
+        preferred_kind = "chase"
+    elif set(temperaments).intersection({"clingy", "gentle"}) or score >= 76:
+        preferred_kind = "nuzzle"
+    else:
+        preferred_kind = "greet"
+
+    if score >= 84:
+        level_label = "天生搭档"
+    elif score >= 68:
+        level_label = "合拍伙伴"
+    elif score >= 52:
+        level_label = "慢慢熟悉"
+    else:
+        level_label = "彼此观察"
+    shared_labels = [
+        str(CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("label") or item_id)
+        for item_id in shared_ids[:2]
+    ]
+    return {
+        "score": score,
+        "levelLabel": level_label,
+        "preferredKind": preferred_kind,
+        "sharedPreferenceLabels": shared_labels,
+    }
+
+
+def cat_world_social_circle_payload(
+    cat_profiles: list[dict[str, Any]],
+    daily_logs: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, dict[str, Any]]:
+    def nonnegative_count(value: Any) -> int:
+        try:
+            return max(int(value or 0), 0)
+        except (TypeError, ValueError):
+            return 0
+
+    logs = daily_logs if isinstance(daily_logs, dict) else {}
+    circle: dict[str, dict[str, Any]] = {}
+    for cat in cat_profiles:
+        cat_id = str(cat.get("id") or "")
+        if not cat_id:
+            continue
+        log = logs.get(cat_id) if isinstance(logs.get(cat_id), dict) else {}
+        agent_state = log.get("agentState") if isinstance(log.get("agentState"), dict) else {}
+        social_partners = (
+            agent_state.get("socialPartners")
+            if isinstance(agent_state.get("socialPartners"), dict)
+            else {}
+        )
+        partners: dict[str, dict[str, Any]] = {}
+        for other in cat_profiles:
+            other_id = str(other.get("id") or "")
+            if not other_id or other_id == cat_id:
+                continue
+            relationship = cat_world_social_chemistry(cat, other)
+            today = social_partners.get(other_id) if isinstance(social_partners.get(other_id), dict) else {}
+            partners[other_id] = {
+                "catId": other_id,
+                "catLabel": str(other.get("displayLabel") or other.get("label") or "猫咪伙伴"),
+                "sameRoom": str(cat.get("currentSceneId") or "") == str(other.get("currentSceneId") or ""),
+                "todayCount": nonnegative_count(today.get("count")),
+                "lastKind": str(today.get("lastKind") or ""),
+                "lastAt": str(today.get("lastAt") or ""),
+                **relationship,
+            }
+        ranked = sorted(
+            partners.values(),
+            key=lambda row: (int(row["score"]), str(row["catId"])),
+            reverse=True,
+        )
+        room_ranked = [row for row in ranked if row["sameRoom"]]
+        favorite = ranked[0] if ranked else {}
+        room_favorite = room_ranked[0] if room_ranked else {}
+        circle[cat_id] = {
+            "catId": cat_id,
+            "favoritePartnerId": str(favorite.get("catId") or ""),
+            "favoritePartnerLabel": str(favorite.get("catLabel") or ""),
+            "favoritePartnerScore": int(favorite.get("score") or 0),
+            "favoritePartnerLevelLabel": str(favorite.get("levelLabel") or "还没有伙伴"),
+            "roomPartnerId": str(room_favorite.get("catId") or ""),
+            "roomPartnerLabel": str(room_favorite.get("catLabel") or ""),
+            "roomPartnerScore": int(room_favorite.get("score") or 0),
+            "sameRoomPartnerCount": len(room_ranked),
+            "todayEventCount": nonnegative_count(agent_state.get("socialEventCount")),
+            "partners": partners,
+        }
+    return circle
 
 
 def cat_world_profile_for_reference(
@@ -20993,6 +21156,7 @@ def cat_world_apply_social_event(
             }
         )
 
+    chemistry = cat_world_social_chemistry(rows[0]["cat"], rows[1]["cat"])
     event_label = {
         "greet": "碰鼻问候",
         "nuzzle": "猫咪贴贴",
@@ -21012,6 +21176,8 @@ def cat_world_apply_social_event(
         if social_need >= 72:
             mood_gain += 1
         if int(row["adjustedMood"]) < 48:
+            mood_gain += 1
+        if int(chemistry.get("score") or 0) >= 84:
             mood_gain += 1
         mood_gain = min(mood_gain, 4)
         energy_gain = -1 if social_kind == "chase" else 0
@@ -21033,6 +21199,29 @@ def cat_world_apply_social_event(
             message,
             current_time,
         )
+        social_partners = (
+            agent_state.get("socialPartners")
+            if isinstance(agent_state.get("socialPartners"), dict)
+            else {}
+        )
+        previous_partner = (
+            social_partners.get(other["profile"].profile_id)
+            if isinstance(social_partners.get(other["profile"].profile_id), dict)
+            else {}
+        )
+        try:
+            previous_partner_count = max(int(previous_partner.get("count") or 0), 0)
+        except (TypeError, ValueError):
+            previous_partner_count = 0
+        social_partners[other["profile"].profile_id] = {
+            "count": previous_partner_count + 1,
+            "lastKind": social_kind,
+            "lastAt": timestamp,
+            "partnerLabel": other_label,
+            "chemistryScore": int(chemistry.get("score") or 0),
+            "chemistryLabel": str(chemistry.get("levelLabel") or "慢慢熟悉"),
+        }
+        agent_state["socialPartners"] = social_partners
         ambient_event_at = (
             agent_state.get("ambientEventAt")
             if isinstance(agent_state.get("ambientEventAt"), dict)
@@ -21041,7 +21230,22 @@ def cat_world_apply_social_event(
         ambient_event_at[pair_token] = timestamp
         agent_state["ambientEventAt"] = ambient_event_at
         agent_state["ambientEffectCount"] = int(row["ambientEffectCount"]) + 1
-        agent_state["socialEventCount"] = max(int(agent_state.get("socialEventCount") or 0), 0) + 1
+        try:
+            social_event_count = max(int(agent_state.get("socialEventCount") or 0), 0)
+        except (TypeError, ValueError):
+            social_event_count = 0
+        agent_state["socialEventCount"] = social_event_count + 1
+        events = cat_world_trim_agent_events(agent_state.get("events"))
+        if events and events[-1].get("kind") == "cat-social":
+            events[-1] = {
+                **events[-1],
+                "partnerCatId": other["profile"].profile_id,
+                "partnerLabel": other_label,
+                "socialKind": social_kind,
+                "chemistryScore": int(chemistry.get("score") or 0),
+                "chemistryLabel": str(chemistry.get("levelLabel") or "慢慢熟悉"),
+            }
+            agent_state["events"] = events
         row["log"].agent_state = encode_cat_world_agent_state(agent_state)
         db.add(row["log"])
         effects.append(
@@ -21051,18 +21255,25 @@ def cat_world_apply_social_event(
                 "moodGain": mood_gain,
                 "energyGain": energy_gain,
                 "ambientEffectCount": int(row["ambientEffectCount"]) + 1,
+                "chemistryScore": int(chemistry.get("score") or 0),
+                "chemistryLabel": str(chemistry.get("levelLabel") or "慢慢熟悉"),
             }
         )
 
     source_label = effects[0]["catLabel"]
     partner_label = effects[1]["catLabel"]
-    summary = f"{source_label}和{partner_label}{action_text}，这段互动已经写进双方的今日档案。"
+    summary = (
+        f"{source_label}和{partner_label}{action_text}，"
+        f"两只猫的默契是{chemistry.get('levelLabel') or '慢慢熟悉'} · {int(chemistry.get('score') or 0)}/100，"
+        "这段互动已经写进双方的今日档案。"
+    )
     return {
         "recorded": True,
         "effect": {
             "kind": "cat-social",
             "socialKind": social_kind,
             "catIds": pair_ids,
+            "chemistry": chemistry,
             "effects": effects,
             "message": summary,
         },
@@ -21659,6 +21870,8 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         for profile in cat_profiles
         if str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) == active_scene["id"]
     ]
+    profile_payloads = [cat_world_cat_profile_payload(profile) for profile in cat_profiles]
+    cat_social = cat_world_social_circle_payload(profile_payloads, daily_logs)
     return {
         "playTime": play_time,
         "energy": {
@@ -21699,6 +21912,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "selectedCat": state.selected_cat,
             "selectedCatProfile": state.selected_cat_profile or "",
             "roomCatIds": room_cat_ids,
+            "catSocial": cat_social,
             "sceneMoves": scene_moves,
             "hygiene": litter_status,
             "activeCare": active_care,
@@ -21714,7 +21928,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             ),
         },
         "cats": [cat_world_cat_payload(cat) for cat in CAT_WORLD_CATS],
-        "catProfiles": [cat_world_cat_profile_payload(profile) for profile in cat_profiles],
+        "catProfiles": profile_payloads,
         "scenes": cat_world_scene_catalog_payload(db, state),
         "blindBoxCatalog": blind_box_catalog,
         "catCollectionCatalog": collection_catalog,

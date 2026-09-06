@@ -30,3 +30,24 @@ test("resting, waking, and low-energy cats are not selected for social moments",
   assert.match(socialTarget, /\["resting", "waking"\]\.includes\(entry\.behavior\.key\)/);
   assert.match(socialTarget, /entry\.behavior\.energy >= Number\(entry\.behavior\.restThreshold \|\| 34\) \+ 8/);
 });
+
+test("cat social choices use individual chemistry and expose the favorite companion", async () => {
+  const [game, page] = await Promise.all([
+    readFile(gameUrl, "utf8"),
+    readFile(pageUrl, "utf8"),
+  ]);
+  const socialTarget = game.slice(
+    game.indexOf("  socialTargetForCat(cat = {}"),
+    game.indexOf("  individualHabitTarget(cat = {}"),
+  );
+
+  assert.match(game, /socialCircle:\s*snapshot\.socialCircle \|\| \{\}/);
+  assert.match(socialTarget, /partnerProfiles\[entry\.cat\.id\]/);
+  assert.match(socialTarget, /CAT_SOCIAL_PAIR_COOLDOWN_MS/);
+  assert.match(socialTarget, /selectionScore = chemistry - Math\.min\(distance \/ 42, 18\)/);
+  assert.match(socialTarget, /preferredKind:\s*partner\.relationship\.preferredKind/);
+  assert.match(page, /socialCircle:\s*catSocial\.value/);
+  assert.match(page, /social\.favoritePartnerLevelLabel/);
+  assert.match(page, /<dt>猫咪伙伴<\/dt>/);
+  assert.match(page, /同伴 \$\{social\.todayEventCount \|\| 0\}/);
+});
