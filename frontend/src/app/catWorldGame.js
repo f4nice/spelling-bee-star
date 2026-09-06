@@ -33,6 +33,7 @@ import {
 } from "./catWorldBehaviorPlanner.js";
 import { catWorldGaitProfile } from "./catWorldGait.js";
 import { catWorldIdleAnimationPlan } from "./catWorldIdleAnimation.js";
+import { catWorldCarryReactionPlan } from "./catWorldCarryReaction.js";
 import { catWorldSocialMomentPlan } from "./catWorldSocialMoment.js";
 import {
   catWorldSceneArrivalPlan,
@@ -2310,6 +2311,7 @@ class CatWorldScene extends Phaser.Scene {
     }
     if (this.owner.wandMode) this.stopFeatherWandMode({ notify: false });
     const facing = entry.container.scaleX < 0 ? -1 : 1;
+    const carryPlan = catWorldCarryReactionPlan(entry.cat, entry.behavior);
     this.owner.catItemActions.delete(catId);
     this.interruptCatAutonomy(entry, "cat-carry");
     this.owner.carriedCat = {
@@ -2319,16 +2321,18 @@ class CatWorldScene extends Phaser.Scene {
       facing,
       lastX: Number(pointer?.worldX) || entry.container.x + 45,
       lastY: Number(pointer?.worldY) || entry.container.y + 36,
+      carryPlan,
     };
-    this.applyCarriedCatVisual(entry);
+    this.applyCarriedCatVisual(entry, carryPlan);
     this.moveCarriedCat(pointer);
     this.drawCarryTargetIndicators();
     return {
       handled: true,
       carrying: true,
       catId,
-      catMessage: "被抱起来啦，点地板或发光家具把我放下。",
-      message: `已抱起${entry.cat.displayLabel || entry.cat.label}，移动鼠标后点击地板或发光家具放下；按 Esc 可放回原处。`,
+      catMessage: carryPlan.message,
+      carryStyle: carryPlan.styleKey,
+      message: `已抱起${entry.cat.displayLabel || entry.cat.label}（${carryPlan.badgeLabel}），移动鼠标后点击地板或发光家具放下；按 Esc 可放回原处。`,
     };
   }
 
@@ -2347,9 +2351,13 @@ class CatWorldScene extends Phaser.Scene {
     return this.startCatCarry(catId, null);
   }
 
-  applyCarriedCatVisual(entry) {
+  applyCarriedCatVisual(entry, requestedPlan = null) {
     if (!entry?.container?.active) return;
     const container = entry.container;
+    const carryPlan = requestedPlan
+      || this.owner.carriedCat?.carryPlan
+      || catWorldCarryReactionPlan(entry.cat, entry.behavior);
+    if (this.owner.carriedCat?.catId === entry.cat.id) this.owner.carriedCat.carryPlan = carryPlan;
     this.interruptCatAutonomy(entry, "cat-carry");
     container.disableInteractive();
     container.setAlpha(0.96);
@@ -2357,8 +2365,30 @@ class CatWorldScene extends Phaser.Scene {
     container.setScale(facing * 1.06, 1.06);
     container.setDepth(CAT_INTERACTION_DEPTH + 260);
     container.getData("catCarryBadge")?.destroy?.();
+    const previousCue = container.getData("catCarryCue");
+    if (previousCue?.active) {
+      this.tweens.killTweensOf(previousCue);
+      previousCue.destroy();
+    }
+    const body = container.getData("catBody");
+    if (body?.active) {
+      this.tweens.killTweensOf(body);
+      body.setPosition(0, 0);
+      body.setAngle(0);
+      const motion = carryPlan.motion || {};
+      this.tweens.add({
+        targets: body,
+        x: Number(motion.swayX || 1),
+        y: -Math.max(Number(motion.bobY || 2), 0),
+        angle: Number(motion.tilt || 0),
+        duration: Math.max(Number(motion.duration || 720), 220),
+        yoyo: true,
+        repeat: -1,
+        ease: carryPlan.styleKey === "wiggle" ? "Sine.easeInOut" : "Cubic.easeInOut",
+      });
+    }
     const badge = this.add
-      .text(45, -58, "抱起中", {
+      .text(45, -58, carryPlan.badgeLabel || "抱起中", {
         color: "#263047",
         backgroundColor: "#fff07d",
         fontFamily: "Consolas, monospace",
@@ -2371,15 +2401,94 @@ class CatWorldScene extends Phaser.Scene {
     this.pinCatTextOverlay(badge);
     container.add(badge);
     container.setData("catCarryBadge", badge);
+    const carryCue = this.drawCatCarryCue(container, carryPlan);
+    container.setData("catCarryCue", carryCue);
     this.syncCatTextOverlays(container);
     this.setCatCarryCursor(true);
+  }
+
+  drawCatCarryCue(container, carryPlan = {}) {
+    const cue = this.add.graphics();
+    cue.setData("catCarryCue", true);
+    const kind = carryPlan.cueKind || "paw";
+    if (kind === "heart") {
+      cue.fillStyle(0xff6f9f, 1);
+      cue.fillRect(96, 6, 6, 6);
+      cue.fillRect(104, 6, 6, 6);
+      cue.fillRect(94, 11, 18, 6);
+      cue.fillRect(98, 17, 10, 5);
+      cue.fillRect(102, 22, 4, 4);
+    } else if (kind === "question" || kind === "lookout") {
+      cue.fillStyle(0x87d9ff, 1);
+      cue.fillRect(98, 2, 12, 4);
+      cue.fillRect(106, 6, 4, 8);
+      cue.fillRect(102, 14, 8, 4);
+      cue.fillRect(102, 18, 4, 5);
+      cue.fillStyle(0xfff07d, 1);
+      cue.fillRect(102, 27, 4, 4);
+    } else if (kind === "huff") {
+      cue.lineStyle(3, 0xff8cad, 1);
+      cue.lineBetween(96, 8, 108, 2);
+      cue.lineBetween(99, 15, 113, 13);
+      cue.lineBetween(96, 22, 108, 27);
+    } else if (kind === "breathe" || kind === "ellipsis") {
+      cue.fillStyle(kind === "breathe" ? 0x87d9ff : 0xfff8df, 0.96);
+      [98, 106, 114].forEach((x, index) => cue.fillCircle(x, 9 - index * 3, 3 + index));
+      cue.lineStyle(2, INK, 0.5);
+      cue.strokeCircle(114, 3, 5);
+    } else if (kind === "chirp") {
+      cue.fillStyle(0xfff07d, 1);
+      cue.fillRect(98, 8, 5, 5);
+      cue.fillRect(107, 1, 4, 4);
+      cue.fillStyle(0x87d9ff, 1);
+      cue.fillRect(104, 16, 4, 4);
+      cue.lineStyle(2, INK, 0.72);
+      cue.lineBetween(100, 5, 96, 0);
+      cue.lineBetween(108, 0, 111, -5);
+    } else if (kind === "sparkle") {
+      [[100, 7, 0xfff07d], [112, -2, 0x87d9ff], [118, 14, 0xff8cad]].forEach(([x, y, color], index) => {
+        const size = index === 1 ? 4 : 3;
+        cue.fillStyle(color, 1);
+        cue.fillRect(x - size, y, size * 3, size);
+        cue.fillRect(x, y - size, size, size * 3);
+      });
+    } else {
+      cue.fillStyle(0xff8cad, 1);
+      cue.fillCircle(103, 10, 5);
+      cue.fillCircle(96, 4, 3);
+      cue.fillCircle(103, 1, 3);
+      cue.fillCircle(110, 4, 3);
+    }
+    container.add(cue);
+    this.tweens.add({
+      targets: cue,
+      y: -8,
+      alpha: 0.56,
+      duration: carryPlan.styleKey === "wiggle" ? 320 : 760,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    return cue;
   }
 
   clearCarriedCatVisual(entry, facing = 1) {
     if (!entry?.container?.active) return;
     const container = entry.container;
+    const body = container.getData("catBody");
+    if (body?.active) {
+      this.tweens.killTweensOf(body);
+      body.setPosition(0, 0);
+      body.setAngle(0);
+    }
     container.getData("catCarryBadge")?.destroy?.();
     container.setData("catCarryBadge", null);
+    const carryCue = container.getData("catCarryCue");
+    if (carryCue?.active) {
+      this.tweens.killTweensOf(carryCue);
+      carryCue.destroy();
+    }
+    container.setData("catCarryCue", null);
     container.setAlpha(1);
     container.setScale(facing === -1 ? -1 : 1, 1);
     container.setInteractive(
@@ -2423,7 +2532,7 @@ class CatWorldScene extends Phaser.Scene {
       this.setCatCarryCursor(false);
       return;
     }
-    this.applyCarriedCatVisual(entry);
+    this.applyCarriedCatVisual(entry, state.carryPlan);
     this.moveCarriedCat({ worldX: state.lastX, worldY: state.lastY });
     this.drawCarryTargetIndicators();
   }

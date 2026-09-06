@@ -2461,7 +2461,12 @@ async function selectCat(catOrId, options = {}) {
       : Boolean(catWorldGame.value?.focusCat?.(roomCatId));
     if (locked) {
       gameMountRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
-      showCatReaction(cat, carryInteraction?.carrying ? "被抱起来啦，带我去想去的地方吧。" : "镜头找到我啦，我会在这里陪着你。");
+      showCatReaction(
+        cat,
+        carryInteraction?.carrying
+          ? carryInteraction.catMessage || "被抱起来啦，带我去想去的地方吧。"
+          : "镜头找到我啦，我会在这里陪着你。",
+      );
     }
     notice.value = carryInteraction?.message
       || `${cat?.displayLabel || cat?.label || "猫咪"}${nextPayload.catMoved ? ` 已来到${currentScene.value.label}` : " 已设为主猫"}${locked ? "，活动室镜头已锁定" : ""}。`;
