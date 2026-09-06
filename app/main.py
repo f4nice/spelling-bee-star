@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-024"
-DEFAULT_PAGE_VERSION = "v20260906.24"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-025"
+DEFAULT_PAGE_VERSION = "v20260906.25"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -289,6 +289,8 @@ CAT_WORLD_RENAME_CARD_ITEM_ID = "cat-rename-card"
 CAT_WORLD_LIMITED_GIFT_ITEM_ID = "limited-gift-toy"
 CAT_WORLD_LIMITED_GIFT_INITIAL_STOCK = 12
 CAT_WORLD_PET_REWARD_COOLDOWN_SECONDS = 60 * 60
+CAT_WORLD_SOCIAL_EVENT_COOLDOWN_MINUTES = 45
+CAT_WORLD_SOCIAL_EVENT_KINDS = {"greet", "nuzzle", "chase"}
 CAT_WORLD_PLAY_TIME_TIERS = ((200, 20 * 60), (100, 12 * 60), (50, 6 * 60), (20, 3 * 60))
 CAT_WORLD_PLAY_TIME_HEARTBEAT_GRACE_SECONDS = 30
 CAT_WORLD_LITTER_MAX = 4
@@ -5408,12 +5410,29 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
     cat_id = str(payload.get("catId") or "").strip()
     item_id = str(payload.get("itemId") or "").strip()
     event_kind = str(payload.get("kind") or "").strip()
-    if event_kind not in {"favorite-toy", "favorite-decor", "rest-spot"}:
+    if event_kind not in {"favorite-toy", "favorite-decor", "rest-spot", "cat-social"}:
         raise HTTPException(status_code=400, detail="不支持这个猫咪事件。")
     state = get_or_create_cat_world_state(db, phone)
     profile = cat_world_profile_for_reference(db, state, cat_id)
     if not profile:
         raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
+    if event_kind == "cat-social":
+        result = cat_world_apply_social_event(
+            db,
+            state,
+            profile,
+            str(payload.get("partnerCatId") or item_id).strip(),
+            str(payload.get("socialKind") or "greet").strip(),
+        )
+        if not result.get("recorded"):
+            return {"ok": True, **result}
+        db.commit()
+        db.refresh(state)
+        return {
+            "ok": True,
+            **result,
+            **serialize_cat_world_payload(db, state),
+        }
     cat_id = profile.profile_id
     cat = cat_world_cat_profile_payload(profile)
     breed_id = profile.breed_id
@@ -17213,6 +17232,7 @@ CAT_WORLD_AGENT_STATE_CARRY_KEYS = {
     "sceneRoamPeriod",
     "sceneRoamReason",
     "sceneRoamTo",
+    "socialEventCount",
 }
 
 
@@ -20875,6 +20895,178 @@ def cat_world_apply_pet_effect(
         "cooldown": False,
         "remainingSeconds": CAT_WORLD_PET_REWARD_COOLDOWN_SECONDS,
         "message": message,
+    }
+
+
+def cat_world_apply_social_event(
+    db: Session,
+    state: CatWorldState,
+    source_profile: CatWorldCatProfile,
+    partner_reference: str,
+    social_kind: str,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    profiles = cat_world_active_cat_profiles(db, state.phone)
+    profiles_by_id = {profile.profile_id: profile for profile in profiles}
+    source = profiles_by_id.get(str(source_profile.profile_id or ""))
+    partner = cat_world_profile_for_reference(db, state, partner_reference, profiles)
+    if not source or not partner:
+        raise HTTPException(status_code=400, detail="没有找到这次互动的两只猫。")
+    if source.profile_id == partner.profile_id:
+        raise HTTPException(status_code=400, detail="猫咪不能和自己记录社交互动。")
+    active_scene_key = str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+    if any(
+        str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) != active_scene_key
+        for profile in (source, partner)
+    ):
+        raise HTTPException(status_code=400, detail="两只猫需要在当前同一个房间才能互动。")
+    social_kind = str(social_kind or "greet").strip().lower()
+    if social_kind not in CAT_WORLD_SOCIAL_EVENT_KINDS:
+        raise HTTPException(status_code=400, detail="不支持这种猫咪社交互动。")
+
+    current_time = now or datetime.utcnow()
+    inventory = parse_cat_world_inventory(state.inventory)
+    damaged_items = parse_cat_world_damaged_items(state.damaged_items)
+    usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
+    room_layout = cat_world_active_scene_layout(db, state, usable_inventory)
+    pair_ids = sorted((source.profile_id, partner.profile_id))
+    pair_token = f"cat-social:{':'.join(pair_ids)}"
+    rows: list[dict[str, Any]] = []
+
+    for profile in (source, partner):
+        cat = cat_world_cat_profile_payload(profile)
+        traits = cat_world_cat_traits(cat)
+        favorite_active_ids = cat_world_active_favorite_decor_ids_for_cat(cat, usable_inventory, room_layout)
+        log = get_or_create_cat_world_daily_log(
+            db,
+            state.phone,
+            profile.profile_id,
+            date.today(),
+            current_time,
+            cat,
+        )
+        apply_cat_world_hourly_decay(
+            log,
+            traits,
+            usable_inventory,
+            len(favorite_active_ids),
+            current_time,
+            cat_world_cat_litter_count(state, cat),
+            cat_world_cat_bath_mood_penalty(state, profile.profile_id, current_time, cat),
+            cat,
+        )
+        agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
+        adjusted_mood = clamp_cat_world_score(
+            int(log.mood_score or 0) + int(agent_state.get("moodOffset") or 0)
+        )
+        adjusted_energy = clamp_cat_world_score(
+            int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0)
+        )
+        behavior = cat_world_current_behavior(agent_state, traits, adjusted_mood, adjusted_energy, current_time)
+        rest_threshold = int(traits.get("restThreshold") or 34)
+        if behavior.get("sleeping") or behavior.get("waking") or adjusted_energy < rest_threshold + 8:
+            return {"recorded": False, "reason": "cat-unavailable"}
+        ambient_event_at = (
+            agent_state.get("ambientEventAt")
+            if isinstance(agent_state.get("ambientEventAt"), dict)
+            else {}
+        )
+        last_seen = cat_world_parse_utc_datetime(str(ambient_event_at.get(pair_token) or ""))
+        if last_seen and current_time - last_seen < timedelta(minutes=CAT_WORLD_SOCIAL_EVENT_COOLDOWN_MINUTES):
+            return {"recorded": False, "reason": "cooldown"}
+        try:
+            ambient_effect_count = max(int(agent_state.get("ambientEffectCount") or 0), 0)
+        except (TypeError, ValueError):
+            ambient_effect_count = 0
+        if ambient_effect_count >= 8:
+            return {"recorded": False, "reason": "daily-limit"}
+        rows.append(
+            {
+                "profile": profile,
+                "cat": cat,
+                "traits": traits,
+                "log": log,
+                "agentState": agent_state,
+                "ambientEventAt": ambient_event_at,
+                "ambientEffectCount": ambient_effect_count,
+                "adjustedMood": adjusted_mood,
+            }
+        )
+
+    event_label = {
+        "greet": "碰鼻问候",
+        "nuzzle": "猫咪贴贴",
+        "chase": "伙伴追逐",
+    }[social_kind]
+    action_text = {
+        "greet": "碰了碰鼻子，互相打了个招呼",
+        "nuzzle": "轻轻贴在一起，安静待了一会儿",
+        "chase": "在房间里开心地追逐了一小圈",
+    }[social_kind]
+    timestamp = current_time.replace(microsecond=0).isoformat() + "Z"
+    effects: list[dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        other = rows[1 - index]
+        social_need = max(int(row["agentState"].get("socialNeed") or 50), 0)
+        mood_gain = 1 + (1 if social_kind in {"nuzzle", "chase"} else 0)
+        if social_need >= 72:
+            mood_gain += 1
+        if int(row["adjustedMood"]) < 48:
+            mood_gain += 1
+        mood_gain = min(mood_gain, 4)
+        energy_gain = -1 if social_kind == "chase" else 0
+        own_label = str(row["cat"].get("displayLabel") or row["cat"].get("label") or "猫咪")
+        other_label = str(other["cat"].get("displayLabel") or other["cat"].get("label") or "伙伴")
+        message = f"{own_label}和{other_label}{action_text}，心情 +{mood_gain}"
+        if energy_gain:
+            message += f"，体力 {energy_gain}"
+        message += "。"
+        row["log"].mood_score = clamp_cat_world_score(int(row["log"].mood_score or 0) + mood_gain)
+        if energy_gain:
+            row["log"].energy_score = clamp_cat_world_score(int(row["log"].energy_score or 0) + energy_gain)
+        agent_state = append_cat_world_agent_event(
+            row["log"],
+            row["cat"],
+            row["traits"],
+            "cat-social",
+            event_label,
+            message,
+            current_time,
+        )
+        ambient_event_at = (
+            agent_state.get("ambientEventAt")
+            if isinstance(agent_state.get("ambientEventAt"), dict)
+            else {}
+        )
+        ambient_event_at[pair_token] = timestamp
+        agent_state["ambientEventAt"] = ambient_event_at
+        agent_state["ambientEffectCount"] = int(row["ambientEffectCount"]) + 1
+        agent_state["socialEventCount"] = max(int(agent_state.get("socialEventCount") or 0), 0) + 1
+        row["log"].agent_state = encode_cat_world_agent_state(agent_state)
+        db.add(row["log"])
+        effects.append(
+            {
+                "catId": row["profile"].profile_id,
+                "catLabel": own_label,
+                "moodGain": mood_gain,
+                "energyGain": energy_gain,
+                "ambientEffectCount": int(row["ambientEffectCount"]) + 1,
+            }
+        )
+
+    source_label = effects[0]["catLabel"]
+    partner_label = effects[1]["catLabel"]
+    summary = f"{source_label}和{partner_label}{action_text}，这段互动已经写进双方的今日档案。"
+    return {
+        "recorded": True,
+        "effect": {
+            "kind": "cat-social",
+            "socialKind": social_kind,
+            "catIds": pair_ids,
+            "effects": effects,
+            "message": summary,
+        },
+        "event": {"kind": "cat-social", "label": event_label, "message": summary},
     }
 
 

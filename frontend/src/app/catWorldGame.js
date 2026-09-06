@@ -3742,11 +3742,23 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   socialTargetForCat(cat = {}, index = 0, behavior = {}) {
-    if (!behavior.canWalk || behavior.sleeping || behavior.energy < Number(behavior.restThreshold || 34) + 8) return null;
+    if (
+      !behavior.canWalk
+      || behavior.sleeping
+      || ["resting", "waking"].includes(behavior.key)
+      || behavior.energy < Number(behavior.restThreshold || 34) + 8
+    ) return null;
     const source = this.catContainers.get(cat.id);
     if (!source?.active) return null;
     const candidates = this.roomCatEntries()
-      .filter((entry) => entry.cat.id !== cat.id && entry.behavior.canWalk && !entry.container.getData("interactionActive"))
+      .filter((entry) => (
+        entry.cat.id !== cat.id
+        && entry.behavior.canWalk
+        && !entry.behavior.sleeping
+        && !["resting", "waking"].includes(entry.behavior.key)
+        && entry.behavior.energy >= Number(entry.behavior.restThreshold || 34) + 8
+        && !entry.container.getData("interactionActive")
+      ))
       .sort((left, right) => (
         Phaser.Math.Distance.Between(source.x, source.y, left.container.x, left.container.y)
         - Phaser.Math.Distance.Between(source.x, source.y, right.container.x, right.container.y)
@@ -3822,6 +3834,20 @@ class CatWorldScene extends Phaser.Scene {
     this.tweens.add({ targets: entry.container, x: entry.container.x + motion, yoyo: true, repeat: kind === "chase" ? 2 : 0, duration: 310, ease: "Sine.easeInOut" });
     this.tweens.add({ targets: partner.container, x: partner.container.x - motion, yoyo: true, repeat: kind === "chase" ? 2 : 0, duration: 310, ease: "Sine.easeInOut" });
     const holdMs = kind === "chase" ? 4200 : 3400;
+    this.time.delayedCall(Math.max(holdMs - 240, 1000), () => {
+      if (!entry.container.active || !partner.container.active) return;
+      if (
+        entry.container.getData("interactionItemId") !== pairKey
+        || partner.container.getData("interactionItemId") !== pairKey
+      ) return;
+      this.owner.handlers.onCatAmbient?.(entry.cat, {
+        kind: "cat-social",
+        itemId: partner.cat.id,
+        partnerCatId: partner.cat.id,
+        label: partner.cat.displayLabel || partner.cat.label || "伙伴",
+        socialKind: kind,
+      });
+    });
     this.holdCatInteraction(entry, pairKey, holdMs, { showStatus: false });
     this.holdCatInteraction(partner, pairKey, holdMs, { showStatus: false });
     return true;

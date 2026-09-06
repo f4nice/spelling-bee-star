@@ -1152,8 +1152,11 @@ function handleRoomToyClick(itemId, interaction = null) {
 
 function recordCatAmbientEvent(cat, event = {}) {
   if (roomEditMode.value) return;
-  if (!cat?.id || !event?.kind || !event?.itemId) return;
-  const key = `${cat.id}:${event.kind}:${event.itemId}`;
+  const targetId = event?.itemId || event?.partnerCatId;
+  if (!cat?.id || !event?.kind || !targetId) return;
+  const key = event.kind === "cat-social"
+    ? `${event.kind}:${[cat.id, targetId].sort().join(":")}`
+    : `${cat.id}:${event.kind}:${targetId}`;
   const now = Date.now();
   if (now - Number(ambientEventCooldowns.get(key) || 0) < 4 * 60 * 1000) return;
   ambientEventCooldowns.set(key, now);
@@ -1163,7 +1166,9 @@ function recordCatAmbientEvent(cat, event = {}) {
     body: JSON.stringify({
       catId: cat.id,
       kind: event.kind,
-      itemId: event.itemId,
+      itemId: targetId,
+      partnerCatId: event.partnerCatId || "",
+      socialKind: event.socialKind || "",
       label: event.label || "",
     }),
   }).then((nextPayload) => {
@@ -1173,6 +1178,9 @@ function recordCatAmbientEvent(cat, event = {}) {
     }
     if (event.kind === "rest-spot" && nextPayload?.recorded && nextPayload?.event?.message) {
       showCatReaction(cat, nextPayload.event.message);
+    }
+    if (event.kind === "cat-social" && nextPayload?.recorded && nextPayload?.event?.message) {
+      notice.value = nextPayload.event.message;
     }
   }).catch(() => {
     ambientEventCooldowns.delete(key);
