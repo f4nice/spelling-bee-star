@@ -6,6 +6,7 @@ import { buildCatWorldRoomLearningSignal } from "../src/app/catWorldLearningRout
 import {
   catWorldLearningMemoryLine,
   catWorldLearningMemoryNextLine,
+  catWorldLearningMemoryReflection,
   catWorldLearningMemoryRoomCue,
   catWorldLearningMemoryVisitPlan,
   formatCatWorldLearningMemoryDate,
@@ -66,6 +67,55 @@ test("opening cat world without learning does not create a false memory", () => 
   assert.match(catWorldLearningMemoryRoomCue(memory), /第一次/);
 });
 
+test("each cat reflects on the same learning page in its own voice", () => {
+  const day = {
+    date: "2026-09-07",
+    dayLabel: "9/7",
+    statusKey: "loop",
+    statusLabel: "完成学习闭环",
+  };
+  const quietCat = catWorldLearningMemoryReflection(day, {
+    id: "cat-quiet",
+    nickname: "小静",
+    traits: { temperament: "calm" },
+    learningStyle: { label: "遮答主动回想", preferredOutput: "essay" },
+  });
+  const chattyCat = catWorldLearningMemoryReflection(day, {
+    id: "cat-chatty",
+    nickname: "话话",
+    traits: { temperament: "chatty" },
+    learningStyle: { label: "观点理由法", preferredOutput: "debate" },
+  });
+
+  assert.equal(quietCat.dateLabel, "9/7");
+  assert.match(quietCat.achievement, /完整英语闭环/);
+  assert.match(quietCat.reviewPrompt, /1 个词和 1 句话/);
+  assert.equal(quietCat.actionLabel, "写一句新表达");
+  assert.equal(quietCat.href, "/essays");
+  assert.equal(chattyCat.actionLabel, "说一个新理由");
+  assert.equal(chattyCat.href, "/debate");
+  assert.notEqual(quietCat.catMessage, chattyCat.catMessage);
+  assert.match(quietCat.catMessage, /遮答主动回想/);
+});
+
+test("a partial memory suggests the missing half of the English loop", () => {
+  const warmup = catWorldLearningMemoryReflection({
+    date: "2026-09-06",
+    statusKey: "warmup",
+    statusLabel: "完成 20 词热身",
+  });
+  const output = catWorldLearningMemoryReflection({
+    date: "2026-09-05",
+    statusKey: "output",
+    statusLabel: "完成英语表达",
+  });
+
+  assert.equal(warmup.href, "/lists");
+  assert.match(warmup.reviewPrompt, /主动回想/);
+  assert.equal(output.href, "/lists");
+  assert.match(output.reviewPrompt, /补 5 个词/);
+});
+
 test("the room signal carries the selected cat's own learning memory", () => {
   const signal = buildCatWorldRoomLearningSignal(
     { todaySpellingCount: 8 },
@@ -104,6 +154,12 @@ test("cat cards, profile and room expose the same personal learning history", as
   assert.match(styles, /\.cat-world-cat-learning-memory\s*\{[^}]*background:\s*#ffe6c7/s);
   assert.match(styles, /\.cat-world-learning-stamp-track\s*\{[^}]*grid-template-columns:\s*repeat\(4,/s);
   assert.match(styles, /\.cat-world-learning-memory-days\s*\{[^}]*overflow-x:\s*auto/s);
+  assert.match(page, /@click="selectCatMemoryDay\(day\)"/);
+  assert.match(page, /class="cat-world-learning-memory-reflection"/);
+  assert.match(page, /@click="focusSelectedCatMemory"/);
+  assert.match(page, /:aria-pressed="day\.date === selectedCatMemoryDay\.date"/);
+  assert.match(styles, /\.cat-world-learning-memory-days > button\.active\s*\{[^}]*color:\s*#fff;[^}]*background:\s*#1d7f5b;/s);
+  assert.match(styles, /\.cat-world-learning-memory-actions button:hover,[\s\S]*?color:\s*#fff;\s*background:\s*#1d7f5b;/);
   assert.match(
     styles,
     /\.cat-world-cat-chip\.active \.cat-world-cat-learning-memory,[\s\S]*?background:\s*rgba\(255, 255, 255, 0\.16\)/,

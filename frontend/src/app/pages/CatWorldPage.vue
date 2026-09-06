@@ -40,6 +40,7 @@ import {
 import {
   catWorldLearningMemoryLine,
   catWorldLearningMemoryNextLine,
+  catWorldLearningMemoryReflection,
   normalizeCatWorldLearningMemory,
 } from "../catWorldLearningMemory.js";
 import {
@@ -113,6 +114,7 @@ const catOsExpanded = ref(false);
 const learningRouteExpanded = ref(false);
 const learningWeekExpanded = ref(false);
 const selectedLearningWeekDate = ref("");
+const selectedCatMemoryDate = ref("");
 const busySceneId = ref("");
 const busyLocationItemId = ref("");
 const ambientEventCooldowns = new Map();
@@ -930,6 +932,13 @@ const catAgentDiaries = computed(() =>
 const activeCatDiary = computed(() =>
   catAgentDiaries.value.find((cat) => cat.id === openCatDiaryId.value) || null,
 );
+const selectedCatMemoryDay = computed(() => {
+  const days = activeCatDiary.value?.learningMemory?.recentDays || [];
+  return days.find((day) => day.date === selectedCatMemoryDate.value) || days[0] || {};
+});
+const selectedCatMemoryReflection = computed(() =>
+  catWorldLearningMemoryReflection(selectedCatMemoryDay.value, activeCatDiary.value || {}),
+);
 const gameDailyLogs = computed(() =>
   Object.fromEntries(
     roomCats.value.map((cat) => [
@@ -1224,6 +1233,7 @@ function toggleCatDiary(cat) {
   activeRoomPanel.value = "cat";
   openCatDiaryId.value = cat.id;
   focusedCatId.value = cat.id;
+  selectedCatMemoryDate.value = cat.learningMemory?.recentDays?.[0]?.date || "";
 }
 
 function focusRoomItem(itemId) {
@@ -1238,6 +1248,35 @@ function focusRoomItem(itemId) {
 
 function closeCatDiary() {
   openCatDiaryId.value = "";
+  selectedCatMemoryDate.value = "";
+}
+
+function selectCatMemoryDay(day = {}) {
+  if (!day.date) return;
+  selectedCatMemoryDate.value = day.date;
+}
+
+async function focusSelectedCatMemory() {
+  const cat = activeCatDiary.value;
+  const reflection = selectedCatMemoryReflection.value;
+  if (!cat?.id || !reflection?.date) return;
+  const targetScene = scenes.value.find((scene) => scene.id === cat.currentSceneId);
+  closeCatDiary();
+  if (!setWorldView("room")) return;
+  if (cat.currentSceneId !== currentScene.value.id) {
+    if (!targetScene?.available || !(await selectScene(targetScene))) {
+      notice.value = `${cat.displayLabel || cat.label || "猫咪"}所在区域暂时无法进入。`;
+      return;
+    }
+  }
+  await nextTick();
+  activeRoomPanel.value = "cat";
+  focusedCatId.value = cat.id;
+  catWorldGame.value?.refreshViewport?.();
+  const focused = catWorldGame.value?.focusCat?.(cat.id);
+  showCatReaction(cat, reflection.catMessage);
+  notice.value = `${reflection.dateLabel} · ${reflection.achievement}${focused ? " 镜头已经找到它。" : ""}`;
+  gameMountRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function handleGlobalKeydown(event) {
@@ -3580,18 +3619,47 @@ async function selectCat(catOrId, options = {}) {
           <div
             v-if="activeCatDiary.learningMemory.recentDays.length"
             class="cat-world-learning-memory-days"
+            role="group"
             aria-label="最近共同学习足迹"
           >
-            <span
+            <button
               v-for="day in activeCatDiary.learningMemory.recentDays"
               :key="`${activeCatDiary.id}-memory-day-${day.date}`"
-              :class="`tone-${day.statusKey}`"
+              type="button"
+              :class="[`tone-${day.statusKey}`, { active: day.date === selectedCatMemoryDay.date }]"
+              :aria-pressed="day.date === selectedCatMemoryDay.date"
+              @click="selectCatMemoryDay(day)"
             >
               <b>{{ day.dayLabel }}</b>
               <em>{{ day.statusLabel }}</em>
-            </span>
+            </button>
           </div>
-          <p v-else class="cat-world-learning-memory-empty">
+          <div
+            v-if="selectedCatMemoryReflection.date"
+            class="cat-world-learning-memory-reflection"
+            aria-live="polite"
+          >
+            <div>
+              <small>{{ selectedCatMemoryReflection.dateLabel }} · {{ selectedCatMemoryReflection.statusLabel }}</small>
+              <strong>{{ selectedCatMemoryReflection.achievement }}</strong>
+            </div>
+            <p><b>{{ selectedCatMemoryReflection.catName }}：</b>{{ selectedCatMemoryReflection.catMessage }}</p>
+            <footer>
+              <span>{{ selectedCatMemoryReflection.reviewPrompt }}</span>
+              <span class="cat-world-learning-memory-actions">
+                <button type="button" @click="focusSelectedCatMemory">
+                  <MessageCircleIcon :size="13" :stroke-width="2.8" aria-hidden="true" />让猫回想
+                </button>
+                <a :href="selectedCatMemoryReflection.href">
+                  {{ selectedCatMemoryReflection.actionLabel }}<MoveRightIcon :size="13" :stroke-width="2.8" aria-hidden="true" />
+                </a>
+              </span>
+            </footer>
+          </div>
+          <p
+            v-if="!activeCatDiary.learningMemory.recentDays.length"
+            class="cat-world-learning-memory-empty"
+          >
             完成 5 个拼写词后，这里会留下你们的第一枚学习足迹。
           </p>
           <div class="cat-world-learning-scrapbook-foot">

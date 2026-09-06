@@ -15213,24 +15213,42 @@ select {
   scrollbar-width: thin;
 }
 
-.cat-world-learning-memory-days > span {
+.cat-world-learning-memory-days > button {
+  appearance: none;
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   gap: 5px;
   border: 2px solid #2c2f3a;
+  border-radius: 0;
   padding: 4px 6px;
   color: #263047;
   background: #d9f6ff;
+  box-shadow: none;
+  font: inherit;
+  cursor: pointer;
 }
 
-.cat-world-learning-memory-days > span.tone-output,
-.cat-world-learning-memory-days > span.tone-warmup-output {
+.cat-world-learning-memory-days > button.tone-output,
+.cat-world-learning-memory-days > button.tone-warmup-output {
   background: #ead8ff;
 }
 
-.cat-world-learning-memory-days > span.tone-loop {
+.cat-world-learning-memory-days > button.tone-loop {
   background: #a9e8c8;
+}
+
+.cat-world-learning-memory-days > button:hover,
+.cat-world-learning-memory-days > button:focus-visible,
+.cat-world-learning-memory-days > button.active {
+  color: #fff;
+  background: #1d7f5b;
+  box-shadow: 2px 2px 0 #2c2f3a;
+}
+
+.cat-world-learning-memory-days > button:focus-visible {
+  outline: 2px solid #f9c84a;
+  outline-offset: 2px;
 }
 
 .cat-world-learning-memory-days b,
@@ -15246,6 +15264,104 @@ select {
 
 .cat-world-learning-memory-days b {
   color: #007f67;
+}
+
+.cat-world-learning-memory-days > button:hover b,
+.cat-world-learning-memory-days > button:hover em,
+.cat-world-learning-memory-days > button:focus-visible b,
+.cat-world-learning-memory-days > button:focus-visible em,
+.cat-world-learning-memory-days > button.active b,
+.cat-world-learning-memory-days > button.active em {
+  color: #fff;
+}
+
+.cat-world-learning-memory-reflection {
+  display: grid;
+  gap: 7px;
+  border-left: 5px solid #e6827b;
+  padding: 8px 10px;
+  color: #263047;
+  background: #fff0df;
+}
+
+.cat-world-learning-memory-reflection > div,
+.cat-world-learning-memory-reflection > footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cat-world-learning-memory-reflection small,
+.cat-world-learning-memory-reflection strong,
+.cat-world-learning-memory-reflection p,
+.cat-world-learning-memory-reflection footer > span:first-child {
+  margin: 0;
+  color: #40516b;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.cat-world-learning-memory-reflection > div {
+  display: grid;
+  gap: 2px;
+}
+
+.cat-world-learning-memory-reflection > div small,
+.cat-world-learning-memory-reflection p b {
+  color: #a34f47;
+}
+
+.cat-world-learning-memory-reflection > div strong {
+  color: #263047;
+  font-size: 11px;
+}
+
+.cat-world-learning-memory-reflection p {
+  padding-top: 6px;
+  border-top: 1px dashed rgba(44, 47, 58, 0.36);
+}
+
+.cat-world-learning-memory-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.cat-world-learning-memory-actions button,
+.cat-world-learning-memory-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 26px;
+  border: 2px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 4px 7px;
+  color: #263047;
+  background: #fff8df;
+  box-shadow: 2px 2px 0 #2c2f3a;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.cat-world-learning-memory-actions a,
+.cat-world-learning-memory-actions button:hover,
+.cat-world-learning-memory-actions button:focus-visible {
+  color: #fff;
+  background: #1d7f5b;
+}
+
+.cat-world-learning-memory-actions a:hover,
+.cat-world-learning-memory-actions a:focus-visible {
+  color: #fff;
+  background: #146b4e;
 }
 
 .cat-world-learning-scrapbook-foot {
@@ -18184,6 +18300,17 @@ select {
 
   .cat-world-room-pan-button.right {
     right: 5px;
+  }
+
+  .cat-world-learning-memory-reflection > footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cat-world-learning-memory-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
   }
 
   .cat-world-hero-status {

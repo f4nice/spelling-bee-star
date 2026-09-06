@@ -35,6 +35,45 @@ const MEMORY_VISIT_ANIMATIONS = Object.freeze({
   balanced: "book",
 });
 
+const MEMORY_REFLECTION_COPY = Object.freeze({
+  started: Object.freeze({
+    achievement: "那天先迈出了最小的一步，点亮了起步爪印。",
+    reviewPrompt: "今天也可以只做 5 个词，开始就算进步。",
+    actionLabel: "再练 5 个词",
+    href: "/lists",
+  }),
+  warmup: Object.freeze({
+    achievement: "那天完成了 20 词热身，把英语状态叫醒了。",
+    reviewPrompt: "从那天的词里挑 1 个，遮住答案主动回想一次。",
+    actionLabel: "再练一组词",
+    href: "/lists",
+  }),
+  output: Object.freeze({
+    achievement: "那天把英语真正用出来了，留下了一次表达。",
+    reviewPrompt: "今天先补 5 个词，再把其中 1 个用进新句子。",
+    actionLabel: "补一次练词",
+    href: "/lists",
+  }),
+  "warmup-output": Object.freeze({
+    achievement: "那天既完成了词汇热身，也把英语用出来了。",
+    reviewPrompt: "复用那天的 1 个旧词，写或说一句新的表达。",
+  }),
+  loop: Object.freeze({
+    achievement: "那天走完了输入、表达和回顾的完整英语闭环。",
+    reviewPrompt: "先回想 1 个词和 1 句话，再决定今天还要不要继续。",
+  }),
+});
+
+const MEMORY_REFLECTION_TONES = Object.freeze({
+  calm: Object.freeze(["我把这页安静收好了。", "这页不用赶，我记得很稳。"]),
+  clingy: Object.freeze(["那天我也一直贴在你旁边。", "这枚脚印是我们靠在一起留下的。"]),
+  guardian: Object.freeze(["这页成果我替你守得好好的。", "这次闭环我一直替你记着。"]),
+  chatty: Object.freeze(["我还记得那天英语响起来的样子。", "这页一翻开，我就想听你再说一次。"]),
+  gentle: Object.freeze(["那天慢慢完成的样子很好。", "这页很轻，但每一步都算数。"]),
+  adventurous: Object.freeze(["那天我们又探索出一小段新路。", "这页是一次很像样的小冒险。"]),
+  balanced: Object.freeze(["这页把认真走过的一步留住了。", "我记得这一天的学习节奏。"]),
+});
+
 function stableIndex(seed, size) {
   let hash = 2166136261;
   for (const char of String(seed || "")) {
@@ -56,6 +95,35 @@ function memoryVisitSentence(memory) {
     started: "，那天留下了一枚起步爪印。",
   };
   return `${prefix}${endings[latest.statusKey] || "，看看我们一起走过的学习脚印。"}`;
+}
+
+export function catWorldLearningMemoryReflection(day = {}, cat = {}) {
+  const normalizedDay = normalizeMemoryDay(day);
+  const statusKey = normalizedDay.statusKey;
+  const copy = MEMORY_REFLECTION_COPY[statusKey] || MEMORY_REFLECTION_COPY.started;
+  const temperament = String(cat.traits?.temperament || cat.temperament || "balanced");
+  const tonePool = MEMORY_REFLECTION_TONES[temperament] || MEMORY_REFLECTION_TONES.balanced;
+  const catId = String(cat.id || cat.profileId || cat.nickname || cat.label || "cat");
+  const catName = String(cat.nickname || cat.displayLabel || cat.label || cat.breedLabel || "猫咪");
+  const tone = tonePool[stableIndex(`${catId}:${normalizedDay.date}:${statusKey}:reflection`, tonePool.length)];
+  const preferredOutput = cat.learningStyle?.preferredOutput === "debate" ? "debate" : "essay";
+  const outputAction = preferredOutput === "debate"
+    ? { actionLabel: "说一个新理由", href: "/debate" }
+    : { actionLabel: "写一句新表达", href: "/essays" };
+  const action = ["warmup-output", "loop"].includes(statusKey) ? outputAction : copy;
+  const styleLabel = String(cat.learningStyle?.label || "").trim();
+  return {
+    date: normalizedDay.date,
+    dateLabel: normalizedDay.dayLabel || formatCatWorldLearningMemoryDate(normalizedDay.date),
+    statusKey,
+    statusLabel: normalizedDay.statusLabel,
+    achievement: copy.achievement,
+    reviewPrompt: copy.reviewPrompt,
+    actionLabel: action.actionLabel,
+    href: action.href,
+    catName,
+    catMessage: `${tone}${styleLabel ? ` 我还记得我们用的是“${styleLabel}”。` : ""}`,
+  };
 }
 
 function normalizeMemoryStage(stage = {}, memoryPoints = 0, levelKey = "waiting") {
