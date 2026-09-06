@@ -51,6 +51,7 @@ const payload = ref(props.data || {});
 const activeCategory = ref("food");
 const activeWorldView = ref("room");
 const bagExpanded = ref(false);
+const activeRoomPanel = ref("cat");
 const busyItemId = ref("");
 const notice = ref("");
 const catReaction = ref("");
@@ -93,6 +94,7 @@ const petBusyCatId = ref("");
 const roomCanPan = ref(false);
 const roomPanActive = ref(false);
 const catOsExpanded = ref(false);
+const learningRouteExpanded = ref(false);
 const learningWeekExpanded = ref(false);
 const selectedLearningWeekDate = ref("");
 const busySceneId = ref("");
@@ -158,10 +160,12 @@ onMounted(async () => {
   catWorldGame.value = new CatWorldGame(gameMountRef.value, {
     onCatPet: (cat, message) => {
       if (!roomEditMode.value && !repairMode.value && !scoopMode.value) {
+        activeRoomPanel.value = "cat";
         petCat(cat, { message, anchor: false });
       }
     },
     onCatCarryStart: (_cat, interaction) => {
+      activeRoomPanel.value = "cat";
       if (interaction?.message) notice.value = interaction.message;
     },
     onCatDrop: (_cat, interaction) => {
@@ -170,7 +174,7 @@ onMounted(async () => {
     onCatPositionChange: syncCatPosition,
     onDecorClick: handleDecorClick,
     onDecorSelect: (decorId) => {
-      selectedDecorId.value = decorId || "";
+      focusRoomItem(decorId);
     },
     onLayoutChange: handleGameLayoutChange,
     onToyClick: handleRoomToyClick,
@@ -184,7 +188,10 @@ onMounted(async () => {
       if (interaction?.message) notice.value = interaction.message;
     },
     onCatThought: (cat, message) => {
-      if (!roomEditMode.value) showCatReaction(cat, message, { anchor: false });
+      if (!roomEditMode.value) {
+        activeRoomPanel.value = "cat";
+        showCatReaction(cat, message, { anchor: false });
+      }
     },
     onLearningBoardClick: openRoomLearningProgress,
     onCatAmbient: recordCatAmbientEvent,
@@ -221,7 +228,6 @@ const toolCategories = [
   { key: "food", label: "食物" },
   { key: "toy", label: "玩具" },
   { key: "consumable", label: "消耗品" },
-  { key: "cat", label: "猫咪" },
 ];
 
 const decorToneColors = {
@@ -374,6 +380,11 @@ const learningRoute = computed(() => {
     coachLine: learningCompanion.value.message || route.coachLine,
   };
 });
+const activeLearningStep = computed(() =>
+  learningRoute.value.steps.find((step) => step.active)
+  || learningRoute.value.steps.at(-1)
+  || {},
+);
 const learningRoomSignal = computed(() =>
   buildCatWorldRoomLearningSignal(
     energy.value.habit || {},
@@ -382,6 +393,7 @@ const learningRoomSignal = computed(() =>
   ),
 );
 const learningGuidePortrait = computed(() => catPortraitModel(learningGuideCat.value));
+const focusedCatPortrait = computed(() => catPortraitModel(focusedCat.value));
 const learningCompanionGrowthLabel = computed(() =>
   catWorldLearningCompanionGrowthLabel(learningCompanion.value),
 );
@@ -468,16 +480,8 @@ const ownedFoodCount = computed(() =>
     .reduce((sum, [, count]) => sum + Number(count || 0), 0),
 );
 const lastPlayLabel = computed(() => shopById.value[mood.value.lastPlayItem]?.label || "");
-const activeToolItems = computed(() => {
-  if (activeToolCategory.value === "cat") {
-    return (catProfiles.value.length ? catProfiles.value : roomCats.value)
-      .map((cat) => ({
-        ...cat,
-        category: "cat",
-        count: 1,
-      }));
-  }
-  return shop.value
+const activeToolItems = computed(() =>
+  shop.value
     .filter((item) => item.category === activeToolCategory.value && itemCount(item.id) > 0)
     .map((item) => ({
       ...item,
@@ -485,11 +489,18 @@ const activeToolItems = computed(() => {
       damageInfo: damagedItems.value[item.id] || null,
       styleOptions: item.category === "decor" ? decorStyleOptions(item.id) : [],
       favoriteLabel: itemFavoriteLabel(item),
-    }));
-});
+    })),
+);
 const ownedToolTotal = computed(() =>
   toolCategories.reduce((total, category) => total + ownedToolCount(category.key), 0),
 );
+const roomContextSummary = computed(() => {
+  if (activeRoomPanel.value === "bag") return `${ownedToolTotal.value} 件物品`;
+  if (activeRoomPanel.value === "room") {
+    return `${currentScene.value.label || "当前房间"} · ${roomCats.value.length} 只猫咪`;
+  }
+  return `${focusedCat.value.displayLabel || focusedCat.value.label || "暂无猫咪"} · ${mood.value.label || "等待陪伴"}`;
+});
 const focusedCatThought = computed(() => {
   if (!focusedCat.value?.id) return "活动室里暂时没有猫咪，可以去商店重新领养一只。";
   const agent = focusedAgentState.value || {};
@@ -958,8 +969,19 @@ function selectCollectionCat(cat) {
 
 function toggleCatDiary(cat) {
   if (!cat?.id) return;
+  activeRoomPanel.value = "cat";
   openCatDiaryId.value = cat.id;
   focusedCatId.value = cat.id;
+}
+
+function focusRoomItem(itemId) {
+  selectedDecorId.value = itemId || "";
+  if (!itemId) return;
+  const category = shopById.value[itemId]?.category;
+  activeRoomPanel.value = "bag";
+  if (toolCategories.some((item) => item.key === category)) {
+    activeToolCategory.value = category;
+  }
 }
 
 function closeCatDiary() {
@@ -1031,17 +1053,15 @@ function handleDecorClick(decorId, interaction = null) {
     notice.value = `${item?.label || "这个道具"}不是猫屎，铲子没有消耗。`;
     return;
   }
+  focusRoomItem(decorId);
   if (!roomEditMode.value && interaction?.handled) {
-    selectedDecorId.value = decorId;
     notice.value = interaction.message || `${item?.label || "道具"} 已互动。`;
     return;
   }
   if (!roomEditMode.value) {
-    selectedDecorId.value = decorId;
     notice.value = `点击“编辑物品”后，可以拖动 ${item?.label || "这个道具"} 或切换已解锁配色。`;
     return;
   }
-  selectedDecorId.value = decorId;
   cycleDecorStyle(decorId);
 }
 
@@ -1057,15 +1077,14 @@ function handleRoomToyClick(itemId, interaction = null) {
       notice.value = `${item.label}不是猫屎，铲子没有消耗。`;
       return;
     }
+    focusRoomItem(item.id);
     if (roomEditMode.value) {
-      selectedDecorId.value = item.id;
       notice.value = item.category === "toy"
         ? `已选中 ${item.label}，可以拖动它，保存后猫咪会回到活动室。`
         : `${item.label} 会被猫咪慢慢吃完，暂时不能拖动。`;
       return;
     }
     if (!roomEditMode.value && interaction?.handled) {
-      selectedDecorId.value = item.id;
       notice.value = interaction.message || `${item.label} 已互动。`;
       return;
     }
@@ -1250,6 +1269,10 @@ function setWorldView(view, options = {}) {
   return true;
 }
 
+function setRoomPanel(panel) {
+  activeRoomPanel.value = ["cat", "bag", "room"].includes(panel) ? panel : "cat";
+}
+
 function openShopCategory(category) {
   activeCategory.value = category || "food";
   setWorldView("shop", { scroll: true });
@@ -1272,6 +1295,7 @@ function setRepairMode(enabled) {
     scoopMode.value = false;
     renameMode.value = false;
     renameCursorVisible.value = false;
+    activeRoomPanel.value = "room";
   }
   repairMode.value = nextEnabled;
   toolCursorVisible.value = false;
@@ -1296,6 +1320,7 @@ function setScoopMode(enabled) {
     repairMode.value = false;
     renameMode.value = false;
     renameCursorVisible.value = false;
+    activeRoomPanel.value = "room";
   }
   scoopMode.value = nextEnabled;
   toolCursorVisible.value = false;
@@ -1323,6 +1348,7 @@ function setRenameMode(enabled) {
     scoopMode.value = false;
     toolCursorVisible.value = false;
     catWorldGame.value?.cancelCatCarry?.();
+    activeRoomPanel.value = "cat";
   }
   renameMode.value = nextEnabled;
   renameCursorVisible.value = false;
@@ -1538,6 +1564,7 @@ async function selectScene(scene) {
     setRenameMode(false);
     layoutDirty.value = false;
     roomPanActive.value = false;
+    activeRoomPanel.value = "room";
     notice.value = `已进入${nextPayload.state?.currentScene?.label || scene.label}。`;
     return true;
   } catch (error) {
@@ -1765,6 +1792,7 @@ function showCatReaction(cat = selectedCat.value, message = "", options = {}) {
   const catLabel = cat?.displayLabel || cat?.nickname || cat?.label || "猫咪";
   const nextIndex = catPetSequence.value % catReactionTexts.length;
   const reactionMessage = message || catReactionTexts[nextIndex];
+  activeRoomPanel.value = "cat";
   focusedCatId.value = cat?.id || "";
   catReaction.value = `${catLabel}: ${reactionMessage}`;
   catReactionAnchored.value = options.anchor === false
@@ -1934,6 +1962,7 @@ async function play(item) {
 
 async function cleanLitter() {
   if (roomEditMode.value || busyItemId.value) return;
+  activeRoomPanel.value = "room";
   if (!scoopMode.value) {
     activeToolCategory.value = "consumable";
     notice.value = repairMode.value
@@ -2135,6 +2164,7 @@ async function selectCat(catOrId, options = {}) {
   const profileId = profile?.profileId || (profile?.breedId ? profile.id : "");
   if (!catId || busyItemId.value) return;
   const carry = Boolean(options.carry);
+  activeRoomPanel.value = "cat";
   if (carry) {
     repairMode.value = false;
     scoopMode.value = false;
@@ -2196,6 +2226,7 @@ async function selectCat(catOrId, options = {}) {
           class="cat-world-play-time"
           :class="`is-${playTimeCardState}`"
           aria-label="今日猫咪世界倒计时"
+          :title="playTimeTierLabel"
         >
           <span>今日陪伴倒计时</span>
           <strong>{{ playTimeClock }}</strong>
@@ -2211,7 +2242,10 @@ async function selectCat(catOrId, options = {}) {
       </div>
     </section>
 
-    <section class="cat-world-learning-route" aria-labelledby="cat-world-learning-route-title">
+    <section
+      :class="['cat-world-learning-route', { 'is-expanded': learningRouteExpanded }]"
+      aria-labelledby="cat-world-learning-route-title"
+    >
       <header class="cat-world-learning-guide">
         <button
           class="cat-world-learning-guide-button"
@@ -2257,11 +2291,44 @@ async function selectCat(catOrId, options = {}) {
             <span>{{ learningCompanionGrowthLabel }}</span>
           </p>
         </div>
-        <strong class="cat-world-learning-streak">
-          <FlameIcon :size="17" :stroke-width="2.8" aria-hidden="true" />
-          {{ learningRoute.streak ? `${learningRoute.streak} 天` : "今天开始" }}
-        </strong>
+        <div class="cat-world-learning-route-actions">
+          <strong class="cat-world-learning-progress-label">
+            {{ learningRoute.completedCount }}/3 已完成
+          </strong>
+          <button
+            v-if="activeLearningStep.actionKind === 'energy'"
+            class="cat-world-learning-next-action"
+            type="button"
+            @click="energyModalOpen = true"
+          >
+            {{ activeLearningStep.action }}
+            <MoveRightIcon :size="14" :stroke-width="3" aria-hidden="true" />
+          </button>
+          <a v-else class="cat-world-learning-next-action" :href="activeLearningStep.href">
+            {{ activeLearningStep.action }}
+            <MoveRightIcon :size="14" :stroke-width="3" aria-hidden="true" />
+          </a>
+          <button
+            class="cat-world-learning-route-toggle"
+            type="button"
+            :aria-expanded="learningRouteExpanded"
+            aria-controls="cat-world-learning-route-details"
+            @click="learningRouteExpanded = !learningRouteExpanded"
+          >
+            <span>{{ learningRouteExpanded ? "收起" : "展开路线" }}</span>
+            <ChevronDown :size="17" :stroke-width="3" aria-hidden="true" />
+          </button>
+          <span class="cat-world-learning-streak">
+            <FlameIcon :size="15" :stroke-width="2.8" aria-hidden="true" />
+            {{ learningRoute.streak ? `${learningRoute.streak} 天` : "今天开始" }}
+          </span>
+        </div>
       </header>
+      <div
+        v-show="learningRouteExpanded"
+        id="cat-world-learning-route-details"
+        class="cat-world-learning-route-details"
+      >
       <ol class="cat-world-learning-steps" aria-label="今日英语学习路线">
         <li
           v-for="(step, index) in learningRoute.steps"
@@ -2343,6 +2410,7 @@ async function selectCat(catOrId, options = {}) {
           </li>
         </ol>
       </section>
+      </div>
     </section>
 
     <div class="cat-world-play-area" :class="{ 'is-locked': playTimeLocked }">
@@ -2617,172 +2685,282 @@ async function selectCat(catOrId, options = {}) {
           aria-controls="cat-world-owned-drawer-body"
           @click="bagExpanded = !bagExpanded"
         >
-          <ShoppingBagIcon :size="20" :stroke-width="2.8" aria-hidden="true" />
+          <HouseIcon :size="20" :stroke-width="2.8" aria-hidden="true" />
           <span>
-            <strong>背包与猫咪档案</strong>
-            <small>{{ ownedToolTotal }} 项物品 · {{ catProfiles.length }} 只猫咪</small>
+            <strong>房间助手</strong>
+            <small>{{ roomContextSummary }}</small>
           </span>
           <ChevronDown :size="18" :stroke-width="3" aria-hidden="true" />
         </button>
+
         <div id="cat-world-owned-drawer-body" class="cat-world-owned-drawer-body">
-        <div class="cat-world-owned-overview">
-        <div class="cat-world-owned-head">
-          <div>
-            <p class="section-kicker">Bag</p>
-            <h2>已拥有道具</h2>
-          </div>
-          <span>{{ activeToolItems.length }} 个</span>
-        </div>
-
-        <div class="cat-world-status-bars" aria-label="猫咪状态">
-          <div class="cat-world-status-bar energy">
-            <span>能量</span>
-            <strong>{{ catEnergyScore }}</strong>
-            <i :style="{ width: `${catEnergyScore}%` }"></i>
-          </div>
-          <div class="cat-world-status-bar mood">
-            <span>心情</span>
-            <strong>{{ moodScore }}</strong>
-            <i :style="{ width: `${moodScore}%` }"></i>
-          </div>
-        </div>
-
-        <div v-if="activeFood.active" class="cat-world-active-food">
-          <span>当前食物</span>
-          <strong>{{ activeFood.label }}</strong>
-          <small>优先给 {{ activeFood.targetCatLabel || "体力最低的小猫" }} · 剩余可补体力 {{ activeFood.remainingEnergy || 0 }} · 总计体力 +{{ activeFoodEnergyGain }} · 总计心情 +{{ activeFoodMoodGain }} · {{ formatSeconds(activeFood.remainingSeconds) }}</small>
-        </div>
-
-        <div :class="['cat-world-hygiene-status', { alert: hygiene.count > 0 }]">
-          <span>房间卫生</span>
-          <strong>{{ hygiene.count ? `${hygiene.count} 堆猫屎` : "干净" }}</strong>
-          <small v-if="hygiene.count">每只猫每小时心情额外 -{{ hygieneMoodPenalty }} · 点击房间里的猫屎清理</small>
-          <small v-if="litterBathAccelerationText">{{ litterBathAccelerationText }}</small>
-          <small v-else>猫砂 {{ hygiene.catLitterCount || 0 }} 包 · 铲子 {{ hygiene.scoopCount || 0 }} 把</small>
-          <small v-if="hygiene.hasPlacedCatLitter">已放好豆腐猫砂，等待猫咪使用</small>
-        </div>
-
-        <div v-if="activeCare.active" class="cat-world-active-food cat-world-active-care">
-          <span>放置中的消耗品</span>
-          <strong>{{ activeCare.label }}</strong>
-          <small>{{ activeCare.targetCatLabel || "猫咪" }}会慢慢靠近 · {{ formatSeconds(activeCare.remainingSeconds) }} 后消失</small>
-        </div>
-        </div>
-
-        <div class="cat-world-owned-tools">
-        <div class="cat-world-tool-tabs" role="tablist" aria-label="已拥有道具分类">
-          <button
-            v-for="category in toolCategories"
-            :key="category.key"
-            type="button"
-            :class="{ active: activeToolCategory === category.key }"
-            @click="activeToolCategory = category.key"
-          >
-            {{ category.label }}
-            <span>{{ ownedToolCount(category.key) }}</span>
-          </button>
-        </div>
-
-        <div class="cat-world-owned-list">
-          <article
-            v-for="item in activeToolItems"
-            :key="`${activeToolCategory}-${item.id}`"
-            :class="[
-              'cat-world-owned-item',
-              {
-                active: selectedDecorId === item.id || state.selectedCatProfile === item.id,
-                'repair-equipped': repairMode && item.useType === 'repair-tool',
-                'scoop-equipped': scoopMode && item.useType === 'litter-clean',
-                'rename-equipped': renameMode && item.useType === 'cat-rename',
-                damaged: item.damageInfo,
-                'has-color-swatches': item.category === 'decor' && item.styleOptions?.length,
-              },
-            ]"
-          >
+          <nav class="cat-world-context-tabs" role="tablist" aria-label="房间助手">
             <button
-              class="cat-world-owned-main"
+              id="cat-world-context-cat-tab"
               type="button"
-              :aria-pressed="item.useType === 'repair-tool' ? repairMode : item.useType === 'litter-clean' ? scoopMode : item.useType === 'cat-rename' ? renameMode : null"
-              :disabled="busyItemId === item.id || busyLocationItemId === item.id"
-              @click="handleOwnedToolClick(item)"
+              role="tab"
+              :class="{ active: activeRoomPanel === 'cat' }"
+              :aria-selected="activeRoomPanel === 'cat'"
+              aria-controls="cat-world-context-cat"
+              @click="setRoomPanel('cat')"
             >
-              <CatWorldProductIcon :item="item" compact aria-hidden="true" />
-              <span class="cat-world-owned-copy">
-                <span>{{ item.englishName || item.rarity || item.category }}</span>
-                <strong>{{ item.label }}</strong>
-                <small>{{ ownedToolSubtext(item) }}</small>
-              </span>
+              <CatIcon :size="18" :stroke-width="2.8" aria-hidden="true" />
+              <span><strong>猫咪</strong><small>{{ roomCats.length }} 只在这里</small></span>
             </button>
-            <div v-if="['decor', 'toy'].includes(item.category)" class="cat-world-item-location-actions">
-              <em><MapPinIcon :size="14" :stroke-width="2.6" aria-hidden="true" />{{ item.locationLabel || "一楼活动室" }}</em>
-              <button
-                v-if="itemIsInCurrentScene(item)"
-                type="button"
-                title="收进收纳箱"
-                :disabled="busyLocationItemId === item.id"
-                @click.stop="moveOwnedItem(item, 'storage')"
-              >
-                <ArchiveIcon :size="15" :stroke-width="2.7" aria-hidden="true" />
-                <span>{{ busyLocationItemId === item.id ? "保存中" : "收纳" }}</span>
-              </button>
-              <button
-                v-else
-                type="button"
-                :title="itemCanEnterCurrentScene(item) ? `放到${currentScene.label}` : '这件物品不适合当前区域'"
-                :disabled="busyLocationItemId === item.id || !itemCanEnterCurrentScene(item)"
-                @click.stop="moveOwnedItem(item, currentScene.id)"
-              >
-                <MoveRightIcon :size="15" :stroke-width="2.7" aria-hidden="true" />
-                <span>{{ busyLocationItemId === item.id ? "保存中" : "放到这里" }}</span>
-              </button>
-            </div>
-            <div v-if="item.category === 'decor' && item.styleOptions?.length && itemIsInCurrentScene(item)" class="cat-world-color-swatches" aria-label="已拥有配色">
-              <button
-                v-for="option in item.styleOptions"
-                :key="`${item.id}-${option.tone}`"
-                type="button"
-                class="cat-world-color-swatch"
-                :class="{ active: decorTone(item.id) === option.tone }"
-                :style="{ '--swatch-color': decorToneColor(option.tone) }"
-                :title="option.label"
-                :aria-label="`应用${option.label}`"
-                :disabled="busyItemId === item.id"
-                @click.stop="applyDecorStyle(item.id, option)"
-              ></button>
-            </div>
-          </article>
-          <p v-if="!activeToolItems.length" class="cat-world-owned-empty">这个分类还没有道具，可以在下方商店购买。</p>
-        </div>
-        </div>
-
-        <section class="cat-world-profile-dock" aria-labelledby="cat-world-profile-dock-title">
-          <div class="cat-world-profile-dock-head">
-            <div>
-              <p class="section-kicker">Agent Diary</p>
-              <h3 id="cat-world-profile-dock-title">今日猫咪档案</h3>
-            </div>
-            <span>{{ catAgentDiaries.length }} 只</span>
-          </div>
-          <div class="cat-world-profile-icons" role="list" aria-label="选择猫咪档案">
             <button
-              v-for="cat in catAgentDiaries"
-              :key="`diary-icon-${cat.id}`"
+              id="cat-world-context-bag-tab"
               type="button"
-              :class="['cat-world-profile-icon-button', { active: openCatDiaryId === cat.id }]"
-              aria-haspopup="dialog"
-              :aria-expanded="openCatDiaryId === cat.id"
-              :aria-label="`查看${cat.displayLabel || cat.label}的今日档案`"
-              aria-controls="cat-world-active-diary"
-              @click="toggleCatDiary(cat)"
+              role="tab"
+              :class="{ active: activeRoomPanel === 'bag' }"
+              :aria-selected="activeRoomPanel === 'bag'"
+              aria-controls="cat-world-context-bag"
+              @click="setRoomPanel('bag')"
             >
-              <span class="cat-world-profile-icon" :style="{ '--cat-icon-color': catIconColor(cat.id) }">
-                <CatIcon :size="20" :stroke-width="2.5" aria-hidden="true" />
-              </span>
-              <strong>{{ cat.displayLabel || cat.label }}</strong>
-              <small>{{ cat.currentSceneLabel }} · {{ cat.genderLabel }} · {{ cat.neglectCritical ? cat.neglectStatusLabel : cat.needsBath ? cat.hygieneStatusLabel : cat.dailyMoodLabel }}</small>
+              <ShoppingBagIcon :size="18" :stroke-width="2.8" aria-hidden="true" />
+              <span><strong>背包</strong><small>{{ ownedToolTotal }} 件物品</small></span>
             </button>
-          </div>
-        </section>
+            <button
+              id="cat-world-context-room-tab"
+              type="button"
+              role="tab"
+              :class="{ active: activeRoomPanel === 'room' }"
+              :aria-selected="activeRoomPanel === 'room'"
+              aria-controls="cat-world-context-room"
+              @click="setRoomPanel('room')"
+            >
+              <HouseIcon :size="18" :stroke-width="2.8" aria-hidden="true" />
+              <span><strong>房间</strong><small>{{ hygiene.count ? `${hygiene.count} 处待清理` : "状态正常" }}</small></span>
+            </button>
+          </nav>
+
+          <section
+            v-show="activeRoomPanel === 'cat'"
+            id="cat-world-context-cat"
+            class="cat-world-context-view cat"
+            role="tabpanel"
+            aria-labelledby="cat-world-context-cat-tab"
+          >
+            <header class="cat-world-context-cat-head">
+              <figure
+                :class="[
+                  'cat-world-cat-portrait',
+                  'cat-world-context-cat-portrait',
+                  `pattern-${focusedCatPortrait.pattern}`,
+                  `feature-${focusedCatPortrait.feature}`,
+                ]"
+                :style="focusedCatPortrait.style"
+                aria-hidden="true"
+              >
+                <i class="cat-world-cat-portrait-ear left"></i>
+                <i class="cat-world-cat-portrait-ear right"></i>
+                <i class="cat-world-cat-portrait-face">
+                  <i class="cat-world-cat-portrait-eye left"></i>
+                  <i class="cat-world-cat-portrait-eye right"></i>
+                  <i class="cat-world-cat-portrait-nose"></i>
+                </i>
+              </figure>
+              <div>
+                <p class="section-kicker">Current Cat</p>
+                <h2>{{ focusedCat.displayLabel || focusedCat.label || "暂无猫咪" }}</h2>
+                <small>{{ focusedCat.breedLabel || "等待伙伴" }} · {{ focusedCat.currentSceneLabel || currentScene.label }}</small>
+              </div>
+              <button
+                v-if="focusedCat.id"
+                type="button"
+                @click="toggleCatDiary(focusedCat)"
+              >
+                <span>档案</span>
+                <MoveRightIcon :size="15" :stroke-width="3" aria-hidden="true" />
+              </button>
+            </header>
+
+            <div class="cat-world-status-bars" aria-label="当前猫咪状态">
+              <div class="cat-world-status-bar energy">
+                <span>体力</span>
+                <strong>{{ catEnergyScore }}</strong>
+                <i :style="{ width: `${catEnergyScore}%` }"></i>
+              </div>
+              <div class="cat-world-status-bar mood">
+                <span>心情</span>
+                <strong>{{ moodScore }}</strong>
+                <i :style="{ width: `${moodScore}%` }"></i>
+              </div>
+            </div>
+            <p class="cat-world-context-thought">{{ focusedCatThought }}</p>
+
+            <section class="cat-world-profile-dock" aria-labelledby="cat-world-profile-dock-title">
+              <div class="cat-world-profile-dock-head">
+                <div>
+                  <p class="section-kicker">Agent Diary</p>
+                  <h3 id="cat-world-profile-dock-title">选择猫咪档案</h3>
+                </div>
+                <span>{{ catAgentDiaries.length }} 只</span>
+              </div>
+              <div class="cat-world-profile-icons" role="list" aria-label="选择猫咪档案">
+                <button
+                  v-for="cat in catAgentDiaries"
+                  :key="`diary-icon-${cat.id}`"
+                  type="button"
+                  :class="['cat-world-profile-icon-button', { active: focusedCat.id === cat.id }]"
+                  aria-haspopup="dialog"
+                  :aria-expanded="openCatDiaryId === cat.id"
+                  :aria-label="`查看${cat.displayLabel || cat.label}的今日档案`"
+                  aria-controls="cat-world-active-diary"
+                  @click="toggleCatDiary(cat)"
+                >
+                  <span class="cat-world-profile-icon" :style="{ '--cat-icon-color': catIconColor(cat.id) }">
+                    <CatIcon :size="20" :stroke-width="2.5" aria-hidden="true" />
+                  </span>
+                  <strong>{{ cat.displayLabel || cat.label }}</strong>
+                  <small>{{ cat.currentSceneLabel }} · {{ cat.genderLabel }} · {{ cat.neglectCritical ? cat.neglectStatusLabel : cat.needsBath ? cat.hygieneStatusLabel : cat.dailyMoodLabel }}</small>
+                </button>
+              </div>
+            </section>
+          </section>
+
+          <section
+            v-show="activeRoomPanel === 'bag'"
+            id="cat-world-context-bag"
+            class="cat-world-context-view bag"
+            role="tabpanel"
+            aria-labelledby="cat-world-context-bag-tab"
+          >
+            <div class="cat-world-owned-head">
+              <div>
+                <p class="section-kicker">Bag</p>
+                <h2>已拥有道具</h2>
+              </div>
+              <span>{{ activeToolItems.length }} 个</span>
+            </div>
+
+            <div class="cat-world-owned-tools">
+              <div class="cat-world-tool-tabs" role="tablist" aria-label="已拥有道具分类">
+                <button
+                  v-for="category in toolCategories"
+                  :key="category.key"
+                  type="button"
+                  :class="{ active: activeToolCategory === category.key }"
+                  @click="activeToolCategory = category.key"
+                >
+                  {{ category.label }}
+                  <span>{{ ownedToolCount(category.key) }}</span>
+                </button>
+              </div>
+
+              <div class="cat-world-owned-list">
+                <article
+                  v-for="item in activeToolItems"
+                  :key="`${activeToolCategory}-${item.id}`"
+                  :class="[
+                    'cat-world-owned-item',
+                    {
+                      active: selectedDecorId === item.id,
+                      'repair-equipped': repairMode && item.useType === 'repair-tool',
+                      'scoop-equipped': scoopMode && item.useType === 'litter-clean',
+                      'rename-equipped': renameMode && item.useType === 'cat-rename',
+                      damaged: item.damageInfo,
+                      'has-color-swatches': item.category === 'decor' && item.styleOptions?.length,
+                    },
+                  ]"
+                >
+                  <button
+                    class="cat-world-owned-main"
+                    type="button"
+                    :aria-pressed="item.useType === 'repair-tool' ? repairMode : item.useType === 'litter-clean' ? scoopMode : item.useType === 'cat-rename' ? renameMode : null"
+                    :disabled="busyItemId === item.id || busyLocationItemId === item.id"
+                    @click="handleOwnedToolClick(item)"
+                  >
+                    <CatWorldProductIcon :item="item" compact aria-hidden="true" />
+                    <span class="cat-world-owned-copy">
+                      <span>{{ item.englishName || item.rarity || item.category }}</span>
+                      <strong>{{ item.label }}</strong>
+                      <small>{{ ownedToolSubtext(item) }}</small>
+                    </span>
+                  </button>
+                  <div v-if="['decor', 'toy'].includes(item.category)" class="cat-world-item-location-actions">
+                    <em><MapPinIcon :size="14" :stroke-width="2.6" aria-hidden="true" />{{ item.locationLabel || "一楼活动室" }}</em>
+                    <button
+                      v-if="itemIsInCurrentScene(item)"
+                      type="button"
+                      title="收进收纳箱"
+                      :disabled="busyLocationItemId === item.id"
+                      @click.stop="moveOwnedItem(item, 'storage')"
+                    >
+                      <ArchiveIcon :size="15" :stroke-width="2.7" aria-hidden="true" />
+                      <span>{{ busyLocationItemId === item.id ? "保存中" : "收纳" }}</span>
+                    </button>
+                    <button
+                      v-else
+                      type="button"
+                      :title="itemCanEnterCurrentScene(item) ? `放到${currentScene.label}` : '这件物品不适合当前区域'"
+                      :disabled="busyLocationItemId === item.id || !itemCanEnterCurrentScene(item)"
+                      @click.stop="moveOwnedItem(item, currentScene.id)"
+                    >
+                      <MoveRightIcon :size="15" :stroke-width="2.7" aria-hidden="true" />
+                      <span>{{ busyLocationItemId === item.id ? "保存中" : "放到这里" }}</span>
+                    </button>
+                  </div>
+                  <div v-if="item.category === 'decor' && item.styleOptions?.length && itemIsInCurrentScene(item)" class="cat-world-color-swatches" aria-label="已拥有配色">
+                    <button
+                      v-for="option in item.styleOptions"
+                      :key="`${item.id}-${option.tone}`"
+                      type="button"
+                      class="cat-world-color-swatch"
+                      :class="{ active: decorTone(item.id) === option.tone }"
+                      :style="{ '--swatch-color': decorToneColor(option.tone) }"
+                      :title="option.label"
+                      :aria-label="`应用${option.label}`"
+                      :disabled="busyItemId === item.id"
+                      @click.stop="applyDecorStyle(item.id, option)"
+                    ></button>
+                  </div>
+                </article>
+                <p v-if="!activeToolItems.length" class="cat-world-owned-empty">这个分类还没有道具，可以去猫咪商店购买。</p>
+              </div>
+            </div>
+          </section>
+
+          <section
+            v-show="activeRoomPanel === 'room'"
+            id="cat-world-context-room"
+            class="cat-world-context-view room"
+            role="tabpanel"
+            aria-labelledby="cat-world-context-room-tab"
+          >
+            <div class="cat-world-owned-head">
+              <div>
+                <p class="section-kicker">Room Status</p>
+                <h2>{{ currentScene.label }}</h2>
+              </div>
+              <span>{{ roomCats.length }} 只</span>
+            </div>
+            <div class="cat-world-context-room-counts" aria-label="当前房间概况">
+              <span><strong>{{ roomCats.length }}</strong><small>猫咪</small></span>
+              <span><strong>{{ currentScene.itemCount || 0 }}</strong><small>物品</small></span>
+              <span :class="{ alert: hygiene.count > 0 }"><strong>{{ hygiene.count || 0 }}</strong><small>待清理</small></span>
+            </div>
+
+            <div v-if="activeFood.active" class="cat-world-active-food">
+              <span>当前食物</span>
+              <strong>{{ activeFood.label }}</strong>
+              <small>优先给 {{ activeFood.targetCatLabel || "体力最低的小猫" }} · 剩余可补体力 {{ activeFood.remainingEnergy || 0 }} · 总计体力 +{{ activeFoodEnergyGain }} · 总计心情 +{{ activeFoodMoodGain }} · {{ formatSeconds(activeFood.remainingSeconds) }}</small>
+            </div>
+
+            <div :class="['cat-world-hygiene-status', { alert: hygiene.count > 0 }]">
+              <span>房间卫生</span>
+              <strong>{{ hygiene.count ? `${hygiene.count} 堆猫屎` : "干净" }}</strong>
+              <small v-if="hygiene.count">每只猫每小时心情额外 -{{ hygieneMoodPenalty }} · 点击房间里的猫屎清理</small>
+              <small v-if="litterBathAccelerationText">{{ litterBathAccelerationText }}</small>
+              <small v-else>猫砂 {{ hygiene.catLitterCount || 0 }} 包 · 铲子 {{ hygiene.scoopCount || 0 }} 把</small>
+              <small v-if="hygiene.hasPlacedCatLitter">已放好豆腐猫砂，等待猫咪使用</small>
+            </div>
+
+            <div v-if="activeCare.active" class="cat-world-active-food cat-world-active-care">
+              <span>放置中的消耗品</span>
+              <strong>{{ activeCare.label }}</strong>
+              <small>{{ activeCare.targetCatLabel || "猫咪" }}会慢慢靠近 · {{ formatSeconds(activeCare.remainingSeconds) }} 后消失</small>
+            </div>
+          </section>
         </div>
       </aside>
     </section>

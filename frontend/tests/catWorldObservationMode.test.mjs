@@ -27,7 +27,7 @@ test("daily learning route stays outside the locked play area", async () => {
     readFile(pageUrl, "utf8"),
     readFile(gameUrl, "utf8"),
   ]);
-  const routeIndex = page.indexOf('class="cat-world-learning-route"');
+  const routeIndex = page.indexOf("'cat-world-learning-route'");
   const playAreaIndex = page.indexOf('class="cat-world-play-area"');
 
   assert.ok(routeIndex >= 0);
@@ -54,17 +54,37 @@ test("CAT-OS details are collapsed until requested", async () => {
   assert.match(page, /:aria-expanded="catOsExpanded"/);
 });
 
-test("medium screens keep the bag compact beside its inventory", async () => {
+test("the room assistant separates cat, bag, and room context", async () => {
   const [page, styles] = await Promise.all([
     readFile(pageUrl, "utf8"),
     readFile(stylesUrl, "utf8"),
   ]);
 
-  assert.match(page, /class="cat-world-owned-overview"/);
-  assert.match(page, /class="cat-world-owned-tools"/);
-  assert.match(styles, /@media \(min-width: 761px\) and \(max-width: 1180px\)/);
-  assert.match(styles, /grid-template-areas:\s*"drawer drawer"\s*"overview tools"\s*"profiles profiles"/);
-  assert.match(styles, /\.cat-world-owned-list\s*\{\s*max-height:\s*360px;/);
+  assert.match(page, /const activeRoomPanel = ref\("cat"\);/);
+  assert.match(page, /class="cat-world-context-tabs" role="tablist"/);
+  assert.match(page, /v-show="activeRoomPanel === 'cat'"/);
+  assert.match(page, /v-show="activeRoomPanel === 'bag'"/);
+  assert.match(page, /v-show="activeRoomPanel === 'room'"/);
+  assert.match(page, /activeRoomPanel\.value = "cat";[\s\S]*?petCat\(cat/);
+  assert.match(page, /function focusRoomItem[\s\S]*?activeRoomPanel\.value = "bag";/);
+  assert.match(page, /activeRoomPanel\.value = "room";[\s\S]*?notice\.value = nextEnabled \? "维修模式已开启/);
+  assert.match(styles, /\.cat-world-context-tabs\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,/);
+  assert.match(styles, /\.cat-world-context-tabs > button\.active,[\s\S]*?color:\s*#fff;[\s\S]*?background:\s*#1d7f5b;/);
+});
+
+test("the daily route is compact until its details are requested", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
+
+  assert.match(page, /const learningRouteExpanded = ref\(false\);/);
+  assert.match(page, /'is-expanded': learningRouteExpanded/);
+  assert.match(page, /v-show="learningRouteExpanded"/);
+  assert.match(page, /aria-controls="cat-world-learning-route-details"/);
+  assert.match(page, /learningRouteExpanded \? "收起" : "展开路线"/);
+  assert.match(styles, /\.cat-world-learning-route-details\s*\{\s*display:\s*grid;/);
+  assert.match(styles, /\.cat-world-learning-route:not\(\.is-expanded\) \.cat-world-learning-companion-status\s*\{\s*display:\s*none;/);
 });
 
 test("the workspace separates play, shopping, and cat management into tabs", async () => {

@@ -15827,6 +15827,10 @@ select {
   align-items: start;
 }
 
+.shell[data-quant-radar-page-key="cat-world"] .cat-world-page {
+  gap: 12px;
+}
+
 .cat-world-wallet {
   appearance: none;
   display: grid;
@@ -15844,6 +15848,38 @@ select {
 
 .shell[data-quant-radar-page-key="cat-world"] .cat-world-hero {
   grid-template-columns: minmax(0, 1fr) minmax(400px, 440px);
+  align-items: center;
+  padding: 7px 10px;
+}
+
+.shell[data-quant-radar-page-key="cat-world"] .cat-world-copy h1 {
+  margin: 2px 0 3px;
+  font-size: 23px;
+}
+
+.shell[data-quant-radar-page-key="cat-world"] .cat-world-copy > p:last-child {
+  overflow: hidden;
+  max-width: none;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell[data-quant-radar-page-key="cat-world"] .cat-world-wallet {
+  min-height: 0;
+  padding: 5px 8px;
+}
+
+.shell[data-quant-radar-page-key="cat-world"] .cat-world-wallet strong {
+  font-size: 21px;
+}
+
+.shell[data-quant-radar-page-key="cat-world"] .cat-world-wallet .cat-world-wallet-today {
+  top: 5px;
+  right: 5px;
+  font-size: 9px;
 }
 
 .cat-world-hero-status {
@@ -15860,7 +15896,7 @@ select {
   min-width: 0;
   border: 4px solid #2c2f3a;
   border-radius: 6px;
-  padding: 10px;
+  padding: 5px 8px;
   color: #f8ffff;
   background:
     linear-gradient(90deg, rgba(142, 231, 255, 0.13) 1px, transparent 1px),
@@ -15880,10 +15916,10 @@ select {
 }
 
 .cat-world-play-time strong {
-  margin: 3px 0;
+  margin: 1px 0;
   color: #fff38c;
   font-family: "Courier New", monospace;
-  font-size: 29px;
+  font-size: 21px;
   line-height: 1;
   letter-spacing: 0;
   text-shadow: 2px 2px 0 #2c2f3a;
@@ -15897,14 +15933,17 @@ select {
   line-height: 1.35;
 }
 
+.cat-world-play-time small {
+  display: none;
+}
+
 .cat-world-play-time.is-waiting strong,
 .cat-world-play-time.is-finished strong {
   color: #ffb9cb;
 }
 
 .cat-world-learning-route {
-  display: grid;
-  grid-template-columns: minmax(300px, 0.84fr) minmax(0, 2.16fr);
+  display: block;
   overflow: hidden;
   border: 4px solid #2c2f3a;
   border-radius: 5px;
@@ -15913,12 +15952,251 @@ select {
   box-shadow: 6px 6px 0 #2c2f3a;
 }
 
+.cat-world-context-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  border-bottom: 3px solid #2c2f3a;
+  padding-bottom: 9px;
+}
+
+.shell[data-quant-radar-page-key="cat-world"] .cat-world-room-panel .cat-world-scene-tabs {
+  gap: 6px;
+  margin-bottom: 8px;
+  padding-bottom: 7px;
+}
+
+.shell[data-quant-radar-page-key="cat-world"] .cat-world-room-panel .cat-world-scene-tabs button {
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.shell[data-quant-radar-page-key="cat-world"] .cat-world-room-head {
+  margin-bottom: 8px;
+}
+
+.shell[data-quant-radar-page-key="cat-world"] .cat-world-room-head .cat-world-mood {
+  padding: 4px 8px;
+}
+
+.shell[data-quant-radar-page-key="cat-world"] .cat-world-room-head .cat-world-mood strong {
+  font-size: 18px;
+}
+
+.shell[data-quant-radar-page-key="cat-world"] .cat-world-room-head .cat-world-edit-button {
+  min-height: 36px;
+  padding: 6px 10px;
+}
+
+.shell[data-quant-radar-page-key="cat-world"] .cat-world-ai-panel {
+  margin-bottom: 8px;
+  padding: 7px 9px;
+}
+
+.cat-world-context-tabs > button {
+  appearance: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 43px;
+  border: 3px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 5px 6px;
+  color: #263047;
+  background: #fff8df;
+  box-shadow: 2px 2px 0 #2c2f3a;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cat-world-context-tabs > button > span {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.cat-world-context-tabs > button strong,
+.cat-world-context-tabs > button small {
+  overflow: hidden;
+  color: inherit;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cat-world-context-tabs > button strong {
+  font-size: 11px;
+}
+
+.cat-world-context-tabs > button small {
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.cat-world-context-tabs > button.active,
+.cat-world-context-tabs > button:hover,
+.cat-world-context-tabs > button:focus-visible {
+  color: #fff;
+  background: #1d7f5b;
+}
+
+.cat-world-context-tabs > button.active :where(span, strong, small),
+.cat-world-context-tabs > button:hover :where(span, strong, small),
+.cat-world-context-tabs > button:focus-visible :where(span, strong, small) {
+  color: #fff;
+}
+
+.cat-world-context-view {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 11px;
+  min-height: 0;
+  padding-top: 10px;
+}
+
+.cat-world-context-cat-head {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+}
+
+.cat-world-context-cat-portrait {
+  width: 50px;
+  height: 50px;
+  margin: 0;
+  box-shadow: 3px 3px 0 #2c2f3a;
+}
+
+.cat-world-context-cat-head > div {
+  min-width: 0;
+}
+
+.cat-world-context-cat-head h2,
+.cat-world-context-cat-head p,
+.cat-world-context-cat-head small {
+  display: block;
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cat-world-context-cat-head h2 {
+  color: #263047;
+  font-size: 16px;
+}
+
+.cat-world-context-cat-head small {
+  color: #526178;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.cat-world-context-cat-head > button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 30px;
+  border: 2px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 5px 6px;
+  color: #263047;
+  background: #d9f6ff;
+  box-shadow: 2px 2px 0 #2c2f3a;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.cat-world-context-cat-head > button:hover,
+.cat-world-context-cat-head > button:focus-visible {
+  color: #fff;
+  background: #1d7f5b;
+}
+
+.cat-world-context-thought {
+  margin: 0;
+  border: 2px solid rgba(44, 47, 58, 0.28);
+  border-left: 5px solid #1d7f5b;
+  padding: 7px 8px;
+  color: #40516b;
+  background: #edf9ff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.cat-world-context-view.cat .cat-world-profile-dock {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.cat-world-context-view.cat .cat-world-profile-icons {
+  align-content: start;
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 2px 4px 4px 0;
+}
+
+.cat-world-context-view.bag .cat-world-owned-tools {
+  flex: 1 1 auto;
+}
+
+.cat-world-context-room-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.cat-world-context-room-counts > span {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  border: 2px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 7px 4px;
+  color: #263047;
+  background: #d9f6ff;
+  box-shadow: 2px 2px 0 #2c2f3a;
+}
+
+.cat-world-context-room-counts strong {
+  color: #176f58;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.cat-world-context-room-counts small {
+  color: #526178;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.cat-world-context-room-counts > span.alert {
+  background: #ffe1df;
+}
+
+.cat-world-context-room-counts > span.alert strong {
+  color: #a22c2c;
+}
+
 .cat-world-owned-drawer-toggle {
   display: none;
 }
 
 .cat-world-owned-drawer-body {
-  display: contents;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .cat-world-owned-overview,
@@ -15936,11 +16214,10 @@ select {
 
 .cat-world-learning-guide {
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
+  grid-template-columns: 52px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  border-right: 3px solid #2c2f3a;
-  padding: 12px;
+  gap: 9px;
+  padding: 7px 9px;
   background:
     linear-gradient(90deg, rgba(32, 48, 64, 0.06) 1px, transparent 1px),
     linear-gradient(0deg, rgba(32, 48, 64, 0.06) 1px, transparent 1px),
@@ -15948,10 +16225,14 @@ select {
   background-size: 10px 10px, 10px 10px, auto;
 }
 
+.cat-world-learning-route.is-expanded .cat-world-learning-guide {
+  border-bottom: 3px solid #2c2f3a;
+}
+
 .cat-world-learning-guide-portrait {
   margin: 0;
-  width: 58px;
-  height: 58px;
+  width: 52px;
+  height: 52px;
   box-shadow: 3px 3px 0 #2c2f3a;
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
@@ -15960,8 +16241,8 @@ select {
   appearance: none;
   display: grid;
   place-items: center;
-  width: 58px;
-  height: 58px;
+  width: 52px;
+  height: 52px;
   border: 0;
   border-radius: 4px;
   padding: 0;
@@ -15987,7 +16268,7 @@ select {
 }
 
 .cat-world-learning-guide h2 {
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1.25;
 }
 
@@ -16052,17 +16333,94 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  grid-column: 2;
-  justify-self: start;
-  align-self: start;
   border: 2px solid #2c2f3a;
   border-radius: 3px;
-  padding: 5px 7px;
+  padding: 4px 6px;
   color: #fff;
   background: #db557b;
   box-shadow: 2px 2px 0 #2c2f3a;
-  font-size: 11px;
+  font-size: 10px;
   white-space: nowrap;
+}
+
+.cat-world-learning-route-actions {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  align-items: center;
+  justify-content: end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cat-world-learning-progress-label {
+  color: #176f58;
+  font-size: 11px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cat-world-learning-next-action,
+.cat-world-learning-route-toggle {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 28px;
+  border: 2px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 4px 7px;
+  box-shadow: 2px 2px 0 #2c2f3a;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.cat-world-learning-next-action {
+  color: #fff;
+  background: #1d7f5b;
+}
+
+.cat-world-learning-route-toggle {
+  color: #263047;
+  background: #fff8df;
+}
+
+.cat-world-learning-route-toggle svg {
+  transition: transform 140ms ease;
+}
+
+.cat-world-learning-route.is-expanded .cat-world-learning-route-toggle svg {
+  transform: rotate(180deg);
+}
+
+.cat-world-learning-next-action:hover,
+.cat-world-learning-next-action:focus-visible {
+  color: #fff;
+  background: #146d4f;
+}
+
+.cat-world-learning-route-toggle:hover,
+.cat-world-learning-route-toggle:focus-visible {
+  color: #176f58;
+  background: #fff3ad;
+}
+
+.cat-world-learning-route-details {
+  display: grid;
+  min-width: 0;
+}
+
+.cat-world-learning-route:not(.is-expanded) .cat-world-learning-companion-status {
+  display: none;
+}
+
+.cat-world-learning-route:not(.is-expanded) .cat-world-learning-style {
+  display: none;
 }
 
 .cat-world-learning-steps {
@@ -16436,7 +16794,7 @@ select {
 .cat-world-play-area,
 .cat-world-play-content {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .cat-world-view-switcher {
@@ -16445,7 +16803,7 @@ select {
   gap: 7px;
   border: 4px solid #2c2f3a;
   border-radius: 5px;
-  padding: 7px;
+  padding: 5px;
   background: #d9f6ff;
   box-shadow: 5px 5px 0 #2c2f3a;
 }
@@ -16457,10 +16815,10 @@ select {
   justify-content: center;
   gap: 8px;
   min-width: 0;
-  min-height: 50px;
+  min-height: 42px;
   border: 3px solid #2c2f3a;
   border-radius: 3px;
-  padding: 6px 10px;
+  padding: 4px 9px;
   color: #263047;
   background: #fff8df;
   box-shadow: 3px 3px 0 #2c2f3a;
@@ -16608,13 +16966,8 @@ select {
     grid-template-columns: 1fr;
   }
 
-  .cat-world-learning-route {
-    grid-template-columns: 1fr;
-  }
-
   .cat-world-learning-guide {
-    border-right: 0;
-    border-bottom: 3px solid #2c2f3a;
+    grid-template-columns: 52px minmax(0, 1fr) auto;
   }
 }
 
@@ -16633,9 +16986,34 @@ select {
     padding: 9px;
   }
 
-  .cat-world-learning-streak {
-    grid-column: 2;
+  .cat-world-learning-guide {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
+  .cat-world-learning-guide-button,
+  .cat-world-learning-guide-portrait {
+    width: 48px;
+    height: 48px;
+  }
+
+  .cat-world-learning-route-actions {
+    grid-column: 1 / -1;
+    grid-template-columns: auto auto 1fr auto;
+    justify-content: stretch;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .cat-world-learning-progress-label {
+    text-align: left;
+  }
+
+  .cat-world-learning-next-action {
     justify-self: start;
+  }
+
+  .cat-world-learning-streak {
+    justify-self: end;
   }
 
   .cat-world-learning-steps {
@@ -17210,40 +17588,15 @@ select {
 @media (min-width: 761px) and (max-width: 1180px) {
   .cat-world-owned-panel {
     position: static;
-    display: grid;
-    grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
-    grid-template-areas:
-      "drawer drawer"
-      "overview tools"
-      "profiles profiles";
-    align-items: start;
     height: auto;
   }
 
   .cat-world-owned-panel:not(.is-drawer-open) {
-    grid-template-columns: 1fr;
-    grid-template-areas: "drawer";
-  }
-
-  .cat-world-owned-drawer-toggle {
-    grid-area: drawer;
-  }
-
-  .cat-world-owned-overview {
-    grid-area: overview;
-  }
-
-  .cat-world-owned-tools {
-    grid-area: tools;
-    align-self: stretch;
+    display: block;
   }
 
   .cat-world-owned-list {
     max-height: 360px;
-  }
-
-  .cat-world-profile-dock {
-    grid-area: profiles;
   }
 
   .cat-world-profile-icons {
