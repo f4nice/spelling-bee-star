@@ -3853,7 +3853,9 @@ class CatWorldScene extends Phaser.Scene {
       itemId: selected.itemId,
       itemKind: selected.point.itemKind,
       label: selected.point.label || "学习角",
-      message: `${activeStep.label}还没完成，我先在${selected.point.label || "学习角"}旁边等你。`,
+      message: activeStep.key === "warmup" && !signal.starterComplete
+        ? `先做 5 词点亮起步爪印，我在${selected.point.label || "学习角"}旁边陪你开始。`
+        : `${activeStep.label}还没完成，我先在${selected.point.label || "学习角"}旁边等你。`,
       animation: "book",
       priority: clamp(64 + Math.round(attention / 6), 62, 84),
       x: clamp(selected.point.x + seededOffset(`${cat.id}:${activeStep.key}:learning-x`, 26), 38, GAME_WIDTH - 132),

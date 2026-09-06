@@ -70,9 +70,24 @@ test("learning route starts with a gentle spelling target", () => {
 
   assert.equal(route.title, "咪咪的今日陪学路线");
   assert.equal(route.completedCount, 0);
+  assert.equal(route.starterComplete, true);
+  assert.equal(route.starterCount, 5);
   assert.equal(route.steps[0].active, true);
+  assert.match(route.steps[0].detail, /起步爪印/);
   assert.match(route.steps[0].detail, /8\/20/);
   assert.equal(route.steps[1].alternateHref, "/debate");
+});
+
+test("the first five words form a visible low-pressure starting step", () => {
+  const waiting = buildCatWorldLearningRoute({ todaySpellingCount: 3 });
+  const started = buildCatWorldLearningRoute({ todaySpellingCount: 5 });
+
+  assert.equal(waiting.starterComplete, false);
+  assert.equal(waiting.starterCount, 3);
+  assert.equal(waiting.starterRemaining, 2);
+  assert.match(waiting.steps[0].detail, /3\/5/);
+  assert.equal(started.starterComplete, true);
+  assert.match(started.steps[0].detail, /5\/20/);
 });
 
 test("a cat learning style changes guidance order without changing the balanced goal", () => {
@@ -137,7 +152,10 @@ test("room learning signal lights input, output, and the completed loop independ
 
   assert.equal(starting.completedCount, 0);
   assert.equal(starting.steps[0].active, true);
-  assert.equal(starting.token, "2026-09-07:cat-calm:starting:0");
+  assert.equal(starting.starterComplete, true);
+  assert.equal(starting.stageKey, "started");
+  assert.equal(starting.statusLabel, "5 词起步完成");
+  assert.equal(starting.token, "2026-09-07:cat-calm:started:0");
   assert.equal(outputFirst.completedCount, 1);
   assert.equal(outputFirst.stageKey, "output");
   assert.equal(outputFirst.steps[1].completed, true);
@@ -155,6 +173,10 @@ test("learning companion milestone tokens are stable and skip the starting state
   assert.equal(
     catWorldLearningCompanionToken({ date: "2026-09-06", catId: "cat-123", statusKey: "starting" }),
     "",
+  );
+  assert.equal(
+    catWorldLearningCompanionToken({ date: "2026-09-06", catId: "cat-123", statusKey: "started" }),
+    "2026-09-06:cat-123:started",
   );
   assert.equal(catWorldLearningCompanionToken({ statusKey: "loop" }), "");
 });

@@ -2406,7 +2406,30 @@ async function selectCat(catOrId, options = {}) {
         <div>
           <p class="section-kicker">Cat Quest</p>
           <h2 id="cat-world-learning-route-title">{{ learningRoute.title }}</h2>
-          <p class="cat-world-learning-coach-line">{{ learningRoute.coachLine }}</p>
+          <div class="cat-world-learning-coach-row">
+            <p class="cat-world-learning-coach-line">{{ learningRoute.coachLine }}</p>
+            <div
+              :class="['cat-world-learning-starter', { complete: learningRoute.starterComplete }]"
+              role="progressbar"
+              :aria-valuenow="learningRoute.starterCount"
+              aria-valuemin="0"
+              :aria-valuemax="learningRoute.starterTarget"
+              :aria-label="learningRoute.starterComplete ? '今日 5 词起步已完成' : `今日已完成 ${learningRoute.starterCount} 个起步词`"
+            >
+              <span>
+                <PawPrintIcon :size="12" :stroke-width="2.8" aria-hidden="true" />
+                5 词起步
+              </span>
+              <i class="cat-world-learning-starter-track" aria-hidden="true">
+                <i
+                  v-for="index in learningRoute.starterTarget"
+                  :key="index"
+                  :class="{ filled: index <= learningRoute.starterCount }"
+                ></i>
+              </i>
+              <strong>{{ learningRoute.starterCount }}/{{ learningRoute.starterTarget }}</strong>
+            </div>
+          </div>
           <p
             class="cat-world-learning-style"
             :title="learningRoute.learningStyleDescription"

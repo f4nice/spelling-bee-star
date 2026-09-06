@@ -117,6 +117,29 @@ class CatWorldIndividualProfileTest(unittest.TestCase):
             )
             companion_log.mood_score = 70
             other_log.mood_score = 70
+            starting_habit = {
+                "todaySpellingCount": 5,
+                "todayHasEssay": False,
+                "todayHasDebate": False,
+                "todayBalanceComplete": False,
+                "nextAction": "再完成 15 词",
+            }
+            starting_reward = cat_world_apply_learning_companion_rewards(
+                state,
+                companion_log,
+                companion_cat,
+                companion_cat["traits"],
+                starting_habit,
+                now,
+            )
+
+            self.assertEqual(starting_reward["statusKey"], "started")
+            self.assertEqual(starting_reward["statusLabel"], "已陪你迈出第一步")
+            self.assertEqual(starting_reward["newMilestones"], ["started"])
+            self.assertEqual(starting_reward["newMoodGain"], 1)
+            self.assertEqual(starting_reward["newBondGain"], 1)
+            self.assertEqual(companion_log.mood_score, 71)
+
             habit = {
                 "todaySpellingCount": 20,
                 "todayHasEssay": True,
@@ -140,28 +163,28 @@ class CatWorldIndividualProfileTest(unittest.TestCase):
             self.assertEqual(reward["newMilestones"], ["warmup", "output", "loop"])
             self.assertEqual(reward["newMoodGain"], 7)
             self.assertEqual(reward["newBondGain"], 3)
-            self.assertEqual(companion_log.mood_score, 77)
+            self.assertEqual(companion_log.mood_score, 78)
             self.assertEqual(other_log.mood_score, 70)
             bonds = parse_cat_world_bonds(state.cat_bonds)
-            self.assertEqual(bonds[companion.profile_id]["score"], 21)
+            self.assertEqual(bonds[companion.profile_id]["score"], 22)
             self.assertNotIn(other_cat.profile_id, bonds)
             agent_state = parse_cat_world_agent_state(companion_log.agent_state)
             self.assertTrue(agent_state["learningCompanionAssigned"])
             self.assertEqual(
                 set(agent_state["learningCompanionMilestones"]),
-                {"warmup", "output", "loop"},
+                {"started", "warmup", "output", "loop"},
             )
             companion_events = [
                 event
                 for event in agent_state.get("events", [])
                 if event.get("kind") == "learning-companion"
             ]
-            self.assertEqual(len(companion_events), 3)
+            self.assertEqual(len(companion_events), 4)
             self.assertEqual(
                 {event.get("label") for event in companion_events},
-                {"20 词热身", "英语输出", "今日学习闭环"},
+                {"5 词起步", "20 词热身", "英语输出", "今日学习闭环"},
             )
-            self.assertEqual(len({event.get("message") for event in companion_events}), 3)
+            self.assertEqual(len({event.get("message") for event in companion_events}), 4)
 
             duplicate = cat_world_apply_learning_companion_rewards(
                 state,
@@ -174,16 +197,18 @@ class CatWorldIndividualProfileTest(unittest.TestCase):
             self.assertFalse(duplicate["changed"])
             self.assertEqual(duplicate["newMoodGain"], 0)
             self.assertEqual(duplicate["newBondGain"], 0)
-            self.assertEqual(companion_log.mood_score, 77)
-            self.assertEqual(parse_cat_world_bonds(state.cat_bonds)[companion.profile_id]["score"], 21)
+            self.assertEqual(companion_log.mood_score, 78)
+            self.assertEqual(parse_cat_world_bonds(state.cat_bonds)[companion.profile_id]["score"], 22)
 
     def test_learning_companion_lines_follow_individual_temperament(self):
         calm = cat_world_learning_companion_message({"temperament": "calm"}, "warmup")
         chatty = cat_world_learning_companion_message({"temperament": "chatty"}, "warmup")
+        gentle_start = cat_world_learning_companion_message({"temperament": "gentle"}, "started")
 
         self.assertNotEqual(calm, chatty)
         self.assertIn("20 词", calm)
         self.assertIn("听", chatty)
+        self.assertIn("慢慢", gentle_start)
 
     def test_learning_companion_lines_follow_the_cat_learning_style(self):
         style = {"key": "idea-sparring"}

@@ -16729,6 +16729,81 @@ select {
   line-height: 1.35;
 }
 
+.cat-world-learning-coach-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 8px;
+  margin-top: 4px;
+}
+
+.cat-world-learning-coach-row .cat-world-learning-coach-line {
+  flex: 1 1 220px;
+  margin-top: 0;
+}
+
+.cat-world-learning-starter {
+  display: inline-grid;
+  grid-template-columns: auto auto auto;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  border: 2px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 2px 5px;
+  color: #263047;
+  background: #fff8df;
+  box-shadow: 2px 2px 0 #2c2f3a;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.cat-world-learning-starter > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.cat-world-learning-starter > strong {
+  color: #176f58;
+  font-size: 9px;
+}
+
+.cat-world-learning-starter-track {
+  display: grid;
+  grid-template-columns: repeat(5, 7px);
+  gap: 2px;
+  font-style: normal;
+}
+
+.cat-world-learning-starter-track > i {
+  width: 7px;
+  height: 7px;
+  border: 1px solid #2c2f3a;
+  border-radius: 2px;
+  background: #fff;
+}
+
+.cat-world-learning-starter-track > i.filled {
+  background: #ffcf59;
+}
+
+.cat-world-learning-starter.complete {
+  color: #fff;
+  background: #1d7f5b;
+}
+
+.cat-world-learning-starter.complete > strong {
+  color: #fff;
+}
+
+.cat-world-learning-starter.complete .cat-world-learning-starter-track > i.filled {
+  background: #fff3ad;
+}
+
 .cat-world-learning-guide .cat-world-learning-style {
   display: flex;
   flex-wrap: wrap;
@@ -17476,6 +17551,14 @@ select {
   .cat-world-learning-guide-portrait {
     width: 48px;
     height: 48px;
+  }
+
+  .cat-world-learning-coach-row {
+    align-items: flex-start;
+  }
+
+  .cat-world-learning-coach-row .cat-world-learning-coach-line {
+    flex-basis: 100%;
   }
 
   .cat-world-learning-route-actions {

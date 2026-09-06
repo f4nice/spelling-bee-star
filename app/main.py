@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-028"
-DEFAULT_PAGE_VERSION = "v20260906.28"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-029"
+DEFAULT_PAGE_VERSION = "v20260906.29"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -581,11 +581,12 @@ CAT_WORLD_CAT_LEARNING_STYLES = [
         "key": "gentle-starter",
         "label": "小步热身搭档",
         "focusKey": "warmup",
-        "focusLabel": "先用 20 词启动",
+        "focusLabel": "先用 5 词起步",
         "preferredOutput": "essay",
         "description": "擅长把任务拆小，先完成容易开始的词汇热身。",
         "messages": {
-            "starting": "先做 20 个词，我陪你把今天轻轻启动。",
+            "starting": "先做 5 个词点亮起步爪印，我陪你把今天轻轻启动。",
+            "started": "起步爪印亮啦，再慢慢积累到 20 词就完成热身。",
             "warmup": "20 词热身完成啦，接下来把这些词写进一段英语。",
             "output": "表达已经完成，再补 20 词就能把今天收好。",
             "loop": "今天从小步热身到表达都完成啦，节奏很稳。",
@@ -599,7 +600,8 @@ CAT_WORLD_CAT_LEARNING_STYLES = [
         "preferredOutput": "essay",
         "description": "喜欢把当天练过的词汇组织成完整的英文表达。",
         "messages": {
-            "starting": "先收集 20 个词，等会儿我们把它们写成一段完整的话。",
+            "starting": "先收集 5 个词点亮起步爪印，等会儿我们再把词写成完整的话。",
+            "started": "已经收集了开头 5 词，再积累到 20 词，故事材料会更丰富。",
             "warmup": "词汇材料准备好了，去写一篇英文作文给我看吧。",
             "output": "这次表达已经写出来了，再补足词汇热身就完整啦。",
             "loop": "今天练过的词已经变成了自己的表达，我很喜欢这一页。",
@@ -613,7 +615,8 @@ CAT_WORLD_CAT_LEARNING_STYLES = [
         "preferredOutput": "debate",
         "description": "会鼓励你用英语整理观点，再大胆回应不同意见。",
         "messages": {
-            "starting": "先热身 20 个词，等会儿去 AI Debate 说说你的观点。",
+            "starting": "先用 5 个词开场，点亮起步爪印后再准备 AI Debate。",
+            "started": "开场词已经准备好，再热身到 20 词，我们就去说观点。",
             "warmup": "词汇已经热身好了，去 AI Debate 把观点讲清楚吧。",
             "output": "观点表达完成，再补 20 词就能形成今天的闭环。",
             "loop": "今天既有词汇输入，也把观点说出来了，很有力量。",
@@ -627,7 +630,8 @@ CAT_WORLD_CAT_LEARNING_STYLES = [
         "preferredOutput": "essay",
         "description": "会提醒你把词汇输入和英语表达放在同一天完成。",
         "messages": {
-            "starting": "今天先输入一点，再用英语表达一次，我帮你守住闭环。",
+            "starting": "今天先输入 5 个词点亮起步爪印，再用英语表达一次。",
+            "started": "第一步已经亮了，再完成 20 词热身和一次表达，我帮你守住闭环。",
             "warmup": "输入格已经亮了，再完成一次英语输出就能闭环。",
             "output": "输出格已经亮了，再练 20 个词就能闭环。",
             "loop": "三格都亮了，今天的输入和输出已经好好连在一起。",
@@ -641,7 +645,8 @@ CAT_WORLD_CAT_LEARNING_STYLES = [
         "preferredOutput": "debate",
         "description": "更在意每天都开始一点，让学习节奏能够持续。",
         "messages": {
-            "starting": "今天不用做很多，先留下 20 个词的学习记录吧。",
+            "starting": "今天不用做很多，先留下 5 个词的起步记录吧。",
+            "started": "今天已经留下第一笔记录，再慢慢走到 20 词就很好。",
             "warmup": "今天已经顺利开始，再表达一次会让这天更完整。",
             "output": "今天已经用过英语，再补 20 词就能守住完整记录。",
             "loop": "今天的连续记录已经稳稳留下，明天我还会等你。",
@@ -655,7 +660,8 @@ CAT_WORLD_CAT_LEARNING_STYLES = [
         "preferredOutput": "essay",
         "description": "喜欢先整理一小组词，再通过表达加深记忆。",
         "messages": {
-            "starting": "先挑 20 个词慢慢复习，不熟的词多见几次就会记住。",
+            "starting": "先挑 5 个词慢慢复习，点亮起步爪印后再继续。",
+            "started": "前 5 个词已经复习过了，再整理到 20 词会记得更牢。",
             "warmup": "这一小组词复习好了，用一次英语会记得更牢。",
             "output": "表达已经完成，再整理 20 个词就能巩固今天的记忆。",
             "loop": "复习和表达都完成了，今天的记忆已经加固。",
@@ -14860,7 +14866,7 @@ def cat_world_learning_habit_source(
             "currentStreak": 0,
             "recentDays": cat_world_learning_week_days(source_date, {}, set(), set()),
             "todayDetail": "新学习节奏尚未开始",
-            "nextAction": "先完成 20 个拼写词，开启今天的学习节奏",
+            "nextAction": "先完成 5 个拼写词点亮起步爪印，再慢慢到 20 词热身",
         }
 
     spelling_by_date = {
@@ -14941,7 +14947,9 @@ def cat_world_learning_habit_source(
         ((target, energy) for target, energy in CAT_WORLD_SPELLING_HABIT_ENERGY_TIERS if today_spelling < target),
         None,
     )
-    if next_tier:
+    if today_spelling < 5:
+        next_action = f"再完成 {5 - today_spelling} 词，点亮起步爪印，再慢慢到 20 词热身"
+    elif next_tier:
         target, energy = next_tier
         next_action = f"再完成 {target - today_spelling} 词，习惯奖励再 +{energy}"
     elif not (today_reward.get("hasEssay") or today_reward.get("hasDebate")):
@@ -17325,6 +17333,7 @@ def append_cat_world_agent_event(
 
 
 CAT_WORLD_LEARNING_COMPANION_MILESTONES = (
+    {"key": "started", "label": "5 词起步", "moodGain": 1, "bondGain": 1},
     {"key": "warmup", "label": "20 词热身", "moodGain": 2, "bondGain": 1},
     {"key": "output", "label": "英语输出", "moodGain": 2, "bondGain": 1},
     {"key": "loop", "label": "今日学习闭环", "moodGain": 3, "bondGain": 1},
@@ -17385,6 +17394,13 @@ def cat_world_learning_companion_message(
             "guardian": f"{action}。今天的学习路线交给我守着。",
             "gentle": f"{action}。不用着急，我们慢慢开始。",
         },
+        "started": {
+            "calm": "5 词已经记下来了，今天的第一步很稳，再慢慢走到 20 词。",
+            "clingy": "起步爪印亮起来啦，我贴着你再陪一小段。",
+            "chatty": "我听见今天的前 5 个词了，再念一些给我听吧。",
+            "guardian": "今天的起步目标已经守住，接下来慢慢完成 20 词热身。",
+            "gentle": "已经开始就很好，我们不赶，慢慢走到 20 词。",
+        },
         "warmup": {
             "calm": "20 词已经稳稳记下了，我陪你把英语再用出来。",
             "clingy": "热身完成啦，我还想贴着你一起完成一次英语输出。",
@@ -17425,13 +17441,25 @@ def cat_world_apply_learning_companion_rewards(
     has_output = bool(habit.get("todayHasEssay") or habit.get("todayHasDebate"))
     loop_complete = bool(habit.get("todayBalanceComplete")) or (spelling_count >= 20 and has_output)
     reached = {
+        "started": spelling_count >= 5,
         "warmup": spelling_count >= 20,
         "output": has_output,
         "loop": loop_complete,
     }
-    status_key = "loop" if loop_complete else ("warmup" if reached["warmup"] else ("output" if has_output else "starting"))
+    status_key = (
+        "loop"
+        if loop_complete
+        else "warmup"
+        if reached["warmup"]
+        else "output"
+        if has_output
+        else "started"
+        if reached["started"]
+        else "starting"
+    )
     status_labels = {
         "starting": "等待一起热身",
+        "started": "已陪你迈出第一步",
         "warmup": "已陪你完成热身",
         "output": "已陪你完成表达",
         "loop": "今日闭环搭档",

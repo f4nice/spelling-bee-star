@@ -1,4 +1,5 @@
 const MINIMUM_SPELLING_TARGET = 20;
+const STARTER_SPELLING_TARGET = 5;
 
 const ROOM_LEARNING_STEPS = Object.freeze([
   Object.freeze({ key: "warmup", label: "20词" }),
@@ -35,6 +36,7 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
   const hasEssay = Boolean(habit.todayHasEssay);
   const hasDebate = Boolean(habit.todayHasDebate);
   const hasOutput = hasEssay || hasDebate;
+  const starterComplete = spellingCount >= STARTER_SPELLING_TARGET;
   const warmupComplete = spellingCount >= MINIMUM_SPELLING_TARGET;
   const learningLoopComplete = Boolean(habit.todayBalanceComplete) || (warmupComplete && hasOutput);
   const guideName = cat.nickname || cat.label || cat.breedLabel || cat.displayLabel || "主猫";
@@ -53,7 +55,9 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
       label: "20 词热身",
       detail: warmupComplete
         ? `已完成 ${spellingCount} 词，今天顺利启动`
-        : `${spellingCount}/${MINIMUM_SPELLING_TARGET} 词，先做一小份`,
+        : starterComplete
+          ? `已点亮起步爪印 · ${spellingCount}/${MINIMUM_SPELLING_TARGET} 词，继续小步积累`
+          : `${spellingCount}/${STARTER_SPELLING_TARGET} 词，先点亮起步爪印`,
       action: warmupComplete ? "继续积累" : "去练单词",
       href: "/lists",
       completed: warmupComplete,
@@ -100,6 +104,10 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
     learningStyleDescription: learningStyle.description || "陪你用适合自己的节奏完成今天的英语学习。",
     preferredOutput,
     streak,
+    starterTarget: STARTER_SPELLING_TARGET,
+    starterCount: Math.min(spellingCount, STARTER_SPELLING_TARGET),
+    starterRemaining: Math.max(STARTER_SPELLING_TARGET - spellingCount, 0),
+    starterComplete,
     completedCount: steps.filter((step) => step.completed).length,
     steps: steps.map((step, index) => ({ ...step, active: index === activeIndex })),
   };
@@ -107,6 +115,7 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
 
 export function buildCatWorldRoomLearningSignal(habit = {}, cat = {}, companion = {}) {
   const spellingCount = safeCount(habit.todaySpellingCount);
+  const starterComplete = spellingCount >= STARTER_SPELLING_TARGET;
   const warmupComplete = spellingCount >= MINIMUM_SPELLING_TARGET;
   const outputComplete = Boolean(habit.todayHasEssay || habit.todayHasDebate);
   const loopComplete = Boolean(habit.todayBalanceComplete) || (warmupComplete && outputComplete);
@@ -127,8 +136,17 @@ export function buildCatWorldRoomLearningSignal(habit = {}, cat = {}, companion 
   const currentDay = Array.isArray(habit.recentDays)
     ? habit.recentDays.find((day) => day?.today)?.date
     : "";
-  const stageKey = loopComplete ? "loop" : warmupComplete ? "warmup" : outputComplete ? "output" : "starting";
+  const stageKey = loopComplete
+    ? "loop"
+    : warmupComplete
+      ? "warmup"
+      : outputComplete
+        ? "output"
+        : starterComplete
+          ? "started"
+          : "starting";
   const fallbackMessages = {
+    started: `${guideName}看到起步爪印亮起来了，再慢慢走到 20 词吧。`,
     warmup: `${guideName}看到第一格亮起来了，再把英语用出来吧。`,
     output: `${guideName}看到表达格亮起来了，再练 20 个词就完整啦。`,
     loop: `${guideName}看到三格都亮了，今天的英语闭环完成啦。`,
@@ -140,6 +158,10 @@ export function buildCatWorldRoomLearningSignal(habit = {}, cat = {}, companion 
     guideCatId,
     guideName,
     spellingCount,
+    starterTarget: STARTER_SPELLING_TARGET,
+    starterCount: Math.min(spellingCount, STARTER_SPELLING_TARGET),
+    starterRemaining: Math.max(STARTER_SPELLING_TARGET - spellingCount, 0),
+    starterComplete,
     completedCount,
     stageKey,
     statusLabel: loopComplete
@@ -148,7 +170,9 @@ export function buildCatWorldRoomLearningSignal(habit = {}, cat = {}, companion 
         ? `${spellingCount} 词已热身`
         : outputComplete
           ? "已经完成表达"
-          : "等待今日开始",
+          : starterComplete
+            ? "5 词起步完成"
+            : `再 ${Math.max(STARTER_SPELLING_TARGET - spellingCount, 0)} 词点亮起步爪印`,
     celebrationMessage: String(companion.message || fallbackMessages[stageKey] || "").trim(),
     steps: steps.map((step, index) => ({ ...step, active: index === activeIndex })),
   };
