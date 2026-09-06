@@ -153,12 +153,30 @@ test("stored furniture visibly leaves from its saved coordinate and releases cat
   assert.match(game, /catWorldNewHiddenItemDepartures/);
   assert.match(game, /captureItemDepartures\(itemDepartures, nextSnapshot\.scene\.id\)/);
   assert.match(game, /this\.releaseCatsForItem\(item\.id\)/);
+  assert.match(game, /catWorldItemDepartureReaction/);
+  assert.match(game, /affectedCats/);
+  assert.match(game, /showCatReaction\(affectedCat\.catId, affectedCat\.message, \{ pause: false \}\)/);
   assert.match(game, /this\.owner\.itemInteractionStates\.delete\(item\.id\)/);
   assert.match(game, /playItemDepartures\(departingItems\)/);
   assert.match(game, /setData\("kind", "departing-item"\)/);
   assert.match(game, /ease: "Cubic\.easeIn"/);
   assert.match(game, /收进收纳箱/);
   assert.doesNotMatch(game, /playItemDepartures[\s\S]{0,2600}this\.owner\.layout\[/);
+});
+
+test("a just-stored item can be restored to its exact previous room", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
+
+  assert.match(page, /const lastStoredItem = ref\(null\)/);
+  assert.match(page, /effect\.previousLocationId \|\| item\.locationId \|\| currentScene\.value\.id/);
+  assert.match(page, /async function undoStoredItem\(\)/);
+  assert.match(page, /body: JSON\.stringify\(\{ itemId: pending\.id, locationId: pending\.locationId \}\)/);
+  assert.match(page, /已撤销收纳/);
+  assert.match(page, /class="cat-world-notice-undo"/);
+  assert.match(styles, /\.cat-world-notice-undo:not\(:disabled\):hover[\s\S]*?color:\s*#fff;/);
 });
 
 test("a healthy cat with an individual preference notices newly placed furniture", async () => {

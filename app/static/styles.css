@@ -18218,6 +18218,64 @@ select {
   cursor: not-allowed;
 }
 
+.cat-world-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cat-world-notice > span:first-child {
+  min-width: 0;
+  flex: 1;
+}
+
+.cat-world-notice-undo {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  border: 3px solid #2c2f3a;
+  border-radius: 4px;
+  padding: 5px 10px;
+  color: #fff;
+  background: #23735d;
+  box-shadow: 3px 3px 0 #2c2f3a;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.cat-world-notice-undo:not(:disabled):hover,
+.cat-world-notice-undo:not(:disabled):focus-visible,
+.cat-world-notice-undo:not(:disabled):active {
+  color: #fff;
+  background: #155c49;
+}
+
+.cat-world-notice-undo:not(:disabled):active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 #2c2f3a;
+}
+
+.cat-world-notice-undo:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+@media (max-width: 640px) {
+  .cat-world-notice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cat-world-notice-undo {
+    align-self: flex-end;
+  }
+}
+
 .cat-world-owned-item.damaged {
   background: #ffe1ed;
 }

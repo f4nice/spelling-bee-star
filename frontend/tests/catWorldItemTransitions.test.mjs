@@ -5,6 +5,7 @@ import {
   catWorldItemArrivalFollower,
   catWorldItemArrivalPlan,
   catWorldItemDeparturePlan,
+  catWorldItemDepartureReaction,
   catWorldNewHiddenItemDepartures,
   catWorldNewVisibleItemArrivals,
 } from "../src/app/catWorldItemTransitions.js";
@@ -83,6 +84,33 @@ test("departure plans are deterministic and visibly gather an item upward", () =
   assert.ok(first.drift >= -8 && first.drift <= 8);
   assert.ok(first.targetScale >= 0.34 && first.targetScale <= 0.43);
   assert.ok(Number.isInteger(first.dustColor));
+});
+
+test("a cat using stored furniture reacts through its own temperament and identity", () => {
+  const calm = catWorldItemDepartureReaction(
+    { id: "calm-cat", traits: { temperament: "calm" } },
+    { temperament: "calm" },
+    "英文书桌",
+  );
+  const guardian = catWorldItemDepartureReaction(
+    { id: "guard-cat", traits: { temperament: "guardian" } },
+    { temperament: "guardian" },
+    "英文书桌",
+  );
+
+  assert.match(calm, /英文书桌/);
+  assert.match(calm, /安静|角落/);
+  assert.match(guardian, /英文书桌/);
+  assert.match(guardian, /巡房|检查/);
+  assert.notEqual(calm, guardian);
+  assert.equal(
+    calm,
+    catWorldItemDepartureReaction(
+      { id: "calm-cat", traits: { temperament: "calm" } },
+      { temperament: "calm" },
+      "英文书桌",
+    ),
+  );
 });
 
 test("a newly placed favorite item attracts one healthy individual cat", () => {

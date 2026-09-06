@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Clock as ClockIcon, Hammer as HammerIcon, Heart as HeartIcon, House as HouseIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, ShoppingBag as ShoppingBagIcon, Shovel as ShovelIcon, Sprout as SproutIcon, X as XIcon } from "lucide-vue-next";
+import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Clock as ClockIcon, Hammer as HammerIcon, Heart as HeartIcon, House as HouseIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, ShoppingBag as ShoppingBagIcon, Shovel as ShovelIcon, Sprout as SproutIcon, Undo2 as UndoIcon, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -61,6 +61,7 @@ const bagExpanded = ref(false);
 const activeRoomPanel = ref("cat");
 const busyItemId = ref("");
 const notice = ref("");
+const lastStoredItem = ref(null);
 const recentSceneMoves = ref([]);
 const catReaction = ref("");
 const catReactionAnchored = ref(false);
@@ -122,6 +123,7 @@ const catReactionTexts = [
 let catReactionTimer = 0;
 let learningCompanionReactionTimer = 0;
 let sceneMoveNoticeTimer = 0;
+let storedItemUndoTimer = 0;
 let activeFoodClockTimer = 0;
 let playTimeHeartbeatTimer = 0;
 let playTimeSyncBusy = false;
@@ -141,6 +143,7 @@ onBeforeUnmount(() => {
   window.clearTimeout(catReactionTimer);
   window.clearTimeout(learningCompanionReactionTimer);
   window.clearTimeout(sceneMoveNoticeTimer);
+  window.clearTimeout(storedItemUndoTimer);
   window.clearInterval(activeFoodClockTimer);
   window.clearInterval(playTimeHeartbeatTimer);
   window.removeEventListener("keydown", handleGlobalKeydown);
@@ -1636,6 +1639,7 @@ async function moveOwnedItem(item, locationId) {
   }
   busyLocationItemId.value = item.id;
   notice.value = "";
+  const previousLocationLabel = item.locationLabel || currentScene.value.label;
   try {
     const nextPayload = await fetchJson(routeApiPaths.catWorldItemLocation(), {
       method: "POST",
@@ -1645,11 +1649,53 @@ async function moveOwnedItem(item, locationId) {
     replacePayload(nextPayload);
     selectedDecorId.value = "";
     const effect = nextPayload.itemLocation || {};
-    notice.value = locationId === "storage"
-      ? `${effect.label || item.label} 已收进收纳箱。`
-      : `${effect.label || item.label} 已放到${effect.locationLabel || currentScene.value.label}，${effect.restoredPosition ? "回到了上次摆放的位置。" : "进入编辑模式后可以继续调整位置。"}`;
+    if (locationId === "storage") {
+      const message = `${effect.label || item.label} 已收进收纳箱。`;
+      window.clearTimeout(storedItemUndoTimer);
+      lastStoredItem.value = {
+        id: item.id,
+        label: effect.label || item.label,
+        locationId: effect.previousLocationId || item.locationId || currentScene.value.id,
+        locationLabel: previousLocationLabel,
+        notice: message,
+      };
+      storedItemUndoTimer = window.setTimeout(() => {
+        lastStoredItem.value = null;
+      }, 12000);
+      notice.value = message;
+    } else {
+      if (lastStoredItem.value?.id === item.id) {
+        window.clearTimeout(storedItemUndoTimer);
+        lastStoredItem.value = null;
+      }
+      notice.value = `${effect.label || item.label} 已放到${effect.locationLabel || currentScene.value.label}，${effect.restoredPosition ? "回到了上次摆放的位置。" : "进入编辑模式后可以继续调整位置。"}`;
+    }
   } catch (error) {
     notice.value = error.message || "物品位置保存失败，请稍后再试。";
+  } finally {
+    busyLocationItemId.value = "";
+  }
+}
+
+async function undoStoredItem() {
+  const pending = lastStoredItem.value;
+  if (!pending?.id || busyLocationItemId.value) return;
+  busyLocationItemId.value = pending.id;
+  try {
+    const nextPayload = await fetchJson(routeApiPaths.catWorldItemLocation(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ itemId: pending.id, locationId: pending.locationId }),
+    });
+    replacePayload(nextPayload);
+    const effect = nextPayload.itemLocation || {};
+    window.clearTimeout(storedItemUndoTimer);
+    lastStoredItem.value = null;
+    notice.value = `${effect.label || pending.label} 已撤销收纳，放回${effect.locationLabel || pending.locationLabel}${effect.restoredPosition ? "，并回到原来的位置。" : "。"}`;
+  } catch (error) {
+    const message = error.message || "撤销收纳失败，请稍后重试。";
+    notice.value = message;
+    lastStoredItem.value = { ...pending, notice: message };
   } finally {
     busyLocationItemId.value = "";
   }
@@ -2749,7 +2795,19 @@ async function selectCat(catOrId, options = {}) {
         :inert="playTimeLocked ? '' : null"
         :aria-label="playTimeLocked ? '猫咪世界观察模式，互动暂时锁定' : null"
       >
-      <p v-if="notice" class="cat-world-notice" aria-live="polite">{{ notice }}</p>
+      <div v-if="notice" class="cat-world-notice" aria-live="polite">
+        <span>{{ notice }}</span>
+        <button
+          v-if="lastStoredItem?.notice === notice"
+          class="cat-world-notice-undo"
+          type="button"
+          :disabled="busyLocationItemId === lastStoredItem.id"
+          @click="undoStoredItem"
+        >
+          <UndoIcon :size="17" :stroke-width="2.8" aria-hidden="true" />
+          <span>{{ busyLocationItemId === lastStoredItem.id ? "放回中" : "撤销收纳" }}</span>
+        </button>
+      </div>
       <div v-if="lostCatRows.length" class="cat-world-lost-alert" role="status">
       <strong>{{ lostCatRows.map((cat) => cat.catLabel).join("、") }}已经离开活动室</strong>
       <span>{{ lostCatRows[0].escapeLabel }}；需要在猫咪商店重新领养。</span>

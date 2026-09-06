@@ -23,6 +23,49 @@ function stableHash(value = "") {
   return hash >>> 0;
 }
 
+const ITEM_DEPARTURE_REACTIONS = Object.freeze({
+  calm: Object.freeze([
+    "{item}收好了，我去安静看看别处。",
+    "先让{item}休息，我也换个角落待着。",
+  ]),
+  gentle: Object.freeze([
+    "{item}收起来也没关系，我慢慢去别处。",
+    "我和{item}说过再见啦，去找个舒服地方。",
+  ]),
+  chatty: Object.freeze([
+    "咦，{item}收起来啦？我要去告诉大家。",
+    "{item}下班啦，我边走边讲今天的故事。",
+  ]),
+  guardian: Object.freeze([
+    "{item}已经收纳，我继续巡房。",
+    "确认{item}收好，我去检查下一个角落。",
+  ]),
+  clingy: Object.freeze([
+    "{item}收起来啦，那我先跟着你。",
+    "没有{item}也没事，我去你附近待着。",
+  ]),
+  adventurous: Object.freeze([
+    "{item}先休息，我去找下一样好玩的。",
+    "收好{item}，正好换一条新路线探险。",
+  ]),
+  balanced: Object.freeze([
+    "{item}收好啦，我换个地方活动。",
+    "和{item}玩完了，我继续逛逛房间。",
+  ]),
+});
+
+export function catWorldItemDepartureReaction(cat = {}, behavior = {}, itemLabel = "物品") {
+  const temperament = String(
+    behavior?.temperament
+    || cat?.traits?.temperament
+    || "balanced",
+  );
+  const lines = ITEM_DEPARTURE_REACTIONS[temperament] || ITEM_DEPARTURE_REACTIONS.balanced;
+  const identity = String(cat?.id || cat?.profileId || cat?.label || "cat");
+  const label = String(itemLabel || "物品").trim().slice(0, 12) || "物品";
+  return lines[stableHash(`${identity}:${label}:stored`) % lines.length].replace("{item}", label);
+}
+
 export function catWorldNewVisibleItemArrivals(previousItems = [], nextItems = [], options = {}) {
   if (!options.sameScene || options.interactionLocked) return [];
   const previousIds = new Set(normalizeVisualItems(previousItems).map((item) => item.id));

@@ -45,6 +45,7 @@ import {
   catWorldItemArrivalFollower,
   catWorldItemArrivalPlan,
   catWorldItemDeparturePlan,
+  catWorldItemDepartureReaction,
   catWorldNewHiddenItemDepartures,
   catWorldNewVisibleItemArrivals,
 } from "./catWorldItemTransitions.js";
@@ -793,6 +794,15 @@ class CatWorldScene extends Phaser.Scene {
     ) return [];
     return items
       .map((item) => {
+        const affectedCats = this.roomCatEntries()
+          .filter((entry) => (
+            this.owner.catItemActions.get(entry.cat.id)?.itemId === item.id
+            || entry.container.getData("interactionItemId") === item.id
+          ))
+          .map((entry) => ({
+            catId: entry.cat.id,
+            message: catWorldItemDepartureReaction(entry.cat, entry.behavior, item.label),
+          }));
         this.releaseCatsForItem(item.id);
         const interactionState = this.owner.itemInteractionStates.get(item.id);
         this.owner.itemInteractionStates.delete(item.id);
@@ -808,6 +818,7 @@ class CatWorldScene extends Phaser.Scene {
           damaged: Boolean(container.getData("damaged")),
           tone: this.owner.snapshot.roomStyles?.[item.id] || "default",
           active: Boolean(interactionState?.active),
+          affectedCats,
         };
       })
       .filter(Boolean);
@@ -857,6 +868,11 @@ class CatWorldScene extends Phaser.Scene {
           ghost.depth + 3,
           departure.label,
         );
+      });
+      this.time.delayedCall(plan.delay + 170, () => {
+        departure.affectedCats?.slice(0, 2).forEach((affectedCat) => {
+          this.showCatReaction(affectedCat.catId, affectedCat.message, { pause: false });
+        });
       });
       this.tweens.add({
         targets: ghost,
