@@ -13,6 +13,7 @@ import {
   interactionMoveDuration,
   itemInteractionFor,
   timedInteractionLabel,
+  timedInteractionBubbleOffset,
   timedInteractionLiveIntent,
   timedInteractionOverlayPosition,
   timedInteractionProgress,
@@ -34,6 +35,7 @@ import {
 import { catWorldGaitProfile } from "./catWorldGait.js";
 import { catWorldIdleAnimationPlan } from "./catWorldIdleAnimation.js";
 import { catWorldCarryReactionPlan } from "./catWorldCarryReaction.js";
+import { catWorldPlacementReactionPlan } from "./catWorldPlacementReaction.js";
 import { catWorldSocialMomentPlan } from "./catWorldSocialMoment.js";
 import {
   catWorldSceneArrivalPlan,
@@ -2692,11 +2694,15 @@ class CatWorldScene extends Phaser.Scene {
       { x: pointer?.worldX, y: pointer?.worldY },
       { width: GAME_WIDTH, floorTop: FLOOR_TOP, floorBottom: FLOOR_BOTTOM },
     );
+    const placementPlan = catWorldPlacementReactionPlan(entry.cat, entry.behavior, {
+      targetType: "floor",
+    });
     const action = {
       kind: "manual-floor",
       itemId: "manual-floor",
       target,
-      message: "这里不错，我先看看四周。",
+      message: placementPlan.message,
+      placementPlan,
       expiresAt: Date.now() + 6500,
     };
     this.owner.catItemActions.set(entry.cat.id, action);
@@ -2705,7 +2711,9 @@ class CatWorldScene extends Phaser.Scene {
       handled: true,
       catId: entry.cat.id,
       targetType: "floor",
-      message: `${entry.cat.label}已放到活动室地板上。`,
+      catMessage: placementPlan.message,
+      placementStyle: placementPlan.styleKey,
+      message: `${entry.cat.displayLabel || entry.cat.label}已放到活动室地板上（${placementPlan.badgeLabel}）。`,
     };
   }
 
@@ -2728,17 +2736,25 @@ class CatWorldScene extends Phaser.Scene {
       };
     }
     const noBathKit = decorId === "bubble-bathtub";
+    const favorite = catLikesItem(entry.cat, decorId, "decor");
+    const placementPlan = noBathKit ? null : catWorldPlacementReactionPlan(entry.cat, entry.behavior, {
+      targetType: "decor",
+      itemId: decorId,
+      itemLabel: interaction.label,
+      favorite,
+    });
     const action = {
       kind: "manual-decor",
       itemId: decorId,
-      message: noBathKit ? "浴缸里还没有泡泡浴用品，先在这里等一等。" : interaction.catMessage,
+      message: noBathKit ? "浴缸里还没有泡泡浴用品，先在这里等一等。" : placementPlan.message,
+      placementPlan,
       expiresAt: Date.now() + (noBathKit ? 5200 : interaction.holdMs),
       showTimedStatus: !noBathKit,
     };
     this.owner.catItemActions.set(entry.cat.id, action);
     this.startManualDecorAction(entry, action);
     if (!noBathKit) {
-      const ambientKind = catLikesItem(entry.cat, decorId, "decor")
+      const ambientKind = favorite
         ? "favorite-decor"
         : ["nap", "roll"].includes(interaction.behavior)
           ? "rest-spot"
@@ -2756,9 +2772,11 @@ class CatWorldScene extends Phaser.Scene {
       catId: entry.cat.id,
       targetType: "decor",
       itemId: decorId,
+      catMessage: noBathKit ? action.message : placementPlan.message,
+      placementStyle: placementPlan?.styleKey || "",
       message: noBathKit
         ? `${entry.cat.label}已放到浴缸旁，但背包里没有泡泡浴套装。`
-        : `${entry.cat.label}已放到${interaction.label}，开始${interaction.actionLabel}互动。`,
+        : `${entry.cat.displayLabel || entry.cat.label}已放到${interaction.label}（${placementPlan.badgeLabel}），开始${interaction.actionLabel}互动。`,
     };
   }
 
@@ -2782,6 +2800,7 @@ class CatWorldScene extends Phaser.Scene {
           onComplete: () => {
             if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
             this.rememberCatPosition(entry);
+            this.playCatPlacementReaction(entry, action.placementPlan);
             this.spawnCatBubble(entry.container, entry.cat, action.message);
             this.holdCatInteraction(entry, action.itemId, Math.max(action.expiresAt - Date.now(), 500));
           },
@@ -2828,7 +2847,21 @@ class CatWorldScene extends Phaser.Scene {
           onComplete: () => {
             if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
             this.rememberCatPosition(entry);
-            this.spawnCatBubble(entry.container, entry.cat, action.message || interaction.catMessage);
+            this.playCatPlacementReaction(entry, action.placementPlan);
+            const overlayPosition = timedInteractionOverlayPosition(decor, spec, {
+              width: GAME_WIDTH,
+              floorTop: FLOOR_TOP,
+            });
+            const bubbleOffsetY = action.showTimedStatus === false
+              ? -78
+              : timedInteractionBubbleOffset(entry.container, overlayPosition);
+            this.spawnCatBubble(
+              entry.container,
+              entry.cat,
+              action.message || interaction.catMessage,
+              null,
+              { offsetY: bubbleOffsetY },
+            );
             this.holdCatInteraction(
               entry,
               action.itemId,
@@ -2837,6 +2870,40 @@ class CatWorldScene extends Phaser.Scene {
             );
           },
         });
+      },
+    });
+  }
+
+  playCatPlacementReaction(entry, placementPlan = {}) {
+    const container = entry?.container;
+    const body = container?.getData?.("catBody");
+    if (!container?.active || !body?.active || !placementPlan?.styleKey) return;
+    const reactionToken = `${entry.cat.id}:${placementPlan.identityToken}:${Date.now()}`;
+    container.setData("placementReactionToken", reactionToken);
+    this.tweens.killTweensOf(body);
+    body.setPosition(0, 0);
+    body.setAngle(0);
+    this.playCatMicroAnimation(
+      container,
+      entry.cat,
+      entry.behavior || this.catBehavior(entry.cat, entry.index),
+      placementPlan.cueKind || "paw",
+    );
+    const motion = placementPlan.motion || {};
+    this.tweens.add({
+      targets: body,
+      x: Number(motion.swayX || 0),
+      y: -Math.max(Number(motion.hopY || 0), 0),
+      angle: Number(motion.tilt || 0),
+      duration: Math.max(Number(motion.duration || 260), 120),
+      yoyo: true,
+      repeat: Math.max(Math.round(Number(motion.repeats || 1)) - 1, 0),
+      ease: placementPlan.styleKey === "wiggle" ? "Sine.easeInOut" : "Quad.easeOut",
+      onComplete: () => {
+        if (container.getData("placementReactionToken") !== reactionToken || !body.active) return;
+        container.setData("placementReactionToken", null);
+        body.setPosition(0, 0);
+        body.setAngle(0);
       },
     });
   }

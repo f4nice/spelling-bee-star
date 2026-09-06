@@ -11,6 +11,7 @@ import {
   interactionMoveDuration,
   itemInteractionFor,
   timedInteractionLabel,
+  timedInteractionBubbleOffset,
   timedInteractionLiveIntent,
   timedInteractionOverlayPosition,
   timedInteractionProgress,
@@ -86,6 +87,15 @@ test("timed furniture status avoids the fixed room badge for top-wall items", ()
     ),
     { x: 457, y: 404 },
   );
+});
+
+test("cat speech moves above a timed status card when both would overlap", () => {
+  const topWallOffset = timedInteractionBubbleOffset({ y: 283 }, { y: 193 });
+  const floorDecorOffset = timedInteractionBubbleOffset({ y: 423 }, { y: 390 });
+
+  assert.ok(topWallOffset < -100);
+  assert.ok(floorDecorOffset <= -78);
+  assert.equal(timedInteractionBubbleOffset({ y: 430 }, { y: 210 }), -78);
 });
 
 test("carried cats recognize furniture drop interactions", () => {

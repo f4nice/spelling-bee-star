@@ -298,6 +298,29 @@ export function timedInteractionOverlayPosition(decor = {}, spec = {}, world = {
   };
 }
 
+export function timedInteractionBubbleOffset(cat = {}, overlay = {}, options = {}) {
+  const defaultOffset = Number.isFinite(Number(options.defaultOffset))
+    ? Number(options.defaultOffset)
+    : -78;
+  const catY = Number(cat.y) || 0;
+  const overlayY = Number(overlay.y) || 0;
+  const bubbleHeight = Math.max(Number(options.bubbleHeight) || 58, 20);
+  const bubbleTail = Math.max(Number(options.bubbleTail) || 14, 0);
+  const overlayHalfHeight = Math.max(Number(options.overlayHalfHeight) || 24, 0);
+  const gap = Math.max(Number(options.gap) || 10, 0);
+  const minY = Math.max(Number(options.minY) || 8, 0);
+  const defaultBaseline = catY + defaultOffset;
+  const bubbleTop = defaultBaseline - bubbleHeight;
+  const bubbleBottom = defaultBaseline + bubbleTail;
+  const overlayTop = overlayY - overlayHalfHeight;
+  const overlayBottom = overlayY + overlayHalfHeight;
+  const overlaps = bubbleBottom >= overlayTop - gap && bubbleTop <= overlayBottom + gap;
+  if (!overlaps) return defaultOffset;
+  const aboveBaseline = overlayTop - gap - bubbleTail;
+  if (aboveBaseline - bubbleHeight < minY) return defaultOffset;
+  return Math.max(Math.min(Math.round(aboveBaseline - catY), defaultOffset), -170);
+}
+
 export function catFloorDropPosition(pointer = {}, world = {}) {
   const worldWidth = Math.max(Number(world.width) || 100, 100);
   const floorTop = Number(world.floorTop) || 0;
