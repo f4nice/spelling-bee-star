@@ -13395,8 +13395,9 @@ select {
 .shell[data-quant-radar-page-key="cat-world"] .cat-world-room {
   width: 100%;
   max-width: 100%;
-  height: clamp(500px, 43vw, 620px);
-  min-height: 500px;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 16 / 7;
 }
 
 .shell[data-quant-radar-page-key="cat-world"] .cat-world-room-panel,
@@ -16631,6 +16632,10 @@ select {
   border-bottom-color: #d8a70a;
 }
 
+.cat-world-room-live-list > button.tone-memory {
+  border-bottom-color: #e6827b;
+}
+
 .cat-world-room-live-list > button.tone-need {
   border-bottom-color: #e24d76;
 }
@@ -16829,6 +16834,11 @@ select {
 
 .cat-world-context-intent.tone-learning {
   border-left-color: #d8a70a;
+}
+
+.cat-world-context-intent.tone-memory {
+  border-left-color: #e6827b;
+  background: #fff0df;
 }
 
 .cat-world-context-intent.tone-social,
@@ -18157,6 +18167,25 @@ select {
 }
 
 @media (max-width: 560px) {
+  .shell[data-quant-radar-page-key="cat-world"] .cat-world-room {
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 6 / 7;
+  }
+
+  .cat-world-room-pan-button {
+    width: 34px;
+    height: 34px;
+  }
+
+  .cat-world-room-pan-button.left {
+    left: 5px;
+  }
+
+  .cat-world-room-pan-button.right {
+    right: 5px;
+  }
+
   .cat-world-hero-status {
     grid-template-columns: 1fr;
   }

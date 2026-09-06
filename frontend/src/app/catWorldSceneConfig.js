@@ -74,19 +74,38 @@ export function normalizeCatWorldScene(scene = {}) {
   };
 }
 
-export function sceneInitialScroll(scene) {
+export function sceneInitialScroll(scene, viewportOverride = 0) {
   const normalized = normalizeCatWorldScene(scene);
-  const maxScroll = Math.max(normalized.world.width - normalized.world.viewportWidth, 0);
-  return Math.min(normalized.camera.initialPage * normalized.camera.pageWidth, maxScroll);
+  const hasViewportOverride = Number.isFinite(Number(viewportOverride)) && Number(viewportOverride) > 0;
+  const viewportWidth = hasViewportOverride
+    ? finiteNumber(viewportOverride, normalized.world.viewportWidth, 240, normalized.world.width)
+    : normalized.world.viewportWidth;
+  const pageWidth = hasViewportOverride ? viewportWidth : normalized.camera.pageWidth;
+  const maxScroll = Math.max(normalized.world.width - viewportWidth, 0);
+  return Math.min(normalized.camera.initialPage * pageWidth, maxScroll);
 }
 
-export function scenePageTarget(scene, currentScroll = 0, direction = 1) {
+export function scenePageTarget(scene, currentScroll = 0, direction = 1, viewportOverride = 0) {
   const normalized = normalizeCatWorldScene(scene);
-  const maxScroll = Math.max(normalized.world.width - normalized.world.viewportWidth, 0);
+  const hasViewportOverride = Number.isFinite(Number(viewportOverride)) && Number(viewportOverride) > 0;
+  const viewportWidth = hasViewportOverride
+    ? finiteNumber(viewportOverride, normalized.world.viewportWidth, 240, normalized.world.width)
+    : normalized.world.viewportWidth;
+  const pageWidth = hasViewportOverride ? viewportWidth : normalized.camera.pageWidth;
+  const maxScroll = Math.max(normalized.world.width - viewportWidth, 0);
   const scroll = finiteNumber(currentScroll, 0, 0, maxScroll);
-  const currentPage = Math.round(scroll / normalized.camera.pageWidth);
+  const currentPage = Math.round(scroll / pageWidth);
   const nextPage = Math.max(currentPage + Math.sign(Number(direction) || 0), 0);
-  return Math.min(nextPage * normalized.camera.pageWidth, maxScroll);
+  return Math.min(nextPage * pageWidth, maxScroll);
+}
+
+export function catWorldResponsiveViewportWidth(scene, renderedWidth = 0) {
+  const configuredWidth = normalizeCatWorldScene(scene).world.viewportWidth;
+  const availableWidth = Number(renderedWidth);
+  if (!Number.isFinite(availableWidth) || availableWidth <= 0 || availableWidth > 560) {
+    return configuredWidth;
+  }
+  return Math.min(configuredWidth, 480);
 }
 
 export function sceneAllowsItem(scene, itemId, category) {

@@ -20,6 +20,7 @@ import {
   wandChaseJoinDecision,
 } from "./catWorldItemInteractions.js";
 import {
+  catWorldResponsiveViewportWidth,
   normalizeCatWorldScene,
   sceneAllowsItem,
   sceneColor,
@@ -36,7 +37,10 @@ import { catWorldGaitProfile } from "./catWorldGait.js";
 import { catWorldIdleAnimationPlan } from "./catWorldIdleAnimation.js";
 import { catWorldCarryReactionPlan } from "./catWorldCarryReaction.js";
 import { catWorldPlacementReactionPlan } from "./catWorldPlacementReaction.js";
-import { catWorldLearningMemoryRoomCue } from "./catWorldLearningMemory.js";
+import {
+  catWorldLearningMemoryRoomCue,
+  catWorldLearningMemoryVisitPlan,
+} from "./catWorldLearningMemory.js";
 import {
   catSpotMemoryPriority,
   nextCatSpotMemory,
@@ -538,7 +542,7 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   create() {
-    applySceneConfig(this.owner.snapshot.scene);
+    this.owner.applyViewportMetrics();
     this.scale.resize(VIEW_WIDTH, VIEW_HEIGHT);
     this.syncCamera();
     this.input.on("pointerdown", (pointer) => {
@@ -4433,6 +4437,15 @@ class CatWorldScene extends Phaser.Scene {
       const restTarget = this.restTargetForCat(cat, index, latestBehavior);
       const careNeedTarget = this.careNeedTarget(cat, index, latestBehavior);
       const learningTarget = this.learningCompanionTarget(cat, index, latestBehavior);
+      const decisionCycle = Number(container.getData("decisionCycle") || 0) + 1;
+      container.setData("decisionCycle", decisionCycle);
+      const learningMemoryTarget = this.learningMemoryTarget(
+        cat,
+        index,
+        latestBehavior,
+        decisionCycle,
+        careNeedTarget,
+      );
       const socialTarget = this.socialTargetForCat(cat, index, latestBehavior);
       const goalTarget = this.agentGoalTarget(cat);
       const individualHabitTarget = this.individualHabitTarget(cat, index, latestBehavior);
@@ -4441,13 +4454,12 @@ class CatWorldScene extends Phaser.Scene {
       const learningRitualPending = Boolean(
         learningVisitKey && !this.owner.learningRitualVisits.has(learningVisitKey),
       );
-      const decisionCycle = Number(container.getData("decisionCycle") || 0) + 1;
-      container.setData("decisionCycle", decisionCycle);
       const visitPlan = chooseCatVisitPlan([
         { kind: "food", target: foodTarget },
         { kind: "rest", target: restTarget },
         { kind: "care", target: careNeedTarget },
         { kind: "learning", target: learningTarget },
+        { kind: "memory", target: learningMemoryTarget },
         { kind: "social", target: socialTarget },
         { kind: "goal", target: goalTarget },
         { kind: "habit", target: individualHabitTarget },
@@ -4533,6 +4545,12 @@ class CatWorldScene extends Phaser.Scene {
           } else if (visitPlan?.kind === "learning") {
             if (learningVisitKey) this.owner.learningRitualVisits.add(learningVisitKey);
             this.spawnLearningCompanionBubble(container, cat, visitPlan.target);
+          } else if (visitPlan?.kind === "memory") {
+            this.owner.learningMemoryVisits.add(visitPlan.target.visitKey);
+            interactionOwnsSchedule = this.startLearningMemoryMoment(
+              { cat, index, container, behavior: latestBehavior },
+              visitPlan.target,
+            );
           } else if (visitPlan?.kind === "social") {
             this.startCatSocialMoment({ cat, index, container, behavior: latestBehavior }, visitPlan.target);
           } else if (visitPlan?.kind === "goal") {
@@ -4988,6 +5006,96 @@ class CatWorldScene extends Phaser.Scene {
     };
   }
 
+  learningMemoryTarget(cat = {}, index = 0, behavior = {}, cycle = 1, careTarget = null) {
+    const visit = catWorldLearningMemoryVisitPlan(cat, behavior, {
+      cycle,
+      sceneId: this.owner.snapshot.scene?.id || "main-room",
+      carePriority: Number(careTarget?.priority || 0),
+    });
+    if (!visit || this.owner.learningMemoryVisits.has(visit.visitKey)) return null;
+    const gardenPoint = this.learningGardenFocusPoint(index);
+    const availableTargets = visit.targetItemIds
+      .map((itemId) => ({
+        itemId,
+        point: itemId === "learning-garden" ? gardenPoint : this.roomItemFocusPoint(itemId, index),
+      }))
+      .filter((entry) => entry.point);
+    if (!availableTargets.length) return null;
+    const selected = availableTargets[0];
+    return {
+      ...visit,
+      itemId: selected.itemId,
+      itemKind: selected.point.itemKind,
+      label: selected.point.label || "学习角",
+      message: `${visit.message} 我去${selected.point.label || "学习角"}安静看一会儿。`,
+      x: clamp(selected.point.x + seededOffset(`${cat.id}:${visit.visitKey}:memory-x`, 28), 38, GAME_WIDTH - 132),
+      y: clamp(selected.point.y + seededOffset(`${cat.id}:${visit.visitKey}:memory-y`, 14), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+    };
+  }
+
+  startLearningMemoryMoment(entry, target = {}) {
+    if (!entry?.container?.active || !target.visitKey) return false;
+    const interactionId = `learning-memory:${target.visitKey}`;
+    const holdMs = Math.max(Number(target.holdMs || 6400), 3200);
+    this.interruptCatAutonomy(entry, interactionId);
+    this.reportLiveCatIntent(entry.cat, {
+      kind: "learning-memory",
+      phase: "arrived",
+      statusLabel: "正在回看学习脚印",
+      targetLabel: target.label || "学习角",
+      message: target.message || "正在翻看共同学习手册。",
+      tone: "memory",
+      expiresAt: Date.now() + holdMs,
+    });
+    this.spawnLearningMemoryBubble(entry.container, entry.cat, target);
+    this.spawnLearningMemoryPageCue(entry.container, target);
+    this.playCatMicroAnimation(
+      entry.container,
+      entry.cat,
+      entry.behavior || this.catBehavior(entry.cat, entry.index),
+      target.animation || "book",
+    );
+    this.holdCatInteraction(entry, interactionId, holdMs, { showStatus: false });
+    return true;
+  }
+
+  spawnLearningMemoryPageCue(container, target = {}) {
+    if (!container?.active) return;
+    const cue = this.add.container(
+      clamp(container.x + 84, 48, GAME_WIDTH - 72),
+      clamp(container.y - 96, 42, FLOOR_BOTTOM - 120),
+    ).setDepth(CAT_INTERACTION_DEPTH + 142);
+    const paper = makeLocalGraphics(this, cue);
+    paper.fillStyle(0x2c2f3a, 1);
+    paper.fillRect(-2, -2, 48, 36);
+    paper.fillStyle(0xfff8df, 1);
+    paper.fillRect(2, 2, 40, 28);
+    paper.fillStyle(0xff8cad, 1);
+    paper.fillRect(7, 7, 8, 8);
+    paper.fillStyle(0x1d7f5b, 1);
+    paper.fillRect(20, 8, 16, 3);
+    paper.fillRect(8, 20, 28, 3);
+    paper.fillRect(8, 25, 21, 3);
+    const label = this.add.text(22, 38, target.dayLabel || target.levelLabel || "学习脚印", {
+      color: "#263047",
+      backgroundColor: "#fff07d",
+      fontFamily: "Consolas, monospace",
+      fontSize: "9px",
+      fontStyle: "bold",
+      padding: { x: 4, y: 2 },
+    }).setOrigin(0.5, 0);
+    cue.add(label);
+    this.tweens.add({
+      targets: cue,
+      y: cue.y - 12,
+      alpha: 0,
+      delay: Math.max(Number(target.holdMs || 6400) - 1500, 1800),
+      duration: 1200,
+      ease: "Cubic.easeOut",
+      onComplete: () => cue.destroy(),
+    });
+  }
+
   individualHabitTarget(cat = {}, index = 0, behavior = {}) {
     if (!behavior.canWalk || behavior.sleeping) return null;
     const habit = cat.individualHabit || {};
@@ -5255,6 +5363,33 @@ class CatWorldScene extends Phaser.Scene {
       alpha: 0,
       delay: 1200,
       duration: 1200,
+      ease: "Cubic.easeOut",
+      onComplete: () => bubble.destroy(),
+    });
+  }
+
+  spawnLearningMemoryBubble(container, cat, target = {}) {
+    if (!container?.active) return;
+    const message = `${cat?.displayLabel || cat?.label || "猫咪"}：${target.message || "我想翻翻我们的共同学习手册。"}`;
+    const bubble = this.add
+      .text(container.x + 36, container.y - 36, message, {
+        color: "#263047",
+        backgroundColor: "#ffe6c7",
+        fontFamily: "Consolas, monospace",
+        fontSize: "12px",
+        fontStyle: "bold",
+        padding: { x: 8, y: 5 },
+        wordWrap: { width: 270 },
+        align: "center",
+      })
+      .setOrigin(0.5)
+      .setDepth(CAT_INTERACTION_DEPTH + 140);
+    this.tweens.add({
+      targets: bubble,
+      y: bubble.y - 18,
+      alpha: 0,
+      delay: 3000,
+      duration: 1400,
       ease: "Cubic.easeOut",
       onComplete: () => bubble.destroy(),
     });
@@ -5992,6 +6127,7 @@ class CatWorldScene extends Phaser.Scene {
 
 export class CatWorldGame {
   constructor(parent, handlers = {}) {
+    this.parent = parent;
     this.handlers = handlers;
     this.layout = {};
     this.catPositions = new Map();
@@ -6011,13 +6147,14 @@ export class CatWorldGame {
     this.learningSignalToken = "";
     this.pendingLearningMilestone = null;
     this.learningRitualVisits = new Set();
+    this.learningMemoryVisits = new Set();
     this.playedSceneMoveTokens = new Set();
     this.pendingSceneMoves = [];
     this.pendingItemArrivals = [];
     this.ready = false;
     this.snapshot = normalizeSnapshot();
-    applySceneConfig(this.snapshot.scene);
-    this.cameraScrollX = sceneInitialScroll(this.snapshot.scene);
+    this.applyViewportMetrics();
+    this.cameraScrollX = sceneInitialScroll(this.snapshot.scene, VIEW_WIDTH);
     this.game = new Phaser.Game({
       type: Phaser.AUTO,
       parent,
@@ -6103,12 +6240,12 @@ export class CatWorldGame {
       nextSnapshot.scene.world.width !== this.snapshot.scene.world.width ||
       nextSnapshot.scene.world.viewportWidth !== this.snapshot.scene.world.viewportWidth;
     this.snapshot = nextSnapshot;
-    applySceneConfig(this.snapshot.scene);
+    this.applyViewportMetrics();
     this.layout = cloneLayout(this.snapshot.layout);
     if (sceneChanged) {
       gameScene?.cancelCarriedCat({ notify: false });
       this.catPositions.clear();
-      this.cameraScrollX = sceneInitialScroll(this.snapshot.scene);
+      this.cameraScrollX = sceneInitialScroll(this.snapshot.scene, VIEW_WIDTH);
     }
     if (this.ready) {
       this.game.scale.resize(VIEW_WIDTH, VIEW_HEIGHT);
@@ -6157,8 +6294,17 @@ export class CatWorldGame {
     return this.game.scene.getScene("CatWorldScene")?.cancelCarriedCat() || null;
   }
 
+  applyViewportMetrics() {
+    applySceneConfig(this.snapshot.scene);
+    VIEW_WIDTH = catWorldResponsiveViewportWidth(
+      this.snapshot.scene,
+      this.parent?.clientWidth,
+    );
+  }
+
   refreshViewport() {
     if (!this.ready) return false;
+    this.applyViewportMetrics();
     this.game.scale.resize(VIEW_WIDTH, VIEW_HEIGHT);
     this.game.scale.refresh();
     this.game.scene.getScene("CatWorldScene")?.syncCamera();
@@ -6176,7 +6322,12 @@ export class CatWorldGame {
 
   panPage(direction) {
     this.game.scene.getScene("CatWorldScene")?.releaseCatFocus();
-    const nextScroll = scenePageTarget(this.snapshot.scene, this.cameraScrollX, direction);
+    const nextScroll = scenePageTarget(
+      this.snapshot.scene,
+      this.cameraScrollX,
+      direction,
+      VIEW_WIDTH,
+    );
     this.game.scene.getScene("CatWorldScene")?.panCameraTo(nextScroll, { smooth: true });
   }
 

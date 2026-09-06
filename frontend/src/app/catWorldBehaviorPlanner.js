@@ -1,12 +1,12 @@
 const URGENT_KINDS = new Set(["food", "rest", "care"]);
 
 const DAILY_MOOD_AFFINITIES = Object.freeze({
-  bright: Object.freeze({ social: 16, favorite: 7, habit: 4, learning: 3 }),
-  curious: Object.freeze({ habit: 16, goal: 9, learning: 6, social: 2 }),
-  clingy: Object.freeze({ social: 18, favorite: 8, habit: 3 }),
-  lazy: Object.freeze({ favorite: 15, rest: 11, social: -5, learning: -6, habit: -2 }),
-  quiet: Object.freeze({ learning: 16, favorite: 8, habit: 4, social: -8 }),
-  grumpy: Object.freeze({ favorite: 18, habit: 8, goal: 4, social: -11, learning: -5 }),
+  bright: Object.freeze({ social: 16, favorite: 7, habit: 4, learning: 3, memory: 2 }),
+  curious: Object.freeze({ habit: 16, goal: 9, learning: 6, memory: 6, social: 2 }),
+  clingy: Object.freeze({ social: 18, favorite: 8, memory: 5, habit: 3 }),
+  lazy: Object.freeze({ favorite: 15, rest: 11, social: -5, learning: -6, memory: -4, habit: -2 }),
+  quiet: Object.freeze({ learning: 16, memory: 12, favorite: 8, habit: 4, social: -8 }),
+  grumpy: Object.freeze({ favorite: 18, habit: 8, goal: 4, social: -11, learning: -5, memory: -4 }),
 });
 
 function clamp(value, min, max) {
@@ -48,6 +48,7 @@ function kindAffinity(kind, target, context) {
   if (kind === "rest") return Math.max(restThreshold + 20 - energy, 0) * 0.7;
   if (kind === "care") return Number(target.priority || 0) >= 70 ? 9 : 0;
   if (kind === "learning") return 7 + (attention - 50) * 0.2;
+  if (kind === "memory") return 5 + (attention - 50) * 0.16;
   if (kind === "social") {
     return (socialNeed - 50) * 0.22 + (Number(target.chemistryScore || 50) - 50) * 0.08;
   }
@@ -155,6 +156,7 @@ export function catVisitPlanMessage(plan = {}) {
   if (plan.kind === "rest") return `体力有点低，去${label}趴一会儿。`;
   if (plan.kind === "care") return `现在最需要${label}，先过去看看。`;
   if (plan.kind === "learning") return String(target.message || `去${label}陪你学习。`);
+  if (plan.kind === "memory") return String(target.message || `去${label}翻翻共同学习手册。`);
   if (plan.kind === "social") return `想去找${target.partnerLabel || "猫咪伙伴"}打个招呼。`;
   if (plan.kind === "habit") return String(target.message || `按自己的习惯去${label}待一会儿。`);
   if (plan.kind === "favorite" && target.kind === "remembered-decor") {
@@ -173,6 +175,7 @@ const PLAN_STATUS = Object.freeze({
   rest: { moving: "去找地方休息", arrived: "正在休息", tone: "rest" },
   care: { moving: "去处理需求", arrived: "正在照顾自己", tone: "need" },
   learning: { moving: "去学习角等你", arrived: "正在陪你学习", tone: "learning" },
+  memory: { moving: "去翻共同学习手册", arrived: "正在回看学习脚印", tone: "memory" },
   social: { moving: "去找猫咪伙伴", arrived: "正在和伙伴相处", tone: "social" },
   goal: { moving: "去完成今日愿望", arrived: "正在实现愿望", tone: "goal" },
   habit: { moving: "按自己的习惯行动", arrived: "正在享受独处", tone: "habit" },

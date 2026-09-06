@@ -190,3 +190,31 @@ test("a plan exposes stable live status for the room interface", () => {
   assert.equal(sleeping.tone, "rest");
   assert.match(sleeping.message, /梦里也要陪你记一个单词/);
 });
+
+test("learning memories have a distinct live status while urgent needs still win", () => {
+  const memory = { kind: "memory", target: target(52, { label: "英文书架", message: "我想翻翻 9月7日 的那一页。" }) };
+  const ordinary = chooseCatVisitPlan([memory], {
+    catId: "cat-memory",
+    cycle: 3,
+    behavior: { attention: 82, energy: 78, restThreshold: 34, activityBias: 70 },
+  });
+  const urgent = chooseCatVisitPlan([
+    memory,
+    { kind: "care", target: target(92, { label: "洗澡" }) },
+  ], {
+    catId: "cat-memory",
+    cycle: 3,
+    behavior: { attention: 82, energy: 78, restThreshold: 34, activityBias: 70 },
+  });
+
+  assert.equal(ordinary.kind, "memory");
+  assert.equal(urgent.kind, "care");
+  assert.deepEqual(catVisitPlanStatus(memory, "arrived"), {
+    kind: "memory",
+    phase: "arrived",
+    statusLabel: "正在回看学习脚印",
+    targetLabel: "英文书架",
+    message: "我想翻翻 9月7日 的那一页。",
+    tone: "memory",
+  });
+});

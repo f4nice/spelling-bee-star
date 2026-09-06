@@ -82,6 +82,35 @@ test("the guide cat performs each visible study ritual once before ordinary choi
   assert.match(game, /\{ minMs: 6500, maxMs: 26000 \}/);
 });
 
+test("each eligible cat can quietly revisit its own learning memory in the room", async () => {
+  const [game, styles] = await Promise.all([
+    readFile(gameUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
+
+  assert.match(game, /catWorldLearningMemoryVisitPlan/);
+  assert.match(game, /learningMemoryTarget\(/);
+  assert.match(game, /\{ kind: "memory", target: learningMemoryTarget \}/);
+  assert.match(game, /this\.owner\.learningMemoryVisits\.add\(visitPlan\.target\.visitKey\)/);
+  assert.match(game, /startLearningMemoryMoment/);
+  assert.match(game, /spawnLearningMemoryPageCue/);
+  assert.match(game, /this\.learningMemoryVisits = new Set\(\)/);
+  assert.match(styles, /\.cat-world-context-intent\.tone-memory\s*\{/);
+});
+
+test("the room keeps a readable mobile camera instead of squeezing the whole world", async () => {
+  const [game, styles] = await Promise.all([
+    readFile(gameUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
+
+  assert.match(game, /catWorldResponsiveViewportWidth/);
+  assert.match(game, /this\.parent\?\.clientWidth/);
+  assert.match(game, /scenePageTarget\([\s\S]*?VIEW_WIDTH/);
+  assert.match(styles, /\.shell\[data-quant-radar-page-key="cat-world"\] \.cat-world-room\s*\{[^}]*aspect-ratio:\s*16 \/ 7;/);
+  assert.match(styles, /\.shell\[data-quant-radar-page-key="cat-world"\] \.cat-world-room\s*\{\s*height:\s*auto;\s*min-height:\s*0;\s*aspect-ratio:\s*6 \/ 7;/);
+});
+
 test("the expanded route explains the companion's method without adding another task card", async () => {
   const [page, styles] = await Promise.all([
     readFile(pageUrl, "utf8"),

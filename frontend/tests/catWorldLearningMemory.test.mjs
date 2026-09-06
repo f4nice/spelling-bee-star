@@ -7,6 +7,7 @@ import {
   catWorldLearningMemoryLine,
   catWorldLearningMemoryNextLine,
   catWorldLearningMemoryRoomCue,
+  catWorldLearningMemoryVisitPlan,
   formatCatWorldLearningMemoryDate,
   normalizeCatWorldLearningMemory,
 } from "../src/app/catWorldLearningMemory.js";
@@ -107,4 +108,62 @@ test("cat cards, profile and room expose the same personal learning history", as
     styles,
     /\.cat-world-cat-chip\.active \.cat-world-cat-learning-memory,[\s\S]*?background:\s*rgba\(255, 255, 255, 0\.16\)/,
   );
+});
+
+test("a cat revisits real learning memories at a low deterministic cadence", () => {
+  const cat = {
+    id: "cat-story",
+    learningStyle: { key: "story-builder" },
+    learningMemory: {
+      hasMemory: true,
+      companionDays: 5,
+      loopDays: 2,
+      memoryPoints: 7,
+      levelKey: "familiar",
+      levelLabel: "熟悉节奏",
+      levelIndex: 2,
+      levelCount: 5,
+      latestDate: "2026-09-07",
+      recentDays: [{ date: "2026-09-07", dayLabel: "9月7日", statusKey: "loop" }],
+    },
+  };
+  const behavior = { canWalk: true, energy: 78, restThreshold: 34, attention: 72 };
+  const plans = [1, 2, 3, 4].map((cycle) => catWorldLearningMemoryVisitPlan(cat, behavior, {
+    cycle,
+    sceneId: "main-room",
+  })).filter(Boolean);
+
+  assert.equal(plans.length, 1);
+  assert.deepEqual(plans[0].targetItemIds, ["study-desk", "word-gallery", "book-shelf"]);
+  assert.match(plans[0].message, /9月7日.*词汇和表达/);
+  assert.equal(plans[0].animation, "book");
+});
+
+test("memory visits yield to recovery and urgent care", () => {
+  const cat = {
+    id: "cat-rest",
+    learningMemory: { hasMemory: true, companionDays: 8, levelIndex: 2, levelCount: 5 },
+  };
+  const eligibleCycle = [1, 2, 3, 4].find((cycle) => catWorldLearningMemoryVisitPlan(
+    cat,
+    { canWalk: true, energy: 80, restThreshold: 34, attention: 60 },
+    { cycle, sceneId: "main-room" },
+  ));
+
+  assert.ok(eligibleCycle);
+  assert.equal(catWorldLearningMemoryVisitPlan(
+    cat,
+    { canWalk: false, sleeping: true, energy: 80, restThreshold: 34 },
+    { cycle: eligibleCycle, sceneId: "main-room" },
+  ), null);
+  assert.equal(catWorldLearningMemoryVisitPlan(
+    cat,
+    { canWalk: true, key: "waking", energy: 80, restThreshold: 34 },
+    { cycle: eligibleCycle, sceneId: "main-room" },
+  ), null);
+  assert.equal(catWorldLearningMemoryVisitPlan(
+    cat,
+    { canWalk: true, energy: 80, restThreshold: 34 },
+    { cycle: eligibleCycle, sceneId: "main-room", carePriority: 82 },
+  ), null);
 });

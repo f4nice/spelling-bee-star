@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  catWorldResponsiveViewportWidth,
   normalizeCatWorldScene,
   sceneAllowsItem,
   sceneColor,
@@ -57,6 +58,28 @@ test("scene paging moves by one viewport-sized page", () => {
   assert.equal(scenePageTarget(scene, 0, 1), 1280);
   assert.equal(scenePageTarget(scene, 1280, -1), 0);
   assert.equal(scenePageTarget(scene, 1280, 1), 1280);
+  assert.equal(scenePageTarget(scene, 0, 1, 480), 480);
+  assert.equal(scenePageTarget(scene, 480, 1, 480), 960);
+});
+
+test("scene initial page follows the active mobile viewport", () => {
+  const scene = {
+    world: { width: 2560, viewportWidth: 1280 },
+    camera: { pageWidth: 1280, initialPage: 1 },
+  };
+
+  assert.equal(sceneInitialScroll(scene), 1280);
+  assert.equal(sceneInitialScroll(scene, 480), 480);
+});
+
+test("cat world uses a narrow virtual viewport only on small rendered rooms", () => {
+  const scene = { world: { width: 2560, viewportWidth: 1280 } };
+
+  assert.equal(catWorldResponsiveViewportWidth(scene, 320), 480);
+  assert.equal(catWorldResponsiveViewportWidth(scene, 560), 480);
+  assert.equal(catWorldResponsiveViewportWidth(scene, 561), 1280);
+  assert.equal(catWorldResponsiveViewportWidth(scene, 960), 1280);
+  assert.equal(catWorldResponsiveViewportWidth(scene), 1280);
 });
 
 test("scene purchase metadata survives normalization", () => {
