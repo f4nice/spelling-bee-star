@@ -126,6 +126,10 @@ class CatWorldEnergyTest(unittest.TestCase):
         self.assertTrue(source["todayBalanceComplete"])
         self.assertEqual(source["nextAction"], "再完成 50 词，习惯奖励再 +20")
         self.assertIn("输入输出组合 +20", source["todayDetail"])
+        self.assertEqual(len(source["recentDays"]), 7)
+        self.assertEqual(source["recentDays"][-2]["statusKey"], "input")
+        self.assertEqual(source["recentDays"][-1]["statusKey"], "loop")
+        self.assertTrue(source["recentDays"][-1]["today"])
 
 
 if __name__ == "__main__":

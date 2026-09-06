@@ -23,6 +23,7 @@ import { catPortraitModel } from "../catWorldPortrait.js";
 import { catRarityBadge } from "../catWorldRarity.js";
 import {
   buildCatWorldLearningRoute,
+  buildCatWorldWeekTrail,
   catWorldLearningCompanionGrowthLabel,
   catWorldLearningCompanionToken,
 } from "../catWorldLearningRoute.js";
@@ -370,6 +371,7 @@ const learningGuidePortrait = computed(() => catPortraitModel(learningGuideCat.v
 const learningCompanionGrowthLabel = computed(() =>
   catWorldLearningCompanionGrowthLabel(learningCompanion.value),
 );
+const learningWeekTrail = computed(() => buildCatWorldWeekTrail(energy.value.habit || {}));
 const mood = computed(() => state.value.mood || {});
 const focusedDailyLog = computed(
   () => individualizeCatLog(
@@ -2201,6 +2203,38 @@ async function selectCat(catOrId, options = {}) {
           </span>
         </li>
       </ol>
+      <section
+        v-if="learningWeekTrail.days.length"
+        class="cat-world-learning-week"
+        aria-labelledby="cat-world-learning-week-title"
+      >
+        <header class="cat-world-learning-week-summary">
+          <div>
+            <small>WEEKLY RHYTHM</small>
+            <strong id="cat-world-learning-week-title">最近七天陪学足迹</strong>
+          </div>
+          <p>{{ learningWeekTrail.summary }}</p>
+          <em>{{ learningWeekTrail.todayMessage }}</em>
+        </header>
+        <ol class="cat-world-learning-week-days">
+          <li
+            v-for="day in learningWeekTrail.days"
+            :key="day.date"
+            :class="[`is-${day.statusKey}`, { 'is-today': day.today }]"
+            :title="day.detail"
+            :aria-label="`${day.weekdayLabel} ${day.dayLabel}：${day.detail}`"
+          >
+            <span>{{ day.weekdayLabel }}</span>
+            <i class="cat-world-learning-week-marker" aria-hidden="true">
+              <CheckIcon v-if="day.loopComplete" :size="14" :stroke-width="3" />
+              <PawPrintIcon v-else-if="day.active" :size="13" :stroke-width="2.8" />
+              <span v-else>·</span>
+            </i>
+            <strong>{{ day.statusLabel }}</strong>
+            <small>{{ day.dayLabel }}</small>
+          </li>
+        </ol>
+      </section>
     </section>
 
     <div class="cat-world-play-area" :class="{ 'is-locked': playTimeLocked }">

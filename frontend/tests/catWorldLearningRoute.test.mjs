@@ -3,9 +3,30 @@ import test from "node:test";
 
 import {
   buildCatWorldLearningRoute,
+  buildCatWorldWeekTrail,
   catWorldLearningCompanionGrowthLabel,
   catWorldLearningCompanionToken,
 } from "../src/app/catWorldLearningRoute.js";
+
+test("weekly trail distinguishes starts, input, output, and completed loops", () => {
+  const trail = buildCatWorldWeekTrail({
+    recentDays: [
+      { date: "2026-09-01", weekdayLabel: "周二", dayLabel: "9/1", statusKey: "unavailable", statusLabel: "未记录" },
+      { date: "2026-09-02", weekdayLabel: "周三", dayLabel: "9/2", statusKey: "rest", statusLabel: "休息" },
+      { date: "2026-09-03", weekdayLabel: "周四", dayLabel: "9/3", statusKey: "started", statusLabel: "已开始", active: true },
+      { date: "2026-09-04", weekdayLabel: "周五", dayLabel: "9/4", statusKey: "input", statusLabel: "练词", active: true },
+      { date: "2026-09-05", weekdayLabel: "周六", dayLabel: "9/5", statusKey: "output", statusLabel: "表达", active: true },
+      { date: "2026-09-06", weekdayLabel: "周日", dayLabel: "9/6", statusKey: "rest", statusLabel: "休息" },
+      { date: "2026-09-07", weekdayLabel: "周一", dayLabel: "9/7", statusKey: "loop", statusLabel: "闭环", active: true, loopComplete: true, today: true },
+    ],
+  });
+
+  assert.equal(trail.days.length, 7);
+  assert.equal(trail.activeDays, 4);
+  assert.equal(trail.loopDays, 1);
+  assert.equal(trail.todayMessage, "今天闭环完成");
+  assert.match(trail.summary, /4 天有学习/);
+});
 
 test("learning route starts with a gentle spelling target", () => {
   const route = buildCatWorldLearningRoute(

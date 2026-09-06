@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-006"
-DEFAULT_PAGE_VERSION = "v20260906.6"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-007"
+DEFAULT_PAGE_VERSION = "v20260906.7"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -14445,6 +14445,70 @@ def cat_world_spelling_habit_energy(spelling_count: int) -> int:
     return sum(energy for target, energy in CAT_WORLD_SPELLING_HABIT_ENERGY_TIERS if count >= target)
 
 
+def cat_world_learning_week_days(
+    source_date: date,
+    spelling_by_date: dict[date, int],
+    essay_dates: set[date],
+    debate_dates: set[date],
+) -> list[dict[str, Any]]:
+    weekday_labels = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
+    status_labels = {
+        "unavailable": "未记录",
+        "rest": "休息",
+        "started": "已开始",
+        "input": "练词",
+        "output": "表达",
+        "loop": "闭环",
+    }
+    days: list[dict[str, Any]] = []
+    for offset in range(6, -1, -1):
+        trail_date = source_date - timedelta(days=offset)
+        available = trail_date >= CAT_WORLD_HABIT_REWARD_START_DATE
+        spelling_count = max(int(spelling_by_date.get(trail_date, 0)), 0) if available else 0
+        has_essay = available and trail_date in essay_dates
+        has_debate = available and trail_date in debate_dates
+        has_output = has_essay or has_debate
+        warmup_complete = spelling_count >= 20
+        loop_complete = warmup_complete and has_output
+        if not available:
+            status_key = "unavailable"
+            detail = "学习习惯记录尚未启用"
+        elif loop_complete:
+            status_key = "loop"
+            output_label = "作文和 Debate" if has_essay and has_debate else ("作文" if has_essay else "Debate")
+            detail = f"{spelling_count} 词 · {output_label} · 完成闭环"
+        elif warmup_complete:
+            status_key = "input"
+            detail = f"完成 {spelling_count} 词热身"
+        elif has_output:
+            status_key = "output"
+            output_label = "作文和 Debate" if has_essay and has_debate else ("作文" if has_essay else "Debate")
+            detail = f"完成英语{output_label}"
+        elif spelling_count > 0:
+            status_key = "started"
+            detail = f"完成 {spelling_count}/20 词，已经开始"
+        else:
+            status_key = "rest"
+            detail = "这天没有学习记录"
+        days.append(
+            {
+                "date": trail_date.isoformat(),
+                "weekdayLabel": weekday_labels[trail_date.weekday()],
+                "dayLabel": f"{trail_date.month}/{trail_date.day}",
+                "statusKey": status_key,
+                "statusLabel": status_labels[status_key],
+                "detail": detail,
+                "spellingCount": spelling_count,
+                "hasEssay": has_essay,
+                "hasDebate": has_debate,
+                "active": available and (spelling_count > 0 or has_output),
+                "loopComplete": loop_complete,
+                "today": trail_date == source_date,
+            }
+        )
+    return days
+
+
 def cat_world_learning_habit_source(
     db: Session,
     phone: str,
@@ -14466,6 +14530,7 @@ def cat_world_learning_habit_source(
             "todayHasDebate": False,
             "todayBalanceComplete": False,
             "currentStreak": 0,
+            "recentDays": cat_world_learning_week_days(source_date, {}, set(), set()),
             "todayDetail": "新学习节奏尚未开始",
             "nextAction": "先完成 20 个拼写词，开启今天的学习节奏",
         }
@@ -14557,6 +14622,7 @@ def cat_world_learning_habit_source(
         next_action = "今日学习闭环已完成，明天继续会增加连续奖励"
     today_detail = " · ".join(detail_parts + [next_action])
     total_energy = sum(int(row["energy"]) for row in daily_rewards.values())
+    recent_days = cat_world_learning_week_days(source_date, spelling_by_date, essay_dates, debate_dates)
 
     return {
         "key": "learning_habit",
@@ -14572,6 +14638,7 @@ def cat_world_learning_habit_source(
         "todayHasDebate": bool(today_reward.get("hasDebate")),
         "todayBalanceComplete": int(today_reward.get("balanceEnergy") or 0) > 0,
         "currentStreak": int(today_reward.get("streak") or 0),
+        "recentDays": recent_days,
         "todayDetail": today_detail,
         "nextAction": next_action,
         "detail": "每天少量开始，组合拼写、写作和口语，并用连续学习获得额外奖励。",

@@ -16104,6 +16104,155 @@ select {
   background: #147b59;
 }
 
+.cat-world-learning-week {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(250px, 0.84fr) minmax(0, 2.16fr);
+  min-width: 0;
+  border-top: 3px solid #2c2f3a;
+  background: #fffdf1;
+}
+
+.cat-world-learning-week-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: center;
+  gap: 3px 10px;
+  min-width: 0;
+  border-right: 3px solid #2c2f3a;
+  padding: 9px 12px;
+  background: #eefaff;
+}
+
+.cat-world-learning-week-summary div {
+  min-width: 0;
+}
+
+.cat-world-learning-week-summary small,
+.cat-world-learning-week-summary strong {
+  display: block;
+}
+
+.cat-world-learning-week-summary small {
+  color: #176f58;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.cat-world-learning-week-summary strong {
+  margin-top: 1px;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.cat-world-learning-week-summary p,
+.cat-world-learning-week-summary em {
+  margin: 0;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.cat-world-learning-week-summary p {
+  align-self: end;
+  color: #526178;
+  white-space: nowrap;
+}
+
+.cat-world-learning-week-summary em {
+  grid-column: 1 / -1;
+  color: #a53d62;
+}
+
+.cat-world-learning-week-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(62px, 1fr));
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cat-world-learning-week-days > li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  place-items: center;
+  gap: 2px 3px;
+  min-width: 0;
+  padding: 7px 4px;
+  color: #526178;
+  background: #fffdf1;
+}
+
+.cat-world-learning-week-days > li + li {
+  border-left: 1px solid #d7cfb5;
+}
+
+.cat-world-learning-week-days > li.is-today {
+  box-shadow: inset 0 0 0 3px #db557b;
+  color: #263047;
+  background: #fff3ad;
+}
+
+.cat-world-learning-week-days > li > span,
+.cat-world-learning-week-days > li > strong,
+.cat-world-learning-week-days > li > small {
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.cat-world-learning-week-days > li > span {
+  justify-self: end;
+}
+
+.cat-world-learning-week-days > li > strong {
+  justify-self: start;
+}
+
+.cat-world-learning-week-days > li > small {
+  grid-column: 1 / -1;
+  color: #718096;
+}
+
+.cat-world-learning-week-marker {
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  border: 2px solid #2c2f3a;
+  border-radius: 2px;
+  color: #263047;
+  background: #edf0e8;
+  box-shadow: 1px 1px 0 #2c2f3a;
+  font-style: normal;
+}
+
+.cat-world-learning-week-days > li.is-loop .cat-world-learning-week-marker {
+  color: #fff;
+  background: #1d7f5b;
+}
+
+.cat-world-learning-week-days > li.is-input .cat-world-learning-week-marker {
+  background: #8bd9f5;
+}
+
+.cat-world-learning-week-days > li.is-output .cat-world-learning-week-marker {
+  background: #ffb9cb;
+}
+
+.cat-world-learning-week-days > li.is-started .cat-world-learning-week-marker {
+  background: #fff07d;
+}
+
+.cat-world-learning-week-days > li.is-unavailable {
+  opacity: 0.55;
+}
+
 .cat-world-play-area,
 .cat-world-play-content {
   display: grid;
@@ -16260,6 +16409,22 @@ select {
   .cat-world-learning-steps > li + li {
     border-top: 0;
     border-left: 2px solid #d7cfb5;
+  }
+
+  .cat-world-learning-week {
+    grid-template-columns: 1fr;
+  }
+
+  .cat-world-learning-week-summary {
+    border-right: 0;
+    border-bottom: 2px solid #d7cfb5;
+  }
+
+  .cat-world-learning-week-days {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 70px;
+    overflow-x: auto;
   }
 
   .cat-world-observation-actions {

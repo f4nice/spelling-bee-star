@@ -70,6 +70,45 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
   };
 }
 
+export function buildCatWorldWeekTrail(habit = {}) {
+  const sourceDays = Array.isArray(habit.recentDays) ? habit.recentDays.slice(-7) : [];
+  const days = sourceDays.map((day) => {
+    const statusKey = ["unavailable", "rest", "started", "input", "output", "loop"].includes(day?.statusKey)
+      ? day.statusKey
+      : "rest";
+    return {
+      date: String(day?.date || ""),
+      weekdayLabel: String(day?.weekdayLabel || ""),
+      dayLabel: String(day?.dayLabel || ""),
+      statusKey,
+      statusLabel: String(day?.statusLabel || "休息"),
+      detail: String(day?.detail || "这天没有学习记录"),
+      active: Boolean(day?.active),
+      loopComplete: Boolean(day?.loopComplete),
+      today: Boolean(day?.today),
+    };
+  });
+  const activeDays = days.filter((day) => day.active).length;
+  const loopDays = days.filter((day) => day.loopComplete).length;
+  const today = days.find((day) => day.today) || days.at(-1) || {};
+  const todayMessage = today.statusKey === "loop"
+    ? "今天闭环完成"
+    : today.statusKey === "input"
+      ? "今天已完成练词热身"
+      : today.statusKey === "output"
+        ? "今天已经练过英语表达"
+        : today.statusKey === "started"
+          ? "今天已经开始"
+          : "今天可以从 20 词热身开始";
+  return {
+    days,
+    activeDays,
+    loopDays,
+    summary: `${activeDays} 天有学习 · ${loopDays} 天完成闭环`,
+    todayMessage,
+  };
+}
+
 export function catWorldLearningCompanionToken(companion = {}) {
   const day = String(companion.date || "").trim();
   const catId = String(companion.catId || "").trim();
