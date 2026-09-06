@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, ChevronDown, ChevronLeft, ChevronRight, Hammer as HammerIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MoveRight as MoveRightIcon, Shovel as ShovelIcon, X as XIcon } from "lucide-vue-next";
+import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Flame as FlameIcon, Hammer as HammerIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, Shovel as ShovelIcon, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -20,6 +20,7 @@ import {
 } from "../catWorldCollectionAtlas.js";
 import { catPortraitModel } from "../catWorldPortrait.js";
 import { catRarityBadge } from "../catWorldRarity.js";
+import { buildCatWorldLearningRoute } from "../catWorldLearningRoute.js";
 import {
   formatCatWorldPlayTime,
   formatCatWorldPlayTimeProgress,
@@ -349,6 +350,8 @@ const focusedCat = computed(
     roomCats.value[0] ||
     {},
 );
+const learningRoute = computed(() => buildCatWorldLearningRoute(energy.value.habit || {}, focusedCat.value));
+const learningGuidePortrait = computed(() => catPortraitModel(focusedCat.value));
 const mood = computed(() => state.value.mood || {});
 const focusedDailyLog = computed(
   () => individualizeCatLog(
@@ -2066,6 +2069,62 @@ async function selectCat(catOrId, options = {}) {
           <small>累计 {{ energy.earned || 0 }} · 已用 {{ energy.spent || 0 }}</small>
         </button>
       </div>
+    </section>
+
+    <section class="cat-world-learning-route" aria-labelledby="cat-world-learning-route-title">
+      <header class="cat-world-learning-guide">
+        <figure
+          :class="[
+            'cat-world-cat-portrait',
+            'cat-world-learning-guide-portrait',
+            `pattern-${learningGuidePortrait.pattern}`,
+            `feature-${learningGuidePortrait.feature}`,
+          ]"
+          :style="learningGuidePortrait.style"
+          aria-hidden="true"
+        >
+          <i class="cat-world-cat-portrait-ear left"></i>
+          <i class="cat-world-cat-portrait-ear right"></i>
+          <i class="cat-world-cat-portrait-face">
+            <i class="cat-world-cat-portrait-eye left"></i>
+            <i class="cat-world-cat-portrait-eye right"></i>
+            <i class="cat-world-cat-portrait-nose"></i>
+          </i>
+        </figure>
+        <div>
+          <p class="section-kicker">Cat Quest</p>
+          <h2 id="cat-world-learning-route-title">{{ learningRoute.title }}</h2>
+          <p>{{ learningRoute.coachLine }}</p>
+        </div>
+        <strong class="cat-world-learning-streak">
+          <FlameIcon :size="17" :stroke-width="2.8" aria-hidden="true" />
+          {{ learningRoute.streak ? `${learningRoute.streak} 天` : "今天开始" }}
+        </strong>
+      </header>
+      <ol class="cat-world-learning-steps" aria-label="今日英语学习路线">
+        <li
+          v-for="(step, index) in learningRoute.steps"
+          :key="step.key"
+          :class="{ complete: step.completed, active: step.active }"
+        >
+          <span class="cat-world-learning-step-marker" aria-hidden="true">
+            <CheckIcon v-if="step.completed" :size="17" :stroke-width="3" />
+            <PawPrintIcon v-else :size="17" :stroke-width="2.8" />
+          </span>
+          <div>
+            <small>STEP 0{{ index + 1 }}</small>
+            <strong>{{ step.label }}</strong>
+            <p>{{ step.detail }}</p>
+          </div>
+          <span class="cat-world-learning-step-actions">
+            <button v-if="step.actionKind === 'energy'" type="button" @click="energyModalOpen = true">
+              <MoveRightIcon :size="14" :stroke-width="3" aria-hidden="true" />{{ step.action }}
+            </button>
+            <a v-else :href="step.href"><MoveRightIcon :size="14" :stroke-width="3" aria-hidden="true" />{{ step.action }}</a>
+            <a v-if="step.alternateHref" class="secondary" :href="step.alternateHref">{{ step.alternateAction }}</a>
+          </span>
+        </li>
+      </ol>
     </section>
 
     <div class="cat-world-play-area" :class="{ 'is-locked': playTimeLocked }">

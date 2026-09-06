@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-002"
-DEFAULT_PAGE_VERSION = "v20260906.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-003"
+DEFAULT_PAGE_VERSION = "v20260906.3"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -14461,8 +14461,13 @@ def cat_world_learning_habit_source(
             "energy": 0,
             "todayValue": 0,
             "todayEnergy": 0,
+            "todaySpellingCount": 0,
+            "todayHasEssay": False,
+            "todayHasDebate": False,
+            "todayBalanceComplete": False,
             "currentStreak": 0,
             "todayDetail": "新学习节奏尚未开始",
+            "nextAction": "先完成 20 个拼写词，开启今天的学习节奏",
         }
 
     spelling_by_date = {
@@ -14563,8 +14568,12 @@ def cat_world_learning_habit_source(
         "todayValue": today_energy,
         "todayEnergy": today_energy,
         "todaySpellingCount": today_spelling,
+        "todayHasEssay": bool(today_reward.get("hasEssay")),
+        "todayHasDebate": bool(today_reward.get("hasDebate")),
+        "todayBalanceComplete": int(today_reward.get("balanceEnergy") or 0) > 0,
         "currentStreak": int(today_reward.get("streak") or 0),
         "todayDetail": today_detail,
+        "nextAction": next_action,
         "detail": "每天少量开始，组合拼写、写作和口语，并用连续学习获得额外奖励。",
     }
 

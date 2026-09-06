@@ -15865,6 +15865,195 @@ select {
   color: #ffb9cb;
 }
 
+.cat-world-learning-route {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.84fr) minmax(0, 2.16fr);
+  overflow: hidden;
+  border: 4px solid #2c2f3a;
+  border-radius: 5px;
+  color: #263047;
+  background: #fff8df;
+  box-shadow: 6px 6px 0 #2c2f3a;
+}
+
+.cat-world-learning-guide {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border-right: 3px solid #2c2f3a;
+  padding: 12px;
+  background:
+    linear-gradient(90deg, rgba(32, 48, 64, 0.06) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(32, 48, 64, 0.06) 1px, transparent 1px),
+    #d9f6ff;
+  background-size: 10px 10px, 10px 10px, auto;
+}
+
+.cat-world-learning-guide-portrait {
+  width: 58px;
+  height: 58px;
+  box-shadow: 3px 3px 0 #2c2f3a;
+}
+
+.cat-world-learning-guide h2,
+.cat-world-learning-guide p {
+  margin: 0;
+}
+
+.cat-world-learning-guide h2 {
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.cat-world-learning-guide > div > p:last-child {
+  margin-top: 4px;
+  color: #526178;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.cat-world-learning-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  grid-column: 2;
+  justify-self: start;
+  align-self: start;
+  border: 2px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 5px 7px;
+  color: #fff;
+  background: #db557b;
+  box-shadow: 2px 2px 0 #2c2f3a;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.cat-world-learning-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cat-world-learning-steps > li {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-rows: minmax(54px, 1fr) auto;
+  gap: 7px 8px;
+  min-width: 0;
+  padding: 11px;
+  background: #fff8df;
+}
+
+.cat-world-learning-steps > li + li {
+  border-left: 2px solid #d7cfb5;
+}
+
+.cat-world-learning-steps > li.active {
+  background: #fff3ad;
+}
+
+.cat-world-learning-steps > li.complete {
+  background: #e4f7e4;
+}
+
+.cat-world-learning-step-marker {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid #2c2f3a;
+  border-radius: 50%;
+  color: #263047;
+  background: #fff07d;
+  box-shadow: 2px 2px 0 #2c2f3a;
+}
+
+.cat-world-learning-steps > li.complete .cat-world-learning-step-marker {
+  color: #fff;
+  background: #1d7f5b;
+}
+
+.cat-world-learning-steps li > div {
+  min-width: 0;
+}
+
+.cat-world-learning-steps li > div > small {
+  display: block;
+  color: #617086;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.cat-world-learning-steps li > div > strong {
+  display: block;
+  margin-top: 1px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.cat-world-learning-steps li > div > p {
+  margin: 3px 0 0;
+  color: #526178;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.cat-world-learning-step-actions {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.cat-world-learning-step-actions a,
+.cat-world-learning-step-actions button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 25px;
+  border: 2px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 3px 6px;
+  color: #fff;
+  background: #1d7f5b;
+  box-shadow: 2px 2px 0 #2c2f3a;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.cat-world-learning-step-actions a.secondary,
+.cat-world-learning-step-actions button.secondary {
+  color: #263047;
+  background: #d9f6ff;
+}
+
+.cat-world-learning-step-actions a:hover,
+.cat-world-learning-step-actions a:focus-visible,
+.cat-world-learning-step-actions button:hover,
+.cat-world-learning-step-actions button:focus-visible,
+.cat-world-learning-step-actions a.secondary:hover,
+.cat-world-learning-step-actions a.secondary:focus-visible,
+.cat-world-learning-step-actions button.secondary:hover,
+.cat-world-learning-step-actions button.secondary:focus-visible {
+  color: #fff;
+  background: #147b59;
+}
+
 .cat-world-play-area,
 .cat-world-play-content {
   display: grid;
@@ -15975,6 +16164,15 @@ select {
   .shell[data-quant-radar-page-key="cat-world"] .cat-world-hero {
     grid-template-columns: 1fr;
   }
+
+  .cat-world-learning-route {
+    grid-template-columns: 1fr;
+  }
+
+  .cat-world-learning-guide {
+    border-right: 0;
+    border-bottom: 3px solid #2c2f3a;
+  }
 }
 
 @media (max-width: 560px) {
@@ -15990,6 +16188,28 @@ select {
   .cat-world-play-lock-card {
     grid-template-columns: auto minmax(0, 1fr);
     padding: 9px;
+  }
+
+  .cat-world-learning-streak {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .cat-world-learning-steps {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(240px, 82vw);
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+  }
+
+  .cat-world-learning-steps > li {
+    scroll-snap-align: start;
+  }
+
+  .cat-world-learning-steps > li + li {
+    border-top: 0;
+    border-left: 2px solid #d7cfb5;
   }
 
   .cat-world-observation-actions {

@@ -21,6 +21,15 @@ test("expired play time keeps the room visible in observation mode", async () =>
   assert.doesNotMatch(lockRule, /background:\s*rgba\(32, 48, 64/);
 });
 
+test("daily learning route stays outside the locked play area", async () => {
+  const page = await readFile(pageUrl, "utf8");
+  const routeIndex = page.indexOf('class="cat-world-learning-route"');
+  const playAreaIndex = page.indexOf('class="cat-world-play-area"');
+
+  assert.ok(routeIndex >= 0);
+  assert.ok(playAreaIndex > routeIndex);
+});
+
 test("CAT-OS details are collapsed until requested", async () => {
   const page = await readFile(pageUrl, "utf8");
 
