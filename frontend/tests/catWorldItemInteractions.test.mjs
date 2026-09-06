@@ -11,6 +11,7 @@ import {
   interactionMoveDuration,
   itemInteractionFor,
   timedInteractionLabel,
+  timedInteractionLiveIntent,
   timedInteractionOverlayPosition,
   timedInteractionProgress,
   wandChaseJoinDecision,
@@ -34,6 +35,38 @@ test("timed furniture interactions expose a label and stable countdown progress"
     remainingSeconds: 2,
   });
   assert.equal(timedInteractionProgress(1000, 5000, 9000).progress, 1);
+});
+
+test("timed furniture interactions publish specific live activity and a clean completion state", () => {
+  assert.deepEqual(timedInteractionLiveIntent("sun-window"), {
+    kind: "item-interaction",
+    phase: "arrived",
+    statusLabel: "正在窗边晒太阳",
+    targetLabel: "阳光窗台",
+    message: "窗边暖暖的，我在这里晒一会儿太阳。",
+    tone: "favorite",
+  });
+  assert.deepEqual(timedInteractionLiveIntent("study-desk", "active", { message: "一起读一页。" }), {
+    kind: "item-interaction",
+    phase: "arrived",
+    statusLabel: "正在书桌陪读",
+    targetLabel: "英文书桌",
+    message: "一起读一页。",
+    tone: "learning",
+  });
+  assert.deepEqual(timedInteractionLiveIntent("window-hammock", "complete"), {
+    kind: "item-interaction",
+    phase: "settled",
+    statusLabel: "准备下一段活动",
+    targetLabel: "",
+    message: "刚刚结束吊床休息，正在看看接下来去哪里。",
+    tone: "steady",
+    ttlMs: 12000,
+  });
+  const expiringIntent = timedInteractionLiveIntent("sun-window", "active", { expiresAt: 5000 });
+  assert.equal(expiringIntent.expiresAt, 5000);
+  assert.equal(expiringIntent.completionIntent.statusLabel, "准备下一段活动");
+  assert.equal(timedInteractionLiveIntent("future-item"), null);
 });
 
 test("timed furniture status avoids the fixed room badge for top-wall items", () => {

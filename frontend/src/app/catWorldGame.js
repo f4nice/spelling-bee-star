@@ -13,6 +13,7 @@ import {
   interactionMoveDuration,
   itemInteractionFor,
   timedInteractionLabel,
+  timedInteractionLiveIntent,
   timedInteractionOverlayPosition,
   timedInteractionProgress,
   wandChaseJoinDecision,
@@ -2170,6 +2171,15 @@ class CatWorldScene extends Phaser.Scene {
       { width: GAME_WIDTH, floorBottom: FLOOR_BOTTOM },
     );
     this.interruptCatAutonomy(entry, action.itemId);
+    if (action.showTimedStatus !== false) {
+      this.reportLiveCatIntent(
+        entry.cat,
+        timedInteractionLiveIntent(action.itemId, "active", {
+          message: action.message || interaction.catMessage,
+          expiresAt: action.expiresAt,
+        }),
+      );
+    }
     this.turnCat(entry.container, target.x);
     this.tweens.add({
       targets: entry.container,
@@ -2548,8 +2558,13 @@ class CatWorldScene extends Phaser.Scene {
     if (!entry?.container?.active || !spec || !decor?.active) return null;
     this.clearTimedInteractionStatus(entry);
     const duration = Math.max(Number(durationMs) || 0, 500);
+    entry.container.setData("timedInteractionLiveActive", true);
     const startedAt = Date.now();
     const endsAt = startedAt + duration;
+    this.reportLiveCatIntent(
+      entry.cat,
+      timedInteractionLiveIntent(itemId, "active", { expiresAt: endsAt }),
+    );
     const overlayPosition = timedInteractionOverlayPosition(decor, spec, {
       width: GAME_WIDTH,
       floorTop: FLOOR_TOP,
@@ -2788,6 +2803,7 @@ class CatWorldScene extends Phaser.Scene {
   interruptCatAutonomy(entry, itemId) {
     if (!entry?.container?.active) return;
     this.clearTimedInteractionStatus(entry);
+    entry.container.setData("timedInteractionLiveActive", false);
     entry.container.getData("walkTimer")?.remove?.(false);
     entry.container.getData("interactionTimer")?.remove?.(false);
     entry.container.setData("walkTimer", null);
@@ -2825,13 +2841,20 @@ class CatWorldScene extends Phaser.Scene {
   resumeCatAutonomy(entry, itemId) {
     if (!entry?.container?.active) return;
     if (itemId && entry.container.getData("interactionItemId") !== itemId) return;
+    const completedTimedInteraction = Boolean(entry.container.getData("timedInteractionLiveActive"));
     this.clearTimedInteractionStatus(entry);
+    entry.container.setData("timedInteractionLiveActive", false);
     entry.container.getData("interactionTimer")?.remove?.(false);
     entry.container.setData("interactionTimer", null);
     entry.container.setData("interactionActive", false);
     entry.container.setData("interactionItemId", "");
     const action = this.owner.catItemActions.get(entry.cat.id);
     if (!itemId || action?.itemId === itemId) this.owner.catItemActions.delete(entry.cat.id);
+    const completedIntent = completedTimedInteraction
+      ? timedInteractionLiveIntent(itemId, "complete")
+      : null;
+    if (completedIntent) this.reportLiveCatIntent(entry.cat, completedIntent);
+    else this.reportCatIntent(entry.cat, { kind: "idle", target: { label: "房间里" } }, "arrived");
     this.scheduleCatWalk(entry.container, entry.index, entry.cat);
   }
 
@@ -2865,6 +2888,9 @@ class CatWorldScene extends Phaser.Scene {
     for (const [catId, action] of [...this.owner.catItemActions.entries()]) {
       const entry = entries.get(catId);
       if (!entry || Number(action.expiresAt || 0) <= Date.now()) {
+        if (entry && action.showTimedStatus !== false) {
+          this.reportLiveCatIntent(entry.cat, timedInteractionLiveIntent(action.itemId, "complete"));
+        }
         this.owner.catItemActions.delete(catId);
         continue;
       }
@@ -3770,7 +3796,11 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   reportCatIntent(cat, plan = {}, phase = "moving") {
-    const intent = catVisitPlanStatus(plan, phase);
+    this.reportLiveCatIntent(cat, catVisitPlanStatus(plan, phase));
+  }
+
+  reportLiveCatIntent(cat, intent = null) {
+    if (!intent?.statusLabel) return;
     this.owner.handlers.onCatIntent?.(cat, {
       ...intent,
       sceneId: this.owner.snapshot.scene?.id || "main-room",

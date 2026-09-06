@@ -225,13 +225,24 @@ function updateLiveCatIntent(cat = {}, intent = {}) {
     [catId]: nextIntent,
   };
   window.clearTimeout(liveCatIntentTimers.get(catId));
+  const completionIntent = intent.completionIntent && typeof intent.completionIntent === "object"
+    ? intent.completionIntent
+    : null;
+  const expiresAt = Number(intent.expiresAt || 0);
+  const timeoutMs = completionIntent && Number.isFinite(expiresAt) && expiresAt > 0
+    ? Math.max(expiresAt - Date.now(), 0)
+    : Math.max(Number(intent.ttlMs || 90000), 1000);
   const timer = window.setTimeout(() => {
     if (Number(liveCatIntents.value[catId]?.updatedAt || 0) !== updatedAt) return;
+    if (completionIntent) {
+      updateLiveCatIntent(cat, { ...completionIntent, updatedAt: Date.now() });
+      return;
+    }
     const next = { ...liveCatIntents.value };
     delete next[catId];
     liveCatIntents.value = next;
     liveCatIntentTimers.delete(catId);
-  }, 90000);
+  }, timeoutMs);
   liveCatIntentTimers.set(catId, timer);
 }
 

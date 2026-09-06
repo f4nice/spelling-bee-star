@@ -226,8 +226,48 @@ const TIMED_INTERACTION_LABELS = Object.freeze({
   "sea-window": "窗边看海",
 });
 
+const TIMED_INTERACTION_TONES = Object.freeze({
+  "bubble-bathtub": "need",
+  "study-desk": "learning",
+  "reading-lamp": "learning",
+  "window-hammock": "rest",
+  "felt-cat-bed": "rest",
+  "moon-cushion": "rest",
+  "mini-fountain": "need",
+});
+
 export function timedInteractionLabel(itemId, fallback = "互动中") {
   return TIMED_INTERACTION_LABELS[itemId] || fallback;
+}
+
+export function timedInteractionLiveIntent(itemId, phase = "active", options = {}) {
+  const interaction = CAT_WORLD_CAT_DROP_INTERACTIONS[itemId];
+  if (!interaction) return null;
+  const activityLabel = timedInteractionLabel(itemId);
+  const completionIntent = {
+    kind: "item-interaction",
+    phase: "settled",
+    statusLabel: "准备下一段活动",
+    targetLabel: "",
+    message: `刚刚结束${activityLabel}，正在看看接下来去哪里。`,
+    tone: "steady",
+    ttlMs: 12000,
+  };
+  if (phase === "complete") {
+    return completionIntent;
+  }
+  const intent = {
+    kind: "item-interaction",
+    phase: "arrived",
+    statusLabel: `正在${activityLabel}`,
+    targetLabel: String(options.targetLabel || interaction.label || "").trim(),
+    message: String(options.message || interaction.catMessage || `正在${activityLabel}。`).trim(),
+    tone: TIMED_INTERACTION_TONES[itemId] || "favorite",
+  };
+  const expiresAt = Number(options.expiresAt || 0);
+  return Number.isFinite(expiresAt) && expiresAt > 0
+    ? { ...intent, expiresAt, completionIntent }
+    : intent;
 }
 
 export function timedInteractionProgress(startedAt, endsAt, now = Date.now()) {
