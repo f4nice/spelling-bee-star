@@ -60,6 +60,7 @@ class CatWorldSceneRoamingTest(unittest.TestCase):
             tired_cat.current_scene_key = "main-room"
             tired_cat.favorite_scene_key = "yard"
             state.selected_cat_profile = companion.profile_id
+            state.active_food_cat_id = companion.profile_id
             db.flush()
             now = datetime(2026, 9, 7, 6, 0)
             tired_payload = m.cat_world_cat_profile_payload(tired_cat)
@@ -133,6 +134,44 @@ class CatWorldSceneRoamingTest(unittest.TestCase):
             self.assertEqual(held_moves, [])
             self.assertEqual(profile.current_scene_key, "main-room")
 
+    def test_selected_cat_can_roam_while_one_companion_keeps_the_active_room(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+
+        with Session(engine) as db:
+            m.seed_cat_world_scenes(db)
+            state = self.make_state(db)
+            self.unlock_scene(db, state, "yard")
+            selected = m.create_cat_world_cat_profile(db, state, "siamese", "test")
+            companion = m.create_cat_world_cat_profile(db, state, "ragdoll", "test")
+            selected.current_scene_key = "main-room"
+            selected.favorite_scene_key = "yard"
+            companion.current_scene_key = "main-room"
+            companion.favorite_scene_key = "yard"
+            state.selected_cat_profile = selected.profile_id
+            db.flush()
+
+            with (
+                patch.object(m, "cat_world_stable_ratio", return_value=0.0),
+                patch.object(
+                    m,
+                    "cat_world_current_behavior",
+                    return_value={"key": "exploring", "sleeping": False},
+                ),
+            ):
+                moves, changed = m.cat_world_apply_autonomous_scene_roaming(
+                    db,
+                    state,
+                    [selected, companion],
+                    datetime(2026, 9, 7, 10, 0),
+                )
+
+            self.assertTrue(changed)
+            self.assertEqual(selected.current_scene_key, "yard")
+            self.assertEqual(companion.current_scene_key, "main-room")
+            self.assertEqual([move["catId"] for move in moves], [selected.profile_id])
+            self.assertIn("去了猫咪外院", moves[0]["message"])
+
     def test_cat_prefers_a_room_containing_its_individual_favorite_item(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(engine)
@@ -148,6 +187,7 @@ class CatWorldSceneRoamingTest(unittest.TestCase):
             profile.current_scene_key = "main-room"
             companion.current_scene_key = "main-room"
             state.selected_cat_profile = companion.profile_id
+            state.active_food_cat_id = companion.profile_id
             favorite_toy_id = m.cat_world_cat_profile_payload(profile)["favoriteToyIds"][0]
             state.inventory = m.encode_cat_world_inventory({favorite_toy_id: 1})
             state.item_locations = m.encode_cat_world_item_locations({favorite_toy_id: "yard"})
@@ -327,7 +367,7 @@ class CatWorldSceneRoamingTest(unittest.TestCase):
                 )
 
             self.assertTrue(changed)
-            self.assertEqual(moves, [])
+            self.assertNotIn(profile.profile_id, [move["catId"] for move in moves])
             self.assertEqual(profile.current_scene_key, "main-room")
             current_log = db.scalar(
                 select(CatWorldDailyLog).where(

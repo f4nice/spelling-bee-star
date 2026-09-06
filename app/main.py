@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-010"
-DEFAULT_PAGE_VERSION = "v20260907.10"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-011"
+DEFAULT_PAGE_VERSION = "v20260907.11"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -20218,6 +20218,12 @@ def cat_world_apply_autonomous_scene_roaming(
     period_token = cat_world_scene_roam_period_token(now)
     roam_date = cat_world_local_now(now).date()
     active_scene_id = str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+    scene_resident_counts = {scene_id: 0 for scene_id in available_ids}
+    for profile in cat_profiles:
+        resident_scene_id = str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+        if resident_scene_id not in choices_by_id:
+            resident_scene_id = available_ids[0]
+        scene_resident_counts[resident_scene_id] = scene_resident_counts.get(resident_scene_id, 0) + 1
     busy_cat_references = {
         str(state.active_food_cat_id or ""),
         str(state.active_care_cat_id or ""),
@@ -20284,7 +20290,7 @@ def cat_world_apply_autonomous_scene_roaming(
         db.add(log)
         changed = True
 
-        if profile.profile_id == str(state.selected_cat_profile or "") and current_scene_id == active_scene_id:
+        if current_scene_id == active_scene_id and scene_resident_counts.get(current_scene_id, 0) <= 1:
             continue
 
         adjusted_mood = clamp_cat_world_score(
@@ -20387,6 +20393,8 @@ def cat_world_apply_autonomous_scene_roaming(
             f"{cat_label}{period_label}{reason}，从{from_scene['label']}去了{to_scene['label']}。"
         )
         profile.current_scene_key = target_scene_id
+        scene_resident_counts[current_scene_id] = max(scene_resident_counts.get(current_scene_id, 1) - 1, 0)
+        scene_resident_counts[target_scene_id] = scene_resident_counts.get(target_scene_id, 0) + 1
         db.add(profile)
         agent_state = append_cat_world_agent_event(
             log,
