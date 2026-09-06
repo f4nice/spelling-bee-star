@@ -89,6 +89,7 @@ class CatWorldSceneRoamingTest(unittest.TestCase):
             self.assertEqual(moves[0]["catId"], profile.profile_id)
             self.assertEqual(moves[0]["fromSceneId"], "main-room")
             self.assertEqual(moves[0]["toSceneId"], "yard")
+            self.assertEqual(moves[0]["occurredAt"], "2026-09-07T06:00:00Z")
 
             log = db.scalar(
                 select(CatWorldDailyLog).where(

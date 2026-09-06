@@ -16196,6 +16196,101 @@ select {
   padding: 6px 10px;
 }
 
+.cat-world-scene-move-strip {
+  display: grid;
+  grid-template-columns: max-content repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 9px;
+  border-top: 2px solid rgba(44, 47, 58, 0.24);
+  border-bottom: 2px solid rgba(44, 47, 58, 0.24);
+  padding: 6px 4px;
+  color: #263047;
+  background: rgba(217, 246, 255, 0.54);
+}
+
+.cat-world-scene-move-strip > strong,
+.cat-world-scene-move-strip > span {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.cat-world-scene-move-strip > strong {
+  gap: 4px;
+  padding: 0 5px;
+  color: #176f58;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.cat-world-scene-move-strip > span {
+  gap: 5px;
+  border-left: 3px solid #5ba8d1;
+  padding: 3px 7px;
+  background: rgba(255, 248, 223, 0.88);
+}
+
+.cat-world-scene-move-strip > span.is-arrival {
+  border-left-color: #1d7f5b;
+}
+
+.cat-world-scene-move-strip i {
+  display: inline-flex;
+  flex: 0 0 25px;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  border: 2px solid #2c2f3a;
+  color: #263047;
+  background: var(--cat-portrait-backdrop, #fff0a6);
+}
+
+.cat-world-scene-move-strip b,
+.cat-world-scene-move-strip em,
+.cat-world-scene-move-strip small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cat-world-scene-move-strip b {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
+.cat-world-scene-move-strip em {
+  color: #176f58;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.cat-world-scene-move-strip small {
+  color: #667085;
+  font-size: 10px;
+}
+
+@media (max-width: 860px) {
+  .cat-world-scene-move-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .cat-world-scene-move-strip > strong {
+    padding: 0 3px;
+  }
+
+  .cat-world-scene-move-strip > span {
+    display: grid;
+    grid-template-columns: 25px max-content minmax(0, 1fr);
+  }
+
+  .cat-world-scene-move-strip > span small {
+    display: none;
+  }
+}
+
 .cat-world-room-live-activity {
   display: grid;
   grid-template-columns: 128px minmax(0, 1fr);

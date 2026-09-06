@@ -10,6 +10,11 @@ test("autonomous room changes are announced without interrupting room controls",
 
   assert.match(page, /announceSceneMoves\(payload\.value\)/);
   assert.match(page, /nextPayload\?\.state\?\.sceneMoves/);
+  assert.match(page, /normalizeCatWorldSceneMoves/);
+  assert.match(page, /sceneMoves: state\.value\.sceneMoves/);
+  assert.match(page, /class="cat-world-scene-move-strip"/);
+  assert.match(page, /从\{\{ move\.fromSceneLabel \}\}走进来/);
+  assert.match(page, /recentSceneMoves\.value = \[\];[\s\S]*?14000/);
   assert.match(page, /moves\.length === 1/);
   assert.match(page, /另外还有 \$\{moves\.length - 1\} 只猫咪去了别的房间/);
   assert.match(page, /class="cat-world-notice" aria-live="polite"/);
@@ -51,6 +56,17 @@ test("timed food and care stay visible only in their own scene", async () => {
   assert.match(page, /scene\?\.hasActiveCare \? "猫草中"/);
   assert.match(page, /'has-live-activity': scene\.hasActiveFood \|\| scene\.hasActiveCare/);
   assert.match(styles, /button\.has-live-activity \{[\s\S]*?border-color: #9a6317;/);
+});
+
+test("cats arriving in the current room use an animated entrance without overwriting saved coordinates", async () => {
+  const game = await readFile(new URL("../src/app/catWorldGame.js", import.meta.url), "utf8");
+
+  assert.match(game, /playPendingSceneMoves\(\)/);
+  assert.match(game, /if \(this\.isEditMode\(\) \|\| this\.isToolMode\(\)\) return false;[\s\S]*?takePendingSceneMoves/);
+  assert.match(game, /catWorldSceneArrivalPlan/);
+  assert.match(game, /sceneArrivalTarget/);
+  assert.match(game, /this\.updateCatGait\(entry\.container, gait, distance, tween\.progress\)/);
+  assert.match(game, /刚走进房间/);
 });
 
 test("cat cards expose individual preferences with white text on green interaction states", async () => {

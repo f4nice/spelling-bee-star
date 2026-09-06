@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-008"
-DEFAULT_PAGE_VERSION = "v20260907.8"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-009"
+DEFAULT_PAGE_VERSION = "v20260907.9"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -20416,6 +20416,7 @@ def cat_world_apply_autonomous_scene_roaming(
                 "targetItemLabel": (
                     CAT_WORLD_SHOP_BY_ID.get(target_item_id, {}).get("label") or ""
                 ),
+                "occurredAt": agent_state.get("sceneRoamAt") or "",
                 "message": message,
             }
         )

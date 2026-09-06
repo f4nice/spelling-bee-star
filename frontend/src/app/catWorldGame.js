@@ -34,6 +34,12 @@ import {
 import { catWorldGaitProfile } from "./catWorldGait.js";
 import { catWorldIdleAnimationPlan } from "./catWorldIdleAnimation.js";
 import { catWorldSocialMomentPlan } from "./catWorldSocialMoment.js";
+import {
+  catWorldSceneArrivalPlan,
+  catWorldSceneMoveForScene,
+  catWorldSceneMoveToken,
+  normalizeCatWorldSceneMoves,
+} from "./catWorldSceneTransitions.js";
 
 let VIEW_WIDTH = 1280;
 let VIEW_HEIGHT = 560;
@@ -293,6 +299,7 @@ function normalizeSnapshot(snapshot = {}) {
     selectedCatId: snapshot.selectedCatId || "",
     gameSettings: snapshot.gameSettings || {},
     learningSignal: normalizeLearningSignal(snapshot.learningSignal),
+    sceneMoves: normalizeCatWorldSceneMoves(snapshot.sceneMoves),
     scene: normalizeCatWorldScene(snapshot.scene),
     editMode: Boolean(snapshot.editMode),
     observationMode: Boolean(snapshot.observationMode),
@@ -696,10 +703,11 @@ class CatWorldScene extends Phaser.Scene {
   cacheCatPositions() {
     for (const [catId, container] of this.catContainers.entries()) {
       if (!container?.active) continue;
+      const arrivalTarget = container.getData("sceneArrivalTarget");
       this.owner.catPositions.set(catId, {
-        x: clamp(container.x, 38, GAME_WIDTH - 132),
-        y: clamp(container.y, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
-        facing: container.scaleX < 0 ? -1 : 1,
+        x: clamp(arrivalTarget?.x ?? container.x, 38, GAME_WIDTH - 132),
+        y: clamp(arrivalTarget?.y ?? container.y, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+        facing: arrivalTarget?.facing === -1 || container.scaleX < 0 ? -1 : 1,
       });
     }
   }
@@ -735,6 +743,7 @@ class CatWorldScene extends Phaser.Scene {
       this.restoreCatBubbles(snapshot);
       this.restoreActiveItemInteractions();
       this.playPendingLearningMilestone();
+      this.playPendingSceneMoves();
     }
     this.syncCamera();
     if (lockedCatId) this.focusCat(lockedCatId);
@@ -1742,6 +1751,108 @@ class CatWorldScene extends Phaser.Scene {
       this.catContainers.set(cat.id, container);
       this.scheduleCatMicroAnimation(container, index, cat);
       this.scheduleCatWalk(container, index, cat);
+    });
+  }
+
+  playPendingSceneMoves() {
+    if (this.isEditMode() || this.isToolMode()) return false;
+    const moves = this.owner.takePendingSceneMoves(this.owner.snapshot.scene.id);
+    if (!moves.length) return false;
+    const entries = new Map(this.roomCatEntries().map((entry) => [entry.cat.id, entry]));
+    let played = false;
+    moves.forEach((move) => {
+      if (catWorldSceneMoveForScene(move, this.owner.snapshot.scene.id) !== "arrival") return;
+      const entry = entries.get(move.catId);
+      if (!entry?.container?.active || !entry.behavior.canWalk) return;
+      const target = { x: entry.container.x, y: entry.container.y };
+      const plan = catWorldSceneArrivalPlan(
+        move,
+        target,
+        {
+          minX: 38,
+          maxX: GAME_WIDTH - 132,
+          minY: FLOOR_TOP + 52,
+          maxY: FLOOR_BOTTOM - 70,
+        },
+        entry.behavior.walkSpeed,
+      );
+      const interactionId = `scene-arrival:${catWorldSceneMoveToken(move)}`;
+      this.interruptCatAutonomy(entry, interactionId);
+      entry.container.setData("sceneArrivalTarget", {
+        x: plan.targetX,
+        y: plan.targetY,
+        facing: plan.facing,
+      });
+      entry.container.setPosition(plan.startX, plan.startY);
+      entry.container.setAlpha(0.28);
+      entry.container.setScale(plan.facing, 1);
+      this.syncCatTextOverlays(entry.container);
+      this.spawnSceneArrivalCue(entry, move, plan);
+      const gait = entry.behavior.gait || catWorldGaitProfile(entry.cat, entry.behavior);
+      const distance = Math.hypot(plan.targetX - plan.startX, plan.targetY - plan.startY);
+      this.tweens.add({
+        targets: entry.container,
+        x: plan.targetX,
+        y: plan.targetY,
+        alpha: 1,
+        duration: plan.duration,
+        ease: gait.ease || "Sine.easeInOut",
+        onUpdate: (tween) => {
+          entry.container.setDepth(CAT_INTERACTION_DEPTH + entry.index);
+          this.updateCatGait(entry.container, gait, distance, tween.progress);
+        },
+        onComplete: () => {
+          if (!entry.container.active || entry.container.getData("interactionItemId") !== interactionId) return;
+          entry.container.setData("sceneArrivalTarget", null);
+          this.resetCatGait(entry.container);
+          this.rememberCatPosition(entry, { notify: false });
+          this.spawnCatBubble(
+            entry.container,
+            entry.cat,
+            `我从${move.fromSceneLabel}过来啦，${move.reason}。`,
+          );
+          this.reportLiveCatIntent(entry.cat, {
+            kind: "scene-arrival",
+            phase: "arrived",
+            statusLabel: "刚走进房间",
+            targetLabel: move.targetItemLabel || move.toSceneLabel,
+            message: move.reason,
+            tone: "curious",
+          });
+          this.resumeCatAutonomy(entry, interactionId);
+        },
+      });
+      played = true;
+    });
+    return played;
+  }
+
+  spawnSceneArrivalCue(entry, move, plan) {
+    const cue = this.add
+      .text(
+        plan.startX + (plan.facing > 0 ? 34 : 64),
+        plan.startY - 48,
+        `${entry.cat.displayLabel || entry.cat.label}\n走进${move.toSceneLabel}`,
+        {
+          color: "#263047",
+          backgroundColor: "#fff07d",
+          fontFamily: "Consolas, monospace",
+          fontSize: "10px",
+          fontStyle: "bold",
+          padding: { x: 6, y: 3 },
+          align: "center",
+        },
+      )
+      .setOrigin(0.5, 1)
+      .setDepth(CAT_INTERACTION_DEPTH + 180);
+    this.tweens.add({
+      targets: cue,
+      y: cue.y - 12,
+      alpha: 0,
+      delay: Math.max(plan.duration - 650, 350),
+      duration: 650,
+      ease: "Sine.easeOut",
+      onComplete: () => cue.destroy(),
     });
   }
 
@@ -5234,6 +5345,8 @@ export class CatWorldGame {
     this.learningSignalToken = "";
     this.pendingLearningMilestone = null;
     this.learningRitualVisits = new Set();
+    this.playedSceneMoveTokens = new Set();
+    this.pendingSceneMoves = [];
     this.ready = false;
     this.snapshot = normalizeSnapshot();
     applySceneConfig(this.snapshot.scene);
@@ -5259,6 +5372,16 @@ export class CatWorldGame {
 
   update(snapshot) {
     const nextSnapshot = normalizeSnapshot(snapshot);
+    const freshSceneMoves = nextSnapshot.sceneMoves.filter((move) => {
+      const token = catWorldSceneMoveToken(move);
+      if (!token || this.playedSceneMoveTokens.has(token)) return false;
+      this.playedSceneMoveTokens.add(token);
+      return true;
+    });
+    if (this.playedSceneMoveTokens.size > 80) {
+      this.playedSceneMoveTokens = new Set([...this.playedSceneMoveTokens].slice(-48));
+    }
+    this.pendingSceneMoves.push(...freshSceneMoves);
     const nextLearningToken = nextSnapshot.learningSignal.token;
     const previousLearningScore = learningMilestoneScore(this.snapshot.learningSignal);
     const nextLearningScore = learningMilestoneScore(nextSnapshot.learningSignal);
@@ -5289,6 +5412,17 @@ export class CatWorldGame {
       this.game.scene.getScene("CatWorldScene")?.syncCamera();
       this.game.scale.refresh();
     }
+  }
+
+  takePendingSceneMoves(sceneId) {
+    const matching = this.pendingSceneMoves.filter(
+      (move) => catWorldSceneMoveForScene(move, sceneId) !== "remote",
+    );
+    this.pendingSceneMoves = this.pendingSceneMoves.filter(
+      (move) => catWorldSceneMoveForScene(move, sceneId) === "remote",
+    );
+    if (this.pendingSceneMoves.length > 24) this.pendingSceneMoves = this.pendingSceneMoves.slice(-24);
+    return matching;
   }
 
   getLayout() {

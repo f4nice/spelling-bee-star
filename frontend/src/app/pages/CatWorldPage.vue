@@ -24,6 +24,10 @@ import { catPortraitModel } from "../catWorldPortrait.js";
 import { catRarityBadge } from "../catWorldRarity.js";
 import { catWorldSocialKindLabel } from "../catWorldSocialMoment.js";
 import {
+  catWorldSceneMoveForScene,
+  normalizeCatWorldSceneMoves,
+} from "../catWorldSceneTransitions.js";
+import {
   buildCatWorldLearningRoute,
   buildCatWorldRoomLearningSignal,
   buildCatWorldWeekTrail,
@@ -57,6 +61,7 @@ const bagExpanded = ref(false);
 const activeRoomPanel = ref("cat");
 const busyItemId = ref("");
 const notice = ref("");
+const recentSceneMoves = ref([]);
 const catReaction = ref("");
 const catReactionAnchored = ref(false);
 const catPetSequence = ref(0);
@@ -116,6 +121,7 @@ const catReactionTexts = [
 ];
 let catReactionTimer = 0;
 let learningCompanionReactionTimer = 0;
+let sceneMoveNoticeTimer = 0;
 let activeFoodClockTimer = 0;
 let playTimeHeartbeatTimer = 0;
 let playTimeSyncBusy = false;
@@ -134,6 +140,7 @@ onBeforeUnmount(() => {
   endPlayTimeSession();
   window.clearTimeout(catReactionTimer);
   window.clearTimeout(learningCompanionReactionTimer);
+  window.clearTimeout(sceneMoveNoticeTimer);
   window.clearInterval(activeFoodClockTimer);
   window.clearInterval(playTimeHeartbeatTimer);
   window.removeEventListener("keydown", handleGlobalKeydown);
@@ -954,6 +961,7 @@ const gameSnapshot = computed(() => ({
   selectedCatId: selectedProfileId.value,
   gameSettings: gameSettings.value,
   learningSignal: learningRoomSignal.value,
+  sceneMoves: state.value.sceneMoves,
   scene: currentScene.value,
   editMode: roomEditMode.value,
   observationMode: playTimeLocked.value,
@@ -987,14 +995,27 @@ function replacePayload(nextPayload) {
 }
 
 function announceSceneMoves(nextPayload) {
-  const moves = Array.isArray(nextPayload?.state?.sceneMoves)
-    ? nextPayload.state.sceneMoves.filter((move) => move?.message)
-    : [];
+  const moves = normalizeCatWorldSceneMoves(nextPayload?.state?.sceneMoves)
+    .filter((move) => move.message);
   if (!moves.length) return;
+  window.clearTimeout(sceneMoveNoticeTimer);
+  recentSceneMoves.value = moves;
+  sceneMoveNoticeTimer = window.setTimeout(() => {
+    recentSceneMoves.value = [];
+  }, 14000);
   notice.value = moves.length === 1
     ? moves[0].message
     : `${moves[0].message} 另外还有 ${moves.length - 1} 只猫咪去了别的房间。`;
 }
+
+const currentSceneMoveActivity = computed(() => recentSceneMoves.value
+  .filter((move) => catWorldSceneMoveForScene(move, currentScene.value.id) !== "remote")
+  .map((move) => ({
+    ...move,
+    cat: catForId(move.catId),
+    direction: catWorldSceneMoveForScene(move, currentScene.value.id),
+  }))
+  .slice(0, 3));
 
 function setPlayTime(nextPlayTime) {
   if (!nextPlayTime || typeof nextPlayTime !== "object") return;
@@ -2877,6 +2898,25 @@ async function selectCat(catOrId, options = {}) {
               <small>{{ mood.label || "安静陪读" }} · {{ moodScore }}</small>
             </div>
           </div>
+        </div>
+
+        <div
+          v-if="currentSceneMoveActivity.length"
+          class="cat-world-scene-move-strip"
+          aria-live="polite"
+        >
+          <strong><MoveRightIcon :size="15" :stroke-width="3" aria-hidden="true" />房间动态</strong>
+          <span
+            v-for="move in currentSceneMoveActivity"
+            :key="`${move.catId}-${move.fromSceneId}-${move.toSceneId}-${move.occurredAt || move.period}`"
+            :class="`is-${move.direction}`"
+          >
+            <i :style="move.cat?.portrait?.style" aria-hidden="true"><CatIcon :size="13" :stroke-width="2.8" /></i>
+            <b>{{ move.catLabel }}</b>
+            <em v-if="move.direction === 'arrival'">从{{ move.fromSceneLabel }}走进来</em>
+            <em v-else>去了{{ move.toSceneLabel }}</em>
+            <small>{{ move.reason }}</small>
+          </span>
         </div>
 
         <section
