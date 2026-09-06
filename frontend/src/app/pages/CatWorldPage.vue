@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Flame as FlameIcon, Hammer as HammerIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, Shovel as ShovelIcon, X as XIcon } from "lucide-vue-next";
+import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Flame as FlameIcon, Hammer as HammerIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, Shovel as ShovelIcon, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -20,7 +20,11 @@ import {
 } from "../catWorldCollectionAtlas.js";
 import { catPortraitModel } from "../catWorldPortrait.js";
 import { catRarityBadge } from "../catWorldRarity.js";
-import { buildCatWorldLearningRoute } from "../catWorldLearningRoute.js";
+import {
+  buildCatWorldLearningRoute,
+  catWorldLearningCompanionGrowthLabel,
+  catWorldLearningCompanionToken,
+} from "../catWorldLearningRoute.js";
 import {
   formatCatWorldPlayTime,
   formatCatWorldPlayTimeProgress,
@@ -95,8 +99,9 @@ const catReactionTexts = [
   "尾巴雷达晃了晃，发现新单词",
   "想法缓存刷新，准备继续陪你学",
 ];
-const CAT_REACTION_DURATION_MS = 7000;
+const CAT_REACTION_DURATION_MS = 9000;
 let catReactionTimer = 0;
+let learningCompanionReactionTimer = 0;
 let activeFoodClockTimer = 0;
 let playTimeHeartbeatTimer = 0;
 let playTimeSyncBusy = false;
@@ -114,6 +119,7 @@ onBeforeUnmount(() => {
   gameMountActive = false;
   endPlayTimeSession();
   window.clearTimeout(catReactionTimer);
+  window.clearTimeout(learningCompanionReactionTimer);
   window.clearInterval(activeFoodClockTimer);
   window.clearInterval(playTimeHeartbeatTimer);
   window.removeEventListener("keydown", handleGlobalKeydown);
@@ -180,6 +186,7 @@ onMounted(async () => {
     },
   });
   updateCatWorldGame();
+  announceLearningCompanionOnEntry();
 });
 
 const categories = [
@@ -350,8 +357,19 @@ const focusedCat = computed(
     roomCats.value[0] ||
     {},
 );
-const learningRoute = computed(() => buildCatWorldLearningRoute(energy.value.habit || {}, focusedCat.value));
-const learningGuidePortrait = computed(() => catPortraitModel(focusedCat.value));
+const learningCompanion = computed(() => payload.value.learningCompanion || {});
+const learningGuideCat = computed(() => catForId(learningCompanion.value.catId) || focusedCat.value);
+const learningRoute = computed(() => {
+  const route = buildCatWorldLearningRoute(energy.value.habit || {}, learningGuideCat.value);
+  return {
+    ...route,
+    coachLine: learningCompanion.value.message || route.coachLine,
+  };
+});
+const learningGuidePortrait = computed(() => catPortraitModel(learningGuideCat.value));
+const learningCompanionGrowthLabel = computed(() =>
+  catWorldLearningCompanionGrowthLabel(learningCompanion.value),
+);
 const mood = computed(() => state.value.mood || {});
 const focusedDailyLog = computed(
   () => individualizeCatLog(
@@ -1690,6 +1708,33 @@ function showCatReaction(cat = selectedCat.value, message = "", options = {}) {
   }, CAT_REACTION_DURATION_MS);
 }
 
+function showLearningCompanionReaction(options = {}) {
+  const companion = learningCompanion.value;
+  const cat = catForId(companion.catId) || learningGuideCat.value;
+  if (!cat?.id) return;
+  catWorldGame.value?.focusCat(cat.id);
+  showCatReaction(cat, companion.message || learningRoute.value.coachLine);
+  if (options.scroll !== false) {
+    nextTick(() => gameMountRef.value?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  }
+}
+
+function announceLearningCompanionOnEntry() {
+  const token = catWorldLearningCompanionToken(learningCompanion.value);
+  if (!token) return;
+  const storageKey = `speakeasy:cat-world-learning-companion:${token}`;
+  try {
+    if (window.sessionStorage.getItem(storageKey)) return;
+    window.sessionStorage.setItem(storageKey, "1");
+  } catch {
+    // A speech bubble is still useful when storage is unavailable.
+  }
+  window.clearTimeout(learningCompanionReactionTimer);
+  learningCompanionReactionTimer = window.setTimeout(() => {
+    showLearningCompanionReaction({ scroll: false });
+  }, 450);
+}
+
 async function petCat(cat = selectedCat.value, options = {}) {
   if (roomEditMode.value) return;
   if (!cat?.id) return;
@@ -2073,28 +2118,41 @@ async function selectCat(catOrId, options = {}) {
 
     <section class="cat-world-learning-route" aria-labelledby="cat-world-learning-route-title">
       <header class="cat-world-learning-guide">
-        <figure
-          :class="[
-            'cat-world-cat-portrait',
-            'cat-world-learning-guide-portrait',
-            `pattern-${learningGuidePortrait.pattern}`,
-            `feature-${learningGuidePortrait.feature}`,
-          ]"
-          :style="learningGuidePortrait.style"
-          aria-hidden="true"
+        <button
+          class="cat-world-learning-guide-button"
+          type="button"
+          :title="`听听${learningCompanion.catLabel || learningRoute.guideName}怎么说`"
+          :aria-label="`听听${learningCompanion.catLabel || learningRoute.guideName}的陪学回应`"
+          @click="showLearningCompanionReaction"
         >
-          <i class="cat-world-cat-portrait-ear left"></i>
-          <i class="cat-world-cat-portrait-ear right"></i>
-          <i class="cat-world-cat-portrait-face">
-            <i class="cat-world-cat-portrait-eye left"></i>
-            <i class="cat-world-cat-portrait-eye right"></i>
-            <i class="cat-world-cat-portrait-nose"></i>
-          </i>
-        </figure>
+          <figure
+            :class="[
+              'cat-world-cat-portrait',
+              'cat-world-learning-guide-portrait',
+              `pattern-${learningGuidePortrait.pattern}`,
+              `feature-${learningGuidePortrait.feature}`,
+            ]"
+            :style="learningGuidePortrait.style"
+            aria-hidden="true"
+          >
+            <i class="cat-world-cat-portrait-ear left"></i>
+            <i class="cat-world-cat-portrait-ear right"></i>
+            <i class="cat-world-cat-portrait-face">
+              <i class="cat-world-cat-portrait-eye left"></i>
+              <i class="cat-world-cat-portrait-eye right"></i>
+              <i class="cat-world-cat-portrait-nose"></i>
+            </i>
+          </figure>
+        </button>
         <div>
           <p class="section-kicker">Cat Quest</p>
           <h2 id="cat-world-learning-route-title">{{ learningRoute.title }}</h2>
-          <p>{{ learningRoute.coachLine }}</p>
+          <p class="cat-world-learning-coach-line">{{ learningRoute.coachLine }}</p>
+          <p class="cat-world-learning-companion-status">
+            <MessageCircleIcon :size="13" :stroke-width="2.8" aria-hidden="true" />
+            <strong>{{ learningCompanion.statusLabel || "等待一起热身" }}</strong>
+            <span>{{ learningCompanionGrowthLabel }}</span>
+          </p>
         </div>
         <strong class="cat-world-learning-streak">
           <FlameIcon :size="17" :stroke-width="2.8" aria-hidden="true" />

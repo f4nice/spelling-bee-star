@@ -15891,9 +15891,36 @@ select {
 }
 
 .cat-world-learning-guide-portrait {
+  margin: 0;
   width: 58px;
   height: 58px;
   box-shadow: 3px 3px 0 #2c2f3a;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.cat-world-learning-guide-button {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.cat-world-learning-guide-button:hover .cat-world-learning-guide-portrait,
+.cat-world-learning-guide-button:focus-visible .cat-world-learning-guide-portrait {
+  transform: translateY(-2px);
+  box-shadow: 3px 5px 0 #2c2f3a;
+}
+
+.cat-world-learning-guide-button:focus-visible {
+  outline: 3px solid #1d7f5b;
+  outline-offset: 3px;
 }
 
 .cat-world-learning-guide h2,
@@ -15906,12 +15933,35 @@ select {
   line-height: 1.25;
 }
 
-.cat-world-learning-guide > div > p:last-child {
+.cat-world-learning-coach-line {
   margin-top: 4px;
   color: #526178;
   font-size: 11px;
   font-weight: 800;
   line-height: 1.35;
+}
+
+.cat-world-learning-guide .cat-world-learning-companion-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 6px;
+  margin-top: 6px;
+  border-top: 1px solid rgba(44, 47, 58, 0.22);
+  padding-top: 5px;
+  color: #526178;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.cat-world-learning-companion-status svg,
+.cat-world-learning-companion-status strong {
+  color: #176f58;
+}
+
+.cat-world-learning-companion-status span {
+  white-space: nowrap;
 }
 
 .cat-world-learning-streak {

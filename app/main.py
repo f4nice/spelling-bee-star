@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-003"
-DEFAULT_PAGE_VERSION = "v20260906.3"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-004"
+DEFAULT_PAGE_VERSION = "v20260906.4"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -16749,6 +16749,151 @@ def append_cat_world_agent_event(
     return agent_state
 
 
+CAT_WORLD_LEARNING_COMPANION_MILESTONES = (
+    {"key": "warmup", "label": "20 词热身", "moodGain": 2, "bondGain": 1},
+    {"key": "output", "label": "英语输出", "moodGain": 2, "bondGain": 1},
+    {"key": "loop", "label": "今日学习闭环", "moodGain": 3, "bondGain": 1},
+)
+
+
+def cat_world_learning_companion_message(
+    traits: dict[str, Any],
+    status_key: str,
+    next_action: str = "",
+) -> str:
+    temperament = str(traits.get("temperament") or "balanced")
+    action = str(next_action or "先完成 20 个拼写词，开启今天的学习节奏").strip().rstrip("。")
+    messages = {
+        "starting": {
+            "calm": f"{action}。我会在安静的位置陪着你。",
+            "clingy": f"{action}。你开始以后，我就贴在旁边陪你。",
+            "chatty": f"{action}。完成后念一个新词给我听吧。",
+            "guardian": f"{action}。今天的学习路线交给我守着。",
+            "gentle": f"{action}。不用着急，我们慢慢开始。",
+        },
+        "warmup": {
+            "calm": "20 词已经稳稳记下了，我陪你把英语再用出来。",
+            "clingy": "热身完成啦，我还想贴着你一起完成一次英语输出。",
+            "chatty": "这 20 词我都听见了，再用英语说点什么给我听吧。",
+            "guardian": "热身目标已经守住，下一步去完成一次英语输出。",
+            "gentle": "今天已经轻轻启动了，再慢慢完成一次英语输出就好。",
+        },
+        "output": {
+            "calm": "你已经把英语用出来了，再完成 20 词热身就能收好今天的成果。",
+            "clingy": "我陪你完成了英语输出，再练 20 个词就闭环啦。",
+            "chatty": "刚才的英语输出很有意思，再来 20 个词让我听听。",
+            "guardian": "英语输出已经完成，再守住 20 词热身就能闭环。",
+            "gentle": "表达已经完成了，再慢慢练 20 个词，今天就很完整。",
+        },
+        "loop": {
+            "calm": "今天的输入和输出都完成了，我会安静记住我们的连续学习。",
+            "clingy": "今天的学习闭环完成啦，我越来越喜欢这样陪着你。",
+            "chatty": "单词和表达都完成了，喵！明天再讲新的给我听。",
+            "guardian": "今日学习路线全部完成，我已经替你把成果守好了。",
+            "gentle": "今天一步一步都完成了，休息一下，明天再继续。",
+        },
+    }
+    status_messages = messages.get(status_key, messages["starting"])
+    return status_messages.get(temperament, status_messages.get("calm", action))
+
+
+def cat_world_apply_learning_companion_rewards(
+    state: CatWorldState,
+    log: CatWorldDailyLog,
+    cat: dict[str, Any],
+    traits: dict[str, Any],
+    habit: dict[str, Any] | None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    now = now or datetime.utcnow()
+    habit = habit if isinstance(habit, dict) else {}
+    spelling_count = max(int(habit.get("todaySpellingCount") or 0), 0)
+    has_output = bool(habit.get("todayHasEssay") or habit.get("todayHasDebate"))
+    loop_complete = bool(habit.get("todayBalanceComplete")) or (spelling_count >= 20 and has_output)
+    reached = {
+        "warmup": spelling_count >= 20,
+        "output": has_output,
+        "loop": loop_complete,
+    }
+    status_key = "loop" if loop_complete else ("warmup" if reached["warmup"] else ("output" if has_output else "starting"))
+    status_labels = {
+        "starting": "等待一起热身",
+        "warmup": "已陪你完成热身",
+        "output": "已陪你完成表达",
+        "loop": "今日闭环搭档",
+    }
+    agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
+    claimed = agent_state.get("learningCompanionMilestones")
+    claimed_keys = {str(key) for key in claimed} if isinstance(claimed, list) else set()
+    new_milestones: list[str] = []
+    new_mood_gain = 0
+    new_bond_gain = 0
+    earned_mood_gain = 0
+    earned_bond_gain = 0
+    message = cat_world_learning_companion_message(traits, status_key, str(habit.get("nextAction") or ""))
+
+    for milestone in CAT_WORLD_LEARNING_COMPANION_MILESTONES:
+        key = str(milestone["key"])
+        if not reached[key]:
+            continue
+        mood_gain = int(milestone["moodGain"])
+        bond_gain = int(milestone["bondGain"])
+        earned_mood_gain += mood_gain
+        earned_bond_gain += bond_gain
+        if key in claimed_keys:
+            continue
+        old_mood = int(log.mood_score or 0)
+        log.mood_score = clamp_cat_world_score(old_mood + mood_gain)
+        actual_mood_gain = max(int(log.mood_score or 0) - old_mood, 0)
+        bond = cat_world_apply_cat_bond(
+            state,
+            str(cat.get("profileId") or cat.get("id") or log.cat_id),
+            bond_gain,
+            "learning-companion",
+            str(milestone["label"]),
+            now,
+        )
+        actual_bond_gain = int(bond.get("lastGain") or 0)
+        claimed_keys.add(key)
+        new_milestones.append(key)
+        new_mood_gain += actual_mood_gain
+        new_bond_gain += actual_bond_gain
+        milestone_message = cat_world_learning_companion_message(
+            traits,
+            key,
+            str(habit.get("nextAction") or ""),
+        )
+        agent_state = append_cat_world_agent_event(
+            log,
+            cat,
+            traits,
+            "learning-companion",
+            str(milestone["label"]),
+            f"{milestone_message}（心情 +{actual_mood_gain}，信任 +{actual_bond_gain}）",
+            now,
+        )
+
+    agent_state["learningCompanionMilestones"] = sorted(claimed_keys)
+    agent_state["learningCompanionStatusKey"] = status_key
+    agent_state["learningCompanionMessage"] = message
+    log.agent_state = encode_cat_world_agent_state(agent_state)
+    return {
+        "date": log.log_date.isoformat(),
+        "catId": str(cat.get("profileId") or cat.get("id") or log.cat_id),
+        "catLabel": str(cat.get("displayLabel") or cat.get("label") or "猫咪"),
+        "personality": str(cat.get("personality") or "独立个性猫咪"),
+        "statusKey": status_key,
+        "statusLabel": status_labels[status_key],
+        "message": message,
+        "earnedMoodGain": earned_mood_gain,
+        "earnedBondGain": earned_bond_gain,
+        "newMoodGain": new_mood_gain,
+        "newBondGain": new_bond_gain,
+        "newMilestones": new_milestones,
+        "changed": bool(new_milestones),
+    }
+
+
 def cat_world_current_behavior(
     agent_state: dict[str, Any],
     traits: dict[str, Any],
@@ -18878,11 +19023,16 @@ def cat_world_apply_daily_decay(
     inventory: dict[str, int],
     cat_profiles: list[CatWorldCatProfile],
     room_layout: dict[str, dict[str, float]],
-) -> dict[str, dict[str, Any]]:
+    learning_habit: dict[str, Any] | None = None,
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     now = datetime.utcnow()
     today = date.today()
     changed = False
     payload: dict[str, dict[str, Any]] = {}
+    learning_companion: dict[str, Any] = {}
+    selected_profile_id = str(state.selected_cat_profile or "")
+    if not any(profile.profile_id == selected_profile_id for profile in cat_profiles):
+        selected_profile_id = cat_profiles[0].profile_id if cat_profiles else ""
     care, care_changed = cat_world_ensure_profile_care_records(state, cat_profiles, now)
     changed = care_changed or changed
     escaped_profile_ids: list[str] = []
@@ -18905,6 +19055,16 @@ def cat_world_apply_daily_decay(
             cat,
         ) or changed
         changed = cat_world_apply_agent_routine_event(log, cat, traits, inventory, favorite_active_ids, now) or changed
+        if cat_id == selected_profile_id:
+            learning_companion = cat_world_apply_learning_companion_rewards(
+                state,
+                log,
+                cat,
+                traits,
+                learning_habit,
+                now,
+            )
+            changed = bool(learning_companion.get("changed")) or changed
         db.add(log)
         row = cat_world_daily_log_payload(log, favorite_active_ids, inventory, room_layout, cat)
         row["hygiene"] = hygiene
@@ -18984,11 +19144,13 @@ def cat_world_apply_daily_decay(
             state.active_care_at = None
         for cat_id in escaped_profile_ids:
             payload.pop(cat_id, None)
+        if selected_profile_id in escaped_set:
+            learning_companion = {}
         changed = True
     db.add(state)
     if changed or payload:
         db.commit()
-    return payload
+    return payload, learning_companion
 
 
 def cat_world_active_care_payload(
@@ -20078,7 +20240,14 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         db.add(state)
         db.commit()
         db.refresh(state)
-    daily_logs = cat_world_apply_daily_decay(db, state, usable_inventory, cat_profiles, room_layout)
+    daily_logs, learning_companion = cat_world_apply_daily_decay(
+        db,
+        state,
+        usable_inventory,
+        cat_profiles,
+        room_layout,
+        habit_energy_source,
+    )
     owned_cats = parse_cat_world_cats(state.cats)
     cat_profiles = cat_world_active_cat_profiles(db, state.phone)
     cat_bonds = parse_cat_world_bonds(state.cat_bonds)
@@ -20127,6 +20296,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "todaySources": today_energy_sources,
             "habit": habit_energy_source,
         },
+        "learningCompanion": learning_companion,
         "state": {
             "inventory": inventory,
             "usableInventory": usable_inventory,

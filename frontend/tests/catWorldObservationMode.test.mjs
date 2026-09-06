@@ -28,6 +28,10 @@ test("daily learning route stays outside the locked play area", async () => {
 
   assert.ok(routeIndex >= 0);
   assert.ok(playAreaIndex > routeIndex);
+  assert.match(page, /class="cat-world-learning-guide-button"/);
+  assert.match(page, /@click="showLearningCompanionReaction"/);
+  assert.match(page, /catWorldGame\.value\?\.focusCat\(cat\.id\)/);
+  assert.match(page, /learningCompanion\.statusLabel/);
 });
 
 test("CAT-OS details are collapsed until requested", async () => {

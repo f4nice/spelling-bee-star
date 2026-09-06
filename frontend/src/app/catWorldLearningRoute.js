@@ -69,3 +69,18 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
     steps: steps.map((step, index) => ({ ...step, active: index === activeIndex })),
   };
 }
+
+export function catWorldLearningCompanionToken(companion = {}) {
+  const day = String(companion.date || "").trim();
+  const catId = String(companion.catId || "").trim();
+  const statusKey = String(companion.statusKey || "").trim();
+  if (!day || !catId || !statusKey || statusKey === "starting") return "";
+  return `${day}:${catId}:${statusKey}`;
+}
+
+export function catWorldLearningCompanionGrowthLabel(companion = {}) {
+  const moodGain = safeCount(companion.earnedMoodGain);
+  const bondGain = safeCount(companion.earnedBondGain);
+  if (!moodGain && !bondGain) return "等待今天的第一步";
+  return [`心情 +${moodGain}`, `信任 +${bondGain}`].join(" · ");
+}

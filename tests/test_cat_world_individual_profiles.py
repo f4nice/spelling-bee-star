@@ -14,9 +14,11 @@ from app.main import (
     CAT_WORLD_RENAME_CARD_ITEM_ID,
     CAT_WORLD_SHOP_BY_ID,
     cat_world_apply_cat_bond,
+    cat_world_apply_learning_companion_rewards,
     cat_world_apply_pet_effect,
     cat_world_cat_profile_payload,
     cat_world_consume_rename_card,
+    cat_world_learning_companion_message,
     cat_world_normalize_nickname,
     create_cat_world_cat_profile,
     encode_cat_world_bonds,
@@ -25,6 +27,7 @@ from app.main import (
     ensure_cat_world_agent_state,
     ensure_cat_world_cat_profiles,
     get_or_create_cat_world_daily_log,
+    parse_cat_world_agent_state,
     parse_cat_world_bonds,
 )
 from app.models import CatWorldDailyLog, CatWorldState
@@ -35,6 +38,100 @@ def utc_now() -> datetime:
 
 
 class CatWorldIndividualProfileTest(unittest.TestCase):
+    def test_daily_learning_milestones_reward_only_the_companion_cat_once(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+
+        with Session(engine) as db:
+            phone = "13900000002"
+            state = CatWorldState(
+                phone=phone,
+                cats=encode_cat_world_cats(["siamese"]),
+                selected_cat="siamese",
+                inventory="{}",
+            )
+            db.add(state)
+            db.flush()
+            companion = create_cat_world_cat_profile(db, state, "siamese", "test")
+            other_cat = create_cat_world_cat_profile(db, state, "siamese", "test")
+            db.flush()
+            companion_cat = cat_world_cat_profile_payload(companion)
+            other_cat_payload = cat_world_cat_profile_payload(other_cat)
+            now = utc_now()
+            companion_log = get_or_create_cat_world_daily_log(
+                db, phone, companion.profile_id, date.today(), now, companion_cat
+            )
+            other_log = get_or_create_cat_world_daily_log(
+                db, phone, other_cat.profile_id, date.today(), now, other_cat_payload
+            )
+            companion_log.mood_score = 70
+            other_log.mood_score = 70
+            habit = {
+                "todaySpellingCount": 20,
+                "todayHasEssay": True,
+                "todayHasDebate": False,
+                "todayBalanceComplete": True,
+                "nextAction": "今日学习闭环已完成",
+            }
+
+            reward = cat_world_apply_learning_companion_rewards(
+                state,
+                companion_log,
+                companion_cat,
+                companion_cat["traits"],
+                habit,
+                now,
+            )
+
+            self.assertTrue(reward["changed"])
+            self.assertEqual(reward["statusKey"], "loop")
+            self.assertEqual(reward["newMilestones"], ["warmup", "output", "loop"])
+            self.assertEqual(reward["newMoodGain"], 7)
+            self.assertEqual(reward["newBondGain"], 3)
+            self.assertEqual(companion_log.mood_score, 77)
+            self.assertEqual(other_log.mood_score, 70)
+            bonds = parse_cat_world_bonds(state.cat_bonds)
+            self.assertEqual(bonds[companion.profile_id]["score"], 21)
+            self.assertNotIn(other_cat.profile_id, bonds)
+            agent_state = parse_cat_world_agent_state(companion_log.agent_state)
+            self.assertEqual(
+                set(agent_state["learningCompanionMilestones"]),
+                {"warmup", "output", "loop"},
+            )
+            companion_events = [
+                event
+                for event in agent_state.get("events", [])
+                if event.get("kind") == "learning-companion"
+            ]
+            self.assertEqual(len(companion_events), 3)
+            self.assertEqual(
+                {event.get("label") for event in companion_events},
+                {"20 词热身", "英语输出", "今日学习闭环"},
+            )
+            self.assertEqual(len({event.get("message") for event in companion_events}), 3)
+
+            duplicate = cat_world_apply_learning_companion_rewards(
+                state,
+                companion_log,
+                companion_cat,
+                companion_cat["traits"],
+                habit,
+                now,
+            )
+            self.assertFalse(duplicate["changed"])
+            self.assertEqual(duplicate["newMoodGain"], 0)
+            self.assertEqual(duplicate["newBondGain"], 0)
+            self.assertEqual(companion_log.mood_score, 77)
+            self.assertEqual(parse_cat_world_bonds(state.cat_bonds)[companion.profile_id]["score"], 21)
+
+    def test_learning_companion_lines_follow_individual_temperament(self):
+        calm = cat_world_learning_companion_message({"temperament": "calm"}, "warmup")
+        chatty = cat_world_learning_companion_message({"temperament": "chatty"}, "warmup")
+
+        self.assertNotEqual(calm, chatty)
+        self.assertIn("20 词", calm)
+        self.assertIn("听", chatty)
+
     def test_nickname_is_individual_and_validated(self):
         self.assertEqual(CAT_WORLD_SHOP_BY_ID[CAT_WORLD_RENAME_CARD_ITEM_ID]["cost"], 200)
         engine = create_engine("sqlite+pysqlite:///:memory:")
