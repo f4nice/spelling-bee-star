@@ -36,6 +36,7 @@ import { catWorldIdleAnimationPlan } from "./catWorldIdleAnimation.js";
 import { catWorldSocialMomentPlan } from "./catWorldSocialMoment.js";
 import {
   catWorldSceneArrivalPlan,
+  catWorldSceneDeparturePlan,
   catWorldSceneMoveForScene,
   catWorldSceneMoveToken,
   normalizeCatWorldSceneMoves,
@@ -1752,6 +1753,88 @@ class CatWorldScene extends Phaser.Scene {
       this.scheduleCatMicroAnimation(container, index, cat);
       this.scheduleCatWalk(container, index, cat);
     });
+  }
+
+  captureSceneDepartures(moves = [], nextSceneId = "") {
+    if (
+      this.isEditMode()
+      || this.isToolMode()
+      || nextSceneId !== this.owner.snapshot.scene.id
+    ) return [];
+    const entries = new Map(this.roomCatEntries().map((entry) => [entry.cat.id, entry]));
+    return moves
+      .filter((move) => catWorldSceneMoveForScene(move, this.owner.snapshot.scene.id) === "departure")
+      .map((move) => {
+        const entry = entries.get(move.catId);
+        if (!entry?.container?.active || !entry.behavior.canWalk || this.owner.carriedCat?.catId === move.catId) {
+          return null;
+        }
+        this.owner.catReactions.delete(move.catId);
+        return {
+          move,
+          cat: entry.cat,
+          behavior: entry.behavior,
+          index: entry.index,
+          x: entry.container.x,
+          y: entry.container.y,
+          snapshot: this.owner.snapshot,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  playSceneDepartures(departures = []) {
+    if (!departures.length || this.isEditMode() || this.isToolMode()) return false;
+    departures.forEach((departure) => {
+      const plan = catWorldSceneDeparturePlan(
+        departure.move,
+        departure,
+        {
+          minX: 38,
+          maxX: GAME_WIDTH - 132,
+          minY: FLOOR_TOP + 52,
+          maxY: FLOOR_BOTTOM - 70,
+        },
+        departure.behavior.walkSpeed,
+      );
+      const ghost = this.add.container(plan.startX, plan.startY);
+      ghost.setSize(100, 70);
+      ghost.setData("kind", "departing-cat");
+      ghost.setData("id", departure.cat.id);
+      ghost.setData("behavior", departure.behavior);
+      ghost.setScale(plan.facing, 1);
+      ghost.setDepth(CAT_INTERACTION_DEPTH + departure.index + 90);
+      this.drawCatShape(ghost, departure.cat, false, departure.snapshot, departure.behavior);
+      const cue = this.add
+        .text(45, -86, `去${departure.move.toSceneLabel}`, {
+          color: "#263047",
+          backgroundColor: "#d9f6ff",
+          fontFamily: "Consolas, monospace",
+          fontSize: "10px",
+          fontStyle: "bold",
+          padding: { x: 6, y: 3 },
+        })
+        .setOrigin(0.5, 1);
+      this.pinCatTextOverlay(cue);
+      ghost.add(cue);
+      this.syncCatTextOverlays(ghost);
+      const gait = departure.behavior.gait || catWorldGaitProfile(departure.cat, departure.behavior);
+      const distance = Math.hypot(plan.targetX - plan.startX, plan.targetY - plan.startY);
+      this.tweens.add({
+        targets: ghost,
+        x: plan.targetX,
+        y: plan.targetY,
+        alpha: 0.12,
+        duration: plan.duration,
+        ease: gait.ease || "Sine.easeInOut",
+        onUpdate: (tween) => {
+          ghost.setDepth(CAT_INTERACTION_DEPTH + departure.index + 90);
+          this.updateCatGait(ghost, gait, distance, tween.progress);
+        },
+        onComplete: () => ghost.destroy(),
+      });
+    });
+    return true;
   }
 
   playPendingSceneMoves() {
@@ -5382,6 +5465,10 @@ export class CatWorldGame {
       this.playedSceneMoveTokens = new Set([...this.playedSceneMoveTokens].slice(-48));
     }
     this.pendingSceneMoves.push(...freshSceneMoves);
+    const gameScene = this.game.scene.getScene("CatWorldScene");
+    const departures = this.ready
+      ? gameScene?.captureSceneDepartures(freshSceneMoves, nextSnapshot.scene.id) || []
+      : [];
     const nextLearningToken = nextSnapshot.learningSignal.token;
     const previousLearningScore = learningMilestoneScore(this.snapshot.learningSignal);
     const nextLearningScore = learningMilestoneScore(nextSnapshot.learningSignal);
@@ -5402,14 +5489,15 @@ export class CatWorldGame {
     applySceneConfig(this.snapshot.scene);
     this.layout = cloneLayout(this.snapshot.layout);
     if (sceneChanged) {
-      this.game.scene.getScene("CatWorldScene")?.cancelCarriedCat({ notify: false });
+      gameScene?.cancelCarriedCat({ notify: false });
       this.catPositions.clear();
       this.cameraScrollX = sceneInitialScroll(this.snapshot.scene);
     }
     if (this.ready) {
       this.game.scale.resize(VIEW_WIDTH, VIEW_HEIGHT);
-      this.game.scene.getScene("CatWorldScene")?.renderSnapshot();
-      this.game.scene.getScene("CatWorldScene")?.syncCamera();
+      gameScene?.renderSnapshot();
+      gameScene?.playSceneDepartures(departures);
+      gameScene?.syncCamera();
       this.game.scale.refresh();
     }
   }

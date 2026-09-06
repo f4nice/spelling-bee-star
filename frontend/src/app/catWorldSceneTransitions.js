@@ -68,3 +68,25 @@ export function catWorldSceneArrivalPlan(move = {}, destination = {}, bounds = {
     facing: targetX >= startX ? 1 : -1,
   };
 }
+
+export function catWorldSceneDeparturePlan(move = {}, origin = {}, bounds = {}, walkSpeed = 1) {
+  const minX = Number(bounds.minX ?? 38);
+  const maxX = Math.max(Number(bounds.maxX ?? 1148), minX);
+  const minY = Number(bounds.minY ?? 312);
+  const maxY = Math.max(Number(bounds.maxY ?? 490), minY);
+  const startX = clamp(origin.x, minX, maxX);
+  const startY = clamp(origin.y, minY, maxY);
+  const leavesToLeft = stableHash(`${move.catId}:${move.fromSceneId}:${move.toSceneId}`) % 2 === 0;
+  const targetX = leavesToLeft ? minX : maxX;
+  const targetY = clamp(startY + (stableHash(`${move.catId}:departure-y`) % 29) - 14, minY, maxY);
+  const distance = Math.hypot(targetX - startX, targetY - startY);
+  const duration = clamp(Math.round((880 + distance * 1.08) / Math.max(Number(walkSpeed) || 1, 0.45)), 1050, 2700);
+  return {
+    startX,
+    startY,
+    targetX,
+    targetY,
+    duration,
+    facing: targetX >= startX ? 1 : -1,
+  };
+}

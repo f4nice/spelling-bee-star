@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   catWorldSceneArrivalPlan,
+  catWorldSceneDeparturePlan,
   catWorldSceneMoveForScene,
   catWorldSceneMoveToken,
   normalizeCatWorldSceneMoves,
@@ -41,6 +42,19 @@ test("arrival plan walks from a room edge to the saved destination", () => {
   assert.equal(plan.targetX, 720);
   assert.equal(plan.targetY, 420);
   assert.ok(plan.duration >= 1150 && plan.duration <= 2800);
+  assert.equal(plan.facing, plan.targetX >= plan.startX ? 1 : -1);
+});
+
+test("departure plan walks from the current coordinate to a stable room edge", () => {
+  const bounds = { minX: 38, maxX: 1468, minY: 312, maxY: 490 };
+  const plan = catWorldSceneDeparturePlan(move, { x: 720, y: 420 }, bounds, 0.8);
+  const repeated = catWorldSceneDeparturePlan(move, { x: 720, y: 420 }, bounds, 0.8);
+
+  assert.deepEqual(plan, repeated);
+  assert.equal(plan.startX, 720);
+  assert.equal(plan.startY, 420);
+  assert.ok([bounds.minX, bounds.maxX].includes(plan.targetX));
+  assert.ok(plan.duration >= 1050 && plan.duration <= 2700);
   assert.equal(plan.facing, plan.targetX >= plan.startX ? 1 : -1);
 });
 

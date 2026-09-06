@@ -58,7 +58,7 @@ test("timed food and care stay visible only in their own scene", async () => {
   assert.match(styles, /button\.has-live-activity \{[\s\S]*?border-color: #9a6317;/);
 });
 
-test("cats arriving in the current room use an animated entrance without overwriting saved coordinates", async () => {
+test("cats visibly enter and leave the current room without overwriting saved coordinates", async () => {
   const game = await readFile(new URL("../src/app/catWorldGame.js", import.meta.url), "utf8");
 
   assert.match(game, /playPendingSceneMoves\(\)/);
@@ -67,6 +67,10 @@ test("cats arriving in the current room use an animated entrance without overwri
   assert.match(game, /sceneArrivalTarget/);
   assert.match(game, /this\.updateCatGait\(entry\.container, gait, distance, tween\.progress\)/);
   assert.match(game, /刚走进房间/);
+  assert.match(game, /captureSceneDepartures\(freshSceneMoves, nextSnapshot\.scene\.id\)/);
+  assert.match(game, /playSceneDepartures\(departures\)/);
+  assert.match(game, /setData\("kind", "departing-cat"\)/);
+  assert.match(game, /`去\$\{departure\.move\.toSceneLabel\}`/);
 });
 
 test("cat cards expose individual preferences with white text on green interaction states", async () => {
