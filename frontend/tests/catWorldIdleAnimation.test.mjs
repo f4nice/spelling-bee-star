@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  catWorldActionRhythmExpression,
   catWorldDailyMoodExpression,
   catWorldIdleAnimationPlan,
 } from "../src/app/catWorldIdleAnimation.js";
@@ -46,6 +47,37 @@ test("idle animation rhythms stay individual and deterministic", () => {
   assert.ok(first.some((plan) => plan.source === "temperament" && ["hop", "lookout", "tail", "stretch"].includes(plan.kind)));
 });
 
+test("each action rhythm becomes a distinct recurring pixel expression", () => {
+  const expected = {
+    "observe-then-decide": ["blink", "ellipsis", "question"],
+    "study-signal-first": ["book", "listen", "sparkle"],
+    "companion-seeker": ["heart", "listen", "tail"],
+    "familiar-corner-first": ["groom", "breathe", "blink"],
+    "new-route-scout": ["lookout", "hop", "question"],
+    "play-before-rest": ["paw", "hop", "tail"],
+  };
+
+  for (const [rhythmKey, animationKinds] of Object.entries(expected)) {
+    const expression = catWorldActionRhythmExpression(rhythmKey);
+    const plans = Array.from({ length: 15 }, (_, index) => catWorldIdleAnimationPlan(
+      {
+        id: `cat-${rhythmKey}`,
+        actionRhythm: { key: rhythmKey },
+        individualHabit: { animation: "groom", toneLabel: "认真派" },
+      },
+      { dailyMoodKey: "quiet", temperament: "balanced" },
+      index + 1,
+    )).filter((plan) => plan.source === "action-rhythm");
+
+    assert.equal(expression.key, rhythmKey);
+    assert.deepEqual(expression.animationKinds, animationKinds);
+    assert.ok(expression.label.length >= 4);
+    assert.ok(plans.length >= 2);
+    assert.ok(plans.every((plan) => plan.rhythmKey === rhythmKey));
+    assert.ok(plans.every((plan) => animationKinds.includes(plan.kind)));
+  }
+});
+
 test("an adventurous activity style stays visible alongside an individual temperament", () => {
   const cat = {
     id: "cat-independent-adventurer",
@@ -62,8 +94,12 @@ test("an adventurous activity style stays visible alongside an individual temper
   assert.ok(plans.some((plan) => plan.source === "temperament" && ["hop", "lookout", "tail", "stretch"].includes(plan.kind)));
 });
 
-test("sleep and wake animations override mood and personal habits", () => {
-  const cat = { id: "cat-sleepy", individualHabit: { animation: "chirp" } };
+test("sleep and wake animations override mood, habits and action rhythms", () => {
+  const cat = {
+    id: "cat-sleepy",
+    individualHabit: { animation: "chirp" },
+    actionRhythm: { key: "play-before-rest" },
+  };
   const sleeping = catWorldIdleAnimationPlan(cat, { sleeping: true, dailyMoodKey: "bright" }, 3);
   const waking = catWorldIdleAnimationPlan(cat, { key: "waking", dailyMoodKey: "grumpy" }, 3);
 

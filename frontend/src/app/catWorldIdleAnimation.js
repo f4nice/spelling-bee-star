@@ -26,6 +26,24 @@ const TEMPERAMENT_ANIMATIONS = Object.freeze({
   balanced: Object.freeze(["blink", "tail", "groom", "stretch", "listen", "breathe"]),
 });
 
+const ACTION_RHYTHM_ANIMATIONS = Object.freeze({
+  "observe-then-decide": Object.freeze(["blink", "ellipsis", "question"]),
+  "study-signal-first": Object.freeze(["book", "listen", "sparkle"]),
+  "companion-seeker": Object.freeze(["heart", "listen", "tail"]),
+  "familiar-corner-first": Object.freeze(["groom", "breathe", "blink"]),
+  "new-route-scout": Object.freeze(["lookout", "hop", "question"]),
+  "play-before-rest": Object.freeze(["paw", "hop", "tail"]),
+});
+
+const ACTION_RHYTHM_EXPRESSION_LABELS = Object.freeze({
+  "observe-then-decide": "先观察一下",
+  "study-signal-first": "学习灯牌亮了",
+  "companion-seeker": "先找伙伴",
+  "familiar-corner-first": "回熟悉角落",
+  "new-route-scout": "发现新路线",
+  "play-before-rest": "先活动一下",
+});
+
 function stableHash(value = "") {
   let hash = 2166136261;
   for (const character of String(value || "")) {
@@ -49,6 +67,15 @@ export function catWorldDailyMoodExpression(moodKey = "") {
   };
 }
 
+export function catWorldActionRhythmExpression(rhythmKey = "") {
+  const key = ACTION_RHYTHM_ANIMATIONS[rhythmKey] ? rhythmKey : "";
+  return {
+    key,
+    label: ACTION_RHYTHM_EXPRESSION_LABELS[key] || "按自己的节奏",
+    animationKinds: [...(ACTION_RHYTHM_ANIMATIONS[key] || [])],
+  };
+}
+
 export function catWorldIdleAnimationPlan(cat = {}, behavior = {}, cycle = 1) {
   const catId = String(cat.id || cat.profileId || cat.breedId || "cat");
   const safeCycle = Math.max(Math.trunc(Number(cycle) || 1), 1);
@@ -68,6 +95,11 @@ export function catWorldIdleAnimationPlan(cat = {}, behavior = {}, cycle = 1) {
   }
 
   const mood = catWorldDailyMoodExpression(String(behavior.dailyMoodKey || ""));
+  const rhythm = catWorldActionRhythmExpression(String(
+    cat.actionRhythm?.key
+    || behavior.actionRhythmKey
+    || "",
+  ));
   const habitAnimation = String(cat.individualHabit?.animation || "").trim();
   const temperament = String(
     behavior.temperament
@@ -77,11 +109,11 @@ export function catWorldIdleAnimationPlan(cat = {}, behavior = {}, cycle = 1) {
   const activity = String(behavior.activity || cat.traits?.activity || "");
   const animationStyle = activity === "adventurous" ? activity : temperament;
   const temperamentPool = TEMPERAMENT_ANIMATIONS[animationStyle] || TEMPERAMENT_ANIMATIONS.balanced;
-  const phase = (safeCycle + stableHash(`${catId}:idle-phase`)) % 4;
+  const phase = (safeCycle + stableHash(`${catId}:idle-phase`)) % 5;
 
-  if (mood.animationKinds.length && (phase === 0 || phase === 2)) {
+  if (mood.animationKinds.length && (phase === 0 || phase === 3)) {
     return {
-      kind: stablePick(mood.animationKinds, `${catId}:${mood.key}:mood:${Math.floor(safeCycle / 4)}`),
+      kind: stablePick(mood.animationKinds, `${catId}:${mood.key}:mood:${Math.floor(safeCycle / 5)}`),
       source: "daily-mood",
       moodKey: mood.key,
       expressionLabel: mood.label,
@@ -93,6 +125,15 @@ export function catWorldIdleAnimationPlan(cat = {}, behavior = {}, cycle = 1) {
       source: "individual-habit",
       moodKey: mood.key,
       expressionLabel: String(cat.individualHabit?.toneLabel || "个人小习惯"),
+    };
+  }
+  if (rhythm.animationKinds.length && phase === 2) {
+    return {
+      kind: stablePick(rhythm.animationKinds, `${catId}:${rhythm.key}:rhythm:${Math.floor(safeCycle / 5)}`),
+      source: "action-rhythm",
+      moodKey: mood.key,
+      rhythmKey: rhythm.key,
+      expressionLabel: rhythm.label,
     };
   }
   return {
