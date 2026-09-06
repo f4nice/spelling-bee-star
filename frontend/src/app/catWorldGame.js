@@ -31,6 +31,7 @@ import {
   catVisitPlanStatus,
   chooseCatVisitPlan,
 } from "./catWorldBehaviorPlanner.js";
+import { catWorldGaitProfile } from "./catWorldGait.js";
 import { catWorldIdleAnimationPlan } from "./catWorldIdleAnimation.js";
 
 let VIEW_WIDTH = 1280;
@@ -2808,7 +2809,10 @@ class CatWorldScene extends Phaser.Scene {
     entry.container.getData("interactionTimer")?.remove?.(false);
     entry.container.setData("walkTimer", null);
     entry.container.setData("interactionTimer", null);
+    entry.container.getData("walkTween")?.stop?.();
+    entry.container.setData("walkTween", null);
     this.tweens.killTweensOf(entry.container);
+    this.resetCatGait(entry.container);
     entry.container.setScale(entry.container.scaleX < 0 ? -1 : 1, 1);
     this.syncCatTextOverlays(entry.container);
     entry.container.setData("interactionActive", true);
@@ -3521,7 +3525,7 @@ class CatWorldScene extends Phaser.Scene {
                 : 24;
     const socialIdleBonus = socialNeed >= 76 && mood < 68 ? 10 : 0;
     const activeIdleBonus = activityBias >= 78 && energy > 58 ? -7 : 0;
-    return {
+    const behavior = {
       key,
       sleeping,
       nightOwl,
@@ -3543,6 +3547,10 @@ class CatWorldScene extends Phaser.Scene {
       walkSpeed,
       idleChance: clamp(idleChance + socialIdleBonus + activeIdleBonus, 12, 100),
       restless: nightOwl && (hour >= 22 || hour < 5),
+    };
+    return {
+      ...behavior,
+      gait: catWorldGaitProfile(cat, behavior),
     };
   }
 
@@ -3590,6 +3598,62 @@ class CatWorldScene extends Phaser.Scene {
       ease: "Cubic.easeOut",
       onComplete: () => puff.destroy(),
     });
+  }
+
+  resetCatGait(container) {
+    const body = container?.getData?.("catBody");
+    if (body?.active) {
+      this.tweens.killTweensOf(body);
+      body.setPosition(0, 0);
+    }
+    container?.setData?.("gaitStepIndex", -1);
+  }
+
+  spawnCatPawPrint(container, gait = {}, stepIndex = 0) {
+    if (!container?.active || stepIndex < 1) return;
+    const colors = {
+      rose: 0xff8cad,
+      sky: 0x87d9ff,
+      sun: 0xffd85e,
+      mint: 0x7ed9b5,
+    };
+    const paw = this.add.graphics();
+    const color = colors[gait.pawTone] || colors.rose;
+    const side = stepIndex % 2 === 0 ? -1 : 1;
+    paw.fillStyle(color, clamp(Number(gait.pawAlpha || 0.22), 0.12, 0.34));
+    paw.fillRect(-3, -1, 7, 5);
+    paw.fillRect(-6, -6, 3, 3);
+    paw.fillRect(-1, -8, 3, 3);
+    paw.fillRect(4, -6, 3, 3);
+    paw.setPosition(container.x + 30 + side * 7, container.y + 54);
+    paw.setAngle(side * 7);
+    paw.setDepth(Math.max(container.depth - 3, 1));
+    this.tweens.add({
+      targets: paw,
+      alpha: 0,
+      y: paw.y + 3,
+      duration: 1500,
+      ease: "Sine.easeOut",
+      onComplete: () => paw.destroy(),
+    });
+  }
+
+  updateCatGait(container, gait = {}, distance = 0, progress = 0) {
+    const body = container?.getData?.("catBody");
+    if (!body?.active) return;
+    const cadenceMs = Math.max(Number(gait.cadenceMs || 390), 210);
+    const phase = ((Date.now() / cadenceMs) + Number(gait.phase || 0)) * Math.PI;
+    body.x = Math.sin(phase * 0.5) * Number(gait.swayPx || 0.8);
+    body.y = -Math.abs(Math.sin(phase)) * Number(gait.bobPx || 3);
+    const stepIndex = Math.floor(
+      (Math.max(distance, 0) * clamp(progress, 0, 1))
+      / Math.max(Number(gait.stridePx || 46), 32),
+    );
+    const previousStep = Number(container.getData("gaitStepIndex") ?? -1);
+    if (stepIndex > previousStep) {
+      container.setData("gaitStepIndex", stepIndex);
+      this.spawnCatPawPrint(container, gait, stepIndex);
+    }
   }
 
   scheduleCatWalk(container, index, cat = {}) {
@@ -3690,6 +3754,8 @@ class CatWorldScene extends Phaser.Scene {
       const nextX = visitPlan?.target.x ?? Phaser.Math.Between(38, GAME_WIDTH - 132);
       const nextY = visitPlan?.target.y ?? Phaser.Math.Between(FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
       const guidedLearningMove = visitPlan?.kind === "learning" && learningRitualPending;
+      const gait = latestBehavior.gait || catWorldGaitProfile(cat, latestBehavior);
+      const distance = Phaser.Math.Distance.Between(container.x, container.y, nextX, nextY);
       const duration = guidedLearningMove
         ? interactionMoveDuration(
           container,
@@ -3698,6 +3764,8 @@ class CatWorldScene extends Phaser.Scene {
           { minMs: 6500, maxMs: 26000 },
         )
         : Math.round(Phaser.Math.Between(34000, 56000) / Math.max(Number(latestBehavior.walkSpeed || movement), 0.34));
+      this.resetCatGait(container);
+      container.setData("gait", gait);
       this.turnCat(container, nextX);
       let walkTween;
       walkTween = this.tweens.add({
@@ -3705,9 +3773,13 @@ class CatWorldScene extends Phaser.Scene {
         x: nextX,
         y: nextY,
         duration,
-        ease: "Sine.easeInOut",
-        onUpdate: () => container.setDepth(CAT_INTERACTION_DEPTH + index),
+        ease: gait.ease || "Sine.easeInOut",
+        onUpdate: (tween) => {
+          container.setDepth(CAT_INTERACTION_DEPTH + index);
+          this.updateCatGait(container, gait, distance, Number(tween?.progress || 0));
+        },
         onComplete: () => {
+          this.resetCatGait(container);
           if (container.getData("walkTween") === walkTween) {
             container.setData("walkTween", null);
           }
@@ -3789,6 +3861,7 @@ class CatWorldScene extends Phaser.Scene {
     container.setData("walkTimer", null);
     container.getData("walkTween")?.stop?.();
     container.setData("walkTween", null);
+    this.resetCatGait(container);
     const index = Math.max(this.visibleRoomCats().findIndex((item) => item.id === cat.id), 0);
     this.rememberCatPosition({ cat, container, index }, { notify: false });
     this.scheduleCatWalk(container, index, cat);
@@ -3817,7 +3890,12 @@ class CatWorldScene extends Phaser.Scene {
       : Phaser.Math.Between(2600, 5600) + index * 180;
     const timer = this.time.delayedCall(delay, () => {
       container.setData("microTimer", null);
-      if (container.active && !container.getData("interactionActive") && this.owner.carriedCat?.catId !== cat.id) {
+      if (
+        container.active
+        && !container.getData("interactionActive")
+        && !container.getData("walkTween")
+        && this.owner.carriedCat?.catId !== cat.id
+      ) {
         this.playCatMicroAnimation(container, cat, this.catBehavior(cat, index));
       }
       if (container.active) this.scheduleCatMicroAnimation(container, index, cat);

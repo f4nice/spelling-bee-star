@@ -19,6 +19,7 @@ import {
   resolveCollectionSection,
 } from "../catWorldCollectionAtlas.js";
 import { CAT_BUBBLE_TOTAL_MS } from "../catWorldBubbleState.js";
+import { catWorldGaitProfile } from "../catWorldGait.js";
 import { catPortraitModel } from "../catWorldPortrait.js";
 import { catRarityBadge } from "../catWorldRarity.js";
 import {
@@ -707,6 +708,16 @@ const catAgentCards = computed(() =>
     const lostInfo = lostCats.value[breedId] || null;
     const agentEvents = Array.isArray(agent.events) ? agent.events.filter((event) => event?.message) : [];
     const latestEvent = agentEvents.length ? agentEvents[agentEvents.length - 1] : null;
+    const moodScore = clampCatScore(log.moodScore ?? agent.adjustedMoodScore ?? 0);
+    const energyScore = clampCatScore(log.energyScore ?? agent.adjustedEnergyScore ?? 0);
+    const gait = catWorldGaitProfile(cat, {
+      temperament: agent.temperament || cat.traits?.temperament,
+      activity: cat.traits?.activity,
+      dailyMoodKey: agent.dailyMoodKey,
+      mood: moodScore,
+      energy: energyScore,
+      restThreshold: cat.traits?.restThreshold,
+    });
     return {
       ...cat,
       portrait: catPortraitModel(cat),
@@ -717,8 +728,9 @@ const catAgentCards = computed(() =>
       log,
       agent,
       behaviorLabel: behavior.label || (owned ? "自由活动" : lostInfo ? "已经离家" : "未解锁"),
-      moodScore: clampCatScore(log.moodScore ?? agent.adjustedMoodScore ?? 0),
-      energyScore: clampCatScore(log.energyScore ?? agent.adjustedEnergyScore ?? 0),
+      moodScore,
+      energyScore,
+      gait,
       bondScore: clampCatScore(bond.score ?? 18),
       bondLabel: bond.levelLabel || "刚开始熟悉",
       bondDetailLabel: bond.detailLabel || "还没有照顾记录",
@@ -3333,6 +3345,7 @@ async function selectCat(catOrId, options = {}) {
         <dl class="cat-world-agent-facts">
           <div><dt>个体档案</dt><dd>{{ activeCatDiary.genderLabel }} · {{ activeCatDiary.patternLabel }} · {{ activeCatDiary.featureLabel }}</dd></div>
           <div><dt>个人小习惯</dt><dd>{{ activeCatDiary.individualHabit?.label || "还在慢慢观察" }}</dd></div>
+          <div><dt>今日步态</dt><dd>{{ activeCatDiary.gait?.label || "自在散步" }} · 会留下短暂的像素爪印</dd></div>
           <div><dt>陪学专长</dt><dd>{{ activeCatDiary.learningStyle?.label || "平衡陪学搭档" }} · {{ activeCatDiary.learningStyle?.focusLabel || "少量输入再表达" }}</dd></div>
           <div><dt>作息</dt><dd>{{ activeCatDiary.sleepLabel }}</dd></div>
           <div><dt>消耗</dt><dd>{{ activeCatDiary.decayLabel }}</dd></div>
