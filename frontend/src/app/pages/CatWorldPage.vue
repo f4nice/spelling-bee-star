@@ -2483,6 +2483,15 @@ async function selectCat(catOrId, options = {}) {
         id="cat-world-learning-route-details"
         class="cat-world-learning-route-details"
       >
+      <aside class="cat-world-learning-ritual" role="note" aria-label="今日陪学方法">
+        <span>
+          <AwardIcon :size="13" :stroke-width="2.8" aria-hidden="true" />
+          今日方法
+        </span>
+        <strong>{{ learningRoute.ritual.label }}</strong>
+        <p>{{ learningRoute.ritual.cue }}</p>
+        <small>{{ learningRoute.guideName }}偏爱在{{ learningRoute.ritual.destinationLabel }}陪你</small>
+      </aside>
       <ol class="cat-world-learning-steps" aria-label="今日英语学习路线">
         <li
           v-for="(step, index) in learningRoute.steps"

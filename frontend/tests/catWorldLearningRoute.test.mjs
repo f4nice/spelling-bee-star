@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildCatWorldHabitGarden,
+  buildCatWorldLearningRitual,
   buildCatWorldLearningRoute,
   buildCatWorldRoomLearningSignal,
   buildCatWorldWeekTrail,
@@ -10,6 +11,30 @@ import {
   catWorldLearningCompanionToken,
   catWorldWeekMemory,
 } from "../src/app/catWorldLearningRoute.js";
+
+test("each individual learning style produces its own visible study ritual", () => {
+  const expectedTargets = {
+    "gentle-starter": "learning-garden",
+    "story-builder": "study-desk",
+    "idea-sparring": "reading-lamp",
+    "loop-keeper": "word-gallery",
+    "streak-keeper": "learning-garden",
+    "review-organizer": "book-shelf",
+  };
+  const rituals = Object.entries(expectedTargets).map(([key, targetId]) => {
+    const ritual = buildCatWorldLearningRitual({ key }, "output");
+    assert.equal(ritual.styleKey, key);
+    assert.equal(ritual.primaryTargetId, targetId);
+    assert.equal(ritual.targetItemIds[0], targetId);
+    assert.ok(ritual.cue.length > 12);
+    return ritual;
+  });
+
+  assert.equal(new Set(rituals.map((ritual) => ritual.label)).size, rituals.length);
+  assert.equal(new Set(rituals.map((ritual) => ritual.cue)).size, rituals.length);
+  assert.match(buildCatWorldLearningRitual({ key: "idea-sparring" }, "output").cue, /I think/);
+  assert.match(buildCatWorldLearningRitual({ key: "review-organizer" }, "warmup").cue, /遮住答案/);
+});
 
 test("the word garden grows from persistent learning days and rewards completed loops visually", () => {
   const seed = buildCatWorldHabitGarden({ totalActiveDays: 0, totalLoopDays: 0 });
@@ -118,6 +143,7 @@ test("a cat learning style changes guidance order without changing the balanced 
     {
       nickname: "话话",
       learningStyle: {
+        key: "idea-sparring",
         label: "观点表达搭档",
         focusLabel: "用 AI Debate 说观点",
         preferredOutput: "debate",
@@ -129,6 +155,8 @@ test("a cat learning style changes guidance order without changing the balanced 
   assert.equal(route.learningStyleLabel, "观点表达搭档");
   assert.equal(route.learningFocusLabel, "用 AI Debate 说观点");
   assert.equal(route.preferredOutput, "debate");
+  assert.equal(route.ritual.label, "观点理由法");
+  assert.equal(route.ritual.primaryTargetId, "reading-lamp");
   assert.equal(route.steps[1].href, "/debate");
   assert.equal(route.steps[1].alternateHref, "/essays");
   assert.match(route.steps[1].detail, /先完成一次 AI Debate/);
@@ -154,7 +182,7 @@ test("learning route recognizes input, output, and a returning learner", () => {
 test("room learning signal lights input, output, and the completed loop independently", () => {
   const starting = buildCatWorldRoomLearningSignal(
     { todaySpellingCount: 6, recentDays: [{ date: "2026-09-07", today: true }] },
-    { id: "cat-calm", nickname: "小静" },
+    { id: "cat-calm", nickname: "小静", learningStyle: { key: "review-organizer" } },
     { catId: "cat-calm" },
   );
   const outputFirst = buildCatWorldRoomLearningSignal({
@@ -178,6 +206,9 @@ test("room learning signal lights input, output, and the completed loop independ
   assert.equal(starting.stageKey, "started");
   assert.equal(starting.statusLabel, "5 词起步完成");
   assert.equal(starting.token, "2026-09-07:cat-calm:1:started:0");
+  assert.equal(starting.ritual.styleKey, "review-organizer");
+  assert.equal(starting.ritual.primaryTargetId, "book-shelf");
+  assert.match(starting.ritual.cue, /主动回想/);
   assert.equal(outputFirst.completedCount, 1);
   assert.equal(outputFirst.stageKey, "output");
   assert.equal(outputFirst.steps[1].completed, true);

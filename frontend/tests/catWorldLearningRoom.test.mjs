@@ -51,7 +51,7 @@ test("the room keeps starter progress and gives the growing word garden a friend
   assert.match(game, /`单词芽 · \$\{garden\.stageLabel \|\| "种子"\}`/);
   assert.match(game, /this\.add\.zone\(position\.x, position\.y \+ 48, 132, 132\)/);
   assert.match(game, /itemId:\s*"learning-garden"/);
-  assert.match(game, /今天的学习让单词芽长到/);
+  assert.match(game, /单词芽已经长到/);
   assert.match(styles, /\.cat-world-energy-modal \.cat-world-modal-summary\s*\{\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(styles, /\.cat-world-energy-modal \.cat-world-energy-list\s*\{\s*grid-template-columns:\s*1fr/);
 });
@@ -61,8 +61,26 @@ test("the daily companion plans a visible visit to the study corner", async () =
 
   assert.match(game, /learningCompanionTarget\(cat = \{\}, index = 0, behavior = \{\}\)/);
   assert.match(game, /cat\.id !== guideCatId/);
-  assert.match(game, /\["study-desk", "book-shelf", "reading-lamp", "word-gallery"\]/);
+  assert.match(game, /\.\.\.\(ritual\.targetItemIds \|\| \[\]\)/);
+  assert.match(game, /itemId === "learning-garden" \? gardenPoint/);
+  assert.match(game, /const selected = studyPoints\[0\]/);
+  assert.match(game, /learningStyleKey: ritual\.styleKey/);
+  assert.match(game, /animation: ritual\.animation/);
   assert.match(game, /\{ kind: "learning", target: learningTarget \}/);
   assert.match(game, /this\.spawnPlannedActionBubble\(container, cat, visitPlan\)/);
   assert.match(game, /this\.spawnLearningCompanionBubble\(container, cat, visitPlan\.target\)/);
+});
+
+test("the expanded route explains the companion's method without adding another task card", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
+
+  assert.match(page, /class="cat-world-learning-ritual"/);
+  assert.match(page, /learningRoute\.ritual\.label/);
+  assert.match(page, /learningRoute\.ritual\.cue/);
+  assert.match(page, /learningRoute\.ritual\.destinationLabel/);
+  assert.match(styles, /\.cat-world-learning-ritual\s*\{/);
+  assert.match(styles, /grid-template-columns:\s*auto auto minmax\(180px, 1fr\) auto/);
 });

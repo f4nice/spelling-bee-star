@@ -209,6 +209,33 @@ function normalizeLearningGarden(garden = {}) {
   };
 }
 
+function normalizeLearningRitual(ritual = {}) {
+  const allowedTargetIds = new Set([
+    "learning-garden",
+    "study-desk",
+    "book-shelf",
+    "reading-lamp",
+    "word-gallery",
+  ]);
+  const targetItemIds = Array.isArray(ritual.targetItemIds)
+    ? [...new Set(
+      ritual.targetItemIds
+        .map((itemId) => String(itemId || ""))
+        .filter((itemId) => allowedTargetIds.has(itemId)),
+    )]
+    : [];
+  return {
+    styleKey: String(ritual.styleKey || "balanced"),
+    label: shortCatText(ritual.label || "输入输出交替", 10),
+    cue: String(ritual.cue || "把刚练过的词用进一句自己的英文。").trim(),
+    stepKey: String(ritual.stepKey || "warmup"),
+    animation: String(ritual.animation || "book"),
+    targetItemIds: targetItemIds.length ? targetItemIds : ["learning-garden"],
+    primaryTargetId: String(ritual.primaryTargetId || targetItemIds[0] || "learning-garden"),
+    destinationLabel: shortCatText(ritual.destinationLabel || "学习角", 8),
+  };
+}
+
 function normalizeLearningSignal(signal = {}) {
   const steps = Array.isArray(signal.steps)
     ? signal.steps.slice(0, 3).map((step, index) => ({
@@ -233,6 +260,7 @@ function normalizeLearningSignal(signal = {}) {
     statusLabel: String(signal.statusLabel || "等待今日开始"),
     celebrationMessage: String(signal.celebrationMessage || ""),
     garden: normalizeLearningGarden(signal.garden),
+    ritual: normalizeLearningRitual(signal.ritual),
     steps,
   };
 }
@@ -3951,6 +3979,7 @@ class CatWorldScene extends Phaser.Scene {
 
   learningCompanionTarget(cat = {}, index = 0, behavior = {}) {
     const signal = this.owner.snapshot.learningSignal || {};
+    const ritual = signal.ritual || {};
     const guideCatId = signal.guideCatId || this.owner.snapshot.selectedCatId;
     if (!behavior.canWalk || behavior.sleeping || cat.id !== guideCatId) {
       return null;
@@ -3963,8 +3992,8 @@ class CatWorldScene extends Phaser.Scene {
         itemId: "learning-garden",
         itemKind: gardenPoint.itemKind,
         label: gardenPoint.label,
-        message: `今天的学习让单词芽长到${signal.garden?.stageLabel || "种子"}，我去照看一下。`,
-        animation: "blink",
+        message: `${ritual.cue || "今天的学习闭环完成了。"} 单词芽已经长到${signal.garden?.stageLabel || "种子"}，我去照看一下。`,
+        animation: ritual.animation || "blink",
         priority: clamp(40 + Math.round(attention / 9), 42, 54),
         x: gardenPoint.x,
         y: gardenPoint.y,
@@ -3973,24 +4002,35 @@ class CatWorldScene extends Phaser.Scene {
     const activeStep = (signal.steps || []).find((step) => step.active)
       || (signal.steps || []).find((step) => !step.completed);
     if (!activeStep) return null;
-    const studyPoints = [
-      { itemId: "learning-garden", point: gardenPoint },
-      ...["study-desk", "book-shelf", "reading-lamp", "word-gallery"]
-      .map((itemId) => ({ itemId, point: this.roomItemFocusPoint(itemId, index) }))
-      .filter((entry) => entry.point),
-    ];
-    const selectedIndex = Math.abs(hashText(`${cat.id}:${signal.stageKey}:${activeStep.key}`)) % studyPoints.length;
-    const selected = studyPoints[selectedIndex];
+    const targetItemIds = [...new Set([
+      ...(ritual.targetItemIds || []),
+      "learning-garden",
+      "study-desk",
+      "book-shelf",
+      "reading-lamp",
+      "word-gallery",
+    ])];
+    const studyPoints = targetItemIds
+      .map((itemId) => ({
+        itemId,
+        point: itemId === "learning-garden" ? gardenPoint : this.roomItemFocusPoint(itemId, index),
+      }))
+      .filter((entry) => entry.point);
+    const selected = studyPoints[0] || { itemId: "learning-garden", point: gardenPoint };
     const attention = Number(behavior.attention || 50);
+    const methodCue = String(ritual.cue || "").trim();
     return {
       kind: "learning-companion",
       itemId: selected.itemId,
       itemKind: selected.point.itemKind,
       label: selected.point.label || "学习角",
-      message: activeStep.key === "warmup" && !signal.starterComplete
-        ? `先做 5 词点亮起步爪印，我在${selected.point.label || "学习角"}旁边陪你开始。`
-        : `${activeStep.label}还没完成，我先在${selected.point.label || "学习角"}旁边等你。`,
-      animation: "book",
+      message: methodCue
+        ? `${methodCue} 我去${selected.point.label || "学习角"}陪你。`
+        : activeStep.key === "warmup" && !signal.starterComplete
+          ? `先做 5 词点亮起步爪印，我在${selected.point.label || "学习角"}旁边陪你开始。`
+          : `${activeStep.label}还没完成，我先在${selected.point.label || "学习角"}旁边等你。`,
+      animation: ritual.animation || "book",
+      learningStyleKey: ritual.styleKey || "balanced",
       priority: clamp(64 + Math.round(attention / 6), 62, 84),
       x: clamp(selected.point.x + seededOffset(`${cat.id}:${activeStep.key}:learning-x`, 26), 38, GAME_WIDTH - 132),
       y: clamp(selected.point.y + seededOffset(`${cat.id}:${activeStep.key}:learning-y`, 14), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),

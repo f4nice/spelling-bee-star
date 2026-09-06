@@ -15,6 +15,87 @@ const HABIT_GARDEN_STAGES = Object.freeze([
   Object.freeze({ key: "crown", label: "满冠", threshold: 16 }),
 ]);
 
+const LEARNING_RITUAL_TARGET_LABELS = Object.freeze({
+  "learning-garden": "单词芽",
+  "study-desk": "英文书桌",
+  "book-shelf": "英文书架",
+  "reading-lamp": "阅读台灯",
+  "word-gallery": "单词挂画",
+});
+
+const LEARNING_RITUALS = Object.freeze({
+  "gentle-starter": Object.freeze({
+    label: "五词轻启动",
+    animation: "blink",
+    targetItemIds: Object.freeze(["learning-garden", "reading-lamp", "word-gallery"]),
+    cues: Object.freeze({
+      warmup: "先只做 5 个词，完成后合上答案回想最熟的 1 个。",
+      output: "先说或写最短的 3 句，正确比华丽更重要。",
+      loop: "用 30 秒回想今天最熟的 1 个词和 1 句话。",
+    }),
+  }),
+  "story-builder": Object.freeze({
+    label: "三词成段法",
+    animation: "book",
+    targetItemIds: Object.freeze(["study-desk", "word-gallery", "book-shelf", "learning-garden"]),
+    cues: Object.freeze({
+      warmup: "练词时挑出 3 个想写进句子的词。",
+      output: "把这 3 个词写进同一段英文，先完整表达再润色。",
+      loop: "读一遍今天写下的段落，留下最想记住的一句。",
+    }),
+  }),
+  "idea-sparring": Object.freeze({
+    label: "观点理由法",
+    animation: "chirp",
+    targetItemIds: Object.freeze(["reading-lamp", "study-desk", "word-gallery", "learning-garden"]),
+    cues: Object.freeze({
+      warmup: "从新词里挑 2 个，想想它们能支持什么观点。",
+      output: "先说 I think...，再用 because 补上一个理由。",
+      loop: "用一句反方观点检查自己的理由是否说清楚。",
+    }),
+  }),
+  "loop-keeper": Object.freeze({
+    label: "输入输出接力",
+    animation: "paw",
+    targetItemIds: Object.freeze(["word-gallery", "study-desk", "learning-garden", "book-shelf"]),
+    cues: Object.freeze({
+      warmup: "练词时选 3 个今天一定要用出来的词。",
+      output: "不看答案，先用刚练的词表达一遍，再回头修正。",
+      loop: "对照输入和输出，确认至少有 1 个新词真正用过。",
+    }),
+  }),
+  "streak-keeper": Object.freeze({
+    label: "最低可行记录",
+    animation: "heart",
+    targetItemIds: Object.freeze(["learning-garden", "book-shelf", "reading-lamp", "word-gallery"]),
+    cues: Object.freeze({
+      warmup: "状态一般也只做 5 个词，先保住今天的学习触点。",
+      output: "完成一次最短表达，给今天留下一条真实记录。",
+      loop: "记住今天最小但真实的一步，明天从这里继续。",
+    }),
+  }),
+  "review-organizer": Object.freeze({
+    label: "遮答主动回想",
+    animation: "book",
+    targetItemIds: Object.freeze(["book-shelf", "word-gallery", "study-desk", "learning-garden"]),
+    cues: Object.freeze({
+      warmup: "先看词义，再遮住答案主动回想一次。",
+      output: "挑 3 个容易忘的词，各用一句英文把它们叫回来。",
+      loop: "离开页面前再回想一轮，答不出的词留给明天。",
+    }),
+  }),
+  balanced: Object.freeze({
+    label: "输入输出交替",
+    animation: "book",
+    targetItemIds: Object.freeze(["learning-garden", "study-desk", "book-shelf", "reading-lamp", "word-gallery"]),
+    cues: Object.freeze({
+      warmup: "先做一小组词，再停下来主动回想一次。",
+      output: "把刚练过的词用进一句自己的英文。",
+      loop: "用 30 秒回顾今天的输入和表达。",
+    }),
+  }),
+});
+
 const WEEK_MEMORY_TONES = {
   calm: ["不用赶，我们稳稳积累。", "我把这格安静收好了。"],
   clingy: ["下一步也让我陪在旁边。", "这格我贴着你一起记住了。"],
@@ -36,6 +117,25 @@ const WEEK_MEMORY_OPENINGS = {
 
 function safeCount(value) {
   return Math.max(Number(value || 0), 0);
+}
+
+export function buildCatWorldLearningRitual(learningStyle = {}, stepKey = "warmup") {
+  const requestedStyleKey = String(learningStyle?.key || "balanced");
+  const styleKey = LEARNING_RITUALS[requestedStyleKey] ? requestedStyleKey : "balanced";
+  const ritual = LEARNING_RITUALS[styleKey];
+  const normalizedStepKey = stepKey === "output" ? "output" : ["loop", "wrapup"].includes(stepKey) ? "loop" : "warmup";
+  const targetItemIds = [...ritual.targetItemIds];
+  const primaryTargetId = targetItemIds[0] || "learning-garden";
+  return {
+    styleKey,
+    label: ritual.label,
+    cue: ritual.cues[normalizedStepKey] || ritual.cues.warmup,
+    stepKey: normalizedStepKey,
+    animation: ritual.animation,
+    targetItemIds,
+    primaryTargetId,
+    destinationLabel: LEARNING_RITUAL_TARGET_LABELS[primaryTargetId] || "学习角",
+  };
 }
 
 export function buildCatWorldHabitGarden(habit = {}) {
@@ -134,6 +234,7 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
   ];
   const firstIncompleteIndex = steps.findIndex((step) => !step.completed);
   const activeIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : steps.length - 1;
+  const ritual = buildCatWorldLearningRitual(learningStyle, steps[activeIndex]?.key);
 
   return {
     guideName,
@@ -143,6 +244,7 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
     learningFocusLabel: learningStyle.focusLabel || "少量输入，再完成一次表达",
     learningStyleDescription: learningStyle.description || "陪你用适合自己的节奏完成今天的英语学习。",
     preferredOutput,
+    ritual,
     streak,
     garden,
     starterTarget: STARTER_SPELLING_TARGET,
@@ -193,6 +295,7 @@ export function buildCatWorldRoomLearningSignal(habit = {}, cat = {}, companion 
     loop: `${guideName}看到三格都亮了，今天的英语闭环完成啦。`,
   };
   const garden = buildCatWorldHabitGarden(habit);
+  const ritual = buildCatWorldLearningRitual(cat.learningStyle || {}, loopComplete ? "loop" : steps[activeIndex]?.key);
 
   return {
     token: `${currentDay || "today"}:${guideCatId || "cat"}:${starterComplete ? 1 : 0}:${stageKey}:${completedCount}`,
@@ -217,6 +320,7 @@ export function buildCatWorldRoomLearningSignal(habit = {}, cat = {}, companion 
             : `再 ${Math.max(STARTER_SPELLING_TARGET - spellingCount, 0)} 词点亮起步爪印`,
     celebrationMessage: String(companion.message || fallbackMessages[stageKey] || "").trim(),
     garden,
+    ritual,
     steps: steps.map((step, index) => ({ ...step, active: index === activeIndex })),
   };
 }
