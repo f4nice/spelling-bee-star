@@ -104,8 +104,9 @@ async def store_audio_candidate(
     return f"/media/audio/{target.name}"
 
 
-async def store_first_available_audio(word: str, accent: str, audio_dir: Path) -> str | None:
-    for candidate in await audio_candidates_with_dictionary(word, accent):
+async def store_first_available_audio(word: str, accent: str, audio_dir: Path, *, include_dictionary: bool = True) -> str | None:
+    candidates = await audio_candidates_with_dictionary(word, accent) if include_dictionary else audio_candidates(word, accent)
+    for candidate in candidates:
         try:
             local_url = await store_audio_candidate(word, accent, candidate["key"], candidate["url"], audio_dir)
             if local_url:

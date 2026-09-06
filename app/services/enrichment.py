@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -11,6 +12,8 @@ from app.services.images import ImageClient
 from app.services.translation import TranslationClient
 from app.services.web_dictionary import CambridgeDictionaryClient
 from app.services.youdao_dictionary import YoudaoDictionaryClient
+from app.services.wordnik_dictionary import WordnikDictionaryClient
+from app.services.reviewed_dictionary import lookup_reviewed_entry
 
 
 UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads"
@@ -63,17 +66,20 @@ async def enrich_word(
 
     try:
         free_dictionary_failed = False
+        reviewed_entry = lookup_reviewed_entry(word.word)
 
         async def lookup_free_dictionary():
             nonlocal free_dictionary_failed
             try:
-                return await free_dictionary.lookup(word.word)
+                return await asyncio.wait_for(free_dictionary.lookup(word.word), timeout=8)
             except Exception:
                 free_dictionary_failed = True
                 raise
 
         try:
-            if settings.merriam_webster_api_key:
+            if reviewed_entry:
+                entry = reviewed_entry
+            elif settings.merriam_webster_api_key:
                 try:
                     entry = await merriam_webster.lookup(word.word)
                 except Exception:
@@ -84,7 +90,10 @@ async def enrich_word(
             try:
                 entry = await YoudaoDictionaryClient().lookup(word.word)
             except Exception:
-                entry = await CambridgeDictionaryClient().lookup(word.word)
+                try:
+                    entry = await asyncio.wait_for(CambridgeDictionaryClient().lookup(word.word), timeout=12)
+                except Exception:
+                    entry = await WordnikDictionaryClient().lookup(word.word)
 
         word.phonetic = word.phonetic or entry.phonetic
         word.part_of_speech = word.part_of_speech or entry.part_of_speech
@@ -100,7 +109,7 @@ async def enrich_word(
 
         optional_errors: list[str] = []
         american_audio, british_audio = None, None
-        if not free_dictionary_failed and ((not word.american_audio_url and not word.american_audio_locked) or (not word.british_audio_url and not word.british_audio_locked)):
+        if not free_dictionary_failed and not reviewed_entry and ((not word.american_audio_url and not word.american_audio_locked) or (not word.british_audio_url and not word.british_audio_locked)):
             try:
                 american_audio, british_audio = await audio_client.lookup_audio(word.word)
             except Exception:
@@ -153,12 +162,18 @@ async def enrich_word(
 
         if not word.american_audio_locked and not is_local_audio_url(word.american_audio_url):
             try:
-                word.american_audio_url = await _store_dictionary_audio(word.word, "us", word.american_audio_url) or word.american_audio_url
+                word.american_audio_url = await asyncio.wait_for(_store_dictionary_audio(
+                    word.word, "us", word.american_audio_url,
+                    include_dictionary=not free_dictionary_failed and not reviewed_entry,
+                ), timeout=10) or word.american_audio_url
             except Exception as exc:
                 optional_errors.append(f"美式音频本地化暂不可用: {exc}")
         if not word.british_audio_locked and not is_local_audio_url(word.british_audio_url):
             try:
-                word.british_audio_url = await _store_dictionary_audio(word.word, "gb", word.british_audio_url) or word.british_audio_url
+                word.british_audio_url = await asyncio.wait_for(_store_dictionary_audio(
+                    word.word, "gb", word.british_audio_url,
+                    include_dictionary=not free_dictionary_failed and not reviewed_entry,
+                ), timeout=10) or word.british_audio_url
             except Exception as exc:
                 optional_errors.append(f"英式音频本地化暂不可用: {exc}")
 
@@ -176,7 +191,7 @@ async def enrich_word(
     return word
 
 
-async def _store_dictionary_audio(word: str, accent: str, remote_url: str | None) -> str | None:
+async def _store_dictionary_audio(word: str, accent: str, remote_url: str | None, *, include_dictionary: bool = True) -> str | None:
     if remote_url:
         try:
             local_url = await store_audio_candidate(word, accent, "online-dictionary", remote_url, AUDIO_DIR)
@@ -184,7 +199,7 @@ async def _store_dictionary_audio(word: str, accent: str, remote_url: str | None
                 return local_url
         except Exception:
             pass
-    return await store_first_available_audio(word, accent, AUDIO_DIR)
+    return await store_first_available_audio(word, accent, AUDIO_DIR, include_dictionary=include_dictionary)
 
 
 def _friendly_enrichment_error(error: str) -> str:

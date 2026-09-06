@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from "vue";
+import { wordRefreshFeedback } from "../wordRefreshFeedback.js";
 
 const props = defineProps({
   canEdit: {
@@ -23,14 +24,9 @@ async function completeWord() {
   notice.value = "正在查询词库并补全，可能需要几十秒…";
   try {
     const result = await props.refreshWord();
-    const word = result?.word;
-    if (!word) throw new Error("未收到补全结果，请稍后重试。");
-    const missing = [["phonetic", "音标"], ["english_definition", "英文定义"], ["chinese_definition", "中文定义"], ["english_example", "英文例句"]]
-      .filter(([key]) => !String(word[key] || "").trim()).map(([, label]) => label);
-    failed.value = missing.length > 0;
-    notice.value = missing.length
-      ? `本次未能补齐${missing.join("、")}。词库可能暂无内容或服务暂不可用，请稍后重试，也可双击字段手动填写。`
-      : "补全完成，词条已更新。";
+    const feedback = wordRefreshFeedback(result);
+    failed.value = feedback.failed;
+    notice.value = feedback.notice;
   } catch (error) {
     failed.value = true;
     notice.value = `补全失败：${error?.message || "连接暂不可用，请稍后重试。"}`;
