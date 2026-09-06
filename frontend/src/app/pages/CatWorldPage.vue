@@ -1450,10 +1450,10 @@ async function saveRoomLayout() {
 }
 
 async function selectScene(scene) {
-  if (!scene?.id || !scene.available || busySceneId.value || scene.id === currentScene.value.id) return;
+  if (!scene?.id || !scene.available || busySceneId.value || scene.id === currentScene.value.id) return false;
   if (roomEditMode.value || layoutDirty.value) {
     const saved = await saveRoomLayout();
-    if (!saved) return;
+    if (!saved) return false;
   }
   busySceneId.value = scene.id;
   notice.value = "";
@@ -1471,8 +1471,10 @@ async function selectScene(scene) {
     layoutDirty.value = false;
     roomPanActive.value = false;
     notice.value = `已进入${nextPayload.state?.currentScene?.label || scene.label}。`;
+    return true;
   } catch (error) {
     notice.value = error.message || "场景切换失败，请稍后再试。";
+    return false;
   } finally {
     busySceneId.value = "";
   }
@@ -1692,7 +1694,7 @@ function handleShopItemAction(item) {
 
 function showCatReaction(cat = selectedCat.value, message = "", options = {}) {
   if (roomEditMode.value) return;
-  const catLabel = cat?.label || "猫咪";
+  const catLabel = cat?.displayLabel || cat?.nickname || cat?.label || "猫咪";
   const nextIndex = catPetSequence.value % catReactionTexts.length;
   const reactionMessage = message || catReactionTexts[nextIndex];
   focusedCatId.value = cat?.id || "";
@@ -1708,10 +1710,24 @@ function showCatReaction(cat = selectedCat.value, message = "", options = {}) {
   }, CAT_REACTION_DURATION_MS);
 }
 
-function showLearningCompanionReaction(options = {}) {
+async function showLearningCompanionReaction(options = {}) {
   const companion = learningCompanion.value;
-  const cat = catForId(companion.catId) || learningGuideCat.value;
+  let cat = catForId(companion.catId) || learningGuideCat.value;
   if (!cat?.id) return;
+  const catIsInRoom = roomCats.value.some((roomCat) => roomCat.id === cat.id);
+  if (!catIsInRoom) {
+    if (options.locate === false) return;
+    const targetScene = scenes.value.find((scene) => scene.id === cat.currentSceneId);
+    if (!targetScene?.available) {
+      notice.value = `${cat.displayLabel || cat.label || "今日陪学猫"}暂时不在可进入的房间。`;
+      return;
+    }
+    const switched = await selectScene(targetScene);
+    if (!switched) return;
+    await nextTick();
+    updateCatWorldGame();
+    cat = catForId(companion.catId) || cat;
+  }
   catWorldGame.value?.focusCat(cat.id);
   showCatReaction(cat, companion.message || learningRoute.value.coachLine);
   if (options.scroll !== false) {
@@ -1731,7 +1747,7 @@ function announceLearningCompanionOnEntry() {
   }
   window.clearTimeout(learningCompanionReactionTimer);
   learningCompanionReactionTimer = window.setTimeout(() => {
-    showLearningCompanionReaction({ scroll: false });
+    showLearningCompanionReaction({ scroll: false, locate: false });
   }, 450);
 }
 

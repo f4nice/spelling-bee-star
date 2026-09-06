@@ -30,6 +30,7 @@ test("daily learning route stays outside the locked play area", async () => {
   assert.ok(playAreaIndex > routeIndex);
   assert.match(page, /class="cat-world-learning-guide-button"/);
   assert.match(page, /@click="showLearningCompanionReaction"/);
+  assert.match(page, /const switched = await selectScene\(targetScene\)/);
   assert.match(page, /catWorldGame\.value\?\.focusCat\(cat\.id\)/);
   assert.match(page, /learningCompanion\.statusLabel/);
 });

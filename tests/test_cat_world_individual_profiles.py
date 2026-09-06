@@ -18,6 +18,7 @@ from app.main import (
     cat_world_apply_pet_effect,
     cat_world_cat_profile_payload,
     cat_world_consume_rename_card,
+    cat_world_learning_companion_profile_id,
     cat_world_learning_companion_message,
     cat_world_normalize_nickname,
     create_cat_world_cat_profile,
@@ -38,6 +39,54 @@ def utc_now() -> datetime:
 
 
 class CatWorldIndividualProfileTest(unittest.TestCase):
+    def test_learning_companion_stays_assigned_across_room_and_cat_changes(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+
+        with Session(engine) as db:
+            state = CatWorldState(
+                phone="13900000003",
+                cats=encode_cat_world_cats(["siamese"]),
+                selected_cat="siamese",
+                current_scene_key="main-room",
+                inventory="{}",
+            )
+            db.add(state)
+            db.flush()
+            selected_elsewhere = create_cat_world_cat_profile(db, state, "siamese", "test")
+            room_cat = create_cat_world_cat_profile(db, state, "siamese", "test")
+            selected_elsewhere.current_scene_key = "outdoor-yard"
+            room_cat.current_scene_key = "main-room"
+            state.selected_cat_profile = selected_elsewhere.profile_id
+            db.flush()
+
+            self.assertEqual(
+                cat_world_learning_companion_profile_id(
+                    state,
+                    [selected_elsewhere, room_cat],
+                    [],
+                ),
+                room_cat.profile_id,
+            )
+
+            assigned_log = CatWorldDailyLog(
+                phone=state.phone,
+                log_date=date.today(),
+                cat_id=selected_elsewhere.profile_id,
+                mood_score=70,
+                energy_score=70,
+                last_decay_at=utc_now(),
+                agent_state='{"learningCompanionAssigned": true}',
+            )
+            self.assertEqual(
+                cat_world_learning_companion_profile_id(
+                    state,
+                    [selected_elsewhere, room_cat],
+                    [assigned_log],
+                ),
+                selected_elsewhere.profile_id,
+            )
+
     def test_daily_learning_milestones_reward_only_the_companion_cat_once(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(engine)
@@ -94,6 +143,7 @@ class CatWorldIndividualProfileTest(unittest.TestCase):
             self.assertEqual(bonds[companion.profile_id]["score"], 21)
             self.assertNotIn(other_cat.profile_id, bonds)
             agent_state = parse_cat_world_agent_state(companion_log.agent_state)
+            self.assertTrue(agent_state["learningCompanionAssigned"])
             self.assertEqual(
                 set(agent_state["learningCompanionMilestones"]),
                 {"warmup", "output", "loop"},

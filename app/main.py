@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-004"
-DEFAULT_PAGE_VERSION = "v20260906.4"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-005"
+DEFAULT_PAGE_VERSION = "v20260906.5"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -16756,6 +16756,38 @@ CAT_WORLD_LEARNING_COMPANION_MILESTONES = (
 )
 
 
+def cat_world_learning_companion_profile_id(
+    state: CatWorldState,
+    cat_profiles: list[CatWorldCatProfile],
+    daily_logs: list[CatWorldDailyLog] | None = None,
+) -> str:
+    profiles_by_id = {profile.profile_id: profile for profile in cat_profiles}
+    logs_by_cat_id = {
+        str(log.cat_id or ""): parse_cat_world_agent_state(log.agent_state)
+        for log in daily_logs or []
+    }
+    for profile in cat_profiles:
+        agent_state = logs_by_cat_id.get(profile.profile_id, {})
+        if agent_state.get("learningCompanionAssigned"):
+            return profile.profile_id
+    for profile in cat_profiles:
+        agent_state = logs_by_cat_id.get(profile.profile_id, {})
+        milestones = agent_state.get("learningCompanionMilestones")
+        if isinstance(milestones, list) and milestones:
+            return profile.profile_id
+
+    selected_profile = profiles_by_id.get(str(state.selected_cat_profile or ""))
+    scene_key = str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+    if selected_profile and str(selected_profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) == scene_key:
+        return selected_profile.profile_id
+    for profile in cat_profiles:
+        if str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) == scene_key:
+            return profile.profile_id
+    if selected_profile:
+        return selected_profile.profile_id
+    return cat_profiles[0].profile_id if cat_profiles else ""
+
+
 def cat_world_learning_companion_message(
     traits: dict[str, Any],
     status_key: str,
@@ -16823,6 +16855,7 @@ def cat_world_apply_learning_companion_rewards(
         "loop": "今日闭环搭档",
     }
     agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
+    assigned_now = not bool(agent_state.get("learningCompanionAssigned"))
     claimed = agent_state.get("learningCompanionMilestones")
     claimed_keys = {str(key) for key in claimed} if isinstance(claimed, list) else set()
     new_milestones: list[str] = []
@@ -16873,6 +16906,7 @@ def cat_world_apply_learning_companion_rewards(
             now,
         )
 
+    agent_state["learningCompanionAssigned"] = True
     agent_state["learningCompanionMilestones"] = sorted(claimed_keys)
     agent_state["learningCompanionStatusKey"] = status_key
     agent_state["learningCompanionMessage"] = message
@@ -16890,7 +16924,7 @@ def cat_world_apply_learning_companion_rewards(
         "newMoodGain": new_mood_gain,
         "newBondGain": new_bond_gain,
         "newMilestones": new_milestones,
-        "changed": bool(new_milestones),
+        "changed": bool(new_milestones) or assigned_now,
     }
 
 
@@ -19030,9 +19064,19 @@ def cat_world_apply_daily_decay(
     changed = False
     payload: dict[str, dict[str, Any]] = {}
     learning_companion: dict[str, Any] = {}
-    selected_profile_id = str(state.selected_cat_profile or "")
-    if not any(profile.profile_id == selected_profile_id for profile in cat_profiles):
-        selected_profile_id = cat_profiles[0].profile_id if cat_profiles else ""
+    existing_daily_logs = list(
+        db.scalars(
+            select(CatWorldDailyLog).where(
+                CatWorldDailyLog.phone == state.phone,
+                CatWorldDailyLog.log_date == today,
+            )
+        ).all()
+    )
+    selected_profile_id = cat_world_learning_companion_profile_id(
+        state,
+        cat_profiles,
+        existing_daily_logs,
+    )
     care, care_changed = cat_world_ensure_profile_care_records(state, cat_profiles, now)
     changed = care_changed or changed
     escaped_profile_ids: list[str] = []
