@@ -42,6 +42,7 @@ import {
   normalizeCatWorldSceneMoves,
 } from "./catWorldSceneTransitions.js";
 import {
+  catWorldItemArrivalFollower,
   catWorldItemArrivalPlan,
   catWorldNewVisibleItemArrivals,
 } from "./catWorldItemTransitions.js";
@@ -823,7 +824,55 @@ class CatWorldScene extends Phaser.Scene {
         Math.max(target.y - 10, 18),
         baseDepth + 3,
       );
+      this.inviteFavoriteCatToNewItem(arrival);
     });
+  }
+
+  inviteFavoriteCatToNewItem(arrival = {}) {
+    const favoriteEntries = this.favoriteCatEntries(arrival.id, arrival.kind);
+    const followerId = catWorldItemArrivalFollower(
+      favoriteEntries.map((entry) => ({
+        id: entry.cat.id,
+        canWalk: entry.behavior.canWalk,
+        sleeping: entry.behavior.sleeping,
+        behaviorKey: entry.behavior.key,
+        energy: entry.behavior.energy,
+        restThreshold: entry.behavior.restThreshold,
+        curiosity: entry.behavior.curiosity,
+        activityBias: entry.behavior.activityBias,
+        mood: entry.behavior.mood,
+        carePriority: catCareNeedForSnapshot(this.owner.snapshot, entry.cat).priority,
+        busy: entry.container.getData("interactionActive") || this.owner.catItemActions.has(entry.cat.id),
+        carried: this.owner.carriedCat?.catId === entry.cat.id,
+      })),
+      arrival.id,
+    );
+    const entry = favoriteEntries.find((candidate) => candidate.cat.id === followerId);
+    if (!entry?.container?.active) return false;
+
+    const label = arrival.label || "新物品";
+    this.spawnCatBubble(entry.container, entry.cat, `新来的${label}！正好是我喜欢的。`);
+    const target = arrival.kind === "toy"
+      ? this.toyFocusPoint(arrival.id)
+      : this.nearDecorPosition(arrival.id, entry.index);
+    if (!target) return false;
+    const favoriteTarget = {
+      ...target,
+      itemId: arrival.id,
+      decorId: arrival.kind === "decor" ? arrival.id : "",
+      itemKind: arrival.kind,
+      kind: arrival.kind === "toy" ? "favorite-toy" : "favorite-decor",
+      label,
+    };
+    this.moveCatForInteraction(entry, target, arrival.id, () => {
+      if (
+        arrival.kind === "decor"
+        && this.startAutonomousFavoriteDecorInteraction(entry, favoriteTarget)
+      ) return;
+      this.spawnFavoritePlayBubble(entry.container, entry.cat, favoriteTarget);
+      this.holdCatInteraction(entry, arrival.id, 5600, { showStatus: false });
+    });
+    return true;
   }
 
   spawnItemArrivalDust(x, y, depth, color) {

@@ -146,3 +146,14 @@ test("newly placed furniture visibly settles at its remembered coordinate", asyn
   assert.match(game, /"摆好啦"/);
   assert.match(game, /container\.setPosition\(target\.x, target\.y\)/);
 });
+
+test("a healthy cat with an individual preference notices newly placed furniture", async () => {
+  const game = await readFile(new URL("../src/app/catWorldGame.js", import.meta.url), "utf8");
+
+  assert.match(game, /inviteFavoriteCatToNewItem\(arrival\)/);
+  assert.match(game, /favoriteCatEntries\(arrival\.id, arrival\.kind\)/);
+  assert.match(game, /catWorldItemArrivalFollower/);
+  assert.match(game, /新来的\$\{label\}！正好是我喜欢的/);
+  assert.match(game, /startAutonomousFavoriteDecorInteraction\(entry, favoriteTarget\)/);
+  assert.match(game, /holdCatInteraction\(entry, arrival\.id, 5600, \{ showStatus: false \}\)/);
+});
