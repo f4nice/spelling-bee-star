@@ -10,7 +10,7 @@ test("each cat can follow a stable personal habit inside the room", async () => 
   const game = await readFile(gameUrl, "utf8");
 
   assert.match(game, /individualHabitTarget\(cat = \{\}, index = 0, behavior = \{\}\)/);
-  assert.match(game, /const shouldVisitHabit =/);
+  assert.match(game, /chooseCatVisitPlan\(\[/);
   assert.match(game, /\{ kind: "habit", target: individualHabitTarget \}/);
   assert.match(game, /this\.spawnIndividualHabitBubble\(container, cat, visitPlan\.target\)/);
   assert.match(game, /cat\.individualHabit\?\.animation/);

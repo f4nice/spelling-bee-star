@@ -34,3 +34,14 @@ test("a new learning milestone celebrates once with the companion cat", async ()
   assert.match(game, /spawnLearningSparkles\(guideEntry\.x \+ 44/);
   assert.match(game, /this\.owner\.pendingLearningMilestone = null/);
 });
+
+test("the daily companion plans a visible visit to the study corner", async () => {
+  const game = await readFile(gameUrl, "utf8");
+
+  assert.match(game, /learningCompanionTarget\(cat = \{\}, index = 0, behavior = \{\}\)/);
+  assert.match(game, /cat\.id !== guideCatId/);
+  assert.match(game, /\["study-desk", "book-shelf", "reading-lamp", "word-gallery"\]/);
+  assert.match(game, /\{ kind: "learning", target: learningTarget \}/);
+  assert.match(game, /this\.spawnPlannedActionBubble\(container, cat, visitPlan\)/);
+  assert.match(game, /this\.spawnLearningCompanionBubble\(container, cat, visitPlan\.target\)/);
+});

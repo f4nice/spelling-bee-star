@@ -23,6 +23,10 @@ import {
   scenePageTarget,
 } from "./catWorldSceneConfig.js";
 import { catWorldTimeAmbience } from "./catWorldTimeAmbience.js";
+import {
+  catVisitPlanMessage,
+  chooseCatVisitPlan,
+} from "./catWorldBehaviorPlanner.js";
 
 let VIEW_WIDTH = 1280;
 let VIEW_HEIGHT = 560;
@@ -3426,39 +3430,45 @@ class CatWorldScene extends Phaser.Scene {
       if (!container.active || container.getData("interactionActive")) return;
       const latestBehavior = this.catBehavior(cat, index);
       container.setData("behavior", latestBehavior);
-      if (this.shouldCatIdle(latestBehavior)) {
-        this.playCatIdle(container, index, cat, latestBehavior);
-        return;
-      }
       const foodTarget = this.foodTargetForCat(cat);
       const restTarget = this.restTargetForCat(cat, index, latestBehavior);
       const careNeedTarget = this.careNeedTarget(cat, index, latestBehavior);
+      const learningTarget = this.learningCompanionTarget(cat, index, latestBehavior);
       const socialTarget = this.socialTargetForCat(cat, index, latestBehavior);
       const goalTarget = this.agentGoalTarget(cat);
       const individualHabitTarget = this.individualHabitTarget(cat, index, latestBehavior);
       const favoriteTarget = this.favoriteItemTarget(cat);
-      const shouldVisitFood = Boolean(foodTarget && Phaser.Math.Between(1, 100) <= foodTarget.priority);
-      const shouldVisitRest = !shouldVisitFood && Boolean(restTarget && Phaser.Math.Between(1, 100) <= restTarget.priority);
-      const shouldVisitCareNeed = !shouldVisitFood && !shouldVisitRest && Boolean(careNeedTarget && Phaser.Math.Between(1, 100) <= careNeedTarget.priority);
-      const shouldVisitSocial = !shouldVisitFood && !shouldVisitRest && !shouldVisitCareNeed && Boolean(socialTarget && Phaser.Math.Between(1, 100) <= socialTarget.priority);
-      const shouldVisitGoal = !shouldVisitFood && !shouldVisitRest && !shouldVisitCareNeed && !shouldVisitSocial && Boolean(goalTarget && Phaser.Math.Between(1, 100) <= goalTarget.priority);
-      const shouldVisitHabit = !shouldVisitFood && !shouldVisitRest && !shouldVisitCareNeed && !shouldVisitSocial && !shouldVisitGoal && Boolean(individualHabitTarget && Phaser.Math.Between(1, 100) <= individualHabitTarget.priority);
-      const shouldVisitFavorite = !shouldVisitFood && !shouldVisitRest && !shouldVisitCareNeed && !shouldVisitSocial && !shouldVisitGoal && !shouldVisitHabit && Boolean(favoriteTarget && Phaser.Math.Between(1, 100) <= favoriteTarget.priority);
-      const visitPlan = shouldVisitFood
-        ? { kind: "food", target: foodTarget }
-        : shouldVisitRest
-          ? { kind: "rest", target: restTarget }
-          : shouldVisitCareNeed
-            ? { kind: "care", target: careNeedTarget }
-            : shouldVisitSocial
-              ? { kind: "social", target: socialTarget }
-              : shouldVisitGoal
-                ? { kind: "goal", target: goalTarget }
-                : shouldVisitHabit
-                  ? { kind: "habit", target: individualHabitTarget }
-                  : shouldVisitFavorite
-                    ? { kind: "favorite", target: favoriteTarget }
-                    : null;
+      const decisionCycle = Number(container.getData("decisionCycle") || 0) + 1;
+      container.setData("decisionCycle", decisionCycle);
+      const visitPlan = chooseCatVisitPlan([
+        { kind: "food", target: foodTarget },
+        { kind: "rest", target: restTarget },
+        { kind: "care", target: careNeedTarget },
+        { kind: "learning", target: learningTarget },
+        { kind: "social", target: socialTarget },
+        { kind: "goal", target: goalTarget },
+        { kind: "habit", target: individualHabitTarget },
+        { kind: "favorite", target: favoriteTarget },
+      ], {
+        cat,
+        behavior: latestBehavior,
+        cycle: decisionCycle,
+        lastKind: container.getData("lastVisitKind") || "",
+        repeatCount: Number(container.getData("lastVisitStreak") || 0),
+      });
+      if (!visitPlan && this.shouldCatIdle(latestBehavior)) {
+        this.playCatIdle(container, index, cat, latestBehavior);
+        return;
+      }
+      if (visitPlan) {
+        const previousKind = container.getData("lastVisitKind") || "";
+        container.setData("lastVisitKind", visitPlan.kind);
+        container.setData(
+          "lastVisitStreak",
+          previousKind === visitPlan.kind ? Number(container.getData("lastVisitStreak") || 0) + 1 : 1,
+        );
+        this.spawnPlannedActionBubble(container, cat, visitPlan);
+      }
       const nextX = visitPlan?.target.x ?? Phaser.Math.Between(38, GAME_WIDTH - 132);
       const nextY = visitPlan?.target.y ?? Phaser.Math.Between(FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
       const duration = Math.round(Phaser.Math.Between(34000, 56000) / Math.max(Number(latestBehavior.walkSpeed || movement), 0.34));
@@ -3488,6 +3498,8 @@ class CatWorldScene extends Phaser.Scene {
             });
           } else if (visitPlan?.kind === "care") {
             this.spawnCareNeedBubble(container, cat, visitPlan.target);
+          } else if (visitPlan?.kind === "learning") {
+            this.spawnLearningCompanionBubble(container, cat, visitPlan.target);
           } else if (visitPlan?.kind === "social") {
             this.startCatSocialMoment({ cat, index, container, behavior: latestBehavior }, visitPlan.target);
           } else if (visitPlan?.kind === "goal") {
@@ -3795,6 +3807,35 @@ class CatWorldScene extends Phaser.Scene {
     };
   }
 
+  learningCompanionTarget(cat = {}, index = 0, behavior = {}) {
+    const signal = this.owner.snapshot.learningSignal || {};
+    const guideCatId = signal.guideCatId || this.owner.snapshot.selectedCatId;
+    if (!behavior.canWalk || behavior.sleeping || cat.id !== guideCatId || Number(signal.completedCount || 0) >= 3) {
+      return null;
+    }
+    const activeStep = (signal.steps || []).find((step) => step.active)
+      || (signal.steps || []).find((step) => !step.completed);
+    if (!activeStep) return null;
+    const studyPoints = ["study-desk", "book-shelf", "reading-lamp", "word-gallery"]
+      .map((itemId) => ({ itemId, point: this.roomItemFocusPoint(itemId, index) }))
+      .filter((entry) => entry.point);
+    if (!studyPoints.length) return null;
+    const selectedIndex = Math.abs(hashText(`${cat.id}:${signal.stageKey}:${activeStep.key}`)) % studyPoints.length;
+    const selected = studyPoints[selectedIndex];
+    const attention = Number(behavior.attention || 50);
+    return {
+      kind: "learning-companion",
+      itemId: selected.itemId,
+      itemKind: selected.point.itemKind,
+      label: selected.point.label || "学习角",
+      message: `${activeStep.label}还没完成，我先在${selected.point.label || "学习角"}旁边等你。`,
+      animation: "book",
+      priority: clamp(64 + Math.round(attention / 6), 62, 84),
+      x: clamp(selected.point.x + seededOffset(`${cat.id}:${activeStep.key}:learning-x`, 26), 38, GAME_WIDTH - 132),
+      y: clamp(selected.point.y + seededOffset(`${cat.id}:${activeStep.key}:learning-y`, 14), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+    };
+  }
+
   individualHabitTarget(cat = {}, index = 0, behavior = {}) {
     if (!behavior.canWalk || behavior.sleeping) return null;
     const habit = cat.individualHabit || {};
@@ -3917,6 +3958,61 @@ class CatWorldScene extends Phaser.Scene {
       alpha: 0,
       delay: 1600,
       duration: 1300,
+      ease: "Cubic.easeOut",
+      onComplete: () => bubble.destroy(),
+    });
+  }
+
+  spawnPlannedActionBubble(container, cat, plan = {}) {
+    const message = catVisitPlanMessage(plan);
+    if (!container?.active || !message) return;
+    const bubble = this.add
+      .text(container.x + 38, container.y - 30, `${cat?.displayLabel || cat?.label || "猫咪"}：${message}`, {
+        color: "#fff8df",
+        backgroundColor: "#123446",
+        fontFamily: "Consolas, monospace",
+        fontSize: "11px",
+        fontStyle: "bold",
+        padding: { x: 7, y: 4 },
+        wordWrap: { width: 230 },
+        align: "center",
+      })
+      .setOrigin(0.5)
+      .setDepth(CAT_INTERACTION_DEPTH + 128);
+    this.tweens.add({
+      targets: bubble,
+      y: bubble.y - 12,
+      alpha: 0,
+      delay: 900,
+      duration: 900,
+      ease: "Cubic.easeOut",
+      onComplete: () => bubble.destroy(),
+    });
+  }
+
+  spawnLearningCompanionBubble(container, cat, target = {}) {
+    if (!container?.active) return;
+    const message = `${cat?.displayLabel || cat?.label || "猫咪"}：${target.message || "我在学习角陪你。"}`;
+    const bubble = this.add
+      .text(container.x + 36, container.y - 30, message, {
+        color: "#263047",
+        backgroundColor: "#fff07d",
+        fontFamily: "Consolas, monospace",
+        fontSize: "12px",
+        fontStyle: "bold",
+        padding: { x: 8, y: 5 },
+        wordWrap: { width: 250 },
+        align: "center",
+      })
+      .setOrigin(0.5)
+      .setDepth(CAT_INTERACTION_DEPTH + 136);
+    this.playCatMicroAnimation(container, cat, container.getData("behavior") || {}, target.animation || "book");
+    this.tweens.add({
+      targets: bubble,
+      y: bubble.y - 18,
+      alpha: 0,
+      delay: 1200,
+      duration: 1200,
       ease: "Cubic.easeOut",
       onComplete: () => bubble.destroy(),
     });
