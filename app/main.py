@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-020"
-DEFAULT_PAGE_VERSION = "v20260907.20"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-021"
+DEFAULT_PAGE_VERSION = "v20260907.21"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -17765,6 +17765,7 @@ def cat_world_learning_memory_payload(logs: list[CatWorldDailyLog] | tuple[CatWo
     dates_by_milestone: dict[str, set[date]] = {
         key: set() for key in CAT_WORLD_LEARNING_MEMORY_KEYS
     }
+    milestones_by_date: dict[date, set[str]] = {}
     companion_dates: set[date] = set()
     for log in logs:
         if not isinstance(log, CatWorldDailyLog) or not log.log_date:
@@ -17775,6 +17776,7 @@ def cat_world_learning_memory_payload(logs: list[CatWorldDailyLog] | tuple[CatWo
         if not milestones:
             continue
         companion_dates.add(log.log_date)
+        milestones_by_date.setdefault(log.log_date, set()).update(milestones)
         for key in milestones:
             dates_by_milestone[key].add(log.log_date)
 
@@ -17809,6 +17811,44 @@ def cat_world_learning_memory_payload(logs: list[CatWorldDailyLog] | tuple[CatWo
         else 100
     )
     ordered_dates = sorted(companion_dates)
+    recent_days = []
+    for memory_date in reversed(ordered_dates[-6:]):
+        milestones = milestones_by_date.get(memory_date, set())
+        if "loop" in milestones:
+            status_key = "loop"
+            status_label = "完成学习闭环"
+        elif "warmup" in milestones and "output" in milestones:
+            status_key = "warmup-output"
+            status_label = "完成热身与表达"
+        elif "warmup" in milestones:
+            status_key = "warmup"
+            status_label = "完成 20 词热身"
+        elif "output" in milestones:
+            status_key = "output"
+            status_label = "完成英语表达"
+        else:
+            status_key = "started"
+            status_label = "点亮 5 词起步"
+        recent_days.append(
+            {
+                "date": memory_date.isoformat(),
+                "dayLabel": f"{memory_date.month}/{memory_date.day}",
+                "statusKey": status_key,
+                "statusLabel": status_label,
+                "milestones": sorted(milestones),
+            }
+        )
+    stage_rows = [
+        {
+            "key": str(memory_stage["key"]),
+            "label": str(memory_stage["label"]),
+            "threshold": int(memory_stage["threshold"]),
+            "unlocked": memory_points >= int(memory_stage["threshold"]),
+            "current": str(memory_stage["key"]) == str(stage["key"]),
+        }
+        for memory_stage in CAT_WORLD_LEARNING_MEMORY_STAGES
+        if str(memory_stage["key"]) != "waiting"
+    ]
     return {
         "hasMemory": companion_days > 0,
         "companionDays": companion_days,
@@ -17827,6 +17867,8 @@ def cat_world_learning_memory_payload(logs: list[CatWorldDailyLog] | tuple[CatWo
         "nextRemaining": max(next_threshold - memory_points, 0) if next_stage else 0,
         "firstDate": ordered_dates[0].isoformat() if ordered_dates else "",
         "latestDate": ordered_dates[-1].isoformat() if ordered_dates else "",
+        "stages": stage_rows,
+        "recentDays": recent_days,
     }
 
 

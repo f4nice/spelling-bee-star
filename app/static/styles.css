@@ -15099,6 +15099,172 @@ select {
   background: rgba(255, 243, 164, 0.34);
 }
 
+.cat-world-learning-scrapbook {
+  display: grid;
+  gap: 8px;
+  margin-inline: -14px;
+  border-top: 3px solid #2c2f3a;
+  border-bottom: 3px solid #2c2f3a;
+  padding: 11px 14px;
+  background: #f1f9e8;
+}
+
+.cat-world-learning-scrapbook-head,
+.cat-world-learning-scrapbook-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cat-world-learning-scrapbook-head > span {
+  display: grid;
+  gap: 1px;
+}
+
+.cat-world-learning-scrapbook-head small {
+  color: #007f67;
+  font-size: 9px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.cat-world-learning-scrapbook-head strong {
+  color: #263047;
+  font-size: 15px;
+}
+
+.cat-world-learning-scrapbook-head > em {
+  flex: 0 0 auto;
+  border: 2px solid #2c2f3a;
+  padding: 3px 7px;
+  color: #75401f;
+  background: #ffe6c7;
+}
+
+.cat-world-learning-stamp-track {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 2px solid #2c2f3a;
+  background: #fff8df;
+}
+
+.cat-world-learning-stamp-track > span {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1px 5px;
+  min-width: 0;
+  min-height: 46px;
+  padding: 6px 7px;
+  color: #7c8492;
+  background: #eef1eb;
+}
+
+.cat-world-learning-stamp-track > span:not(:last-child) {
+  border-right: 2px solid #2c2f3a;
+}
+
+.cat-world-learning-stamp-track > span.unlocked {
+  color: #684016;
+  background: #fff3a4;
+}
+
+.cat-world-learning-stamp-track > span.current {
+  color: #5c2f1d;
+  background: #ffcfa8;
+}
+
+.cat-world-learning-stamp-track > span.current::after {
+  position: absolute;
+  right: 4px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid #2c2f3a;
+  background: #ff6b7d;
+  content: "";
+}
+
+.cat-world-learning-stamp-track strong,
+.cat-world-learning-stamp-track small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cat-world-learning-stamp-track strong {
+  color: inherit;
+  font-size: 10px;
+}
+
+.cat-world-learning-stamp-track small {
+  grid-column: 2;
+  color: inherit;
+  font-size: 9px;
+}
+
+.cat-world-learning-memory-days {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.cat-world-learning-memory-days > span {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  border: 2px solid #2c2f3a;
+  padding: 4px 6px;
+  color: #263047;
+  background: #d9f6ff;
+}
+
+.cat-world-learning-memory-days > span.tone-output,
+.cat-world-learning-memory-days > span.tone-warmup-output {
+  background: #ead8ff;
+}
+
+.cat-world-learning-memory-days > span.tone-loop {
+  background: #a9e8c8;
+}
+
+.cat-world-learning-memory-days b,
+.cat-world-learning-memory-days em,
+.cat-world-learning-scrapbook-foot span,
+.cat-world-learning-scrapbook-foot em,
+.cat-world-agent-card .cat-world-learning-memory-empty {
+  color: #40516b;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.cat-world-learning-memory-days b {
+  color: #007f67;
+}
+
+.cat-world-learning-scrapbook-foot {
+  align-items: flex-start;
+}
+
+.cat-world-learning-scrapbook-foot span {
+  color: #263047;
+}
+
+.cat-world-learning-scrapbook-foot em {
+  text-align: right;
+}
+
+.cat-world-agent-card .cat-world-learning-memory-empty {
+  padding: 5px 7px;
+  color: #526178;
+  background: rgba(255, 255, 255, 0.58);
+}
+
 .cat-world-agent-meter-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
@@ -15584,6 +15750,26 @@ select {
 
   .cat-world-agent-facts {
     grid-template-columns: 1fr;
+  }
+
+  .cat-world-learning-stamp-track {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cat-world-learning-stamp-track > span:nth-child(2) {
+    border-right: 0;
+  }
+
+  .cat-world-learning-stamp-track > span:nth-child(-n + 2) {
+    border-bottom: 2px solid #2c2f3a;
+  }
+
+  .cat-world-learning-scrapbook-foot {
+    display: grid;
+  }
+
+  .cat-world-learning-scrapbook-foot em {
+    text-align: left;
   }
 
   .cat-world-lost-alert,

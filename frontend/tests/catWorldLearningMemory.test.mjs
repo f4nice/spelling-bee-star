@@ -7,6 +7,7 @@ import {
   catWorldLearningMemoryLine,
   catWorldLearningMemoryNextLine,
   catWorldLearningMemoryRoomCue,
+  formatCatWorldLearningMemoryDate,
   normalizeCatWorldLearningMemory,
 } from "../src/app/catWorldLearningMemory.js";
 
@@ -26,13 +27,26 @@ test("cat learning memory keeps humane per-cat progress and readable titles", ()
     progressPercent: 0,
     nextLevelLabel: "稳定陪学",
     nextRemaining: 6,
+    latestDate: "2026-09-07",
+    stages: [
+      { key: "starter", label: "起步搭子", threshold: 1, unlocked: true },
+      { key: "familiar", label: "熟悉节奏", threshold: 4, unlocked: true, current: true },
+      { key: "steady", label: "稳定陪学", threshold: 10, unlocked: false },
+      { key: "guardian", label: "英语守护猫", threshold: 24, unlocked: false },
+    ],
+    recentDays: [
+      { date: "2026-09-07", dayLabel: "9/7", statusKey: "loop", statusLabel: "完成学习闭环" },
+    ],
   });
 
   assert.equal(memory.companionDays, 3);
   assert.equal(memory.loopDays, 1);
   assert.equal(catWorldLearningMemoryLine(memory), "熟悉节奏 · 陪学 3 天 · 闭环 1 次");
   assert.equal(catWorldLearningMemoryNextLine(memory), "再积累 6 点陪学记忆，成为稳定陪学");
-  assert.match(catWorldLearningMemoryRoomCue(memory), /一起学过 3 天/);
+  assert.deepEqual(memory.stages.filter((stage) => stage.unlocked).map((stage) => stage.key), ["starter", "familiar"]);
+  assert.equal(memory.recentDays[0].statusLabel, "完成学习闭环");
+  assert.equal(formatCatWorldLearningMemoryDate(memory.latestDate), "9月7日");
+  assert.match(catWorldLearningMemoryRoomCue(memory), /最新一页写在 9月7日/);
   assert.match(catWorldLearningMemoryRoomCue(memory, true), /完成 1 次英语闭环/);
 });
 
@@ -81,9 +95,14 @@ test("cat cards, profile and room expose the same personal learning history", as
 
   assert.match(page, /class="cat-world-learning-memory-badge"/);
   assert.match(page, /class="cat-world-cat-learning-memory"/);
+  assert.match(page, /class="cat-world-learning-scrapbook"/);
+  assert.match(page, /class="cat-world-learning-stamp-track"/);
+  assert.match(page, /class="cat-world-learning-memory-days"/);
   assert.match(page, /<dt>陪学记忆<\/dt>/);
   assert.match(game, /catWorldLearningMemoryRoomCue\(signal\.learningMemory/);
   assert.match(styles, /\.cat-world-cat-learning-memory\s*\{[^}]*background:\s*#ffe6c7/s);
+  assert.match(styles, /\.cat-world-learning-stamp-track\s*\{[^}]*grid-template-columns:\s*repeat\(4,/s);
+  assert.match(styles, /\.cat-world-learning-memory-days\s*\{[^}]*overflow-x:\s*auto/s);
   assert.match(
     styles,
     /\.cat-world-cat-chip\.active \.cat-world-cat-learning-memory,[\s\S]*?background:\s*rgba\(255, 255, 255, 0\.16\)/,

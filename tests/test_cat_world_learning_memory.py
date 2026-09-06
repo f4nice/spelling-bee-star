@@ -65,6 +65,14 @@ class CatWorldLearningMemoryTest(unittest.TestCase):
         self.assertEqual(payload["nextRemaining"], 6)
         self.assertEqual(payload["firstDate"], "2026-09-05")
         self.assertEqual(payload["latestDate"], "2026-09-07")
+        self.assertEqual(
+            [stage["key"] for stage in payload["stages"] if stage["unlocked"]],
+            ["starter", "familiar"],
+        )
+        self.assertEqual(payload["recentDays"][0]["date"], "2026-09-07")
+        self.assertEqual(payload["recentDays"][0]["statusKey"], "output")
+        self.assertEqual(payload["recentDays"][1]["statusKey"], "loop")
+        self.assertEqual(payload["recentDays"][2]["statusLabel"], "点亮 5 词起步")
 
     def test_legacy_companion_status_restores_equivalent_milestones(self):
         self.assertEqual(
@@ -80,6 +88,7 @@ class CatWorldLearningMemoryTest(unittest.TestCase):
         self.assertEqual(payload["companionDays"], 1)
         self.assertEqual(payload["loopDays"], 1)
         self.assertEqual(payload["memoryPoints"], 2)
+        self.assertEqual(payload["recentDays"][0]["statusKey"], "loop")
 
     def test_learning_memories_are_grouped_by_cat_and_account(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")
@@ -110,6 +119,8 @@ class CatWorldLearningMemoryTest(unittest.TestCase):
         self.assertEqual(payloads["cat-a"]["loopDays"], 0)
         self.assertEqual(payloads["cat-b"]["warmupDays"], 1)
         self.assertFalse(payloads["cat-empty"]["hasMemory"])
+        self.assertEqual(payloads["cat-empty"]["recentDays"], [])
+        self.assertFalse(any(stage["unlocked"] for stage in payloads["cat-empty"]["stages"]))
 
 
 if __name__ == "__main__":

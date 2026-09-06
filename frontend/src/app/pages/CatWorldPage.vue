@@ -3555,6 +3555,50 @@ async function selectCat(catOrId, options = {}) {
         </p>
         <p v-if="activeCatDiary.careTip" class="cat-world-agent-care">{{ activeCatDiary.careTip }}</p>
         <p v-if="activeCatDiary.voiceLine" class="cat-world-agent-voice">{{ activeCatDiary.voiceLine }}</p>
+        <section
+          class="cat-world-learning-scrapbook"
+          :aria-label="`${activeCatDiary.displayLabel || activeCatDiary.label}的共同学习手册`"
+        >
+          <div class="cat-world-learning-scrapbook-head">
+            <span>
+              <small>Learning Scrapbook</small>
+              <strong>共同学习手册</strong>
+            </span>
+            <em>{{ activeCatDiary.learningMemory.memoryPoints }} 记忆点</em>
+          </div>
+          <div class="cat-world-learning-stamp-track" aria-label="陪学称号印章">
+            <span
+              v-for="stage in activeCatDiary.learningMemory.stages"
+              :key="`${activeCatDiary.id}-memory-stage-${stage.key}`"
+              :class="{ unlocked: stage.unlocked, current: stage.current }"
+            >
+              <AwardIcon :size="16" :stroke-width="2.8" aria-hidden="true" />
+              <strong>{{ stage.label }}</strong>
+              <small>{{ stage.unlocked ? "已点亮" : `${stage.threshold} 点` }}</small>
+            </span>
+          </div>
+          <div
+            v-if="activeCatDiary.learningMemory.recentDays.length"
+            class="cat-world-learning-memory-days"
+            aria-label="最近共同学习足迹"
+          >
+            <span
+              v-for="day in activeCatDiary.learningMemory.recentDays"
+              :key="`${activeCatDiary.id}-memory-day-${day.date}`"
+              :class="`tone-${day.statusKey}`"
+            >
+              <b>{{ day.dayLabel }}</b>
+              <em>{{ day.statusLabel }}</em>
+            </span>
+          </div>
+          <p v-else class="cat-world-learning-memory-empty">
+            完成 5 个拼写词后，这里会留下你们的第一枚学习足迹。
+          </p>
+          <div class="cat-world-learning-scrapbook-foot">
+            <span>{{ catWorldLearningMemoryLine(activeCatDiary.learningMemory) }}</span>
+            <em>{{ catWorldLearningMemoryNextLine(activeCatDiary.learningMemory) }}</em>
+          </div>
+        </section>
         <div class="cat-world-agent-meter-row" aria-label="猫咪 agent 参数">
           <span class="cat-world-agent-meter energy">体力<i><b :style="{ width: `${activeCatDiary.energyScore}%` }"></b></i></span>
           <span class="cat-world-agent-meter mood">心情<i><b :style="{ width: `${activeCatDiary.moodScore}%` }"></b></i></span>
