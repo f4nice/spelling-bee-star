@@ -15,6 +15,8 @@ const DEFAULT_MEMORY_STAGES = Object.freeze([
 
 const MEMORY_DAY_KEYS = new Set(["started", "warmup", "output", "warmup-output", "loop"]);
 const MEMORY_REVIEW_STAGE_KEYS = new Set(["first", "strengthen", "settled"]);
+const RECALL_WORD_PATTERN = /^[A-Za-z]+(?:['\u2019-][A-Za-z]+)*$/;
+const RECALL_SENTENCE_WORD_PATTERN = /[A-Za-z]+(?:['\u2019-][A-Za-z]+)*/g;
 
 const MEMORY_VISIT_TARGETS = Object.freeze({
   "gentle-starter": Object.freeze(["learning-garden", "reading-lamp", "word-gallery"]),
@@ -168,6 +170,24 @@ function normalizeMemoryDay(day = {}) {
     reviewedToday: Boolean(day.reviewedToday),
     lastReviewDate: String(day.lastReviewDate || ""),
     nextReviewDate: String(day.nextReviewDate || ""),
+    latestRecallWord: String(day.latestRecallWord || "").trim(),
+    latestRecallSentence: String(day.latestRecallSentence || "").trim(),
+  };
+}
+
+export function catWorldLearningRecallDraft(rawWord = "", rawSentence = "") {
+  const word = String(rawWord || "").replace(/\s+/g, " ").trim();
+  const sentence = String(rawSentence || "").replace(/\s+/g, " ").trim();
+  const sentenceWordCount = sentence.match(RECALL_SENTENCE_WORD_PATTERN)?.length || 0;
+  const wordReady = word.length <= 48 && RECALL_WORD_PATTERN.test(word);
+  const sentenceReady = sentence.length <= 240 && sentenceWordCount >= 3;
+  return {
+    word,
+    sentence,
+    wordReady,
+    sentenceReady,
+    sentenceWordCount,
+    ready: wordReady && sentenceReady,
   };
 }
 

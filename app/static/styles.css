@@ -15371,6 +15371,8 @@ select {
 
 .cat-world-memory-review > header,
 .cat-world-memory-review > p,
+.cat-world-memory-recall-form,
+.cat-world-memory-recall-result,
 .cat-world-memory-review-error {
   grid-column: 1 / -1;
 }
@@ -15427,6 +15429,112 @@ select {
 }
 
 .cat-world-memory-review > p {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.cat-world-memory-recall-form {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.72fr) minmax(190px, 1.28fr);
+  gap: 7px;
+  border-top: 1px dashed rgba(44, 47, 58, 0.32);
+  padding-top: 7px;
+}
+
+.cat-world-memory-recall-form label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: start;
+  gap: 4px 6px;
+  min-width: 0;
+  color: #263047;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.cat-world-memory-recall-form label > span {
+  align-self: center;
+}
+
+.cat-world-memory-recall-form input,
+.cat-world-memory-recall-form textarea {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  border: 2px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 6px 7px;
+  color: #263047;
+  background: #fffef5;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.cat-world-memory-recall-form input {
+  min-height: 32px;
+}
+
+.cat-world-memory-recall-form textarea {
+  min-height: 46px;
+  resize: vertical;
+}
+
+.cat-world-memory-recall-form input:focus,
+.cat-world-memory-recall-form textarea:focus {
+  border-color: #007f67;
+  outline: 2px solid rgba(0, 127, 103, 0.16);
+}
+
+.cat-world-memory-recall-form label > small {
+  align-self: center;
+  color: #7a6170;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.cat-world-memory-recall-form label > small.ready {
+  color: #0b6c4b;
+}
+
+.cat-world-memory-recall-result {
+  display: grid;
+  grid-template-columns: minmax(105px, 0.36fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 7px 10px;
+  border-left: 4px solid #1d7f5b;
+  padding: 6px 8px;
+  background: #eff9f1;
+}
+
+.cat-world-memory-recall-result > span {
+  display: grid;
+  gap: 2px;
+}
+
+.cat-world-memory-recall-result small,
+.cat-world-memory-recall-result strong,
+.cat-world-memory-recall-result p {
+  margin: 0;
+  color: #40516b;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.cat-world-memory-recall-result small {
+  color: #0b6c4b;
+  font-size: 8px;
+}
+
+.cat-world-memory-recall-result strong {
+  color: #263047;
+  font-size: 12px;
+}
+
+.cat-world-memory-recall-result p {
   border-top: 0;
   padding-top: 0;
 }
@@ -18501,6 +18609,11 @@ select {
   .cat-world-memory-review > i,
   .cat-world-memory-review > button {
     grid-column: 1;
+  }
+
+  .cat-world-memory-recall-form,
+  .cat-world-memory-recall-result {
+    grid-template-columns: 1fr;
   }
 
   .cat-world-hero-status {

@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { buildCatWorldRoomLearningSignal } from "../src/app/catWorldLearningRoute.js";
 import {
+  catWorldLearningRecallDraft,
   catWorldLearningMemoryDefaultDate,
   catWorldLearningMemoryLine,
   catWorldLearningMemoryNextLine,
@@ -47,7 +48,14 @@ test("cat learning memory keeps humane per-cat progress and readable titles", ()
       { key: "guardian", label: "英语守护猫", threshold: 24, unlocked: false },
     ],
     recentDays: [
-      { date: "2026-09-07", dayLabel: "9/7", statusKey: "loop", statusLabel: "完成学习闭环" },
+      {
+        date: "2026-09-07",
+        dayLabel: "9/7",
+        statusKey: "loop",
+        statusLabel: "完成学习闭环",
+        latestRecallWord: "steady",
+        latestRecallSentence: "I can make steady progress.",
+      },
     ],
   });
 
@@ -62,9 +70,27 @@ test("cat learning memory keeps humane per-cat progress and readable titles", ()
   assert.equal(memory.todayReviewSourceDate, "2026-09-06");
   assert.equal(memory.reviewDueToday, true);
   assert.equal(memory.suggestedReviewStageLabel, "三日巩固");
+  assert.equal(memory.recentDays[0].latestRecallWord, "steady");
+  assert.equal(memory.recentDays[0].latestRecallSentence, "I can make steady progress.");
   assert.equal(formatCatWorldLearningMemoryDate(memory.latestDate), "9月7日");
   assert.match(catWorldLearningMemoryRoomCue(memory), /最新一页写在 9月7日/);
   assert.match(catWorldLearningMemoryRoomCue(memory, true), /完成 1 次英语闭环/);
+});
+
+test("active recall needs one English word and a short original sentence", () => {
+  const ready = catWorldLearningRecallDraft(
+    "  resilient  ",
+    "  I   can stay resilient.  ",
+  );
+  assert.equal(ready.word, "resilient");
+  assert.equal(ready.sentence, "I can stay resilient.");
+  assert.equal(ready.sentenceWordCount, 4);
+  assert.equal(ready.ready, true);
+
+  assert.equal(catWorldLearningRecallDraft("two words", "I keep learning.").wordReady, false);
+  assert.equal(catWorldLearningRecallDraft("steady", "Too short").sentenceReady, false);
+  assert.equal(catWorldLearningRecallDraft("don't", "I don't give up.").ready, true);
+  assert.equal(catWorldLearningRecallDraft("steady", "word ".repeat(61)).sentenceReady, false);
 });
 
 test("opening cat world without learning does not create a false memory", () => {
@@ -219,17 +245,25 @@ test("cat cards, profile and room expose the same personal learning history", as
   assert.match(page, /class="cat-world-learning-memory-reflection"/);
   assert.match(page, /@click="focusSelectedCatMemory"/);
   assert.match(page, /CAT_MEMORY_REVIEW_SECONDS = 30/);
-  assert.match(page, /@click="startCatMemoryReview"/);
+  assert.match(page, /@click="handleCatMemoryReviewAction"/);
   assert.match(page, /selectedCatMemoryReviewState\.reviewedToday/);
   assert.match(page, /catWorldLearningMemoryDefaultDate\(cat\.learningMemory\)/);
   assert.match(page, /day\.reviewStageKey === 'settled'/);
   assert.match(page, /今日\{\{ day\.reviewStageLabel \}\}/);
+  assert.match(page, /class="cat-world-memory-recall-form"/);
+  assert.match(page, /v-model="catMemoryReview\.word"/);
+  assert.match(page, /v-model="catMemoryReview\.sentence"/);
+  assert.match(page, /recalledWord:\s*draft\.word/);
+  assert.match(page, /recalledSentence:\s*draft\.sentence/);
+  assert.doesNotMatch(page, /void saveCatMemoryReview\(cat\.id, sourceDate\)/);
   assert.match(routes, /catWorldLearningMemoryReview: \(\) => "\/api\/vue\/cat-world\/learning-memory\/review"/);
   assert.match(page, /:aria-pressed="day\.date === selectedCatMemoryDay\.date"/);
   assert.match(styles, /\.cat-world-learning-memory-days > button\.active\s*\{[^}]*color:\s*#fff;[^}]*background:\s*#1d7f5b;/s);
   assert.match(styles, /\.cat-world-learning-memory-actions button:hover,[\s\S]*?color:\s*#fff;\s*background:\s*#1d7f5b;/);
   assert.match(styles, /\.cat-world-memory-review > button:not\(:disabled\):hover,[\s\S]*?color:\s*#fff;\s*background:\s*#1d7f5b;/);
   assert.match(styles, /\.cat-world-memory-review\.complete > button\s*\{[^}]*color:\s*#fff;[^}]*background:\s*#1d7f5b;/s);
+  assert.match(styles, /\.cat-world-memory-recall-form\s*\{[^}]*grid-template-columns:/s);
+  assert.match(styles, /\.cat-world-memory-recall-form input:focus,[\s\S]*?border-color:\s*#007f67;/);
   assert.match(styles, /\.cat-world-learning-memory-days > button\.review-due:not\(\.active\)/);
   assert.match(
     styles,

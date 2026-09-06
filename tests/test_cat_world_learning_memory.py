@@ -3,6 +3,7 @@ import os
 import unittest
 from datetime import date, datetime
 
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -20,6 +21,7 @@ from app.main import (
     cat_world_learning_memory_payload,
     cat_world_learning_memory_payloads,
     cat_world_learning_memory_review_error,
+    cat_world_normalize_learning_memory_recall,
     parse_cat_world_agent_state,
 )
 from app.models import CatWorldDailyLog
@@ -50,17 +52,24 @@ def review_log(
     log_date: date,
     source_date: date,
     phone: str = "13900000000",
+    recalled_word: str = "",
+    recalled_sentence: str = "",
 ) -> CatWorldDailyLog:
+    review = {
+        "sourceDate": source_date.isoformat(),
+        "reviewedAt": f"{log_date.isoformat()}T08:00:00Z",
+    }
+    if recalled_word:
+        review["recalledWord"] = recalled_word
+    if recalled_sentence:
+        review["recalledSentence"] = recalled_sentence
     return CatWorldDailyLog(
         phone=phone,
         log_date=log_date,
         cat_id=cat_id,
         agent_state=json.dumps(
             {
-                "learningMemoryReview": {
-                    "sourceDate": source_date.isoformat(),
-                    "reviewedAt": f"{log_date.isoformat()}T08:00:00Z",
-                }
+                "learningMemoryReview": review
             },
             ensure_ascii=False,
         ),
@@ -159,6 +168,8 @@ class CatWorldLearningMemoryTest(unittest.TestCase):
                 "learningMemoryReview": {
                     "sourceDate": "2026-09-06",
                     "reviewedAt": "2026-09-07T08:00:00Z",
+                    "recalledWord": "steady",
+                    "recalledSentence": "I can make steady progress.",
                 }
             },
             ensure_ascii=False,
@@ -175,6 +186,38 @@ class CatWorldLearningMemoryTest(unittest.TestCase):
         self.assertTrue(payload["reviewedToday"])
         self.assertEqual(payload["todayReviewSourceDate"], "2026-09-06")
         self.assertEqual(payload["lastReviewDate"], "2026-09-07")
+        self.assertEqual(payload["recentDays"][0]["latestRecallWord"], "steady")
+        self.assertEqual(
+            payload["recentDays"][0]["latestRecallSentence"],
+            "I can make steady progress.",
+        )
+
+    def test_review_requires_one_english_word_and_a_real_short_sentence(self):
+        self.assertEqual(
+            cat_world_normalize_learning_memory_recall(
+                "  resilient  ",
+                "  I   can stay resilient.  ",
+            ),
+            ("resilient", "I can stay resilient."),
+        )
+        self.assertEqual(
+            cat_world_normalize_learning_memory_recall(
+                "don't",
+                "I don't give up.",
+            ),
+            ("don't", "I don't give up."),
+        )
+        for word, sentence in (
+            ("", "I keep learning."),
+            ("两个词", "I keep learning."),
+            ("two words", "I keep learning."),
+            ("steady", "Too short"),
+            ("steady", ""),
+            ("steady", "word " * 61),
+        ):
+            with self.subTest(word=word, sentence=sentence):
+                with self.assertRaises(HTTPException):
+                    cat_world_normalize_learning_memory_recall(word, sentence)
 
     def test_learning_pages_offer_one_humane_review_when_the_next_day_arrives(self):
         payload = cat_world_learning_memory_payload(
@@ -285,20 +328,31 @@ class CatWorldLearningMemoryTest(unittest.TestCase):
             cat,
             traits,
             date(2026, 9, 6),
-            now,
+            "resilient",
+            "I can stay resilient.",
+            now=now,
         )
         repeated = cat_world_apply_learning_memory_review(
             log,
             cat,
             traits,
             date(2026, 9, 5),
-            now,
+            "patient",
+            "I can remain patient.",
+            now=now,
         )
         agent_state = parse_cat_world_agent_state(log.agent_state)
 
         self.assertTrue(first["recorded"])
         self.assertFalse(repeated["recorded"])
         self.assertEqual(repeated["sourceDate"], "2026-09-06")
+        self.assertEqual(first["recalledWord"], "resilient")
+        self.assertEqual(agent_state["learningMemoryReview"]["recalledWord"], "resilient")
+        self.assertEqual(
+            agent_state["learningMemoryReview"]["recalledSentence"],
+            "I can stay resilient.",
+        )
+        self.assertIn("resilient", first["message"])
         self.assertEqual(log.mood_score, 63)
         self.assertEqual(log.energy_score, 57)
         self.assertEqual(

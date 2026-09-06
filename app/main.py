@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-025"
-DEFAULT_PAGE_VERSION = "v20260907.25"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-026"
+DEFAULT_PAGE_VERSION = "v20260907.26"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -6178,6 +6178,10 @@ async def vue_cat_world_learning_memory_review_api(request: Request, db: Session
     today = date.today()
     if source_date > today:
         raise HTTPException(status_code=400, detail="还不能回想未来的学习足迹。")
+    recalled_word, recalled_sentence = cat_world_normalize_learning_memory_recall(
+        (payload or {}).get("recalledWord"),
+        (payload or {}).get("recalledSentence"),
+    )
 
     state = get_or_create_cat_world_state(db, phone)
     db.refresh(state, with_for_update=True)
@@ -6214,7 +6218,9 @@ async def vue_cat_world_learning_memory_review_api(request: Request, db: Session
         cat,
         cat_world_cat_traits(cat),
         source_date,
-        now,
+        recalled_word,
+        recalled_sentence,
+        now=now,
     )
     db.add(log)
     db.add(state)
@@ -17596,6 +17602,8 @@ CAT_WORLD_LEARNING_MEMORY_KEYS = frozenset(
     str(milestone["key"]) for milestone in CAT_WORLD_LEARNING_COMPANION_MILESTONES
 )
 CAT_WORLD_LEARNING_MEMORY_REVIEW_INTERVAL_DAYS = (1, 3)
+CAT_WORLD_LEARNING_RECALL_WORD_MAX_LENGTH = 48
+CAT_WORLD_LEARNING_RECALL_SENTENCE_MAX_LENGTH = 240
 CAT_WORLD_LEARNING_MEMORY_STATUS_KEYS = {
     "started": frozenset({"started"}),
     "warmup": frozenset({"started", "warmup"}),
@@ -17839,10 +17847,39 @@ def cat_world_learning_memory_review_record(agent_state: dict[str, Any] | None) 
     except ValueError:
         return {}
     reviewed_at = str(raw_review.get("reviewedAt") or "").strip()
-    return {
+    recalled_word = str(raw_review.get("recalledWord") or "").strip()
+    recalled_sentence = str(raw_review.get("recalledSentence") or "").strip()
+    record = {
         "sourceDate": source_date,
         "reviewedAt": reviewed_at,
     }
+    if recalled_word:
+        record["recalledWord"] = recalled_word[:CAT_WORLD_LEARNING_RECALL_WORD_MAX_LENGTH]
+    if recalled_sentence:
+        record["recalledSentence"] = recalled_sentence[:CAT_WORLD_LEARNING_RECALL_SENTENCE_MAX_LENGTH]
+    return record
+
+
+def cat_world_normalize_learning_memory_recall(
+    raw_word: Any,
+    raw_sentence: Any,
+) -> tuple[str, str]:
+    recalled_word = " ".join(str(raw_word or "").split())
+    recalled_sentence = " ".join(str(raw_sentence or "").split())
+    if not recalled_word:
+        raise HTTPException(status_code=400, detail="请先凭记忆写下 1 个英文词。")
+    if len(recalled_word) > CAT_WORLD_LEARNING_RECALL_WORD_MAX_LENGTH:
+        raise HTTPException(status_code=400, detail="回想词请控制在 48 个字符以内。")
+    if not re.fullmatch(r"[A-Za-z]+(?:['\u2019-][A-Za-z]+)*", recalled_word):
+        raise HTTPException(status_code=400, detail="回想词请填写一个英文单词，不要查看原答案。")
+    if not recalled_sentence:
+        raise HTTPException(status_code=400, detail="请再用自己的英语写下 1 句话。")
+    if len(recalled_sentence) > CAT_WORLD_LEARNING_RECALL_SENTENCE_MAX_LENGTH:
+        raise HTTPException(status_code=400, detail="回想句请控制在 240 个字符以内。")
+    sentence_words = re.findall(r"[A-Za-z]+(?:['\u2019-][A-Za-z]+)*", recalled_sentence)
+    if len(sentence_words) < 3:
+        raise HTTPException(status_code=400, detail="回想句至少写 3 个英文词，短句也可以。")
+    return recalled_word, recalled_sentence
 
 
 def cat_world_learning_memory_review_schedule(
@@ -17859,6 +17896,7 @@ def cat_world_learning_memory_review_schedule(
         key=lambda row: (str(row.get("reviewDate") or ""), str(row.get("reviewedAt") or "")),
     )
     review_count = len(ordered_reviews)
+    latest_review = ordered_reviews[-1] if ordered_reviews else {}
     last_review_date = str(ordered_reviews[-1].get("reviewDate") or "") if ordered_reviews else ""
     reviewed_today = any(str(row.get("reviewDate") or "") == today.isoformat() for row in ordered_reviews)
     if review_count >= len(CAT_WORLD_LEARNING_MEMORY_REVIEW_INTERVAL_DAYS):
@@ -17871,6 +17909,8 @@ def cat_world_learning_memory_review_schedule(
             "reviewedToday": reviewed_today,
             "lastReviewDate": last_review_date,
             "nextReviewDate": "",
+            "latestRecallWord": str(latest_review.get("recalledWord") or ""),
+            "latestRecallSentence": str(latest_review.get("recalledSentence") or ""),
         }
 
     interval_days = CAT_WORLD_LEARNING_MEMORY_REVIEW_INTERVAL_DAYS[review_count]
@@ -17887,6 +17927,8 @@ def cat_world_learning_memory_review_schedule(
         "reviewedToday": reviewed_today,
         "lastReviewDate": last_review_date,
         "nextReviewDate": next_review_date.isoformat(),
+        "latestRecallWord": str(latest_review.get("recalledWord") or ""),
+        "latestRecallSentence": str(latest_review.get("recalledSentence") or ""),
     }
 
 
@@ -17912,9 +17954,15 @@ def cat_world_apply_learning_memory_review(
     cat: dict[str, Any],
     traits: dict[str, Any],
     source_date: date,
+    recalled_word: str,
+    recalled_sentence: str,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     now = now or datetime.utcnow()
+    recalled_word, recalled_sentence = cat_world_normalize_learning_memory_recall(
+        recalled_word,
+        recalled_sentence,
+    )
     agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
     existing = cat_world_learning_memory_review_record(agent_state)
     cat_label = str(cat.get("displayLabel") or cat.get("label") or "猫咪")
@@ -17926,6 +17974,8 @@ def cat_world_apply_learning_memory_review(
             "catId": str(cat.get("profileId") or cat.get("id") or log.cat_id),
             "catLabel": cat_label,
             "sourceDate": existing["sourceDate"],
+            "recalledWord": str(existing.get("recalledWord") or ""),
+            "recalledSentence": str(existing.get("recalledSentence") or ""),
             "message": f"今天已经和{cat_label}回想过 {existing_label} 的学习足迹，明天再翻新的一页。",
         }
 
@@ -17941,18 +17991,21 @@ def cat_world_apply_learning_memory_review(
         "balanced": "我们把那天的词和句子重新想起来了。",
     }
     message = memory_lines.get(temperament, memory_lines["balanced"])
+    message = f"{message} 这次找回的是 {recalled_word}。"
     agent_state = append_cat_world_agent_event(
         log,
         cat,
         traits,
         "learning-review",
         "30 秒主动回想",
-        f"回想了 {source_label} 的学习足迹。{message}",
+        f"回想了 {source_label} 的学习足迹，找回 {recalled_word} 并写下自己的英文句子。{message}",
         now,
     )
     review = {
         "sourceDate": source_date.isoformat(),
         "reviewedAt": now.replace(microsecond=0).isoformat() + "Z",
+        "recalledWord": recalled_word,
+        "recalledSentence": recalled_sentence,
     }
     agent_state["learningMemoryReview"] = review
     log.agent_state = encode_cat_world_agent_state(agent_state)
@@ -17961,6 +18014,8 @@ def cat_world_apply_learning_memory_review(
         "catId": str(cat.get("profileId") or cat.get("id") or log.cat_id),
         "catLabel": cat_label,
         "sourceDate": source_date.isoformat(),
+        "recalledWord": recalled_word,
+        "recalledSentence": recalled_sentence,
         "message": message,
     }
 

@@ -38,6 +38,7 @@ import {
   catWorldWeekMemory,
 } from "../catWorldLearningRoute.js";
 import {
+  catWorldLearningRecallDraft,
   catWorldLearningMemoryDefaultDate,
   catWorldLearningMemoryLine,
   catWorldLearningMemoryNextLine,
@@ -117,10 +118,13 @@ const learningRouteExpanded = ref(false);
 const learningWeekExpanded = ref(false);
 const selectedLearningWeekDate = ref("");
 const selectedCatMemoryDate = ref("");
+const catMemoryReviewWordInputRef = ref(null);
 const catMemoryReview = ref({
   catId: "",
   sourceDate: "",
   remainingSeconds: 0,
+  word: "",
+  sentence: "",
   busy: false,
   error: "",
 });
@@ -962,6 +966,10 @@ const selectedCatMemoryReviewState = computed(() => {
   const reviewedToday = Boolean(memory.reviewedToday);
   const settled = day.reviewStageKey === "settled";
   const remainingSeconds = active ? Math.max(Number(review.remainingSeconds || 0), 0) : 0;
+  const draft = catWorldLearningRecallDraft(
+    active ? review.word : "",
+    active ? review.sentence : "",
+  );
   const progressPercent = reviewedToday || settled
     ? 100
     : active
@@ -980,6 +988,13 @@ const selectedCatMemoryReviewState = computed(() => {
     reviewDue: Boolean(day.reviewDue),
     reviewStageLabel: String(day.reviewStageLabel || "主动回想"),
     nextReviewLabel: formatCatWorldLearningMemoryDate(day.nextReviewDate),
+    recalledWord: String(day.latestRecallWord || ""),
+    recalledSentence: String(day.latestRecallSentence || ""),
+    draftWordReady: draft.wordReady,
+    draftSentenceReady: draft.sentenceReady,
+    draftSentenceWordCount: draft.sentenceWordCount,
+    draftReady: draft.ready,
+    timerFinished: active && remainingSeconds === 0,
   };
 });
 const gameDailyLogs = computed(() =>
@@ -1309,6 +1324,8 @@ function resetCatMemoryReview() {
     catId: "",
     sourceDate: "",
     remainingSeconds: 0,
+    word: "",
+    sentence: "",
     busy: false,
     error: "",
   };
@@ -1316,6 +1333,21 @@ function resetCatMemoryReview() {
 
 async function saveCatMemoryReview(catId, sourceDate) {
   const reviewToken = `${catId}:${sourceDate}`;
+  const draft = catWorldLearningRecallDraft(
+    catMemoryReview.value.word,
+    catMemoryReview.value.sentence,
+  );
+  if (!draft.ready) {
+    catMemoryReview.value = {
+      ...catMemoryReview.value,
+      error: !draft.wordReady
+        ? "请先凭记忆写下 1 个英文单词。"
+        : "请用自己的英语写下至少 3 个词的短句。",
+    };
+    return;
+  }
+  window.clearInterval(catMemoryReviewTimer);
+  catMemoryReviewTimer = 0;
   catMemoryReview.value = {
     ...catMemoryReview.value,
     remainingSeconds: 0,
@@ -1326,7 +1358,12 @@ async function saveCatMemoryReview(catId, sourceDate) {
     const result = await fetchJson(routeApiPaths.catWorldLearningMemoryReview(), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ catId, sourceDate }),
+      body: JSON.stringify({
+        catId,
+        sourceDate,
+        recalledWord: draft.word,
+        recalledSentence: draft.sentence,
+      }),
     });
     replacePayload(result);
     notice.value = result.effect?.message || "这次主动回想已经留进共同学习手册。";
@@ -1357,9 +1394,12 @@ function startCatMemoryReview() {
     catId: cat.id,
     sourceDate,
     remainingSeconds: CAT_MEMORY_REVIEW_SECONDS,
+    word: "",
+    sentence: "",
     busy: false,
     error: "",
   };
+  nextTick(() => catMemoryReviewWordInputRef.value?.focus());
   catMemoryReviewTimer = window.setInterval(() => {
     const nextRemaining = Math.max(Number(catMemoryReview.value.remainingSeconds || 0) - 1, 0);
     catMemoryReview.value = {
@@ -1369,8 +1409,18 @@ function startCatMemoryReview() {
     if (nextRemaining > 0) return;
     window.clearInterval(catMemoryReviewTimer);
     catMemoryReviewTimer = 0;
-    void saveCatMemoryReview(cat.id, sourceDate);
   }, 1000);
+}
+
+function handleCatMemoryReviewAction() {
+  if (!selectedCatMemoryReviewState.value.active) {
+    startCatMemoryReview();
+    return;
+  }
+  const catId = catMemoryReview.value.catId;
+  const sourceDate = catMemoryReview.value.sourceDate;
+  if (!catId || !sourceDate || catMemoryReview.value.busy) return;
+  void saveCatMemoryReview(catId, sourceDate);
 }
 
 async function focusSelectedCatMemory() {
@@ -3798,6 +3848,7 @@ async function selectCat(catOrId, options = {}) {
                 </span>
                 <em v-if="selectedCatMemoryReviewState.reviewedToday">今日已完成</em>
                 <em v-else-if="selectedCatMemoryReviewState.busy">正在保存</em>
+                <em v-else-if="selectedCatMemoryReviewState.timerFinished">时间到 · 慢慢写完</em>
                 <em v-else-if="selectedCatMemoryReviewState.active">剩余 {{ selectedCatMemoryReviewState.remainingSeconds }} 秒</em>
                 <em v-else-if="selectedCatMemoryReviewState.settled">两轮已稳固</em>
                 <em v-else-if="selectedCatMemoryReviewState.reviewDue">今日{{ selectedCatMemoryReviewState.reviewStageLabel }}</em>
@@ -3821,6 +3872,51 @@ async function selectCat(catOrId, options = {}) {
               <p v-else>
                 先不看答案，在心里找回这一天的 1 个词和 1 句话；还没到巩固日，想不完整也没关系。
               </p>
+              <div
+                v-if="(selectedCatMemoryReviewState.reviewedThisPage || selectedCatMemoryReviewState.settled) && selectedCatMemoryReviewState.recalledWord"
+                class="cat-world-memory-recall-result"
+                aria-label="最近一次主动回想"
+              >
+                <span><small>找回的词</small><strong>{{ selectedCatMemoryReviewState.recalledWord }}</strong></span>
+                <p>{{ selectedCatMemoryReviewState.recalledSentence }}</p>
+              </div>
+              <form
+                v-else-if="selectedCatMemoryReviewState.active"
+                class="cat-world-memory-recall-form"
+                @submit.prevent="handleCatMemoryReviewAction"
+              >
+                <label>
+                  <span>1 个英文词</span>
+                  <input
+                    ref="catMemoryReviewWordInputRef"
+                    v-model="catMemoryReview.word"
+                    type="text"
+                    maxlength="48"
+                    autocomplete="off"
+                    autocapitalize="none"
+                    spellcheck="false"
+                    placeholder="不看答案，写下记得的词"
+                    @input="catMemoryReview.error = ''"
+                  />
+                  <small :class="{ ready: selectedCatMemoryReviewState.draftWordReady }">
+                    {{ selectedCatMemoryReviewState.draftWordReady ? "已找回" : "只写一个英文单词" }}
+                  </small>
+                </label>
+                <label>
+                  <span>1 句自己的英语</span>
+                  <textarea
+                    v-model="catMemoryReview.sentence"
+                    maxlength="240"
+                    rows="2"
+                    spellcheck="false"
+                    placeholder="用自己的话写一句，短句也可以"
+                    @input="catMemoryReview.error = ''"
+                  ></textarea>
+                  <small :class="{ ready: selectedCatMemoryReviewState.draftSentenceReady }">
+                    {{ selectedCatMemoryReviewState.draftSentenceWordCount }}/3 个英文词
+                  </small>
+                </label>
+              </form>
               <i
                 role="progressbar"
                 :aria-valuenow="selectedCatMemoryReviewState.progressPercent"
@@ -3832,15 +3928,16 @@ async function selectCat(catOrId, options = {}) {
               </i>
               <button
                 type="button"
-                :disabled="selectedCatMemoryReviewState.reviewedToday || selectedCatMemoryReviewState.active || selectedCatMemoryReviewState.settled"
-                @click="startCatMemoryReview"
+                :disabled="selectedCatMemoryReviewState.reviewedToday || selectedCatMemoryReviewState.settled || selectedCatMemoryReviewState.busy || (selectedCatMemoryReviewState.active && !selectedCatMemoryReviewState.draftReady)"
+                @click="handleCatMemoryReviewAction"
               >
-                <CheckIcon v-if="selectedCatMemoryReviewState.reviewedToday || selectedCatMemoryReviewState.settled" :size="13" :stroke-width="3" aria-hidden="true" />
+                <CheckIcon v-if="selectedCatMemoryReviewState.reviewedToday || selectedCatMemoryReviewState.settled || selectedCatMemoryReviewState.draftReady" :size="13" :stroke-width="3" aria-hidden="true" />
                 <ClockIcon v-else :size="13" :stroke-width="2.8" aria-hidden="true" />
                 <template v-if="selectedCatMemoryReviewState.reviewedToday">今日回想已完成</template>
                 <template v-else-if="selectedCatMemoryReviewState.settled">这页已经稳固</template>
                 <template v-else-if="selectedCatMemoryReviewState.busy">正在保存回想</template>
-                <template v-else-if="selectedCatMemoryReviewState.active">安静回想中</template>
+                <template v-else-if="selectedCatMemoryReviewState.active && selectedCatMemoryReviewState.draftReady">保存这次回想</template>
+                <template v-else-if="selectedCatMemoryReviewState.active">先写下 1 词 1 句</template>
                 <template v-else>开始 30 秒回想</template>
               </button>
               <small v-if="selectedCatMemoryReviewState.error" class="cat-world-memory-review-error">
