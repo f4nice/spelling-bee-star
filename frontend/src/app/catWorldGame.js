@@ -4,6 +4,7 @@ import {
   resolveCatBubbleTiming,
 } from "./catWorldBubbleState.js";
 import {
+  autonomousCatDecorInteractionFor,
   catDecorDropPosition,
   catDropInteractionFor,
   catFloorDropPosition,
@@ -12,6 +13,7 @@ import {
   interactionMoveDuration,
   itemInteractionFor,
   timedInteractionLabel,
+  timedInteractionOverlayPosition,
   timedInteractionProgress,
   wandChaseJoinDecision,
 } from "./catWorldItemInteractions.js";
@@ -1910,6 +1912,14 @@ class CatWorldScene extends Phaser.Scene {
     );
   }
 
+  autonomousCatDecorInteraction(decorId) {
+    return autonomousCatDecorInteractionFor(
+      decorId,
+      this.owner.snapshot?.gameSettings?.interactionDurations || {},
+      { lampActive: Boolean(this.owner.itemInteractionStates.get(decorId)?.active) },
+    );
+  }
+
   drawCarryTargetIndicators() {
     this.clearCarryTargetIndicators();
     for (const [decorId, container] of this.decorContainers.entries()) {
@@ -2540,10 +2550,13 @@ class CatWorldScene extends Phaser.Scene {
     const duration = Math.max(Number(durationMs) || 0, 500);
     const startedAt = Date.now();
     const endsAt = startedAt + duration;
-    const xOffset = ((entry.index % 3) - 1) * 68;
+    const overlayPosition = timedInteractionOverlayPosition(decor, spec, {
+      width: GAME_WIDTH,
+      floorTop: FLOOR_TOP,
+    });
     const overlay = this.add.container(
-      clamp(decor.x + spec.width / 2 + xOffset, 74, GAME_WIDTH - 74),
-      Math.max(decor.y - 42, 48),
+      overlayPosition.x,
+      overlayPosition.y,
     );
     overlay.setDepth(CAT_INTERACTION_DEPTH + 260 + entry.index);
     const graphics = makeLocalGraphics(this, overlay);
@@ -2860,7 +2873,7 @@ class CatWorldScene extends Phaser.Scene {
       }
       if (action.kind === "manual-floor") {
         this.startManualFloorAction(entry, action);
-      } else if (action.kind === "manual-decor") {
+      } else if (["manual-decor", "autonomous-decor"].includes(action.kind)) {
         this.startManualDecorAction(entry, action);
       } else if (action.kind === "carried-bathtub") {
         this.startCarriedBathtubAction(entry, action);
@@ -3679,6 +3692,7 @@ class CatWorldScene extends Phaser.Scene {
             visitPlan || { kind: "wander", target: { label: "房间里" } },
             "arrived",
           );
+          let interactionOwnsSchedule = false;
           if (visitPlan?.kind === "food") {
             this.spawnFoodPlayBubble(container, cat, visitPlan.target);
           } else if (visitPlan?.kind === "rest") {
@@ -3699,14 +3713,23 @@ class CatWorldScene extends Phaser.Scene {
             if (visitPlan.target.kind === "mischief") {
               this.spawnMischiefBubble(container, cat, visitPlan.target);
             } else {
-              this.spawnGoalBubble(container, cat, visitPlan.target);
+              interactionOwnsSchedule = visitPlan.target.goalKey === "favorite-decor"
+                && this.startAutonomousFavoriteDecorInteraction(
+                  { cat, index, container, behavior: latestBehavior },
+                  visitPlan.target,
+                );
+              if (!interactionOwnsSchedule) this.spawnGoalBubble(container, cat, visitPlan.target);
             }
           } else if (visitPlan?.kind === "habit") {
             this.spawnIndividualHabitBubble(container, cat, visitPlan.target);
           } else if (visitPlan?.kind === "favorite") {
-            this.spawnFavoritePlayBubble(container, cat, visitPlan.target);
+            interactionOwnsSchedule = this.startAutonomousFavoriteDecorInteraction(
+              { cat, index, container, behavior: latestBehavior },
+              visitPlan.target,
+            );
+            if (!interactionOwnsSchedule) this.spawnFavoritePlayBubble(container, cat, visitPlan.target);
           }
-          this.scheduleCatWalk(container, index, cat);
+          if (!interactionOwnsSchedule) this.scheduleCatWalk(container, index, cat);
         },
       });
       container.setData("walkTween", walkTween);
@@ -4319,6 +4342,7 @@ class CatWorldScene extends Phaser.Scene {
       const target = this.toyFocusPoint(targetItemId);
       return {
         itemId: targetItemId,
+        goalKey: goal.key,
         label: goal.targetLabel || target.label,
         message: goal.message || "",
         kind: isMischiefWatch ? "mischief" : "toy",
@@ -4333,6 +4357,7 @@ class CatWorldScene extends Phaser.Scene {
       const position = this.positionForDecor(targetItemId, spec);
       return {
         itemId: targetItemId,
+        goalKey: goal.key,
         label: goal.targetLabel || spec.label,
         message: goal.message || "",
         kind: isMischiefWatch ? "mischief" : goal.targetType || "decor",
@@ -4455,10 +4480,18 @@ class CatWorldScene extends Phaser.Scene {
       itemId,
       label: target.label,
       kind: "favorite-toy",
+      itemKind: "toy",
       priority,
       x: clamp(target.x + Phaser.Math.Between(-48, 48), 38, GAME_WIDTH - 132),
       y: clamp(target.y + Phaser.Math.Between(-24, 26), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
     };
+  }
+
+  decorOccupiedByAnotherCat(itemId, catId = "") {
+    for (const [activeCatId, action] of this.owner.catItemActions.entries()) {
+      if (activeCatId !== catId && action?.itemId === itemId) return true;
+    }
+    return false;
   }
 
   favoriteDecorTarget(cat = {}) {
@@ -4467,7 +4500,8 @@ class CatWorldScene extends Phaser.Scene {
       (decorId) => owned(this.owner.snapshot.inventory, decorId)
         && this.owner.snapshot.layout?.[decorId]
         && DECOR_SPECS[decorId]
-        && !isDamaged(this.owner.snapshot, decorId),
+        && !isDamaged(this.owner.snapshot, decorId)
+        && !this.decorOccupiedByAnotherCat(decorId, cat.id),
     );
     if (!ownedFavorites.length) return null;
     const decorId = ownedFavorites[Phaser.Math.Between(0, ownedFavorites.length - 1)];
@@ -4480,9 +4514,11 @@ class CatWorldScene extends Phaser.Scene {
     const mood = catMoodForSnapshot(this.owner.snapshot, cat);
     const priority = clamp(56 + (["calm", "gentle", "clingy"].includes(temperament) ? 10 : 0) + (mood < 52 ? 12 : 0), 38, 82);
     return {
+      itemId: decorId,
       decorId,
       label: spec.label,
       kind: "favorite-decor",
+      itemKind: "decor",
       priority,
       x: clamp(nearX, 38, GAME_WIDTH - 132),
       y: clamp(nearY, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
@@ -4588,6 +4624,30 @@ class CatWorldScene extends Phaser.Scene {
         label: target?.label || "",
       });
     }
+  }
+
+  startAutonomousFavoriteDecorInteraction(entry, target = {}) {
+    const itemId = String(target.itemId || target.decorId || "");
+    if (target.itemKind !== "decor" || !itemId) return false;
+    const interaction = this.autonomousCatDecorInteraction(itemId);
+    const spec = DECOR_SPECS[itemId];
+    const decor = this.decorContainers.get(itemId);
+    if (!interaction || !spec || !decor?.active || decor.getData("damaged")) return false;
+    const action = {
+      kind: "autonomous-decor",
+      itemId,
+      message: interaction.catMessage || `我想在${interaction.label || target.label || "这里"}待一会儿。`,
+      expiresAt: Date.now() + interaction.holdMs + 1400,
+      showTimedStatus: true,
+    };
+    this.owner.catItemActions.set(entry.cat.id, action);
+    this.startManualDecorAction(entry, action);
+    this.owner.handlers.onCatAmbient?.(entry.cat, {
+      kind: "favorite-decor",
+      itemId,
+      label: interaction.label || target.label,
+    });
+    return true;
   }
 
   spawnFavoritePlayBubble(container, cat, target) {

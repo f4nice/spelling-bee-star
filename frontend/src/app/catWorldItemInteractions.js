@@ -160,6 +160,13 @@ export function catDropInteractionFor(itemId, durationOverrides = {}) {
   return { ...interaction, holdMs };
 }
 
+export function autonomousCatDecorInteractionFor(itemId, durationOverrides = {}, state = {}) {
+  const interaction = catDropInteractionFor(itemId, durationOverrides);
+  if (!interaction || interaction.behavior === "bathe") return null;
+  if (itemId === "reading-lamp" && state.lampActive !== true) return null;
+  return interaction;
+}
+
 export function catLikesItem(cat, itemId, itemKind) {
   const favoriteKey = itemKind === "toy" ? "favoriteToyIds" : "favoriteDecorIds";
   return Array.isArray(cat?.[favoriteKey]) && cat[favoriteKey].includes(itemId);
@@ -233,6 +240,21 @@ export function timedInteractionProgress(startedAt, endsAt, now = Date.now()) {
     progress: Math.min(Math.max((current - start) / duration, 0), 1),
     remainingMs,
     remainingSeconds: Math.ceil(remainingMs / 1000),
+  };
+}
+
+export function timedInteractionOverlayPosition(decor = {}, spec = {}, world = {}) {
+  const worldWidth = Math.max(Number(world.width) || 1280, 148);
+  const floorTop = Math.max(Number(world.floorTop) || 260, 90);
+  const decorX = Number(decor.x) || 0;
+  const decorY = Number(decor.y) || 0;
+  const decorWidth = Math.max(Number(spec.width) || 0, 0);
+  const decorHeight = Math.max(Number(spec.height) || 0, 0);
+  const aboveY = decorY - 42;
+  const wallDecorY = Math.min(decorY + decorHeight + 34, floorTop - 34);
+  return {
+    x: Math.min(Math.max(decorX + decorWidth / 2, 74), worldWidth - 74),
+    y: Math.max(aboveY < 76 ? wallDecorY : aboveY, 48),
   };
 }
 

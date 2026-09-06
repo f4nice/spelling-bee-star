@@ -30,3 +30,15 @@ test("the room shows persistent live activity and can focus the matching cat", a
   assert.match(styles, /\.cat-world-room-live-list > button\.active/);
   assert.match(styles, /\.cat-world-room-live-list > button\.active :where\(strong, small, em, span\)/);
 });
+
+test("favorite furniture visits become timed room interactions before roaming resumes", async () => {
+  const game = await readFile(gameUrl, "utf8");
+
+  assert.match(game, /startAutonomousFavoriteDecorInteraction/);
+  assert.match(game, /kind: "autonomous-decor"/);
+  assert.match(game, /this\.startManualDecorAction\(entry, action\)/);
+  assert.match(game, /goalKey: goal\.key/);
+  assert.match(game, /visitPlan\.target\.goalKey === "favorite-decor"/);
+  assert.match(game, /if \(!interactionOwnsSchedule\) this\.scheduleCatWalk/);
+  assert.match(game, /\["manual-decor", "autonomous-decor"\]\.includes\(action\.kind\)/);
+});

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  autonomousCatDecorInteractionFor,
   catDecorDropPosition,
   catDropInteractionFor,
   catFloorDropPosition,
@@ -10,6 +11,7 @@ import {
   interactionMoveDuration,
   itemInteractionFor,
   timedInteractionLabel,
+  timedInteractionOverlayPosition,
   timedInteractionProgress,
   wandChaseJoinDecision,
 } from "../src/app/catWorldItemInteractions.js";
@@ -34,6 +36,25 @@ test("timed furniture interactions expose a label and stable countdown progress"
   assert.equal(timedInteractionProgress(1000, 5000, 9000).progress, 1);
 });
 
+test("timed furniture status avoids the fixed room badge for top-wall items", () => {
+  assert.deepEqual(
+    timedInteractionOverlayPosition(
+      { x: 64, y: 28 },
+      { width: 166, height: 120 },
+      { width: 1280, floorTop: 260 },
+    ),
+    { x: 147, y: 182 },
+  );
+  assert.deepEqual(
+    timedInteractionOverlayPosition(
+      { x: 390, y: 446 },
+      { width: 134, height: 64 },
+      { width: 1280, floorTop: 260 },
+    ),
+    { x: 457, y: 404 },
+  );
+});
+
 test("carried cats recognize furniture drop interactions", () => {
   assert.equal(catDropInteractionFor("bubble-bathtub")?.behavior, "bathe");
   assert.equal(catDropInteractionFor("study-desk")?.behavior, "perch");
@@ -49,6 +70,20 @@ test("server duration overrides change only allowlisted furniture timing", () =>
   assert.equal(catDropInteractionFor("study-desk", { "study-desk": 999999 })?.holdMs, 60000);
   assert.equal(catDropInteractionFor("study-desk", { "study-desk": "bad" })?.holdMs, 9000);
   assert.equal(catDropInteractionFor("word-gallery", { "word-gallery": 16000 }), null);
+});
+
+test("autonomous cats really use safe favorite furniture without spending bath supplies", () => {
+  assert.equal(autonomousCatDecorInteractionFor("study-desk")?.behavior, "perch");
+  assert.equal(
+    autonomousCatDecorInteractionFor("window-hammock", { "window-hammock": 17000 })?.holdMs,
+    17000,
+  );
+  assert.equal(autonomousCatDecorInteractionFor("bubble-bathtub"), null);
+  assert.equal(autonomousCatDecorInteractionFor("reading-lamp"), null);
+  assert.equal(
+    autonomousCatDecorInteractionFor("reading-lamp", {}, { lampActive: true })?.behavior,
+    "read",
+  );
 });
 
 test("all five new window ledges support distinct perch interactions", () => {
