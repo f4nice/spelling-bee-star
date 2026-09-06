@@ -1,5 +1,11 @@
 const MINIMUM_SPELLING_TARGET = 20;
 
+const ROOM_LEARNING_STEPS = Object.freeze([
+  Object.freeze({ key: "warmup", label: "20词" }),
+  Object.freeze({ key: "output", label: "说写" }),
+  Object.freeze({ key: "loop", label: "闭环" }),
+]);
+
 const WEEK_MEMORY_TONES = {
   calm: ["不用赶，我们稳稳积累。", "我把这格安静收好了。"],
   clingy: ["下一步也让我陪在旁边。", "这格我贴着你一起记住了。"],
@@ -85,6 +91,55 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
     coachLine: nextAction,
     streak,
     completedCount: steps.filter((step) => step.completed).length,
+    steps: steps.map((step, index) => ({ ...step, active: index === activeIndex })),
+  };
+}
+
+export function buildCatWorldRoomLearningSignal(habit = {}, cat = {}, companion = {}) {
+  const spellingCount = safeCount(habit.todaySpellingCount);
+  const warmupComplete = spellingCount >= MINIMUM_SPELLING_TARGET;
+  const outputComplete = Boolean(habit.todayHasEssay || habit.todayHasDebate);
+  const loopComplete = Boolean(habit.todayBalanceComplete) || (warmupComplete && outputComplete);
+  const completedByKey = {
+    warmup: warmupComplete,
+    output: outputComplete,
+    loop: loopComplete,
+  };
+  const steps = ROOM_LEARNING_STEPS.map((step) => ({
+    ...step,
+    completed: completedByKey[step.key],
+  }));
+  const firstIncompleteIndex = steps.findIndex((step) => !step.completed);
+  const activeIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : steps.length - 1;
+  const completedCount = steps.filter((step) => step.completed).length;
+  const guideCatId = String(companion.catId || cat.id || cat.profileId || "");
+  const guideName = cat.nickname || cat.label || cat.displayLabel || cat.breedLabel || "今日陪学猫";
+  const currentDay = Array.isArray(habit.recentDays)
+    ? habit.recentDays.find((day) => day?.today)?.date
+    : "";
+  const stageKey = loopComplete ? "loop" : warmupComplete ? "warmup" : outputComplete ? "output" : "starting";
+  const fallbackMessages = {
+    warmup: `${guideName}看到第一格亮起来了，再把英语用出来吧。`,
+    output: `${guideName}看到表达格亮起来了，再练 20 个词就完整啦。`,
+    loop: `${guideName}看到三格都亮了，今天的英语闭环完成啦。`,
+  };
+
+  return {
+    token: `${currentDay || "today"}:${guideCatId || "cat"}:${stageKey}:${completedCount}`,
+    date: String(currentDay || companion.date || ""),
+    guideCatId,
+    guideName,
+    spellingCount,
+    completedCount,
+    stageKey,
+    statusLabel: loopComplete
+      ? "今日闭环"
+      : warmupComplete
+        ? `${spellingCount} 词已热身`
+        : outputComplete
+          ? "已经完成表达"
+          : "等待今日开始",
+    celebrationMessage: String(companion.message || fallbackMessages[stageKey] || "").trim(),
     steps: steps.map((step, index) => ({ ...step, active: index === activeIndex })),
   };
 }

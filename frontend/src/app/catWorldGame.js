@@ -188,6 +188,29 @@ function cloneLayout(layout = {}) {
   );
 }
 
+function normalizeLearningSignal(signal = {}) {
+  const steps = Array.isArray(signal.steps)
+    ? signal.steps.slice(0, 3).map((step, index) => ({
+      key: String(step?.key || `step-${index + 1}`),
+      label: shortCatText(step?.label || `${index + 1}`, 4),
+      completed: Boolean(step?.completed),
+      active: Boolean(step?.active),
+    }))
+    : [];
+  return {
+    token: String(signal.token || ""),
+    date: String(signal.date || ""),
+    guideCatId: String(signal.guideCatId || ""),
+    guideName: String(signal.guideName || "今日陪学猫"),
+    spellingCount: Math.max(Number(signal.spellingCount || 0), 0),
+    completedCount: clamp(Number(signal.completedCount || 0), 0, 3),
+    stageKey: String(signal.stageKey || "starting"),
+    statusLabel: String(signal.statusLabel || "等待今日开始"),
+    celebrationMessage: String(signal.celebrationMessage || ""),
+    steps,
+  };
+}
+
 function normalizeSnapshot(snapshot = {}) {
   return {
     cats: Array.isArray(snapshot.cats) ? snapshot.cats : [],
@@ -204,6 +227,7 @@ function normalizeSnapshot(snapshot = {}) {
     roomStyles: snapshot.roomStyles || {},
     selectedCatId: snapshot.selectedCatId || "",
     gameSettings: snapshot.gameSettings || {},
+    learningSignal: normalizeLearningSignal(snapshot.learningSignal),
     scene: normalizeCatWorldScene(snapshot.scene),
     editMode: Boolean(snapshot.editMode),
     toolMode: ["repair", "scoop"].includes(snapshot.toolMode) ? snapshot.toolMode : "",
@@ -644,9 +668,72 @@ class CatWorldScene extends Phaser.Scene {
       this.restoreCarriedCat();
       this.restoreCatBubbles(snapshot);
       this.restoreActiveItemInteractions();
+      this.playPendingLearningMilestone();
     }
     this.syncCamera();
     if (lockedCatId) this.focusCat(lockedCatId);
+  }
+
+  playPendingLearningMilestone() {
+    const signal = this.owner.pendingLearningMilestone;
+    if (!signal || this.isEditMode() || this.isToolMode()) return false;
+    let activeCatId = signal.guideCatId;
+    let guideEntry = this.catContainers.get(activeCatId);
+    if (!guideEntry) {
+      activeCatId = this.owner.snapshot.selectedCatId;
+      guideEntry = this.catContainers.get(activeCatId);
+    }
+    if (!guideEntry) {
+      [activeCatId, guideEntry] = this.catContainers.entries().next().value || [];
+    }
+    if (!guideEntry?.active) return false;
+    const cat = this.owner.snapshot.cats.find((item) => item.id === activeCatId)
+      || this.owner.snapshot.cats[0];
+    if (!cat) return false;
+
+    this.owner.pendingLearningMilestone = null;
+    const message = signal.celebrationMessage
+      || `${signal.guideName || cat.label || "猫咪"}看到学习灯牌亮起来了。`;
+    this.spawnCatBubble(guideEntry, cat, message);
+    this.children.bringToTop(guideEntry);
+    const startY = guideEntry.y;
+    this.tweens.add({
+      targets: guideEntry,
+      y: startY - 13,
+      duration: 170,
+      yoyo: true,
+      repeat: 1,
+      ease: "Quad.easeOut",
+      onComplete: () => {
+        if (guideEntry.active) guideEntry.y = startY;
+      },
+    });
+    this.spawnLearningSparkles(guideEntry.x + 44, guideEntry.y - 52);
+    this.spawnLearningSparkles(VIEW_WIDTH - 221, 116, { fixed: true });
+    return true;
+  }
+
+  spawnLearningSparkles(x, y, options = {}) {
+    const colors = [0xffef82, 0x7fffd4, 0xff8cad, 0x87d9ff];
+    for (let index = 0; index < 8; index += 1) {
+      const direction = index % 2 ? 1 : -1;
+      const offsetX = direction * (10 + (index % 4) * 9);
+      const sparkle = this.add
+        .rectangle(x + offsetX / 2, y + (index % 3) * 5, index % 2 ? 5 : 7, index % 2 ? 9 : 7, colors[index % colors.length])
+        .setDepth(CAT_INTERACTION_DEPTH + 170 + index);
+      if (options.fixed) sparkle.setScrollFactor(0);
+      this.tweens.add({
+        targets: sparkle,
+        x: sparkle.x + offsetX,
+        y: sparkle.y - 20 - (index % 4) * 5,
+        alpha: 0,
+        angle: direction * 90,
+        duration: 760 + index * 45,
+        delay: index * 35,
+        ease: "Cubic.easeOut",
+        onComplete: () => sparkle.destroy(),
+      });
+    }
   }
 
   rememberCatPosition(entry, options = {}) {
@@ -708,6 +795,84 @@ class CatWorldScene extends Phaser.Scene {
     bg.strokeRect(2, 2, GAME_WIDTH - 4, GAME_HEIGHT - 4);
     bg.lineStyle(3, 0xfff8df, 0.5);
     bg.strokeRect(11, 11, GAME_WIDTH - 22, GAME_HEIGHT - 22);
+    this.drawLearningBoard(this.owner.snapshot);
+  }
+
+  drawLearningBoard(snapshot) {
+    const signal = snapshot.learningSignal || {};
+    if (!Array.isArray(signal.steps) || signal.steps.length !== 3) return;
+    const width = 390;
+    const height = 96;
+    const x = Math.max(VIEW_WIDTH - width - 26, 24);
+    const y = 18;
+    const container = this.add.container(x, y).setDepth(CAT_INTERACTION_DEPTH - 40).setScrollFactor(0);
+    const graphics = makeLocalGraphics(this, container);
+    drawPixelRect(graphics, 0, 0, width, height, 0x123446, INK, 5);
+    graphics.lineStyle(2, 0xd9f6ff, 0.6);
+    graphics.strokeRect(7, 7, width - 14, height - 14);
+
+    const heading = this.add.text(15, 11, "TODAY ENGLISH", {
+      color: "#7fffd4",
+      fontFamily: "Consolas, monospace",
+      fontSize: "13px",
+      fontStyle: "bold",
+    });
+    const progress = this.add
+      .text(width - 15, 11, `${signal.completedCount}/3 · ${shortCatText(signal.statusLabel, 10)}`, {
+        color: signal.completedCount >= 3 ? "#fff07d" : "#fff8df",
+        fontFamily: "Consolas, monospace",
+        fontSize: "12px",
+        fontStyle: "bold",
+      })
+      .setOrigin(1, 0);
+    container.add([heading, progress]);
+
+    const gap = 9;
+    const cellWidth = (width - 30 - gap * 2) / 3;
+    signal.steps.forEach((step, index) => {
+      const cellX = 15 + index * (cellWidth + gap);
+      const fill = step.completed ? 0x1d7f5b : step.active ? 0xffef82 : 0xfff8df;
+      drawPixelRect(graphics, cellX, 40, cellWidth, 38, fill, INK, 3);
+      graphics.fillStyle(step.completed ? 0x7fffd4 : step.active ? 0xdb2777 : 0xaeb8bc, 1);
+      graphics.fillRect(cellX + 10, 55, 8, 8);
+      const label = this.add
+        .text(cellX + cellWidth / 2 + 6, 59, step.label, {
+          color: step.completed ? "#ffffff" : "#263047",
+          fontFamily: "Consolas, monospace",
+          fontSize: "14px",
+          fontStyle: "bold",
+        })
+        .setOrigin(0.5);
+      container.add(label);
+      if (step.active && !step.completed) {
+        const marker = this.add.rectangle(cellX + 14, 59, 8, 8, 0xdb2777).setOrigin(0.5);
+        container.add(marker);
+        this.tweens.add({
+          targets: marker,
+          alpha: 0.35,
+          duration: 650,
+          yoyo: true,
+          repeat: -1,
+          ease: "Sine.easeInOut",
+        });
+      }
+    });
+
+    if (snapshot.editMode || snapshot.toolMode) return;
+    const hitZone = this.add.zone(x, y, width, height)
+      .setOrigin(0, 0)
+      .setDepth(CAT_INTERACTION_DEPTH - 39)
+      .setScrollFactor(0)
+      .setInteractive({ cursor: "pointer" });
+    hitZone.on("pointerdown", (_pointer, _localX, _localY, event) => {
+      this.stopPointerEvent(event);
+    });
+    hitZone.on("pointerup", (_pointer, _localX, _localY, event) => {
+      this.stopPointerEvent(event);
+      if (!this.shouldSuppressRoomClick()) {
+        this.owner.handlers.onLearningBoardClick?.(signal);
+      }
+    });
   }
 
   drawOwnedDecor(snapshot) {
@@ -4147,6 +4312,8 @@ export class CatWorldGame {
     this.wandCatIds = new Set();
     this.wandTarget = null;
     this.lastWandMoveAt = 0;
+    this.learningSignalToken = "";
+    this.pendingLearningMilestone = null;
     this.ready = false;
     this.snapshot = normalizeSnapshot();
     applySceneConfig(this.snapshot.scene);
@@ -4172,6 +4339,18 @@ export class CatWorldGame {
 
   update(snapshot) {
     const nextSnapshot = normalizeSnapshot(snapshot);
+    const nextLearningToken = nextSnapshot.learningSignal.token;
+    const previousLearningCount = Number(this.snapshot.learningSignal.completedCount || 0);
+    const nextLearningCount = Number(nextSnapshot.learningSignal.completedCount || 0);
+    if (
+      nextLearningToken
+      && nextLearningToken !== this.learningSignalToken
+      && nextLearningCount > 0
+      && (!this.learningSignalToken || nextLearningCount > previousLearningCount)
+    ) {
+      this.pendingLearningMilestone = nextSnapshot.learningSignal;
+    }
+    if (nextLearningToken) this.learningSignalToken = nextLearningToken;
     const sceneChanged =
       nextSnapshot.scene.id !== this.snapshot.scene.id ||
       nextSnapshot.scene.world.width !== this.snapshot.scene.world.width ||

@@ -23,6 +23,7 @@ import { catPortraitModel } from "../catWorldPortrait.js";
 import { catRarityBadge } from "../catWorldRarity.js";
 import {
   buildCatWorldLearningRoute,
+  buildCatWorldRoomLearningSignal,
   buildCatWorldWeekTrail,
   catWorldLearningCompanionGrowthLabel,
   catWorldLearningCompanionToken,
@@ -185,6 +186,7 @@ onMounted(async () => {
     onCatThought: (cat, message) => {
       if (!roomEditMode.value) showCatReaction(cat, message, { anchor: false });
     },
+    onLearningBoardClick: openRoomLearningProgress,
     onCatAmbient: recordCatAmbientEvent,
     onFoodVisit: recordCatFoodNibble,
     onCameraPanState: (active) => {
@@ -372,6 +374,13 @@ const learningRoute = computed(() => {
     coachLine: learningCompanion.value.message || route.coachLine,
   };
 });
+const learningRoomSignal = computed(() =>
+  buildCatWorldRoomLearningSignal(
+    energy.value.habit || {},
+    learningGuideCat.value,
+    learningCompanion.value,
+  ),
+);
 const learningGuidePortrait = computed(() => catPortraitModel(learningGuideCat.value));
 const learningCompanionGrowthLabel = computed(() =>
   catWorldLearningCompanionGrowthLabel(learningCompanion.value),
@@ -751,6 +760,7 @@ const gameSnapshot = computed(() => ({
   roomStyles: roomStyles.value,
   selectedCatId: selectedProfileId.value,
   gameSettings: gameSettings.value,
+  learningSignal: learningRoomSignal.value,
   scene: currentScene.value,
   editMode: roomEditMode.value,
   toolMode: repairMode.value ? "repair" : scoopMode.value ? "scoop" : "",
@@ -846,6 +856,12 @@ function handlePlayTimeVisibilityChange() {
 function updateCatWorldGame() {
   catWorldGame.value?.update(gameSnapshot.value);
   roomCanPan.value = Boolean(catWorldGame.value?.canPan?.());
+}
+
+function openRoomLearningProgress(signal = learningRoomSignal.value) {
+  const completed = Math.max(Number(signal?.completedCount || 0), 0);
+  notice.value = `今日学习灯牌已亮 ${completed}/3 格。完成单词热身和一次英语说写，就能点亮闭环。`;
+  energyModalOpen.value = true;
 }
 
 function syncCatPosition(cat, position) {
@@ -2482,7 +2498,7 @@ async function selectCat(catOrId, options = {}) {
               'can-pan': roomCanPan,
             },
           ]"
-          :aria-label="`${currentScene.label || '猫咪房间'}场景`"
+          :aria-label="`${currentScene.label || '猫咪房间'}场景，今日学习灯牌已亮 ${learningRoomSignal.completedCount}/3 格`"
           @pointermove="handleRoomToolPointerMove"
           @pointerleave="hideRoomToolCursor"
         >

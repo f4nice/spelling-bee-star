@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildCatWorldLearningRoute,
+  buildCatWorldRoomLearningSignal,
   buildCatWorldWeekTrail,
   catWorldLearningCompanionGrowthLabel,
   catWorldLearningCompanionToken,
@@ -88,6 +89,39 @@ test("learning route recognizes input, output, and a returning learner", () => {
   assert.equal(route.steps[2].label, "完成今日闭环");
   assert.equal(route.steps[2].actionKind, "energy");
   assert.match(route.steps[2].detail, /连续学习 4 天/);
+});
+
+test("room learning signal lights input, output, and the completed loop independently", () => {
+  const starting = buildCatWorldRoomLearningSignal(
+    { todaySpellingCount: 6, recentDays: [{ date: "2026-09-07", today: true }] },
+    { id: "cat-calm", nickname: "小静" },
+    { catId: "cat-calm" },
+  );
+  const outputFirst = buildCatWorldRoomLearningSignal({
+    todaySpellingCount: 6,
+    todayHasDebate: true,
+  });
+  const complete = buildCatWorldRoomLearningSignal(
+    {
+      todaySpellingCount: 50,
+      todayHasEssay: true,
+      todayBalanceComplete: true,
+      recentDays: [{ date: "2026-09-07", today: true }],
+    },
+    { id: "cat-calm", nickname: "小静" },
+    { catId: "cat-calm", message: "三格都亮啦。" },
+  );
+
+  assert.equal(starting.completedCount, 0);
+  assert.equal(starting.steps[0].active, true);
+  assert.equal(starting.token, "2026-09-07:cat-calm:starting:0");
+  assert.equal(outputFirst.completedCount, 1);
+  assert.equal(outputFirst.stageKey, "output");
+  assert.equal(outputFirst.steps[1].completed, true);
+  assert.equal(complete.completedCount, 3);
+  assert.equal(complete.steps.every((step) => step.completed), true);
+  assert.equal(complete.statusLabel, "今日闭环");
+  assert.equal(complete.celebrationMessage, "三格都亮啦。");
 });
 
 test("learning companion milestone tokens are stable and skip the starting state", () => {
