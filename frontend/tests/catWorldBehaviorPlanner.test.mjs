@@ -23,6 +23,30 @@ test("urgent care wins before personality-driven choices", () => {
   assert.equal(plan.kind, "food");
 });
 
+test("a pending study ritual wins once without overriding urgent care", () => {
+  const ordinary = chooseCatVisitPlan([
+    { kind: "learning", target: target(64, { label: "英文书架" }) },
+    { kind: "favorite", target: target(96, { label: "阳光窗台" }) },
+  ], {
+    catId: "cat-study",
+    cycle: 1,
+    requiredKind: "learning",
+    behavior: { attention: 60, activityBias: 52 },
+  });
+  const urgent = chooseCatVisitPlan([
+    { kind: "learning", target: target(82, { label: "英文书架" }) },
+    { kind: "food", target: target(90, { label: "猫粮" }) },
+  ], {
+    catId: "cat-study",
+    cycle: 2,
+    requiredKind: "learning",
+    behavior: { energy: 8, restThreshold: 34, attention: 70 },
+  });
+
+  assert.equal(ordinary.kind, "learning");
+  assert.equal(urgent.kind, "food");
+});
+
 test("individual traits alter the same room choices", () => {
   const candidates = [
     { kind: "learning", target: target(66, { label: "英文书桌" }) },

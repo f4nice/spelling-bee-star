@@ -82,6 +82,10 @@ export function chooseCatVisitPlan(candidates = [], context = {}) {
   const urgent = ranked.filter((candidate) => candidate.urgent);
   if (urgent.length) return urgent[0];
 
+  const requiredKind = String(context.requiredKind || "");
+  const required = requiredKind ? ranked.find((candidate) => candidate.kind === requiredKind) : null;
+  if (required) return required;
+
   const activity = clamp(context.behavior?.activityBias ?? 50, 0, 100);
   const wanderScore = 43 + (50 - activity) * 0.08;
   const bestScore = ranked[0].score;

@@ -71,6 +71,17 @@ test("the daily companion plans a visible visit to the study corner", async () =
   assert.match(game, /this\.spawnLearningCompanionBubble\(container, cat, visitPlan\.target\)/);
 });
 
+test("the guide cat performs each visible study ritual once before ordinary choices", async () => {
+  const game = await readFile(gameUrl, "utf8");
+
+  assert.match(game, /this\.learningRitualVisitKey\(cat\.id\)/);
+  assert.match(game, /requiredKind: learningRitualPending \? "learning" : ""/);
+  assert.match(game, /this\.owner\.learningRitualVisits\.add\(learningVisitKey\)/);
+  assert.match(game, /this\.learningRitualVisits = new Set\(\)/);
+  assert.match(game, /const delayRange = ritualDue \? \[1800, 3400\]/);
+  assert.match(game, /\{ minMs: 6500, maxMs: 26000 \}/);
+});
+
 test("the expanded route explains the companion's method without adding another task card", async () => {
   const [page, styles] = await Promise.all([
     readFile(pageUrl, "utf8"),

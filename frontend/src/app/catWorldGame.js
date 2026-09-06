@@ -3574,7 +3574,9 @@ class CatWorldScene extends Phaser.Scene {
       }
       return;
     }
-    const delay = Math.round((Phaser.Math.Between(5800, 12200) + index * 780) / Math.max(movement, 0.38));
+    const ritualDue = Boolean(this.learningRitualVisitKey(cat.id));
+    const delayRange = ritualDue ? [1800, 3400] : [5800, 12200];
+    const delay = Math.round((Phaser.Math.Between(...delayRange) + index * 780) / Math.max(movement, 0.38));
     const walkTimer = this.time.delayedCall(delay, () => {
       container.setData("walkTimer", null);
       if (!container.active || container.getData("interactionActive")) return;
@@ -3588,6 +3590,10 @@ class CatWorldScene extends Phaser.Scene {
       const goalTarget = this.agentGoalTarget(cat);
       const individualHabitTarget = this.individualHabitTarget(cat, index, latestBehavior);
       const favoriteTarget = this.favoriteItemTarget(cat);
+      const learningVisitKey = learningTarget ? this.learningRitualVisitKey(cat.id) : "";
+      const learningRitualPending = Boolean(
+        learningVisitKey && !this.owner.learningRitualVisits.has(learningVisitKey),
+      );
       const decisionCycle = Number(container.getData("decisionCycle") || 0) + 1;
       container.setData("decisionCycle", decisionCycle);
       const visitPlan = chooseCatVisitPlan([
@@ -3605,6 +3611,7 @@ class CatWorldScene extends Phaser.Scene {
         cycle: decisionCycle,
         lastKind: container.getData("lastVisitKind") || "",
         repeatCount: Number(container.getData("lastVisitStreak") || 0),
+        requiredKind: learningRitualPending ? "learning" : "",
       });
       if (!visitPlan && this.shouldCatIdle(latestBehavior)) {
         this.reportCatIntent(cat, { kind: "idle", target: { label: "原地" } }, "arrived");
@@ -3627,7 +3634,15 @@ class CatWorldScene extends Phaser.Scene {
       );
       const nextX = visitPlan?.target.x ?? Phaser.Math.Between(38, GAME_WIDTH - 132);
       const nextY = visitPlan?.target.y ?? Phaser.Math.Between(FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
-      const duration = Math.round(Phaser.Math.Between(34000, 56000) / Math.max(Number(latestBehavior.walkSpeed || movement), 0.34));
+      const guidedLearningMove = visitPlan?.kind === "learning" && learningRitualPending;
+      const duration = guidedLearningMove
+        ? interactionMoveDuration(
+          container,
+          { x: nextX, y: nextY },
+          Number(latestBehavior.walkSpeed || movement),
+          { minMs: 6500, maxMs: 26000 },
+        )
+        : Math.round(Phaser.Math.Between(34000, 56000) / Math.max(Number(latestBehavior.walkSpeed || movement), 0.34));
       this.turnCat(container, nextX);
       let walkTween;
       walkTween = this.tweens.add({
@@ -3660,6 +3675,7 @@ class CatWorldScene extends Phaser.Scene {
           } else if (visitPlan?.kind === "care") {
             this.spawnCareNeedBubble(container, cat, visitPlan.target);
           } else if (visitPlan?.kind === "learning") {
+            if (learningVisitKey) this.owner.learningRitualVisits.add(learningVisitKey);
             this.spawnLearningCompanionBubble(container, cat, visitPlan.target);
           } else if (visitPlan?.kind === "social") {
             this.startCatSocialMoment({ cat, index, container, behavior: latestBehavior }, visitPlan.target);
@@ -3680,6 +3696,22 @@ class CatWorldScene extends Phaser.Scene {
       container.setData("walkTween", walkTween);
     });
     container.setData("walkTimer", walkTimer);
+  }
+
+  learningRitualVisitKey(catId = "") {
+    const signal = this.owner.snapshot.learningSignal || {};
+    const guideCatId = signal.guideCatId || this.owner.snapshot.selectedCatId;
+    const cleanCatId = String(catId || "");
+    if (
+      !cleanCatId
+      || cleanCatId !== guideCatId
+      || !signal.token
+      || Number(signal.completedCount || 0) >= 3
+      || this.owner.learningRitualVisits.has(`${signal.token}:${this.owner.snapshot.scene.id}:${cleanCatId}`)
+    ) {
+      return "";
+    }
+    return `${signal.token}:${this.owner.snapshot.scene.id}:${cleanCatId}`;
   }
 
   pauseCatForReaction(container, cat) {
@@ -4877,6 +4909,7 @@ export class CatWorldGame {
     this.lastWandMoveAt = 0;
     this.learningSignalToken = "";
     this.pendingLearningMilestone = null;
+    this.learningRitualVisits = new Set();
     this.ready = false;
     this.snapshot = normalizeSnapshot();
     applySceneConfig(this.snapshot.scene);
