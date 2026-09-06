@@ -4,6 +4,7 @@ import test from "node:test";
 
 const pageUrl = new URL("../src/app/pages/CatWorldPage.vue", import.meta.url);
 const gameUrl = new URL("../src/app/catWorldGame.js", import.meta.url);
+const stylesUrl = new URL("../../app/static/styles.css", import.meta.url);
 
 test("the activity room turns daily English progress into an interactive pixel board", async () => {
   const [page, game] = await Promise.all([
@@ -13,10 +14,12 @@ test("the activity room turns daily English progress into an interactive pixel b
 
   assert.match(page, /buildCatWorldRoomLearningSignal/);
   assert.match(page, /learningSignal:\s*learningRoomSignal\.value/);
+  assert.match(page, /class="cat-world-energy-garden"/);
   assert.match(page, /observationMode:\s*playTimeLocked\.value/);
   assert.match(page, /onLearningBoardClick:\s*openRoomLearningProgress/);
   assert.match(page, /今日学习灯牌已亮 \$\{learningRoomSignal\.completedCount\}\/3 格/);
   assert.match(game, /drawLearningBoard\(this\.owner\.snapshot\)/);
+  assert.match(game, /drawLearningGardenFixture\(this\.owner\.snapshot\)/);
   assert.match(game, /"TODAY ENGLISH"/);
   assert.match(game, /snapshot\.observationMode \? 126 : 18/);
   assert.match(game, /this\.add\.zone\(x, y, width, height\)/);
@@ -27,12 +30,30 @@ test("the activity room turns daily English progress into an interactive pixel b
 test("a new learning milestone celebrates once with the companion cat", async () => {
   const game = await readFile(gameUrl, "utf8");
 
-  assert.match(game, /nextLearningCount > previousLearningCount/);
+  assert.match(game, /function learningMilestoneScore/);
+  assert.match(game, /nextLearningScore > previousLearningScore/);
   assert.match(game, /this\.pendingLearningMilestone = nextSnapshot\.learningSignal/);
   assert.match(game, /playPendingLearningMilestone\(\)/);
   assert.match(game, /this\.spawnCatBubble\(guideEntry, cat, message\)/);
   assert.match(game, /spawnLearningSparkles\(guideEntry\.x \+ 44/);
   assert.match(game, /this\.owner\.pendingLearningMilestone = null/);
+});
+
+test("the room keeps starter progress and gives the growing word garden a friendly hit area", async () => {
+  const [game, styles] = await Promise.all([
+    readFile(gameUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
+
+  assert.match(game, /starterComplete:\s*Boolean\(signal\.starterComplete\)/);
+  assert.match(game, /garden:\s*normalizeLearningGarden\(signal\.garden\)/);
+  assert.match(game, /learningGardenFixturePosition\(\)/);
+  assert.match(game, /`单词芽 · \$\{garden\.stageLabel \|\| "种子"\}`/);
+  assert.match(game, /this\.add\.zone\(position\.x, position\.y \+ 48, 132, 132\)/);
+  assert.match(game, /itemId:\s*"learning-garden"/);
+  assert.match(game, /今天的学习让单词芽长到/);
+  assert.match(styles, /\.cat-world-energy-modal \.cat-world-modal-summary\s*\{\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(styles, /\.cat-world-energy-modal \.cat-world-energy-list\s*\{\s*grid-template-columns:\s*1fr/);
 });
 
 test("the daily companion plans a visible visit to the study corner", async () => {

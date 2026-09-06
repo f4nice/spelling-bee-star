@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Flame as FlameIcon, Hammer as HammerIcon, Heart as HeartIcon, House as HouseIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, ShoppingBag as ShoppingBagIcon, Shovel as ShovelIcon, X as XIcon } from "lucide-vue-next";
+import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Flame as FlameIcon, Hammer as HammerIcon, Heart as HeartIcon, House as HouseIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, ShoppingBag as ShoppingBagIcon, Shovel as ShovelIcon, Sprout as SproutIcon, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -991,7 +991,8 @@ function updateCatWorldGame() {
 
 function openRoomLearningProgress(signal = learningRoomSignal.value) {
   const completed = Math.max(Number(signal?.completedCount || 0), 0);
-  notice.value = `今日学习灯牌已亮 ${completed}/3 格。完成单词热身和一次英语说写，就能点亮闭环。`;
+  const garden = signal?.garden || learningRoute.value.garden || {};
+  notice.value = `今日学习灯牌已亮 ${completed}/3 格。单词芽现为${garden.stageLabel || "种子"}，累计 ${garden.growthPoints || 0} 成长点。`;
   energyModalOpen.value = true;
 }
 
@@ -2516,7 +2517,6 @@ async function selectCat(catOrId, options = {}) {
             <small>WEEKLY RHYTHM</small>
             <strong id="cat-world-learning-week-title">最近七天陪学足迹</strong>
           </div>
-          <p>{{ learningWeekTrail.summary }}</p>
           <button
             class="cat-world-learning-week-toggle"
             type="button"
@@ -2527,6 +2527,19 @@ async function selectCat(catOrId, options = {}) {
             <span>{{ learningWeekExpanded ? "收起记录" : "查看七天" }}</span>
             <ChevronDown :size="16" :stroke-width="3" aria-hidden="true" />
           </button>
+          <p class="cat-world-learning-garden">
+            <SproutIcon :size="14" :stroke-width="2.8" aria-hidden="true" />
+            <strong>单词芽 · {{ learningRoute.garden.stageLabel }}</strong>
+            <span>
+              {{ learningRoute.garden.growthPoints }} 成长点
+              <template v-if="learningRoute.garden.nextRemaining">
+                · 再 {{ learningRoute.garden.nextRemaining }} 点到{{ learningRoute.garden.nextStageLabel }}
+              </template>
+            </span>
+          </p>
+          <p class="cat-world-learning-week-counts">
+            {{ learningWeekTrail.summary }} · 最长连续 {{ learningRoute.garden.bestStreak }} 天
+          </p>
           <div v-if="learningWeekExpanded" class="cat-world-learning-week-memory" aria-live="polite">
             <p><span>{{ learningWeekMemory.dateLabel }}</span> · {{ learningWeekMemory.detail }}</p>
             <p>{{ learningWeekMemory.catName }}：{{ learningWeekMemory.catMessage }}</p>
@@ -3787,6 +3800,24 @@ async function selectCat(catOrId, options = {}) {
           <span>今日 +{{ todayEnergy }}</span>
           <span>累计 {{ energy.earned || 0 }}</span>
           <span>已用 {{ energy.spent || 0 }}</span>
+        </div>
+        <div class="cat-world-energy-garden">
+          <figure aria-hidden="true">
+            <SproutIcon :size="22" :stroke-width="2.8" />
+          </figure>
+          <div>
+            <small>WORD GARDEN</small>
+            <strong>单词芽 · {{ learningRoute.garden.stageLabel }}</strong>
+            <p>
+              {{ learningRoute.garden.activeDays }} 天有效开始 ·
+              {{ learningRoute.garden.loopDays }} 天完成闭环 ·
+              最长连续 {{ learningRoute.garden.bestStreak }} 天
+            </p>
+          </div>
+          <span v-if="learningRoute.garden.nextRemaining">
+            再 {{ learningRoute.garden.nextRemaining }} 点到{{ learningRoute.garden.nextStageLabel }}
+          </span>
+          <span v-else>已长成满冠</span>
         </div>
         <div v-if="todayEnergySources.length" class="cat-world-energy-list">
           <div v-for="source in todayEnergySources" :key="source.key" class="cat-world-energy-row">

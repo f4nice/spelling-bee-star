@@ -195,6 +195,20 @@ function cloneLayout(layout = {}) {
   );
 }
 
+function normalizeLearningGarden(garden = {}) {
+  return {
+    key: String(garden.key || "seed"),
+    stageIndex: clamp(Number(garden.stageIndex || 0), 0, 4),
+    stageLabel: String(garden.stageLabel || "种子"),
+    growthPoints: Math.max(Number(garden.growthPoints || 0), 0),
+    activeDays: Math.max(Number(garden.activeDays || 0), 0),
+    loopDays: Math.max(Number(garden.loopDays || 0), 0),
+    bestStreak: Math.max(Number(garden.bestStreak || 0), 0),
+    nextStageLabel: String(garden.nextStageLabel || ""),
+    nextRemaining: Math.max(Number(garden.nextRemaining || 0), 0),
+  };
+}
+
 function normalizeLearningSignal(signal = {}) {
   const steps = Array.isArray(signal.steps)
     ? signal.steps.slice(0, 3).map((step, index) => ({
@@ -210,12 +224,21 @@ function normalizeLearningSignal(signal = {}) {
     guideCatId: String(signal.guideCatId || ""),
     guideName: String(signal.guideName || "今日陪学猫"),
     spellingCount: Math.max(Number(signal.spellingCount || 0), 0),
+    starterTarget: Math.max(Number(signal.starterTarget || 5), 1),
+    starterCount: Math.max(Number(signal.starterCount || 0), 0),
+    starterRemaining: Math.max(Number(signal.starterRemaining || 0), 0),
+    starterComplete: Boolean(signal.starterComplete),
     completedCount: clamp(Number(signal.completedCount || 0), 0, 3),
     stageKey: String(signal.stageKey || "starting"),
     statusLabel: String(signal.statusLabel || "等待今日开始"),
     celebrationMessage: String(signal.celebrationMessage || ""),
+    garden: normalizeLearningGarden(signal.garden),
     steps,
   };
+}
+
+function learningMilestoneScore(signal = {}) {
+  return Number(signal.completedCount || 0) * 2 + (signal.starterComplete ? 1 : 0);
 }
 
 function normalizeSnapshot(snapshot = {}) {
@@ -723,6 +746,8 @@ class CatWorldScene extends Phaser.Scene {
       this.owner.snapshot.observationMode ? 224 : 116,
       { fixed: true },
     );
+    const gardenPosition = this.learningGardenFixturePosition();
+    this.spawnLearningSparkles(gardenPosition.x, gardenPosition.y + 52);
     return true;
   }
 
@@ -812,6 +837,7 @@ class CatWorldScene extends Phaser.Scene {
     bg.strokeRect(11, 11, GAME_WIDTH - 22, GAME_HEIGHT - 22);
     this.drawRoomTimeBadge(ambience);
     this.drawLearningBoard(this.owner.snapshot);
+    this.drawLearningGardenFixture(this.owner.snapshot);
   }
 
   drawRoomTimeAmbience(graphics, ambience = {}) {
@@ -928,6 +954,97 @@ class CatWorldScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setDepth(CAT_INTERACTION_DEPTH - 39)
       .setScrollFactor(0)
+      .setInteractive({ cursor: "pointer" });
+    hitZone.on("pointerdown", (_pointer, _localX, _localY, event) => {
+      this.stopPointerEvent(event);
+    });
+    hitZone.on("pointerup", (_pointer, _localX, _localY, event) => {
+      this.stopPointerEvent(event);
+      if (!this.shouldSuppressRoomClick()) {
+        this.owner.handlers.onLearningBoardClick?.(signal);
+      }
+    });
+  }
+
+  learningGardenFixturePosition() {
+    return {
+      x: clamp(Math.round(VIEW_WIDTH * 0.2), 224, GAME_WIDTH - 124),
+      y: 92,
+    };
+  }
+
+  learningGardenFocusPoint(index = 0) {
+    const fixture = this.learningGardenFixturePosition();
+    return {
+      itemKind: "learning-garden",
+      label: "单词芽",
+      x: clamp(fixture.x + seededOffset(`learning-garden:${index}:x`, 34), 38, GAME_WIDTH - 132),
+      y: clamp(FLOOR_TOP + 60 + seededOffset(`learning-garden:${index}:y`, 10), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+    };
+  }
+
+  drawLearningGardenFixture(snapshot) {
+    const signal = snapshot.learningSignal || {};
+    if (!Array.isArray(signal.steps) || signal.steps.length !== 3) return;
+    const garden = signal.garden || {};
+    const stageIndex = clamp(Number(garden.stageIndex || 0), 0, 4);
+    const position = this.learningGardenFixturePosition();
+    const container = this.add
+      .container(position.x, position.y)
+      .setDepth(CAT_INTERACTION_DEPTH - 55);
+    const graphics = makeLocalGraphics(this, container);
+
+    graphics.lineStyle(4, INK, 1);
+    graphics.lineBetween(-54, 8, 54, 8);
+    graphics.lineBetween(-42, 8, -34, 64);
+    graphics.lineBetween(42, 8, 34, 64);
+    drawPixelRect(graphics, -48, 61, 96, 28, 0xffb9cb, INK, 4);
+    graphics.fillStyle(0x7b4b32, 1);
+    graphics.fillRect(-38, 56, 76, 9);
+
+    const stemHeight = [0, 18, 32, 44, 54][stageIndex];
+    if (stageIndex === 0) {
+      graphics.fillStyle(0xffcf59, 1);
+      graphics.fillRect(-5, 51, 10, 7);
+    } else {
+      graphics.fillStyle(0x176f58, 1);
+      graphics.fillRect(-3, 57 - stemHeight, 6, stemHeight);
+      const leafRows = stageIndex >= 4 ? [14, 26, 38, 48] : stageIndex >= 2 ? [13, 25, 36] : [12];
+      leafRows.forEach((row, index) => {
+        if (row > stemHeight) return;
+        const direction = index % 2 === 0 ? -1 : 1;
+        graphics.fillStyle(index % 2 === 0 ? 0x38a169 : 0x65c96f, 1);
+        graphics.fillRect(direction < 0 ? -18 : 3, 55 - row, 15, 8);
+        graphics.fillRect(direction < 0 ? -13 : 3, 51 - row, 10, 4);
+      });
+    }
+    if (stageIndex >= 3) {
+      const flowers = stageIndex >= 4 ? [-24, 0, 24] : [0];
+      flowers.forEach((offset, index) => {
+        const flowerY = 52 - stemHeight + (index % 2) * 8;
+        graphics.fillStyle(index % 2 ? 0xffef82 : 0xff8cad, 1);
+        graphics.fillRect(offset - 8, flowerY - 4, 16, 8);
+        graphics.fillRect(offset - 4, flowerY - 8, 8, 16);
+        graphics.fillStyle(0xffcf59, 1);
+        graphics.fillRect(offset - 3, flowerY - 3, 6, 6);
+      });
+    }
+
+    const title = this.add
+      .text(0, 96, `单词芽 · ${garden.stageLabel || "种子"}`, {
+        color: "#176f58",
+        backgroundColor: "#fff8df",
+        fontFamily: "Consolas, monospace",
+        fontSize: "11px",
+        fontStyle: "bold",
+        padding: { x: 5, y: 3 },
+      })
+      .setOrigin(0.5, 0);
+    container.add(title);
+
+    if (snapshot.editMode || snapshot.toolMode) return;
+    const hitZone = this.add.zone(position.x, position.y + 48, 132, 132)
+      .setDepth(CAT_INTERACTION_DEPTH - 54)
       .setInteractive({ cursor: "pointer" });
     hitZone.on("pointerdown", (_pointer, _localX, _localY, event) => {
       this.stopPointerEvent(event);
@@ -3835,16 +3952,33 @@ class CatWorldScene extends Phaser.Scene {
   learningCompanionTarget(cat = {}, index = 0, behavior = {}) {
     const signal = this.owner.snapshot.learningSignal || {};
     const guideCatId = signal.guideCatId || this.owner.snapshot.selectedCatId;
-    if (!behavior.canWalk || behavior.sleeping || cat.id !== guideCatId || Number(signal.completedCount || 0) >= 3) {
+    if (!behavior.canWalk || behavior.sleeping || cat.id !== guideCatId) {
       return null;
+    }
+    const gardenPoint = this.learningGardenFocusPoint(index);
+    if (Number(signal.completedCount || 0) >= 3) {
+      const attention = Number(behavior.attention || 50);
+      return {
+        kind: "learning-companion",
+        itemId: "learning-garden",
+        itemKind: gardenPoint.itemKind,
+        label: gardenPoint.label,
+        message: `今天的学习让单词芽长到${signal.garden?.stageLabel || "种子"}，我去照看一下。`,
+        animation: "blink",
+        priority: clamp(40 + Math.round(attention / 9), 42, 54),
+        x: gardenPoint.x,
+        y: gardenPoint.y,
+      };
     }
     const activeStep = (signal.steps || []).find((step) => step.active)
       || (signal.steps || []).find((step) => !step.completed);
     if (!activeStep) return null;
-    const studyPoints = ["study-desk", "book-shelf", "reading-lamp", "word-gallery"]
+    const studyPoints = [
+      { itemId: "learning-garden", point: gardenPoint },
+      ...["study-desk", "book-shelf", "reading-lamp", "word-gallery"]
       .map((itemId) => ({ itemId, point: this.roomItemFocusPoint(itemId, index) }))
-      .filter((entry) => entry.point);
-    if (!studyPoints.length) return null;
+      .filter((entry) => entry.point),
+    ];
     const selectedIndex = Math.abs(hashText(`${cat.id}:${signal.stageKey}:${activeStep.key}`)) % studyPoints.length;
     const selected = studyPoints[selectedIndex];
     const attention = Number(behavior.attention || 50);
@@ -4729,13 +4863,13 @@ export class CatWorldGame {
   update(snapshot) {
     const nextSnapshot = normalizeSnapshot(snapshot);
     const nextLearningToken = nextSnapshot.learningSignal.token;
-    const previousLearningCount = Number(this.snapshot.learningSignal.completedCount || 0);
-    const nextLearningCount = Number(nextSnapshot.learningSignal.completedCount || 0);
+    const previousLearningScore = learningMilestoneScore(this.snapshot.learningSignal);
+    const nextLearningScore = learningMilestoneScore(nextSnapshot.learningSignal);
     if (
       nextLearningToken
       && nextLearningToken !== this.learningSignalToken
-      && nextLearningCount > 0
-      && (!this.learningSignalToken || nextLearningCount > previousLearningCount)
+      && nextLearningScore > 0
+      && (!this.learningSignalToken || nextLearningScore > previousLearningScore)
     ) {
       this.pendingLearningMilestone = nextSnapshot.learningSignal;
     }

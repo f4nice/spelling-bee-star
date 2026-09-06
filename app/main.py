@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-029"
-DEFAULT_PAGE_VERSION = "v20260906.29"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-030"
+DEFAULT_PAGE_VERSION = "v20260906.30"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -14864,6 +14864,9 @@ def cat_world_learning_habit_source(
             "todayHasDebate": False,
             "todayBalanceComplete": False,
             "currentStreak": 0,
+            "totalActiveDays": 0,
+            "totalLoopDays": 0,
+            "bestStreak": 0,
             "recentDays": cat_world_learning_week_days(source_date, {}, set(), set()),
             "todayDetail": "新学习节奏尚未开始",
             "nextAction": "先完成 5 个拼写词点亮起步爪印，再慢慢到 20 词热身",
@@ -14958,6 +14961,15 @@ def cat_world_learning_habit_source(
         next_action = "今日学习闭环已完成，明天继续会增加连续奖励"
     today_detail = " · ".join(detail_parts + [next_action])
     total_energy = sum(int(row["energy"]) for row in daily_rewards.values())
+    garden_active_dates = {
+        learning_date
+        for learning_date in set(spelling_by_date) | essay_dates | debate_dates
+        if spelling_by_date.get(learning_date, 0) >= 5
+        or learning_date in essay_dates
+        or learning_date in debate_dates
+    }
+    total_loop_days = sum(1 for row in daily_rewards.values() if int(row.get("balanceEnergy") or 0) > 0)
+    best_streak = max((int(row.get("streak") or 0) for row in daily_rewards.values()), default=0)
     recent_days = cat_world_learning_week_days(source_date, spelling_by_date, essay_dates, debate_dates)
 
     return {
@@ -14974,6 +14986,9 @@ def cat_world_learning_habit_source(
         "todayHasDebate": bool(today_reward.get("hasDebate")),
         "todayBalanceComplete": int(today_reward.get("balanceEnergy") or 0) > 0,
         "currentStreak": int(today_reward.get("streak") or 0),
+        "totalActiveDays": len(garden_active_dates),
+        "totalLoopDays": total_loop_days,
+        "bestStreak": best_streak,
         "recentDays": recent_days,
         "todayDetail": today_detail,
         "nextAction": next_action,

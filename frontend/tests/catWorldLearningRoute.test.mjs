@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildCatWorldHabitGarden,
   buildCatWorldLearningRoute,
   buildCatWorldRoomLearningSignal,
   buildCatWorldWeekTrail,
@@ -9,6 +10,27 @@ import {
   catWorldLearningCompanionToken,
   catWorldWeekMemory,
 } from "../src/app/catWorldLearningRoute.js";
+
+test("the word garden grows from persistent learning days and rewards completed loops visually", () => {
+  const seed = buildCatWorldHabitGarden({ totalActiveDays: 0, totalLoopDays: 0 });
+  const leaves = buildCatWorldHabitGarden({ totalActiveDays: 3, totalLoopDays: 1, bestStreak: 2 });
+  const crown = buildCatWorldHabitGarden({ totalActiveDays: 11, totalLoopDays: 5, bestStreak: 6 });
+  const recentFallback = buildCatWorldHabitGarden({
+    recentDays: [
+      { active: true, loopComplete: false },
+      { active: true, loopComplete: true },
+    ],
+  });
+
+  assert.equal(seed.key, "seed");
+  assert.equal(seed.nextRemaining, 1);
+  assert.equal(leaves.key, "leaves");
+  assert.equal(leaves.growthPoints, 4);
+  assert.equal(leaves.bestStreak, 2);
+  assert.equal(crown.key, "crown");
+  assert.equal(crown.nextRemaining, 0);
+  assert.equal(recentFallback.growthPoints, 3);
+});
 
 test("weekly trail distinguishes starts, input, output, and completed loops", () => {
   const trail = buildCatWorldWeekTrail({
@@ -155,7 +177,7 @@ test("room learning signal lights input, output, and the completed loop independ
   assert.equal(starting.starterComplete, true);
   assert.equal(starting.stageKey, "started");
   assert.equal(starting.statusLabel, "5 词起步完成");
-  assert.equal(starting.token, "2026-09-07:cat-calm:started:0");
+  assert.equal(starting.token, "2026-09-07:cat-calm:1:started:0");
   assert.equal(outputFirst.completedCount, 1);
   assert.equal(outputFirst.stageKey, "output");
   assert.equal(outputFirst.steps[1].completed, true);

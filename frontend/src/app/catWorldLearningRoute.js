@@ -7,6 +7,14 @@ const ROOM_LEARNING_STEPS = Object.freeze([
   Object.freeze({ key: "loop", label: "闭环" }),
 ]);
 
+const HABIT_GARDEN_STAGES = Object.freeze([
+  Object.freeze({ key: "seed", label: "种子", threshold: 0 }),
+  Object.freeze({ key: "sprout", label: "冒芽", threshold: 1 }),
+  Object.freeze({ key: "leaves", label: "舒叶", threshold: 4 }),
+  Object.freeze({ key: "bloom", label: "开花", threshold: 8 }),
+  Object.freeze({ key: "crown", label: "满冠", threshold: 16 }),
+]);
+
 const WEEK_MEMORY_TONES = {
   calm: ["不用赶，我们稳稳积累。", "我把这格安静收好了。"],
   clingy: ["下一步也让我陪在旁边。", "这格我贴着你一起记住了。"],
@@ -30,6 +38,37 @@ function safeCount(value) {
   return Math.max(Number(value || 0), 0);
 }
 
+export function buildCatWorldHabitGarden(habit = {}) {
+  const recentDays = Array.isArray(habit.recentDays) ? habit.recentDays : [];
+  const hasTotalActiveDays = Number.isFinite(Number(habit.totalActiveDays));
+  const hasTotalLoopDays = Number.isFinite(Number(habit.totalLoopDays));
+  const activeDays = hasTotalActiveDays
+    ? safeCount(habit.totalActiveDays)
+    : recentDays.filter((day) => day?.active).length;
+  const loopDays = hasTotalLoopDays
+    ? safeCount(habit.totalLoopDays)
+    : recentDays.filter((day) => day?.loopComplete).length;
+  const growthPoints = activeDays + loopDays;
+  const stageIndex = HABIT_GARDEN_STAGES.reduce(
+    (current, stage, index) => (growthPoints >= stage.threshold ? index : current),
+    0,
+  );
+  const stage = HABIT_GARDEN_STAGES[stageIndex];
+  const nextStage = HABIT_GARDEN_STAGES[stageIndex + 1] || null;
+  return {
+    key: stage.key,
+    stageIndex,
+    stageLabel: stage.label,
+    growthPoints,
+    activeDays,
+    loopDays,
+    bestStreak: safeCount(habit.bestStreak ?? habit.currentStreak),
+    nextStageLabel: nextStage?.label || "",
+    nextThreshold: nextStage?.threshold ?? growthPoints,
+    nextRemaining: nextStage ? Math.max(nextStage.threshold - growthPoints, 0) : 0,
+  };
+}
+
 export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
   const spellingCount = safeCount(habit.todaySpellingCount);
   const streak = safeCount(habit.currentStreak);
@@ -48,6 +87,7 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
   const outputAction = preferredOutput === "debate"
     ? { action: debateAction, href: "/debate", alternateAction: essayAction, alternateHref: "/essays" }
     : { action: essayAction, href: "/essays", alternateAction: debateAction, alternateHref: "/debate" };
+  const garden = buildCatWorldHabitGarden(habit);
 
   const steps = [
     {
@@ -104,6 +144,7 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
     learningStyleDescription: learningStyle.description || "陪你用适合自己的节奏完成今天的英语学习。",
     preferredOutput,
     streak,
+    garden,
     starterTarget: STARTER_SPELLING_TARGET,
     starterCount: Math.min(spellingCount, STARTER_SPELLING_TARGET),
     starterRemaining: Math.max(STARTER_SPELLING_TARGET - spellingCount, 0),
@@ -151,9 +192,10 @@ export function buildCatWorldRoomLearningSignal(habit = {}, cat = {}, companion 
     output: `${guideName}看到表达格亮起来了，再练 20 个词就完整啦。`,
     loop: `${guideName}看到三格都亮了，今天的英语闭环完成啦。`,
   };
+  const garden = buildCatWorldHabitGarden(habit);
 
   return {
-    token: `${currentDay || "today"}:${guideCatId || "cat"}:${stageKey}:${completedCount}`,
+    token: `${currentDay || "today"}:${guideCatId || "cat"}:${starterComplete ? 1 : 0}:${stageKey}:${completedCount}`,
     date: String(currentDay || companion.date || ""),
     guideCatId,
     guideName,
@@ -174,6 +216,7 @@ export function buildCatWorldRoomLearningSignal(habit = {}, cat = {}, companion 
             ? "5 词起步完成"
             : `再 ${Math.max(STARTER_SPELLING_TARGET - spellingCount, 0)} 词点亮起步爪印`,
     celebrationMessage: String(companion.message || fallbackMessages[stageKey] || "").trim(),
+    garden,
     steps: steps.map((step, index) => ({ ...step, active: index === activeIndex })),
   };
 }
