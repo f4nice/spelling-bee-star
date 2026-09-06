@@ -41,6 +41,16 @@ test("carried cats recognize furniture drop interactions", () => {
   assert.equal(catDropInteractionFor("word-gallery"), null);
 });
 
+test("server duration overrides change only allowlisted furniture timing", () => {
+  assert.equal(catDropInteractionFor("study-desk")?.holdMs, 9000);
+  assert.equal(catDropInteractionFor("bubble-bathtub")?.holdMs, 12000);
+  assert.equal(catDropInteractionFor("study-desk", { "study-desk": 16000 })?.holdMs, 16000);
+  assert.equal(catDropInteractionFor("study-desk", { "study-desk": 100 })?.holdMs, 3000);
+  assert.equal(catDropInteractionFor("study-desk", { "study-desk": 999999 })?.holdMs, 60000);
+  assert.equal(catDropInteractionFor("study-desk", { "study-desk": "bad" })?.holdMs, 9000);
+  assert.equal(catDropInteractionFor("word-gallery", { "word-gallery": 16000 }), null);
+});
+
 test("all five new window ledges support distinct perch interactions", () => {
   const expected = new Map([
     ["moon-window", "窗边看月亮"],

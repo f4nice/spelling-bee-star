@@ -29,6 +29,7 @@ const catGenderWeightDrafts = ref({
   male: Number(catWorldPricing.value.settings?.genderDrawWeights?.male ?? 50),
   female: Number(catWorldPricing.value.settings?.genderDrawWeights?.female ?? 50),
 });
+const catInteractionDurationDrafts = ref(createCatInteractionDurationDrafts(catWorldPricing.value.settings));
 const energyGrantDraft = ref({ reason: "", amount: 100, password: "" });
 const grantingCatWorldEnergy = ref(false);
 const playTimeRewards = ref(props.data.catWorldPlayTimeRewards || {
@@ -98,6 +99,14 @@ const catGenderWeightPreview = computed(() => {
     femalePercent: total ? Math.round((female / total) * 1000) / 10 : 0,
   };
 });
+const catInteractionDurationItems = computed(
+  () => catWorldPricing.value.settings?.interactionDurationItems || [],
+);
+const catInteractionDurationLimits = computed(() => ({
+  min: Number(catWorldPricing.value.settings?.limits?.interactionDurationMs?.min ?? 3000),
+  max: Number(catWorldPricing.value.settings?.limits?.interactionDurationMs?.max ?? 60000),
+  step: Number(catWorldPricing.value.settings?.limits?.interactionDurationMs?.step ?? 1000),
+}));
 const siteSummaryCards = computed(() => [
   { label: "登录方式", value: "手机号 + 密码", detail: "手机号仍是唯一登录标识，页面只展示昵称。" },
   { label: "图片 AI", value: `${props.data.imageAiOptions?.length || 0} 项`, detail: "在用户中心为不同用户选择默认图片 AI。" },
@@ -122,6 +131,7 @@ function normalizeCatWorldPricing(source = {}) {
   const rawSettings = source.settings || {};
   const rawLimits = rawSettings.limits?.movementSpeed || {};
   const rawGenderLimits = rawSettings.limits?.genderDrawWeight || {};
+  const rawInteractionLimits = rawSettings.limits?.interactionDurationMs || {};
   const speedLimits = {
     min: finiteNumber(rawLimits.min, 0.4),
     max: finiteNumber(rawLimits.max, 2),
@@ -141,6 +151,10 @@ function normalizeCatWorldPricing(source = {}) {
         malePercent: finiteNumber(rawSettings.genderDrawWeights?.malePercent, 50),
         femalePercent: finiteNumber(rawSettings.genderDrawWeights?.femalePercent, 50),
       },
+      interactionDurations: { ...(rawSettings.interactionDurations || {}) },
+      interactionDurationItems: Array.isArray(rawSettings.interactionDurationItems)
+        ? rawSettings.interactionDurationItems
+        : [],
       defaults: {
         movementSpeed: 1,
         ...(rawSettings.defaults || {}),
@@ -152,6 +166,11 @@ function normalizeCatWorldPricing(source = {}) {
           min: finiteNumber(rawGenderLimits.min, 0),
           max: finiteNumber(rawGenderLimits.max, 1000),
           step: finiteNumber(rawGenderLimits.step, 5),
+        },
+        interactionDurationMs: {
+          min: finiteNumber(rawInteractionLimits.min, 3000),
+          max: finiteNumber(rawInteractionLimits.max, 60000),
+          step: finiteNumber(rawInteractionLimits.step, 1000),
         },
       },
     },
@@ -166,6 +185,19 @@ function clampCatMovementSpeed(value) {
 function clampCatGenderWeight(value) {
   const limits = catGenderWeightLimits.value;
   return Math.round(Math.min(Math.max(finiteNumber(value, 50), limits.min), limits.max));
+}
+
+function createCatInteractionDurationDrafts(settings = {}) {
+  return Object.fromEntries((settings?.interactionDurationItems || []).map((item) => [
+    item.id,
+    Math.round((Number(item.holdMs || item.defaultHoldMs || 3000) / 1000) * 10) / 10,
+  ]));
+}
+
+function clampCatInteractionDurationMs(value) {
+  const limits = catInteractionDurationLimits.value;
+  const durationMs = finiteNumber(value, limits.min / 1000) * 1000;
+  return Math.round(Math.min(Math.max(durationMs, limits.min), limits.max));
 }
 
 function applyCatWorldPricing(nextPricing) {
@@ -183,6 +215,7 @@ function applyCatWorldPricing(nextPricing) {
     male: Number(catWorldPricing.value.settings?.genderDrawWeights?.male ?? 50),
     female: Number(catWorldPricing.value.settings?.genderDrawWeights?.female ?? 50),
   };
+  catInteractionDurationDrafts.value = createCatInteractionDurationDrafts(catWorldPricing.value.settings);
   if (!(catWorldPricing.value.plans || []).some((plan) => plan.category === activePricingCategory.value)) {
     activePricingCategory.value = catWorldPricing.value.plans?.[0]?.category || "";
   }
@@ -340,6 +373,11 @@ async function saveScenePrice(scene) {
 async function saveCatWorldSettings() {
   const speed = clampCatMovementSpeed(catMovementSpeedDraft.value);
   const genderWeights = catGenderWeightPreview.value;
+  const interactionDurations = Object.fromEntries(catInteractionDurationItems.value.map((item) => {
+    const holdMs = clampCatInteractionDurationMs(catInteractionDurationDrafts.value[item.id]);
+    catInteractionDurationDrafts.value[item.id] = holdMs / 1000;
+    return [item.id, holdMs];
+  }));
   if (genderWeights.male + genderWeights.female <= 0) {
     notice.value = "公猫和母猫的抽取系数不能同时为 0。";
     return;
@@ -358,10 +396,11 @@ async function saveCatWorldSettings() {
           male: genderWeights.male,
           female: genderWeights.female,
         },
+        interactionDurations,
       }),
     });
     applyCatWorldPricing(result.catWorldPricing);
-    notice.value = `猫咪设置已保存：速度 ${speed.toFixed(2)}x，公猫 ${genderWeights.malePercent}%，母猫 ${genderWeights.femalePercent}%。`;
+    notice.value = `猫咪设置已保存：速度 ${speed.toFixed(2)}x，公猫 ${genderWeights.malePercent}%，母猫 ${genderWeights.femalePercent}%，互动时长 ${Object.keys(interactionDurations).length} 项。`;
   } catch (error) {
     notice.value = error.message || "猫咪世界设置保存失败。";
   } finally {
@@ -838,6 +877,32 @@ async function resetCatWorldData() {
             </label>
             <button class="challenge-button compact-button" type="button" :disabled="savingCatWorldSettings" @click="saveCatWorldSettings">
               {{ savingCatWorldSettings ? "保存中" : `保存 ${catMovementSpeedLabel}` }}
+            </button>
+          </section>
+
+          <section class="admin-cat-world-settings-panel admin-cat-interaction-settings-panel">
+            <div class="admin-cat-interaction-heading">
+              <strong>道具互动时长</strong>
+              <p>设置猫咪到达道具后停留、洗澡或玩耍的时间。行为类型由系统固定，避免配置错误影响活动室。</p>
+            </div>
+            <div class="admin-cat-interaction-grid">
+              <label v-for="item in catInteractionDurationItems" :key="item.id">
+                <span>{{ item.label }}</span>
+                <small>{{ item.actionLabel }}</small>
+                <span class="admin-cat-interaction-input">
+                  <input
+                    v-model.number="catInteractionDurationDrafts[item.id]"
+                    type="number"
+                    :min="catInteractionDurationLimits.min / 1000"
+                    :max="catInteractionDurationLimits.max / 1000"
+                    :step="catInteractionDurationLimits.step / 1000"
+                  >
+                  <em>秒</em>
+                </span>
+              </label>
+            </div>
+            <button class="challenge-button compact-button" type="button" :disabled="savingCatWorldSettings" @click="saveCatWorldSettings">
+              {{ savingCatWorldSettings ? "保存中" : "保存互动时长" }}
             </button>
           </section>
 

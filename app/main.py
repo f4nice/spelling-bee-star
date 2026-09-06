@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-001"
-DEFAULT_PAGE_VERSION = "v20260907.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-002"
+DEFAULT_PAGE_VERSION = "v20260907.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -274,6 +274,27 @@ CAT_WORLD_DEFAULT_MOVEMENT_SPEED = 1.0
 CAT_WORLD_MIN_MOVEMENT_SPEED = 0.4
 CAT_WORLD_MAX_MOVEMENT_SPEED = 2.0
 CAT_WORLD_MOVEMENT_SPEED_STEP = 0.05
+CAT_WORLD_INTERACTION_DURATION_SETTING_PREFIX = "interaction_duration_ms:"
+CAT_WORLD_INTERACTION_DURATION_MIN_MS = 3000
+CAT_WORLD_INTERACTION_DURATION_MAX_MS = 60000
+CAT_WORLD_INTERACTION_DURATION_STEP_MS = 1000
+CAT_WORLD_INTERACTION_DURATION_CATALOG = (
+    {"id": "study-desk", "label": "英文书桌", "actionLabel": "书桌陪读", "defaultHoldMs": 9000},
+    {"id": "bubble-bathtub", "label": "泡泡浴缸", "actionLabel": "泡泡洗澡", "defaultHoldMs": 12000},
+    {"id": "window-hammock", "label": "窗边吊床", "actionLabel": "吊床休息", "defaultHoldMs": 10000},
+    {"id": "felt-cat-bed", "label": "毛毡猫窝", "actionLabel": "猫窝休息", "defaultHoldMs": 10000},
+    {"id": "moon-cushion", "label": "月亮软垫", "actionLabel": "软垫休息", "defaultHoldMs": 8500},
+    {"id": "cloud-rug", "label": "云朵地毯", "actionLabel": "地毯打滚", "defaultHoldMs": 8000},
+    {"id": "cat-climbing-tree", "label": "原木猫爬架", "actionLabel": "爬架巡视", "defaultHoldMs": 9000},
+    {"id": "mini-fountain", "label": "循环饮水机", "actionLabel": "饮水时间", "defaultHoldMs": 7000},
+    {"id": "reading-lamp", "label": "阅读台灯", "actionLabel": "灯下陪读", "defaultHoldMs": 8500},
+    {"id": "sun-window", "label": "阳光窗台", "actionLabel": "窗边晒太阳", "defaultHoldMs": 9500},
+    {"id": "moon-window", "label": "月光窗台", "actionLabel": "窗边看月亮", "defaultHoldMs": 10000},
+    {"id": "rain-window", "label": "雨声窗台", "actionLabel": "窗边听雨", "defaultHoldMs": 10500},
+    {"id": "garden-window", "label": "花园窗台", "actionLabel": "窗边看花", "defaultHoldMs": 9500},
+    {"id": "snow-window", "label": "雪景窗台", "actionLabel": "窗边看雪", "defaultHoldMs": 11000},
+    {"id": "sea-window", "label": "海风窗台", "actionLabel": "窗边看海", "defaultHoldMs": 10500},
+)
 CAT_WORLD_MALE_WEIGHT_SETTING_KEY = "male_cat_weight"
 CAT_WORLD_FEMALE_WEIGHT_SETTING_KEY = "female_cat_weight"
 CAT_WORLD_DEFAULT_GENDER_WEIGHT = 50
@@ -6291,6 +6312,7 @@ async def vue_admin_cat_world_settings_api(request: Request, db: Session = Depen
             gender_weights.get("male"),
             gender_weights.get("female"),
         )
+    save_cat_world_interaction_durations(db, (payload or {}).get("interactionDurations"))
     db.commit()
     return {"ok": True, "catWorldPricing": admin_cat_world_pricing_payload(db)}
 
@@ -15844,6 +15866,56 @@ def save_cat_world_game_setting(db: Session, setting_key: str, value: str) -> No
         row.setting_value = value
 
 
+def cat_world_clamp_interaction_duration(value: Any, fallback: int) -> int:
+    try:
+        duration_ms = int(round(float(value)))
+    except (TypeError, ValueError, OverflowError):
+        duration_ms = int(fallback)
+    return min(
+        max(duration_ms, CAT_WORLD_INTERACTION_DURATION_MIN_MS),
+        CAT_WORLD_INTERACTION_DURATION_MAX_MS,
+    )
+
+
+def cat_world_interaction_duration_setting_key(item_id: str) -> str:
+    return f"{CAT_WORLD_INTERACTION_DURATION_SETTING_PREFIX}{item_id}"
+
+
+def cat_world_interaction_duration_payload(db: Session) -> dict[str, Any]:
+    setting_keys = {
+        cat_world_interaction_duration_setting_key(item["id"]): item["id"]
+        for item in CAT_WORLD_INTERACTION_DURATION_CATALOG
+    }
+    rows = db.scalars(
+        select(CatWorldGameSetting).where(CatWorldGameSetting.setting_key.in_(setting_keys))
+    ).all()
+    stored = {setting_keys[row.setting_key]: row.setting_value for row in rows if row.setting_key in setting_keys}
+    items: list[dict[str, Any]] = []
+    durations: dict[str, int] = {}
+    for item in CAT_WORLD_INTERACTION_DURATION_CATALOG:
+        item_id = item["id"]
+        default_hold_ms = int(item["defaultHoldMs"])
+        hold_ms = cat_world_clamp_interaction_duration(stored.get(item_id), default_hold_ms)
+        durations[item_id] = hold_ms
+        items.append({**item, "holdMs": hold_ms})
+    return {"byItemId": durations, "items": items}
+
+
+def save_cat_world_interaction_durations(db: Session, values: Any) -> None:
+    if not isinstance(values, dict):
+        return
+    for item in CAT_WORLD_INTERACTION_DURATION_CATALOG:
+        item_id = item["id"]
+        if item_id not in values:
+            continue
+        hold_ms = cat_world_clamp_interaction_duration(values[item_id], int(item["defaultHoldMs"]))
+        save_cat_world_game_setting(
+            db,
+            cat_world_interaction_duration_setting_key(item_id),
+            str(hold_ms),
+        )
+
+
 def cat_world_gender_draw_weights(db: Session) -> dict[str, Any]:
     male = cat_world_clamp_gender_weight(
         cat_world_game_setting_value(
@@ -15888,14 +15960,21 @@ def save_cat_world_gender_draw_weights(db: Session, male_value: Any, female_valu
 
 
 def cat_world_game_settings_payload(db: Session) -> dict[str, Any]:
+    interaction_durations = cat_world_interaction_duration_payload(db)
     return {
         "movementSpeed": cat_world_movement_speed(db),
         "genderDrawWeights": cat_world_gender_draw_weights(db),
+        "interactionDurations": interaction_durations["byItemId"],
+        "interactionDurationItems": interaction_durations["items"],
         "defaults": {
             "movementSpeed": CAT_WORLD_DEFAULT_MOVEMENT_SPEED,
             "genderDrawWeights": {
                 "male": CAT_WORLD_DEFAULT_GENDER_WEIGHT,
                 "female": CAT_WORLD_DEFAULT_GENDER_WEIGHT,
+            },
+            "interactionDurations": {
+                item["id"]: item["defaultHoldMs"]
+                for item in CAT_WORLD_INTERACTION_DURATION_CATALOG
             },
         },
         "limits": {
@@ -15908,6 +15987,11 @@ def cat_world_game_settings_payload(db: Session) -> dict[str, Any]:
                 "min": CAT_WORLD_MIN_GENDER_WEIGHT,
                 "max": CAT_WORLD_MAX_GENDER_WEIGHT,
                 "step": CAT_WORLD_GENDER_WEIGHT_STEP,
+            },
+            "interactionDurationMs": {
+                "min": CAT_WORLD_INTERACTION_DURATION_MIN_MS,
+                "max": CAT_WORLD_INTERACTION_DURATION_MAX_MS,
+                "step": CAT_WORLD_INTERACTION_DURATION_STEP_MS,
             },
         },
     }

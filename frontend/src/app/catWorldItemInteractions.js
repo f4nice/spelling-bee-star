@@ -56,7 +56,7 @@ export const CAT_WORLD_CAT_DROP_INTERACTIONS = Object.freeze({
     anchorY: 0,
     offsetX: -48,
     offsetY: 66,
-    holdMs: 6000,
+    holdMs: 12000,
   }),
   "window-hammock": Object.freeze({
     behavior: "nap",
@@ -149,8 +149,15 @@ export function itemInteractionFor(itemId, itemKind = "") {
   return interaction;
 }
 
-export function catDropInteractionFor(itemId) {
-  return CAT_WORLD_CAT_DROP_INTERACTIONS[itemId] || null;
+export function catDropInteractionFor(itemId, durationOverrides = {}) {
+  const interaction = CAT_WORLD_CAT_DROP_INTERACTIONS[itemId] || null;
+  if (!interaction) return null;
+  if (!Object.prototype.hasOwnProperty.call(durationOverrides || {}, itemId)) return interaction;
+  const configured = Number(durationOverrides[itemId]);
+  if (!Number.isFinite(configured)) return interaction;
+  const holdMs = Math.round(Math.min(Math.max(configured, 3000), 60000));
+  if (holdMs === interaction.holdMs) return interaction;
+  return { ...interaction, holdMs };
 }
 
 export function catLikesItem(cat, itemId, itemKind) {

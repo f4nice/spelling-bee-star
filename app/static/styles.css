@@ -18093,6 +18093,70 @@ select {
   grid-template-columns: minmax(260px, 1fr) minmax(118px, 150px) minmax(118px, 150px) minmax(170px, 210px) auto;
 }
 
+.admin-cat-interaction-settings-panel {
+  grid-template-columns: minmax(220px, 0.7fr) minmax(420px, 2fr) auto;
+  align-items: start;
+}
+
+.admin-cat-interaction-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 8px 14px;
+}
+
+.admin-cat-interaction-grid label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 82px;
+  gap: 2px 8px;
+  align-items: center;
+  border-bottom: 1px solid rgba(29, 127, 91, 0.18);
+  padding: 4px 0 8px;
+}
+
+.admin-cat-interaction-grid label > span:first-child {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-cat-interaction-grid small {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.admin-cat-interaction-input {
+  display: grid;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.admin-cat-interaction-input input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-weight: 900;
+}
+
+.admin-cat-interaction-input em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+
 .admin-limited-item-settings-panel {
   grid-template-columns: minmax(280px, 1fr) minmax(140px, 180px) minmax(130px, 170px) auto;
   border-color: rgba(196, 139, 20, 0.32);
@@ -18333,6 +18397,10 @@ select {
   .admin-energy-grant-panel,
   .admin-reset-panel {
     grid-template-columns: 1fr;
+  }
+
+  .admin-cat-interaction-grid {
+    grid-template-columns: repeat(2, minmax(150px, 1fr));
   }
 
   .cat-world-owned-drawer-toggle {
