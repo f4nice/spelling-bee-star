@@ -21,6 +21,7 @@ from app.main import (
     cat_world_learning_companion_profile_id,
     cat_world_learning_companion_message,
     cat_world_normalize_nickname,
+    cat_world_profile_learning_style,
     create_cat_world_cat_profile,
     encode_cat_world_bonds,
     encode_cat_world_care,
@@ -134,6 +135,7 @@ class CatWorldIndividualProfileTest(unittest.TestCase):
 
             self.assertTrue(reward["changed"])
             self.assertEqual(reward["statusKey"], "loop")
+            self.assertEqual(reward["learningStyle"], companion_cat["learningStyle"])
             self.assertEqual(reward["newMilestones"], ["warmup", "output", "loop"])
             self.assertEqual(reward["newMoodGain"], 7)
             self.assertEqual(reward["newBondGain"], 3)
@@ -181,6 +183,16 @@ class CatWorldIndividualProfileTest(unittest.TestCase):
         self.assertNotEqual(calm, chatty)
         self.assertIn("20 词", calm)
         self.assertIn("听", chatty)
+
+    def test_learning_companion_lines_follow_the_cat_learning_style(self):
+        style = {"key": "idea-sparring"}
+        message = cat_world_learning_companion_message(
+            {"temperament": "calm"},
+            "warmup",
+            learning_style=style,
+        )
+
+        self.assertIn("AI Debate", message)
 
     def test_nickname_is_individual_and_validated(self):
         self.assertEqual(CAT_WORLD_SHOP_BY_ID[CAT_WORLD_RENAME_CARD_ITEM_ID]["cost"], 200)
@@ -272,6 +284,17 @@ class CatWorldIndividualProfileTest(unittest.TestCase):
             )
             self.assertTrue(first_cat["individualHabit"]["label"])
             self.assertIsInstance(first_cat["individualHabit"]["targetItemIds"], list)
+            self.assertEqual(
+                first_cat["learningStyle"],
+                cat_world_profile_learning_style(first),
+            )
+            original_learning_style = first_cat["learningStyle"]
+            first.breed_id = "ragdoll"
+            self.assertEqual(
+                original_learning_style,
+                cat_world_profile_learning_style(first),
+            )
+            first.breed_id = "siamese"
 
             second.personality_key = first.personality_key
             second.personality_label = first.personality_label

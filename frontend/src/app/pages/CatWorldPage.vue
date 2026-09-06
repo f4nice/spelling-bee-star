@@ -2243,6 +2243,14 @@ async function selectCat(catOrId, options = {}) {
           <p class="section-kicker">Cat Quest</p>
           <h2 id="cat-world-learning-route-title">{{ learningRoute.title }}</h2>
           <p class="cat-world-learning-coach-line">{{ learningRoute.coachLine }}</p>
+          <p
+            class="cat-world-learning-style"
+            :title="learningRoute.learningStyleDescription"
+          >
+            <AwardIcon :size="13" :stroke-width="2.8" aria-hidden="true" />
+            <strong>{{ learningRoute.learningStyleLabel }}</strong>
+            <span>{{ learningRoute.learningFocusLabel }}</span>
+          </p>
           <p class="cat-world-learning-companion-status">
             <MessageCircleIcon :size="13" :stroke-width="2.8" aria-hidden="true" />
             <strong>{{ learningCompanion.statusLabel || "等待一起热身" }}</strong>
@@ -2868,6 +2876,7 @@ async function selectCat(catOrId, options = {}) {
         <dl class="cat-world-agent-facts">
           <div><dt>个体档案</dt><dd>{{ activeCatDiary.genderLabel }} · {{ activeCatDiary.patternLabel }} · {{ activeCatDiary.featureLabel }}</dd></div>
           <div><dt>个人小习惯</dt><dd>{{ activeCatDiary.individualHabit?.label || "还在慢慢观察" }}</dd></div>
+          <div><dt>陪学专长</dt><dd>{{ activeCatDiary.learningStyle?.label || "平衡陪学搭档" }} · {{ activeCatDiary.learningStyle?.focusLabel || "少量输入再表达" }}</dd></div>
           <div><dt>作息</dt><dd>{{ activeCatDiary.sleepLabel }}</dd></div>
           <div><dt>消耗</dt><dd>{{ activeCatDiary.decayLabel }}</dd></div>
           <div><dt>亲密</dt><dd>{{ activeCatDiary.bondLabel }} · {{ activeCatDiary.bondDetailLabel }}</dd></div>
@@ -3219,6 +3228,10 @@ async function selectCat(catOrId, options = {}) {
             <p v-if="cat.individualHabit?.label" class="cat-world-cat-individual-habit">
               <b>个人小习惯</b>
               <em>{{ cat.individualHabit.label }}</em>
+            </p>
+            <p v-if="cat.learningStyle?.label" class="cat-world-cat-learning-style">
+              <b>陪学专长</b>
+              <em>{{ cat.learningStyle.label }}</em>
             </p>
             <p class="cat-world-cat-card-location">
               <b><MapPinIcon :size="14" :stroke-width="2.6" aria-hidden="true" />{{ cat.currentSceneLabel }}</b>

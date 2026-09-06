@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-013"
-DEFAULT_PAGE_VERSION = "v20260906.13"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-014"
+DEFAULT_PAGE_VERSION = "v20260906.14"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -573,6 +573,95 @@ CAT_WORLD_CAT_INDIVIDUAL_HABITS = [
         "priority": 50,
     },
 ]
+CAT_WORLD_CAT_LEARNING_STYLES = [
+    {
+        "key": "gentle-starter",
+        "label": "小步热身搭档",
+        "focusKey": "warmup",
+        "focusLabel": "先用 20 词启动",
+        "preferredOutput": "essay",
+        "description": "擅长把任务拆小，先完成容易开始的词汇热身。",
+        "messages": {
+            "starting": "先做 20 个词，我陪你把今天轻轻启动。",
+            "warmup": "20 词热身完成啦，接下来把这些词写进一段英语。",
+            "output": "表达已经完成，再补 20 词就能把今天收好。",
+            "loop": "今天从小步热身到表达都完成啦，节奏很稳。",
+        },
+    },
+    {
+        "key": "story-builder",
+        "label": "写作构思搭档",
+        "focusKey": "essay",
+        "focusLabel": "把词汇写进作文",
+        "preferredOutput": "essay",
+        "description": "喜欢把当天练过的词汇组织成完整的英文表达。",
+        "messages": {
+            "starting": "先收集 20 个词，等会儿我们把它们写成一段完整的话。",
+            "warmup": "词汇材料准备好了，去写一篇英文作文给我看吧。",
+            "output": "这次表达已经写出来了，再补足词汇热身就完整啦。",
+            "loop": "今天练过的词已经变成了自己的表达，我很喜欢这一页。",
+        },
+    },
+    {
+        "key": "idea-sparring",
+        "label": "观点表达搭档",
+        "focusKey": "debate",
+        "focusLabel": "用 AI Debate 说观点",
+        "preferredOutput": "debate",
+        "description": "会鼓励你用英语整理观点，再大胆回应不同意见。",
+        "messages": {
+            "starting": "先热身 20 个词，等会儿去 AI Debate 说说你的观点。",
+            "warmup": "词汇已经热身好了，去 AI Debate 把观点讲清楚吧。",
+            "output": "观点表达完成，再补 20 词就能形成今天的闭环。",
+            "loop": "今天既有词汇输入，也把观点说出来了，很有力量。",
+        },
+    },
+    {
+        "key": "loop-keeper",
+        "label": "输入输出闭环搭档",
+        "focusKey": "loop",
+        "focusLabel": "当天输入当天使用",
+        "preferredOutput": "essay",
+        "description": "会提醒你把词汇输入和英语表达放在同一天完成。",
+        "messages": {
+            "starting": "今天先输入一点，再用英语表达一次，我帮你守住闭环。",
+            "warmup": "输入格已经亮了，再完成一次英语输出就能闭环。",
+            "output": "输出格已经亮了，再练 20 个词就能闭环。",
+            "loop": "三格都亮了，今天的输入和输出已经好好连在一起。",
+        },
+    },
+    {
+        "key": "streak-keeper",
+        "label": "连续学习守护搭档",
+        "focusKey": "streak",
+        "focusLabel": "每天留下一点记录",
+        "preferredOutput": "debate",
+        "description": "更在意每天都开始一点，让学习节奏能够持续。",
+        "messages": {
+            "starting": "今天不用做很多，先留下 20 个词的学习记录吧。",
+            "warmup": "今天已经顺利开始，再表达一次会让这天更完整。",
+            "output": "今天已经用过英语，再补 20 词就能守住完整记录。",
+            "loop": "今天的连续记录已经稳稳留下，明天我还会等你。",
+        },
+    },
+    {
+        "key": "review-organizer",
+        "label": "复习节奏搭档",
+        "focusKey": "review",
+        "focusLabel": "少量复习再输出",
+        "preferredOutput": "essay",
+        "description": "喜欢先整理一小组词，再通过表达加深记忆。",
+        "messages": {
+            "starting": "先挑 20 个词慢慢复习，不熟的词多见几次就会记住。",
+            "warmup": "这一小组词复习好了，用一次英语会记得更牢。",
+            "output": "表达已经完成，再整理 20 个词就能巩固今天的记忆。",
+            "loop": "复习和表达都完成了，今天的记忆已经加固。",
+        },
+    },
+]
+CAT_WORLD_CAT_LEARNING_STYLE_BY_KEY = {
+    item["key"]: item for item in CAT_WORLD_CAT_LEARNING_STYLES
+}
 CAT_WORLD_CAT_PATTERN_BY_KEY = {item["key"]: item for item in CAT_WORLD_CAT_PATTERNS}
 CAT_WORLD_CAT_FEATURE_BY_KEY = {item["key"]: item for item in CAT_WORLD_CAT_FEATURES}
 CAT_WORLD_CAT_PERSONALITY_BY_KEY = {item["key"]: item for item in CAT_WORLD_CAT_PERSONALITIES}
@@ -16998,9 +17087,16 @@ def cat_world_learning_companion_message(
     traits: dict[str, Any],
     status_key: str,
     next_action: str = "",
+    learning_style: dict[str, Any] | None = None,
 ) -> str:
     temperament = str(traits.get("temperament") or "balanced")
     action = str(next_action or "先完成 20 个拼写词，开启今天的学习节奏").strip().rstrip("。")
+    style_key = str((learning_style or {}).get("key") or "")
+    style = CAT_WORLD_CAT_LEARNING_STYLE_BY_KEY.get(style_key, {})
+    style_messages = style.get("messages") if isinstance(style.get("messages"), dict) else {}
+    style_message = str(style_messages.get(status_key) or "").strip()
+    if style_message:
+        return style_message
     messages = {
         "starting": {
             "calm": f"{action}。我会在安静的位置陪着你。",
@@ -17069,7 +17165,13 @@ def cat_world_apply_learning_companion_rewards(
     new_bond_gain = 0
     earned_mood_gain = 0
     earned_bond_gain = 0
-    message = cat_world_learning_companion_message(traits, status_key, str(habit.get("nextAction") or ""))
+    learning_style = cat.get("learningStyle") if isinstance(cat.get("learningStyle"), dict) else {}
+    message = cat_world_learning_companion_message(
+        traits,
+        status_key,
+        str(habit.get("nextAction") or ""),
+        learning_style,
+    )
 
     for milestone in CAT_WORLD_LEARNING_COMPANION_MILESTONES:
         key = str(milestone["key"])
@@ -17101,6 +17203,7 @@ def cat_world_apply_learning_companion_rewards(
             traits,
             key,
             str(habit.get("nextAction") or ""),
+            learning_style,
         )
         agent_state = append_cat_world_agent_event(
             log,
@@ -17122,6 +17225,7 @@ def cat_world_apply_learning_companion_rewards(
         "catId": str(cat.get("profileId") or cat.get("id") or log.cat_id),
         "catLabel": str(cat.get("displayLabel") or cat.get("label") or "猫咪"),
         "personality": str(cat.get("personality") or "独立个性猫咪"),
+        "learningStyle": learning_style,
         "statusKey": status_key,
         "statusLabel": status_labels[status_key],
         "message": message,
@@ -18167,9 +18271,13 @@ def cat_world_profile_traits(
     return cat_world_cat_traits({"traits": stored_traits})
 
 
-def cat_world_profile_individual_habit(profile: CatWorldCatProfile) -> dict[str, Any]:
+def cat_world_profile_identity_digest(profile: CatWorldCatProfile) -> tuple[str, bytes]:
     profile_id = str(profile.profile_id or "cat")
-    digest = hashlib.sha256(profile_id.encode("utf-8")).digest()
+    return profile_id, hashlib.sha256(profile_id.encode("utf-8")).digest()
+
+
+def cat_world_profile_individual_habit(profile: CatWorldCatProfile) -> dict[str, Any]:
+    profile_id, digest = cat_world_profile_identity_digest(profile)
     habit = CAT_WORLD_CAT_INDIVIDUAL_HABITS[digest[0] % len(CAT_WORLD_CAT_INDIVIDUAL_HABITS)]
     tone = CAT_WORLD_CAT_HABIT_TONES[digest[1] % len(CAT_WORLD_CAT_HABIT_TONES)]
     profile_code = profile_id.rsplit("-", 1)[-1][:4].lower() or "cat"
@@ -18184,6 +18292,21 @@ def cat_world_profile_individual_habit(profile: CatWorldCatProfile) -> dict[str,
         "targetItemIds": list(habit.get("targetItemIds") or []),
         "priority": int(habit.get("priority") or 48),
         "socialBonus": int(habit.get("socialBonus") or 0),
+    }
+
+
+def cat_world_profile_learning_style(profile: CatWorldCatProfile) -> dict[str, Any]:
+    profile_id, digest = cat_world_profile_identity_digest(profile)
+    style = CAT_WORLD_CAT_LEARNING_STYLES[digest[2] % len(CAT_WORLD_CAT_LEARNING_STYLES)]
+    profile_code = profile_id.rsplit("-", 1)[-1][:4].lower() or "cat"
+    return {
+        "id": f"{style['key']}-{profile_code}",
+        "key": str(style["key"]),
+        "label": str(style["label"]),
+        "focusKey": str(style["focusKey"]),
+        "focusLabel": str(style["focusLabel"]),
+        "preferredOutput": str(style["preferredOutput"]),
+        "description": str(style["description"]),
     }
 
 
@@ -18256,6 +18379,7 @@ def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]
     personality_label = str(profile.personality_label or personality.get("label") or breed.get("personality") or "独立个性猫咪")
     personality_thoughts = personality.get("thoughts") if isinstance(personality.get("thoughts"), list) else []
     individual_habit = cat_world_profile_individual_habit(profile)
+    learning_style = cat_world_profile_learning_style(profile)
     profile_code = str(profile.profile_id).rsplit("-", 1)[-1][:4].upper()
     nickname = str(profile.nickname or "").strip()
     favorite_scene_key = str(profile.favorite_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
@@ -18283,6 +18407,7 @@ def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]
         "traits": cat_world_profile_traits(profile, breed),
         "thoughts": [*personality_thoughts, individual_habit["thought"]],
         "individualHabit": individual_habit,
+        "learningStyle": learning_style,
         "favoriteSceneId": favorite_scene_key,
         "favoriteSceneLabel": str(favorite_scene.get("label") or "一楼活动室"),
         "currentSceneId": current_scene_key,

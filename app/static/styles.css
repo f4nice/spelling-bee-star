@@ -14634,7 +14634,8 @@ select {
   color: #236b55;
 }
 
-.cat-world-cat-individual-habit {
+.cat-world-cat-individual-habit,
+.cat-world-cat-learning-style {
   display: flex !important;
   align-items: center;
   justify-content: space-between;
@@ -14646,16 +14647,24 @@ select {
   box-shadow: 2px 2px 0 rgba(44, 47, 58, 0.16);
 }
 
-.cat-world-cat-individual-habit b {
+.cat-world-cat-learning-style {
+  background: #d9f6ff;
+}
+
+.cat-world-cat-individual-habit b,
+.cat-world-cat-learning-style b {
   flex: 0 0 auto;
 }
 
-.cat-world-cat-individual-habit em {
+.cat-world-cat-individual-habit em,
+.cat-world-cat-learning-style em {
   text-align: right;
 }
 
 .cat-world-cat-chip.active .cat-world-cat-individual-habit,
-.cat-world-cat-chip:not(:disabled):hover .cat-world-cat-individual-habit {
+.cat-world-cat-chip:not(:disabled):hover .cat-world-cat-individual-habit,
+.cat-world-cat-chip.active .cat-world-cat-learning-style,
+.cat-world-cat-chip:not(:disabled):hover .cat-world-cat-learning-style {
   border-color: rgba(255, 255, 255, 0.72);
   color: #fff;
   background: rgba(255, 255, 255, 0.16);
@@ -15988,6 +15997,32 @@ select {
   font-size: 11px;
   font-weight: 800;
   line-height: 1.35;
+}
+
+.cat-world-learning-guide .cat-world-learning-style {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 6px;
+  width: fit-content;
+  margin-top: 5px;
+  padding: 3px 6px;
+  border: 2px solid rgba(44, 47, 58, 0.24);
+  border-radius: 4px;
+  color: #263047;
+  background: #fff3b0;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.cat-world-learning-style svg,
+.cat-world-learning-style strong {
+  color: #176f58;
+}
+
+.cat-world-learning-style span {
+  color: #526178;
 }
 
 .cat-world-learning-guide .cat-world-learning-companion-status {

@@ -75,6 +75,29 @@ test("learning route starts with a gentle spelling target", () => {
   assert.equal(route.steps[1].alternateHref, "/debate");
 });
 
+test("a cat learning style changes guidance order without changing the balanced goal", () => {
+  const route = buildCatWorldLearningRoute(
+    { todaySpellingCount: 20, currentStreak: 2 },
+    {
+      nickname: "话话",
+      learningStyle: {
+        label: "观点表达搭档",
+        focusLabel: "用 AI Debate 说观点",
+        preferredOutput: "debate",
+        description: "鼓励清楚表达观点。",
+      },
+    },
+  );
+
+  assert.equal(route.learningStyleLabel, "观点表达搭档");
+  assert.equal(route.learningFocusLabel, "用 AI Debate 说观点");
+  assert.equal(route.preferredOutput, "debate");
+  assert.equal(route.steps[1].href, "/debate");
+  assert.equal(route.steps[1].alternateHref, "/essays");
+  assert.match(route.steps[1].detail, /先完成一次 AI Debate/);
+  assert.equal(route.steps[2].completed, false);
+});
+
 test("learning route recognizes input, output, and a returning learner", () => {
   const route = buildCatWorldLearningRoute({
     todaySpellingCount: 50,

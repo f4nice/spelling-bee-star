@@ -39,6 +39,13 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
   const learningLoopComplete = Boolean(habit.todayBalanceComplete) || (warmupComplete && hasOutput);
   const guideName = cat.nickname || cat.label || cat.breedLabel || cat.displayLabel || "主猫";
   const nextAction = String(habit.nextAction || "先完成 20 个拼写词，开启今天的学习节奏");
+  const learningStyle = cat.learningStyle || {};
+  const preferredOutput = learningStyle.preferredOutput === "debate" ? "debate" : "essay";
+  const essayAction = hasEssay ? "再写一篇" : "去写作文";
+  const debateAction = hasDebate ? "再辩一场" : "去做 Debate";
+  const outputAction = preferredOutput === "debate"
+    ? { action: debateAction, href: "/debate", alternateAction: essayAction, alternateHref: "/essays" }
+    : { action: essayAction, href: "/essays", alternateAction: debateAction, alternateHref: "/debate" };
 
   const steps = [
     {
@@ -60,11 +67,10 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
           ? "英文作文已完成"
           : hasDebate
             ? "AI Debate 已完成"
-            : "完成一篇作文或一次 AI Debate",
-      action: hasOutput ? "再写一篇" : "去写作文",
-      href: "/essays",
-      alternateAction: hasOutput ? "再辩一场" : "AI Debate",
-      alternateHref: "/debate",
+            : preferredOutput === "debate"
+              ? "先完成一次 AI Debate，也可以写一篇英文作文"
+              : "先写一篇英文作文，也可以完成一次 AI Debate",
+      ...outputAction,
       completed: hasOutput,
     },
     {
@@ -89,6 +95,10 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
     guideName,
     title: `${guideName}的今日陪学路线`,
     coachLine: nextAction,
+    learningStyleLabel: learningStyle.label || "平衡陪学搭档",
+    learningFocusLabel: learningStyle.focusLabel || "少量输入，再完成一次表达",
+    learningStyleDescription: learningStyle.description || "陪你用适合自己的节奏完成今天的英语学习。",
+    preferredOutput,
     streak,
     completedCount: steps.filter((step) => step.completed).length,
     steps: steps.map((step, index) => ({ ...step, active: index === activeIndex })),
