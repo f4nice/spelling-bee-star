@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { catWorldIdleAnimationPlan } from "../src/app/catWorldIdleAnimation.js";
+
 const gameUrl = new URL("../src/app/catWorldGame.js", import.meta.url);
 
 test("a waking cat looks calm before low mood cues can appear", async () => {
@@ -19,6 +21,12 @@ test("wake recovery slows roaming and favors stretch animations", async () => {
 
   assert.match(game, /key === "waking"[\s\S]*?\? 0\.68/);
   assert.match(game, /key === "waking"[\s\S]*?\? 68/);
-  assert.match(game, /behavior\.key === "waking"\) return Phaser\.Math\.RND\.pick\(\["stretch", "blink", "groom"\]\)/);
+  const wakePlans = Array.from({ length: 6 }, (_, index) => catWorldIdleAnimationPlan(
+    { id: "cat-waking" },
+    { key: "waking", dailyMoodKey: "grumpy" },
+    index + 1,
+  ));
+  assert.ok(wakePlans.every((plan) => plan.source === "wake"));
+  assert.ok(wakePlans.every((plan) => ["stretch", "blink", "groom"].includes(plan.kind)));
   assert.match(game, /我刚睡醒，先伸个懒腰，再慢慢想今天去哪里/);
 });

@@ -28,6 +28,7 @@ import {
   catVisitPlanStatus,
   chooseCatVisitPlan,
 } from "./catWorldBehaviorPlanner.js";
+import { catWorldIdleAnimationPlan } from "./catWorldIdleAnimation.js";
 
 let VIEW_WIDTH = 1280;
 let VIEW_HEIGHT = 560;
@@ -3474,6 +3475,7 @@ class CatWorldScene extends Phaser.Scene {
       dailyLabel,
       dailyMoodKey: agent.dailyMoodKey || "",
       temperament,
+      activity: String(traits.activity || "balanced"),
       routine: agent.routine || traits.routine || "观察房间里的学习节奏",
       canWalk: !sleeping && energy >= restThreshold,
       energy,
@@ -3756,28 +3758,17 @@ class CatWorldScene extends Phaser.Scene {
     container.setData("microTimer", timer);
   }
 
-  catMicroAnimationKind(cat = {}, behavior = {}) {
-    if (behavior.sleeping) return Phaser.Math.RND.pick(["breathe", "dream", "ear"]);
-    if (behavior.key === "waking") return Phaser.Math.RND.pick(["stretch", "blink", "groom"]);
-    const habitAnimation = String(cat.individualHabit?.animation || "");
-    if (habitAnimation && Phaser.Math.Between(1, 100) <= 38) return habitAnimation;
-    const temperament = String(behavior.temperament || cat.traits?.temperament || "balanced");
-    const pools = {
-      calm: ["blink", "breathe", "listen", "groom"],
-      gentle: ["blink", "groom", "breathe", "tail"],
-      chatty: ["listen", "tail", "blink", "stretch"],
-      guardian: ["listen", "ear", "stretch", "blink"],
-      clingy: ["tail", "blink", "groom", "listen"],
-    };
-    const pool = pools[temperament] || ["blink", "tail", "groom", "stretch", "listen", "breathe"];
-    return Phaser.Math.RND.pick(pool);
+  catMicroAnimationKind(cat = {}, behavior = {}, cycle = 1) {
+    return catWorldIdleAnimationPlan(cat, behavior, cycle).kind;
   }
 
   playCatMicroAnimation(container, cat = {}, behavior = {}, forcedKind = "") {
     const body = container.getData("catBody");
     if (!body?.active) return;
     const colors = CAT_COLORS[cat.breedId || cat.id] || CAT_COLORS.mimi;
-    const kind = forcedKind || this.catMicroAnimationKind(cat, behavior);
+    const animationCycle = Number(container.getData("microAnimationCycle") || 0) + 1;
+    container.setData("microAnimationCycle", animationCycle);
+    const kind = forcedKind || this.catMicroAnimationKind(cat, behavior, animationCycle);
     const cue = this.add.graphics();
     cue.setData("catMicroCue", true);
     container.add(cue);
@@ -3803,6 +3794,59 @@ class CatWorldScene extends Phaser.Scene {
       cue.fillRect(99, 18, 10, 5);
       cue.fillRect(103, 23, 4, 4);
       this.tweens.add({ targets: cue, y: -18, alpha: 0, duration: 1100, ease: "Cubic.easeOut", onComplete: () => cue.destroy() });
+      return;
+    }
+
+    if (kind === "sparkle") {
+      [[98, 7, 0xfff07d], [112, -2, 0x87d9ff], [119, 14, 0xff8cad]].forEach(([x, y, color], index) => {
+        const size = index === 1 ? 4 : 3;
+        cue.fillStyle(color, 1);
+        cue.fillRect(x - size, y, size * 3, size);
+        cue.fillRect(x, y - size, size, size * 3);
+      });
+      this.tweens.add({ targets: cue, y: -15, alpha: 0, duration: 1050, ease: "Cubic.easeOut", onComplete: () => cue.destroy() });
+      return;
+    }
+
+    if (kind === "question") {
+      cue.fillStyle(0x87d9ff, 1);
+      cue.fillRect(101, -3, 12, 4);
+      cue.fillRect(109, 1, 4, 8);
+      cue.fillRect(105, 9, 8, 4);
+      cue.fillRect(105, 13, 4, 5);
+      cue.fillStyle(0xfff07d, 1);
+      cue.fillRect(105, 23, 4, 4);
+      this.tweens.add({ targets: cue, y: -11, alpha: 0, duration: 980, ease: "Sine.easeOut", onComplete: () => cue.destroy() });
+      return;
+    }
+
+    if (kind === "yawn") {
+      cue.fillStyle(0xfff8df, 1);
+      cue.fillRect(99, 7, 8, 3);
+      cue.fillRect(104, 10, 3, 3);
+      cue.fillRect(99, 13, 8, 3);
+      cue.fillRect(110, -1, 6, 3);
+      cue.fillRect(113, 2, 3, 3);
+      cue.fillRect(110, 5, 6, 3);
+      this.tweens.add({ targets: cue, x: 7, y: -15, alpha: 0, duration: 1250, ease: "Cubic.easeOut", onComplete: () => cue.destroy() });
+      return;
+    }
+
+    if (kind === "ellipsis") {
+      cue.fillStyle(0x9de8ff, 1);
+      [97, 106, 115].forEach((x) => cue.fillRect(x, 8, 5, 5));
+      this.tweens.add({ targets: cue, y: -6, alpha: 0, delay: 260, duration: 900, ease: "Sine.easeOut", onComplete: () => cue.destroy() });
+      return;
+    }
+
+    if (kind === "huff") {
+      cue.fillStyle(0xd9f6ff, 0.95);
+      cue.fillRect(98, 16, 10, 7);
+      cue.fillRect(105, 11, 9, 10);
+      cue.fillRect(112, 16, 8, 7);
+      cue.fillStyle(0xff8cad, 1);
+      cue.fillRect(121, 18, 4, 4);
+      this.tweens.add({ targets: cue, x: 15, y: -5, alpha: 0, duration: 880, ease: "Cubic.easeOut", onComplete: () => cue.destroy() });
       return;
     }
 
