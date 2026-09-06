@@ -258,6 +258,20 @@ class CatWorldIndividualProfileTest(unittest.TestCase):
             self.assertEqual(first_cat["traits"]["personalityModel"], 2)
             self.assertEqual(second_cat["traits"]["personalityModel"], 2)
             self.assertNotEqual(first_cat["traits"], second_cat["traits"])
+            self.assertNotEqual(
+                first_cat["individualHabit"]["id"],
+                second_cat["individualHabit"]["id"],
+            )
+            self.assertEqual(
+                first_cat["individualHabit"],
+                cat_world_cat_profile_payload(first)["individualHabit"],
+            )
+            self.assertIn(
+                first_cat["individualHabit"]["thought"],
+                first_cat["thoughts"],
+            )
+            self.assertTrue(first_cat["individualHabit"]["label"])
+            self.assertIsInstance(first_cat["individualHabit"]["targetItemIds"], list)
 
             second.personality_key = first.personality_key
             second.personality_label = first.personality_label

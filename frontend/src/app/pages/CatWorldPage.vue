@@ -584,6 +584,11 @@ function individualizeCatLog(cat, sourceLog = {}) {
   const traits = cat?.traits || {};
   const sourceAgent = sourceLog?.agentState || {};
   const sourceTags = Array.isArray(sourceAgent.profileTags) ? sourceAgent.profileTags : [];
+  const profileTags = Array.from(new Set([
+    cat?.personality,
+    cat?.individualHabit?.label,
+    ...sourceTags,
+  ].filter(Boolean)));
   return {
     ...(sourceLog || {}),
     agentState: {
@@ -591,7 +596,7 @@ function individualizeCatLog(cat, sourceLog = {}) {
       temperament: traits.temperament || sourceAgent.temperament || "balanced",
       routine: traits.routine || sourceAgent.routine || "观察房间里的学习节奏",
       personaLabel: cat?.personality || sourceAgent.personaLabel || "学习陪伴型",
-      profileTags: [cat?.personality, ...sourceTags].filter(Boolean).slice(0, 4),
+      profileTags: profileTags.slice(0, 4),
     },
   };
 }
@@ -2862,6 +2867,7 @@ async function selectCat(catOrId, options = {}) {
         </div>
         <dl class="cat-world-agent-facts">
           <div><dt>个体档案</dt><dd>{{ activeCatDiary.genderLabel }} · {{ activeCatDiary.patternLabel }} · {{ activeCatDiary.featureLabel }}</dd></div>
+          <div><dt>个人小习惯</dt><dd>{{ activeCatDiary.individualHabit?.label || "还在慢慢观察" }}</dd></div>
           <div><dt>作息</dt><dd>{{ activeCatDiary.sleepLabel }}</dd></div>
           <div><dt>消耗</dt><dd>{{ activeCatDiary.decayLabel }}</dd></div>
           <div><dt>亲密</dt><dd>{{ activeCatDiary.bondLabel }} · {{ activeCatDiary.bondDetailLabel }}</dd></div>
@@ -3210,6 +3216,10 @@ async function selectCat(catOrId, options = {}) {
           </div>
           <small>{{ cat.owned ? `${cat.patternLabel || "原生花纹"} · ${cat.featureLabel || "普通特点"} · 个性：${cat.personality || cat.englishName}` : cat.escaped ? `${cat.lostInfo.escapeLabel}，请去商店重新领养` : cat.description }}</small>
           <div v-if="cat.owned" class="cat-world-cat-agent-status">
+            <p v-if="cat.individualHabit?.label" class="cat-world-cat-individual-habit">
+              <b>个人小习惯</b>
+              <em>{{ cat.individualHabit.label }}</em>
+            </p>
             <p class="cat-world-cat-card-location">
               <b><MapPinIcon :size="14" :stroke-width="2.6" aria-hidden="true" />{{ cat.currentSceneLabel }}</b>
               <em>喜欢 {{ cat.favoriteSceneLabel }}</em>

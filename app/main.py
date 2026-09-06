@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-012"
-DEFAULT_PAGE_VERSION = "v20260906.12"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-013"
+DEFAULT_PAGE_VERSION = "v20260906.13"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -432,6 +432,145 @@ CAT_WORLD_CAT_PERSONALITIES = [
         "traitLabel": "情绪开朗、适应力强，喜欢频繁但轻松的互动。",
         "multipliers": {"movement": 1.02, "moodDrain": 0.92, "playMoodGain": 1.14},
         "thoughts": ["今天看起来很不错，我们一起做点开心的事吧。"],
+    },
+]
+CAT_WORLD_CAT_HABIT_TONES = [
+    {"key": "careful", "label": "认真派"},
+    {"key": "quiet", "label": "安静派"},
+    {"key": "brisk", "label": "轻快派"},
+    {"key": "curious", "label": "好奇派"},
+    {"key": "slow", "label": "慢热派"},
+    {"key": "casual", "label": "随性派"},
+]
+CAT_WORLD_CAT_INDIVIDUAL_HABITS = [
+    {
+        "key": "english-ears",
+        "label": "听完一句英语再抬耳回应",
+        "thought": "我听见英语时会认真抬耳，再轻轻回应你。",
+        "animation": "chirp",
+        "targetItemIds": ["word-gallery", "study-desk"],
+        "priority": 58,
+    },
+    {
+        "key": "window-pause",
+        "label": "路过窗台就停下来看看外面",
+        "thought": "每次路过窗台，我都想停下来看看外面。",
+        "animation": "lookout",
+        "targetItemIds": ["sun-window", "garden-window", "sea-window", "rain-window", "snow-window"],
+        "priority": 52,
+    },
+    {
+        "key": "rug-circle",
+        "label": "沿着地毯边缘绕一小圈",
+        "thought": "地毯边缘是我的固定散步路线。",
+        "animation": "tail",
+        "targetItemIds": ["cloud-rug"],
+        "priority": 54,
+    },
+    {
+        "key": "desk-guard",
+        "label": "在学习桌旁守一会儿",
+        "thought": "你学习的时候，我喜欢守在桌子旁边。",
+        "animation": "ear",
+        "targetItemIds": ["study-desk"],
+        "priority": 58,
+    },
+    {
+        "key": "shelf-reader",
+        "label": "去书架前安静坐一会儿",
+        "thought": "书架前很安静，我能在那里陪你读很久。",
+        "animation": "book",
+        "targetItemIds": ["book-shelf", "word-gallery"],
+        "priority": 56,
+    },
+    {
+        "key": "tidy-groomer",
+        "label": "休息前先认真梳理毛发",
+        "thought": "趴下休息以前，我要先把毛整理好。",
+        "animation": "groom",
+        "targetItemIds": ["felt-cat-bed", "cloud-rug"],
+        "priority": 46,
+    },
+    {
+        "key": "nose-greeter",
+        "label": "见到同伴先碰碰鼻子",
+        "thought": "遇到别的猫，我会先过去碰碰鼻子。",
+        "animation": "heart",
+        "targetItemIds": [],
+        "priority": 48,
+        "socialBonus": 18,
+    },
+    {
+        "key": "happy-hopper",
+        "label": "高兴时原地轻轻跳两下",
+        "thought": "心情好的时候，我会忍不住轻轻跳两下。",
+        "animation": "hop",
+        "targetItemIds": ["rolling-ball", "yarn-basket"],
+        "priority": 48,
+    },
+    {
+        "key": "toy-inspector",
+        "label": "闻过玩具以后再开始玩",
+        "thought": "新玩具要先认真闻一闻，才能放心玩。",
+        "animation": "paw",
+        "targetItemIds": ["rolling-ball", "feather-wand", "scratch-board", "yarn-basket", "limited-gift-toy"],
+        "priority": 60,
+    },
+    {
+        "key": "night-window",
+        "label": "夜里去窗边看一会儿灯光",
+        "thought": "夜里安静下来以后，我喜欢去窗边看灯光。",
+        "animation": "lookout",
+        "targetItemIds": ["moon-window", "window-sunset", "sun-window"],
+        "priority": 50,
+    },
+    {
+        "key": "quiet-retreat",
+        "label": "心情低落时躲进安静角落",
+        "thought": "不开心时让我先在安静角落待一会儿。",
+        "animation": "breathe",
+        "targetItemIds": ["felt-cat-bed", "window-hammock", "cloud-rug"],
+        "priority": 44,
+    },
+    {
+        "key": "food-circle",
+        "label": "吃饭前围着食物闻一圈",
+        "thought": "开饭以前，我总要先绕着食物闻一圈。",
+        "animation": "listen",
+        "targetItemIds": ["active-food"],
+        "priority": 62,
+    },
+    {
+        "key": "hammock-sway",
+        "label": "看见吊篮就想晃一会儿",
+        "thought": "吊篮轻轻晃起来的时候，我最容易放松。",
+        "animation": "tail",
+        "targetItemIds": ["window-hammock"],
+        "priority": 56,
+    },
+    {
+        "key": "bath-curious",
+        "label": "听见浴缸水声就过去看看",
+        "thought": "我不一定想洗澡，但水声一定要去看看。",
+        "animation": "lookout",
+        "targetItemIds": ["bubble-bathtub"],
+        "priority": 45,
+    },
+    {
+        "key": "edge-patrol",
+        "label": "散步时先确认房间边缘",
+        "thought": "每次散步，我都要先确认房间边缘很安全。",
+        "animation": "stretch",
+        "targetItemIds": [],
+        "priority": 46,
+    },
+    {
+        "key": "sun-napper",
+        "label": "看到阳光就眯眼打个盹",
+        "thought": "阳光照进来时，我会眯着眼睛打个小盹。",
+        "animation": "blink",
+        "targetItemIds": ["sun-window", "felt-cat-bed"],
+        "priority": 50,
     },
 ]
 CAT_WORLD_CAT_PATTERN_BY_KEY = {item["key"]: item for item in CAT_WORLD_CAT_PATTERNS}
@@ -18028,6 +18167,26 @@ def cat_world_profile_traits(
     return cat_world_cat_traits({"traits": stored_traits})
 
 
+def cat_world_profile_individual_habit(profile: CatWorldCatProfile) -> dict[str, Any]:
+    profile_id = str(profile.profile_id or "cat")
+    digest = hashlib.sha256(profile_id.encode("utf-8")).digest()
+    habit = CAT_WORLD_CAT_INDIVIDUAL_HABITS[digest[0] % len(CAT_WORLD_CAT_INDIVIDUAL_HABITS)]
+    tone = CAT_WORLD_CAT_HABIT_TONES[digest[1] % len(CAT_WORLD_CAT_HABIT_TONES)]
+    profile_code = profile_id.rsplit("-", 1)[-1][:4].lower() or "cat"
+    return {
+        "id": f"{habit['key']}-{tone['key']}-{profile_code}",
+        "behaviorKey": str(habit["key"]),
+        "toneKey": str(tone["key"]),
+        "toneLabel": str(tone["label"]),
+        "label": f"{tone['label']} · {habit['label']}",
+        "thought": str(habit["thought"]),
+        "animation": str(habit.get("animation") or "blink"),
+        "targetItemIds": list(habit.get("targetItemIds") or []),
+        "priority": int(habit.get("priority") or 48),
+        "socialBonus": int(habit.get("socialBonus") or 0),
+    }
+
+
 def create_cat_world_cat_profile(
     db: Session,
     state: CatWorldState,
@@ -18096,6 +18255,7 @@ def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]
     personality = CAT_WORLD_CAT_PERSONALITY_BY_KEY.get(str(profile.personality_key or ""), {})
     personality_label = str(profile.personality_label or personality.get("label") or breed.get("personality") or "独立个性猫咪")
     personality_thoughts = personality.get("thoughts") if isinstance(personality.get("thoughts"), list) else []
+    individual_habit = cat_world_profile_individual_habit(profile)
     profile_code = str(profile.profile_id).rsplit("-", 1)[-1][:4].upper()
     nickname = str(profile.nickname or "").strip()
     favorite_scene_key = str(profile.favorite_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
@@ -18121,7 +18281,8 @@ def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]
         "personalityKey": str(profile.personality_key or ""),
         "personality": personality_label,
         "traits": cat_world_profile_traits(profile, breed),
-        "thoughts": personality_thoughts,
+        "thoughts": [*personality_thoughts, individual_habit["thought"]],
+        "individualHabit": individual_habit,
         "favoriteSceneId": favorite_scene_key,
         "favoriteSceneLabel": str(favorite_scene.get("label") or "一楼活动室"),
         "currentSceneId": current_scene_key,

@@ -14634,6 +14634,34 @@ select {
   color: #236b55;
 }
 
+.cat-world-cat-individual-habit {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px !important;
+  padding: 6px 8px;
+  border: 2px solid rgba(44, 47, 58, 0.28);
+  border-radius: 4px;
+  background: #fff3b0;
+  box-shadow: 2px 2px 0 rgba(44, 47, 58, 0.16);
+}
+
+.cat-world-cat-individual-habit b {
+  flex: 0 0 auto;
+}
+
+.cat-world-cat-individual-habit em {
+  text-align: right;
+}
+
+.cat-world-cat-chip.active .cat-world-cat-individual-habit,
+.cat-world-cat-chip:not(:disabled):hover .cat-world-cat-individual-habit {
+  border-color: rgba(255, 255, 255, 0.72);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: 2px 2px 0 rgba(255, 255, 255, 0.26);
+}
+
 .cat-world-cat-card-location {
   display: flex !important;
   align-items: center;

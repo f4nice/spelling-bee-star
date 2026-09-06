@@ -3356,39 +3356,32 @@ class CatWorldScene extends Phaser.Scene {
       const careNeedTarget = this.careNeedTarget(cat, index, latestBehavior);
       const socialTarget = this.socialTargetForCat(cat, index, latestBehavior);
       const goalTarget = this.agentGoalTarget(cat);
+      const individualHabitTarget = this.individualHabitTarget(cat, index, latestBehavior);
       const favoriteTarget = this.favoriteItemTarget(cat);
       const shouldVisitFood = Boolean(foodTarget && Phaser.Math.Between(1, 100) <= foodTarget.priority);
       const shouldVisitRest = !shouldVisitFood && Boolean(restTarget && Phaser.Math.Between(1, 100) <= restTarget.priority);
       const shouldVisitCareNeed = !shouldVisitFood && !shouldVisitRest && Boolean(careNeedTarget && Phaser.Math.Between(1, 100) <= careNeedTarget.priority);
       const shouldVisitSocial = !shouldVisitFood && !shouldVisitRest && !shouldVisitCareNeed && Boolean(socialTarget && Phaser.Math.Between(1, 100) <= socialTarget.priority);
       const shouldVisitGoal = !shouldVisitFood && !shouldVisitRest && !shouldVisitCareNeed && !shouldVisitSocial && Boolean(goalTarget && Phaser.Math.Between(1, 100) <= goalTarget.priority);
-      const shouldVisitFavorite = !shouldVisitFood && !shouldVisitRest && !shouldVisitCareNeed && !shouldVisitSocial && !shouldVisitGoal && Boolean(favoriteTarget && Phaser.Math.Between(1, 100) <= favoriteTarget.priority);
-      const nextX = shouldVisitFood
-        ? foodTarget.x
+      const shouldVisitHabit = !shouldVisitFood && !shouldVisitRest && !shouldVisitCareNeed && !shouldVisitSocial && !shouldVisitGoal && Boolean(individualHabitTarget && Phaser.Math.Between(1, 100) <= individualHabitTarget.priority);
+      const shouldVisitFavorite = !shouldVisitFood && !shouldVisitRest && !shouldVisitCareNeed && !shouldVisitSocial && !shouldVisitGoal && !shouldVisitHabit && Boolean(favoriteTarget && Phaser.Math.Between(1, 100) <= favoriteTarget.priority);
+      const visitPlan = shouldVisitFood
+        ? { kind: "food", target: foodTarget }
         : shouldVisitRest
-          ? restTarget.x
-        : shouldVisitCareNeed
-          ? careNeedTarget.x
-        : shouldVisitSocial
-          ? socialTarget.x
-        : shouldVisitGoal
-          ? goalTarget.x
-          : shouldVisitFavorite
-            ? favoriteTarget.x
-            : Phaser.Math.Between(38, GAME_WIDTH - 132);
-      const nextY = shouldVisitFood
-        ? foodTarget.y
-        : shouldVisitRest
-          ? restTarget.y
-        : shouldVisitCareNeed
-          ? careNeedTarget.y
-        : shouldVisitSocial
-          ? socialTarget.y
-        : shouldVisitGoal
-          ? goalTarget.y
-          : shouldVisitFavorite
-            ? favoriteTarget.y
-            : Phaser.Math.Between(FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
+          ? { kind: "rest", target: restTarget }
+          : shouldVisitCareNeed
+            ? { kind: "care", target: careNeedTarget }
+            : shouldVisitSocial
+              ? { kind: "social", target: socialTarget }
+              : shouldVisitGoal
+                ? { kind: "goal", target: goalTarget }
+                : shouldVisitHabit
+                  ? { kind: "habit", target: individualHabitTarget }
+                  : shouldVisitFavorite
+                    ? { kind: "favorite", target: favoriteTarget }
+                    : null;
+      const nextX = visitPlan?.target.x ?? Phaser.Math.Between(38, GAME_WIDTH - 132);
+      const nextY = visitPlan?.target.y ?? Phaser.Math.Between(FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
       const duration = Math.round(Phaser.Math.Between(34000, 56000) / Math.max(Number(latestBehavior.walkSpeed || movement), 0.34));
       this.turnCat(container, nextX);
       let walkTween;
@@ -3405,27 +3398,29 @@ class CatWorldScene extends Phaser.Scene {
           }
           if (container.getData("interactionActive")) return;
           this.rememberCatPosition({ cat, container, index });
-          if (shouldVisitFood) {
-            this.spawnFoodPlayBubble(container, cat, foodTarget);
-          } else if (shouldVisitRest) {
-            this.spawnRestBubble(container, cat, restTarget.message);
+          if (visitPlan?.kind === "food") {
+            this.spawnFoodPlayBubble(container, cat, visitPlan.target);
+          } else if (visitPlan?.kind === "rest") {
+            this.spawnRestBubble(container, cat, visitPlan.target.message);
             this.owner.handlers.onCatAmbient?.(cat, {
               kind: "rest-spot",
-              itemId: restTarget.itemId || "room-rest",
-              label: restTarget.label || "休息点",
+              itemId: visitPlan.target.itemId || "room-rest",
+              label: visitPlan.target.label || "休息点",
             });
-          } else if (shouldVisitCareNeed) {
-            this.spawnCareNeedBubble(container, cat, careNeedTarget);
-          } else if (shouldVisitSocial) {
-            this.startCatSocialMoment({ cat, index, container, behavior: latestBehavior }, socialTarget);
-          } else if (shouldVisitGoal) {
-            if (goalTarget.kind === "mischief") {
-              this.spawnMischiefBubble(container, cat, goalTarget);
+          } else if (visitPlan?.kind === "care") {
+            this.spawnCareNeedBubble(container, cat, visitPlan.target);
+          } else if (visitPlan?.kind === "social") {
+            this.startCatSocialMoment({ cat, index, container, behavior: latestBehavior }, visitPlan.target);
+          } else if (visitPlan?.kind === "goal") {
+            if (visitPlan.target.kind === "mischief") {
+              this.spawnMischiefBubble(container, cat, visitPlan.target);
             } else {
-              this.spawnGoalBubble(container, cat, goalTarget);
+              this.spawnGoalBubble(container, cat, visitPlan.target);
             }
-          } else if (shouldVisitFavorite) {
-            this.spawnFavoritePlayBubble(container, cat, favoriteTarget);
+          } else if (visitPlan?.kind === "habit") {
+            this.spawnIndividualHabitBubble(container, cat, visitPlan.target);
+          } else if (visitPlan?.kind === "favorite") {
+            this.spawnFavoritePlayBubble(container, cat, visitPlan.target);
           }
           this.scheduleCatWalk(container, index, cat);
         },
@@ -3470,6 +3465,8 @@ class CatWorldScene extends Phaser.Scene {
 
   catMicroAnimationKind(cat = {}, behavior = {}) {
     if (behavior.sleeping) return Phaser.Math.RND.pick(["breathe", "dream", "ear"]);
+    const habitAnimation = String(cat.individualHabit?.animation || "");
+    if (habitAnimation && Phaser.Math.Between(1, 100) <= 38) return habitAnimation;
     const temperament = String(behavior.temperament || cat.traits?.temperament || "balanced");
     const pools = {
       calm: ["blink", "breathe", "listen", "groom"],
@@ -3482,14 +3479,94 @@ class CatWorldScene extends Phaser.Scene {
     return Phaser.Math.RND.pick(pool);
   }
 
-  playCatMicroAnimation(container, cat = {}, behavior = {}) {
+  playCatMicroAnimation(container, cat = {}, behavior = {}, forcedKind = "") {
     const body = container.getData("catBody");
     if (!body?.active) return;
     const colors = CAT_COLORS[cat.breedId || cat.id] || CAT_COLORS.mimi;
-    const kind = this.catMicroAnimationKind(cat, behavior);
+    const kind = forcedKind || this.catMicroAnimationKind(cat, behavior);
     const cue = this.add.graphics();
     cue.setData("catMicroCue", true);
     container.add(cue);
+
+    if (kind === "chirp") {
+      cue.fillStyle(0xfff07d, 1);
+      cue.fillRect(96, 8, 5, 5);
+      cue.fillRect(105, 1, 4, 4);
+      cue.fillStyle(0x87d9ff, 1);
+      cue.fillRect(101, 14, 4, 4);
+      cue.lineStyle(2, INK, 0.72);
+      cue.lineBetween(98, 5, 94, 0);
+      cue.lineBetween(106, 0, 109, -5);
+      this.tweens.add({ targets: cue, x: 8, y: -12, alpha: 0, duration: 980, ease: "Cubic.easeOut", onComplete: () => cue.destroy() });
+      return;
+    }
+
+    if (kind === "heart") {
+      cue.fillStyle(0xff6f9f, 1);
+      cue.fillRect(97, 7, 6, 6);
+      cue.fillRect(105, 7, 6, 6);
+      cue.fillRect(95, 12, 18, 6);
+      cue.fillRect(99, 18, 10, 5);
+      cue.fillRect(103, 23, 4, 4);
+      this.tweens.add({ targets: cue, y: -18, alpha: 0, duration: 1100, ease: "Cubic.easeOut", onComplete: () => cue.destroy() });
+      return;
+    }
+
+    if (kind === "book") {
+      cue.fillStyle(0xfff8df, 1);
+      cue.fillRect(93, 37, 11, 9);
+      cue.fillRect(105, 37, 11, 9);
+      cue.fillStyle(0x87d9ff, 1);
+      cue.fillRect(95, 39, 7, 5);
+      cue.fillStyle(0xff8cad, 1);
+      cue.fillRect(107, 39, 7, 5);
+      cue.lineStyle(2, INK, 1);
+      cue.strokeRect(92, 36, 25, 11);
+      cue.lineBetween(104, 37, 104, 46);
+      this.tweens.add({ targets: cue, y: -4, yoyo: true, repeat: 1, alpha: 0.25, duration: 620, onComplete: () => cue.destroy() });
+      return;
+    }
+
+    if (kind === "lookout") {
+      cue.fillStyle(0x87d9ff, 1);
+      cue.fillRect(99, 4, 5, 5);
+      cue.fillRect(110, -3, 7, 7);
+      cue.fillStyle(0xfff07d, 1);
+      cue.fillRect(119, 9, 4, 4);
+      cue.lineStyle(2, INK, 0.7);
+      cue.lineBetween(102, 2, 107, -4);
+      cue.lineBetween(115, 4, 120, 0);
+      this.tweens.add({ targets: cue, x: 7, alpha: 0, duration: 1050, ease: "Sine.easeOut", onComplete: () => cue.destroy() });
+      return;
+    }
+
+    if (kind === "paw") {
+      cue.fillStyle(0xff8cad, 1);
+      cue.fillRect(97, 34, 8, 7);
+      cue.fillRect(94, 28, 4, 4);
+      cue.fillRect(101, 25, 4, 4);
+      cue.fillRect(108, 28, 4, 4);
+      cue.lineStyle(2, INK, 0.6);
+      cue.strokeRect(97, 34, 8, 7);
+      this.tweens.add({ targets: cue, x: 12, y: -8, alpha: 0, duration: 900, ease: "Cubic.easeOut", onComplete: () => cue.destroy() });
+      return;
+    }
+
+    if (kind === "hop") {
+      cue.destroy();
+      this.tweens.add({
+        targets: body,
+        y: -8,
+        yoyo: true,
+        repeat: 1,
+        duration: 180,
+        ease: "Quad.easeOut",
+        onComplete: () => {
+          if (body.active) body.setPosition(0, 0);
+        },
+      });
+      return;
+    }
 
     if (kind === "blink") {
       cue.fillStyle(colors.body, 1);
@@ -3580,6 +3657,8 @@ class CatWorldScene extends Phaser.Scene {
     if (goal.key === "favorite-decor") return `在想${goal.targetLabel || "喜欢的角落"}。`;
     if (behavior.key === "slow") return "今天想慢慢走。";
     if (behavior.key === "night-watch") return "夜巡路线确认中。";
+    const habitThought = String(cat.individualHabit?.thought || "").trim();
+    if (habitThought && Phaser.Math.Between(1, 100) <= 24) return habitThought;
     return Phaser.Math.Between(1, 100) <= 45 ? "停下来观察房间。" : "";
   }
 
@@ -3598,12 +3677,40 @@ class CatWorldScene extends Phaser.Scene {
     const socialNeed = Number(behavior.socialNeed || 50);
     const moodBonus = Number(behavior.mood || 0) >= 72 ? 8 : 0;
     const temperamentBonus = ["clingy", "gentle", "chatty"].includes(behavior.temperament) ? 9 : 0;
+    const habitBonus = Number(cat.individualHabit?.socialBonus || 0);
     const approachFromLeft = source.x <= partner.container.x;
     return {
       partnerCatId: partner.cat.id,
-      priority: clamp(9 + socialNeed * 0.3 + moodBonus + temperamentBonus, 18, 54),
+      priority: clamp(9 + socialNeed * 0.3 + moodBonus + temperamentBonus + habitBonus, 18, 72),
       x: clamp(partner.container.x + (approachFromLeft ? -76 : 76), 38, GAME_WIDTH - 132),
       y: clamp(partner.container.y + Phaser.Math.Between(-12, 12), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+    };
+  }
+
+  individualHabitTarget(cat = {}, index = 0, behavior = {}) {
+    if (!behavior.canWalk || behavior.sleeping) return null;
+    const habit = cat.individualHabit || {};
+    const targetItemIds = Array.isArray(habit.targetItemIds) ? habit.targetItemIds : [];
+    const availableTargets = targetItemIds
+      .map((itemId) => ({ itemId, point: this.roomItemFocusPoint(itemId, index) }))
+      .filter((target) => target.point);
+    if (!availableTargets.length) return null;
+    const hour = new Date().getHours();
+    const selectedIndex = Math.abs(hashText(`${cat.id || "cat"}:${habit.behaviorKey || "habit"}:${hour}`)) % availableTargets.length;
+    const selected = availableTargets[selectedIndex];
+    const curiosity = Number(behavior.curiosity || 50);
+    const mood = Number(behavior.mood || 50);
+    const moodBonus = mood >= 72 ? 6 : mood < 38 && habit.behaviorKey === "quiet-retreat" ? 18 : 0;
+    return {
+      kind: "individual-habit",
+      itemId: selected.itemId,
+      itemKind: selected.point.itemKind,
+      label: selected.point.label || "习惯地点",
+      message: String(habit.thought || "").trim(),
+      animation: String(habit.animation || "blink"),
+      priority: clamp(Number(habit.priority || 48) + Math.round((curiosity - 50) / 7) + moodBonus, 28, 78),
+      x: clamp(selected.point.x + seededOffset(`${cat.id}:${selected.itemId}:habit-x`, 24), 38, GAME_WIDTH - 132),
+      y: clamp(selected.point.y + seededOffset(`${cat.id}:${selected.itemId}:habit-y`, 12), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
     };
   }
 
@@ -3661,6 +3768,33 @@ class CatWorldScene extends Phaser.Scene {
       duration: 1500,
       ease: "Cubic.easeOut",
       onComplete: () => cue.destroy(),
+    });
+  }
+
+  spawnIndividualHabitBubble(container, cat, target = {}) {
+    if (!container?.active) return;
+    const catLabel = cat?.displayLabel || cat?.label || "猫咪";
+    const message = `${catLabel}：${target.message || `我想在${target.label || "这里"}待一会儿。`}`;
+    const bubble = this.add
+      .text(container.x + 36, container.y - 30, message, {
+        color: "#263047",
+        backgroundColor: "#d9f6ff",
+        fontFamily: "Consolas, monospace",
+        fontSize: "12px",
+        fontStyle: "bold",
+        padding: { x: 8, y: 5 },
+      })
+      .setOrigin(0.5)
+      .setDepth(CAT_INTERACTION_DEPTH + 132);
+    this.playCatMicroAnimation(container, cat, container.getData("behavior") || {}, target.animation);
+    this.tweens.add({
+      targets: bubble,
+      y: bubble.y - 18,
+      alpha: 0,
+      delay: 1600,
+      duration: 1300,
+      ease: "Cubic.easeOut",
+      onComplete: () => bubble.destroy(),
     });
   }
 
