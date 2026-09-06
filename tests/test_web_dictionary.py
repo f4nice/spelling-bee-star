@@ -52,6 +52,7 @@ class WebDictionaryTest(unittest.TestCase):
             entry = DictionaryEntry(phonetic="/test/", part_of_speech="noun", english_definition="Inflammation of spinal bones", chinese_definition="脊柱炎", english_example="The report mentioned spondylitis.", source="https://dictionary.cambridge.org/example")
             with patch.object(e, "get_settings", return_value=Settings(merriam_webster_api_key="")), \
                  patch.object(e.FreeDictionaryClient, "lookup", new=AsyncMock(side_effect=RuntimeError("522"))), \
+                 patch.object(e.YoudaoDictionaryClient, "lookup", new=AsyncMock(side_effect=RuntimeError("not found"))), \
                  patch.object(e.CambridgeDictionaryClient, "lookup", new=AsyncMock(return_value=entry)), \
                  patch.object(e.FreeDictionaryAudioClient, "lookup_audio", new=AsyncMock(side_effect=RuntimeError("522"))) as audio, \
                  patch.object(e, "store_first_available_audio", new=AsyncMock(return_value="/media/audio/test.mp3")):

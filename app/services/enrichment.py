@@ -10,6 +10,7 @@ from app.services.image_storage import is_local_media_url, store_word_image
 from app.services.images import ImageClient
 from app.services.translation import TranslationClient
 from app.services.web_dictionary import CambridgeDictionaryClient
+from app.services.youdao_dictionary import YoudaoDictionaryClient
 
 
 UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads"
@@ -80,7 +81,10 @@ async def enrich_word(
             else:
                 entry = await lookup_free_dictionary()
         except Exception:
-            entry = await CambridgeDictionaryClient().lookup(word.word)
+            try:
+                entry = await YoudaoDictionaryClient().lookup(word.word)
+            except Exception:
+                entry = await CambridgeDictionaryClient().lookup(word.word)
 
         word.phonetic = word.phonetic or entry.phonetic
         word.part_of_speech = word.part_of_speech or entry.part_of_speech
