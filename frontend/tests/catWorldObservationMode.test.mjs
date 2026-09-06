@@ -63,6 +63,49 @@ test("medium screens keep the bag compact beside its inventory", async () => {
   assert.match(page, /class="cat-world-owned-overview"/);
   assert.match(page, /class="cat-world-owned-tools"/);
   assert.match(styles, /@media \(min-width: 761px\) and \(max-width: 1180px\)/);
-  assert.match(styles, /grid-template-areas:\s*"overview tools"\s*"profiles profiles"/);
+  assert.match(styles, /grid-template-areas:\s*"drawer drawer"\s*"overview tools"\s*"profiles profiles"/);
   assert.match(styles, /\.cat-world-owned-list\s*\{\s*max-height:\s*360px;/);
+});
+
+test("the workspace separates play, shopping, and cat management into tabs", async () => {
+  const [page, game, styles] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(gameUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
+
+  assert.match(page, /const activeWorldView = ref\("room"\);/);
+  assert.match(page, /class="cat-world-view-switcher" role="tablist"/);
+  assert.match(page, /v-show="activeWorldView === 'room'"/);
+  assert.match(page, /v-show="activeWorldView === 'shop'"/);
+  assert.match(page, /v-show="activeWorldView === 'cats'"/);
+  assert.match(page, /@click="openShopCategory\('cat'\)"/);
+  assert.match(page, /if \(!setWorldView\("room"\)\) return;/);
+  assert.match(page, /catWorldGame\.value\?\.refreshViewport\?\.\(\)/);
+  assert.match(game, /refreshViewport\(\) \{/);
+  assert.match(styles, /\.cat-world-view-switcher > button\.active,[\s\S]*?color:\s*#fff;[\s\S]*?background:\s*#1d7f5b;/);
+});
+
+test("the weekly learning trail opens on demand", async () => {
+  const page = await readFile(pageUrl, "utf8");
+
+  assert.match(page, /const learningWeekExpanded = ref\(false\);/);
+  assert.match(page, /class="cat-world-learning-week-toggle"/);
+  assert.match(page, /:aria-expanded="learningWeekExpanded"/);
+  assert.match(page, /v-if="learningWeekExpanded" id="cat-world-learning-week-days"/);
+  assert.match(page, /learningWeekExpanded \? "收起记录" : "查看七天"/);
+});
+
+test("medium and small screens collapse the bag into an on-demand drawer", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
+
+  assert.match(page, /const bagExpanded = ref\(false\);/);
+  assert.match(page, /class="cat-world-owned-drawer-toggle"/);
+  assert.match(page, /aria-controls="cat-world-owned-drawer-body"/);
+  assert.match(page, /'is-drawer-open': bagExpanded/);
+  assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*?\.cat-world-owned-panel:not\(\.is-drawer-open\) \.cat-world-owned-drawer-body \{\s*display:\s*none;/);
+  assert.match(styles, /\.cat-world-owned-panel\.is-drawer-open \.cat-world-owned-drawer-toggle[\s\S]*?color:\s*#fff;[\s\S]*?background:\s*#1d7f5b;/);
 });

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Flame as FlameIcon, Hammer as HammerIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, Shovel as ShovelIcon, X as XIcon } from "lucide-vue-next";
+import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Flame as FlameIcon, Hammer as HammerIcon, House as HouseIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, ShoppingBag as ShoppingBagIcon, Shovel as ShovelIcon, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -48,6 +48,8 @@ const props = defineProps({
 
 const payload = ref(props.data || {});
 const activeCategory = ref("food");
+const activeWorldView = ref("room");
+const bagExpanded = ref(false);
 const busyItemId = ref("");
 const notice = ref("");
 const catReaction = ref("");
@@ -90,6 +92,7 @@ const petBusyCatId = ref("");
 const roomCanPan = ref(false);
 const roomPanActive = ref(false);
 const catOsExpanded = ref(false);
+const learningWeekExpanded = ref(false);
 const selectedLearningWeekDate = ref("");
 const busySceneId = ref("");
 const busyLocationItemId = ref("");
@@ -475,6 +478,9 @@ const activeToolItems = computed(() => {
       favoriteLabel: itemFavoriteLabel(item),
     }));
 });
+const ownedToolTotal = computed(() =>
+  toolCategories.reduce((total, category) => total + ownedToolCount(category.key), 0),
+);
 const focusedCatThought = computed(() => {
   if (!focusedCat.value?.id) return "活动室里暂时没有猫咪，可以去商店重新领养一只。";
   const agent = focusedAgentState.value || {};
@@ -1200,12 +1206,39 @@ function isDamagedItem(item) {
   return Boolean(damageInfo(item));
 }
 
+function setWorldView(view, options = {}) {
+  const nextView = ["room", "shop", "cats"].includes(view) ? view : "room";
+  if (nextView !== "room" && (roomEditMode.value || layoutDirty.value)) {
+    notice.value = "请先保存并退出物品编辑，再离开活动室。";
+    return false;
+  }
+  if (nextView !== "room") {
+    repairMode.value = false;
+    scoopMode.value = false;
+    toolCursorVisible.value = false;
+    catWorldGame.value?.cancelCatCarry?.();
+  }
+  activeWorldView.value = nextView;
+  nextTick(() => {
+    if (nextView === "room") catWorldGame.value?.refreshViewport?.();
+    if (options.scroll) {
+      document.getElementById(`cat-world-view-${nextView}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  });
+  return true;
+}
+
+function openShopCategory(category) {
+  activeCategory.value = category || "food";
+  setWorldView("shop", { scroll: true });
+}
+
 function setRepairMode(enabled) {
   const nextEnabled = Boolean(enabled);
   if (nextEnabled && itemCount(REPAIR_HAMMER_ITEM_ID) <= 0) {
     repairMode.value = false;
     toolCursorVisible.value = false;
-    activeCategory.value = "consumable";
+    openShopCategory("consumable");
     notice.value = "背包里没有维修锤，请先在消耗品商店购买。";
     return;
   }
@@ -1939,7 +1972,7 @@ async function repairItem(item) {
   const damaged = damageInfo(item);
   if (!damaged) return;
   if (itemCount(REPAIR_HAMMER_ITEM_ID) <= 0) {
-    activeCategory.value = "consumable";
+    openShopCategory("consumable");
     notice.value = "维修需要 1 把一次性维修锤，请先在下方消耗品商店购买。";
     return;
   }
@@ -2064,12 +2097,14 @@ async function submitCatRename() {
   }
 }
 
-function handleCatCardClick(cat) {
+async function handleCatCardClick(cat) {
   if (renameMode.value) {
     openRenameModal(cat);
     return;
   }
-  selectCat(cat, { carry: true });
+  if (!setWorldView("room")) return;
+  await nextTick();
+  await selectCat(cat, { carry: true });
 }
 
 async function selectCat(catOrId, options = {}) {
@@ -2223,7 +2258,7 @@ async function selectCat(catOrId, options = {}) {
       </ol>
       <section
         v-if="learningWeekTrail.days.length"
-        class="cat-world-learning-week"
+        :class="['cat-world-learning-week', { 'is-expanded': learningWeekExpanded }]"
         aria-labelledby="cat-world-learning-week-title"
       >
         <header class="cat-world-learning-week-summary">
@@ -2232,12 +2267,22 @@ async function selectCat(catOrId, options = {}) {
             <strong id="cat-world-learning-week-title">最近七天陪学足迹</strong>
           </div>
           <p>{{ learningWeekTrail.summary }}</p>
-          <div class="cat-world-learning-week-memory" aria-live="polite">
+          <button
+            class="cat-world-learning-week-toggle"
+            type="button"
+            :aria-expanded="learningWeekExpanded"
+            aria-controls="cat-world-learning-week-days"
+            @click="learningWeekExpanded = !learningWeekExpanded"
+          >
+            <span>{{ learningWeekExpanded ? "收起记录" : "查看七天" }}</span>
+            <ChevronDown :size="16" :stroke-width="3" aria-hidden="true" />
+          </button>
+          <div v-if="learningWeekExpanded" class="cat-world-learning-week-memory" aria-live="polite">
             <p><span>{{ learningWeekMemory.dateLabel }}</span> · {{ learningWeekMemory.detail }}</p>
             <p>{{ learningWeekMemory.catName }}：{{ learningWeekMemory.catMessage }}</p>
           </div>
         </header>
-        <ol class="cat-world-learning-week-days">
+        <ol v-if="learningWeekExpanded" id="cat-world-learning-week-days" class="cat-world-learning-week-days">
           <li
             v-for="day in learningWeekTrail.days"
             :key="day.date"
@@ -2304,10 +2349,55 @@ async function selectCat(catOrId, options = {}) {
       <div v-if="lostCatRows.length" class="cat-world-lost-alert" role="status">
       <strong>{{ lostCatRows.map((cat) => cat.catLabel).join("、") }}已经离开活动室</strong>
       <span>{{ lostCatRows[0].escapeLabel }}；需要在猫咪商店重新领养。</span>
-      <button type="button" @click="activeCategory = 'cat'">查看猫咪商店</button>
+      <button type="button" @click="openShopCategory('cat')">查看猫咪商店</button>
       </div>
 
-    <section class="cat-world-layout">
+      <nav class="cat-world-view-switcher" role="tablist" aria-label="猫咪世界功能">
+        <button
+          id="cat-world-view-room-tab"
+          type="button"
+          role="tab"
+          :class="{ active: activeWorldView === 'room' }"
+          :aria-selected="activeWorldView === 'room'"
+          aria-controls="cat-world-view-room"
+          @click="setWorldView('room')"
+        >
+          <HouseIcon :size="20" :stroke-width="2.8" aria-hidden="true" />
+          <span><strong>活动室</strong><small>{{ currentScene.label }}</small></span>
+        </button>
+        <button
+          id="cat-world-view-shop-tab"
+          type="button"
+          role="tab"
+          :class="{ active: activeWorldView === 'shop' }"
+          :aria-selected="activeWorldView === 'shop'"
+          aria-controls="cat-world-view-shop"
+          @click="setWorldView('shop')"
+        >
+          <ShoppingBagIcon :size="20" :stroke-width="2.8" aria-hidden="true" />
+          <span><strong>猫咪商店</strong><small>{{ categories.length }} 个分类</small></span>
+        </button>
+        <button
+          id="cat-world-view-cats-tab"
+          type="button"
+          role="tab"
+          :class="{ active: activeWorldView === 'cats' }"
+          :aria-selected="activeWorldView === 'cats'"
+          aria-controls="cat-world-view-cats"
+          @click="setWorldView('cats')"
+        >
+          <CatIcon :size="20" :stroke-width="2.8" aria-hidden="true" />
+          <span><strong>我的猫咪</strong><small>{{ catProfiles.length }} 只伙伴</small></span>
+        </button>
+      </nav>
+
+    <section
+      v-show="activeWorldView === 'room'"
+      id="cat-world-view-room"
+      class="cat-world-layout"
+      role="tabpanel"
+      aria-labelledby="cat-world-view-room-tab"
+    >
       <section class="cat-world-room-panel panel">
         <div v-if="scenes.length > 1" class="cat-world-scene-tabs" role="tablist" aria-label="猫咪世界场景">
           <button
@@ -2489,7 +2579,22 @@ async function selectCat(catOrId, options = {}) {
         </div>
       </section>
 
-      <aside class="cat-world-owned-panel panel">
+      <aside :class="['cat-world-owned-panel', 'panel', { 'is-drawer-open': bagExpanded }]">
+        <button
+          class="cat-world-owned-drawer-toggle"
+          type="button"
+          :aria-expanded="bagExpanded"
+          aria-controls="cat-world-owned-drawer-body"
+          @click="bagExpanded = !bagExpanded"
+        >
+          <ShoppingBagIcon :size="20" :stroke-width="2.8" aria-hidden="true" />
+          <span>
+            <strong>背包与猫咪档案</strong>
+            <small>{{ ownedToolTotal }} 项物品 · {{ catProfiles.length }} 只猫咪</small>
+          </span>
+          <ChevronDown :size="18" :stroke-width="3" aria-hidden="true" />
+        </button>
+        <div id="cat-world-owned-drawer-body" class="cat-world-owned-drawer-body">
         <div class="cat-world-owned-overview">
         <div class="cat-world-owned-head">
           <div>
@@ -2648,6 +2753,7 @@ async function selectCat(catOrId, options = {}) {
             </button>
           </div>
         </section>
+        </div>
       </aside>
     </section>
 
@@ -2770,7 +2876,13 @@ async function selectCat(catOrId, options = {}) {
       </section>
     </div>
 
-    <section class="cat-world-market panel">
+    <section
+      v-show="activeWorldView === 'shop'"
+      id="cat-world-view-shop"
+      class="cat-world-market panel"
+      role="tabpanel"
+      aria-labelledby="cat-world-view-shop-tab"
+    >
       <div class="cat-world-market-head">
         <div>
           <p class="section-kicker">Shop</p>
@@ -3020,7 +3132,13 @@ async function selectCat(catOrId, options = {}) {
     </section>
     </div>
 
-    <section class="cat-world-cats panel">
+    <section
+      v-show="activeWorldView === 'cats'"
+      id="cat-world-view-cats"
+      class="cat-world-cats panel"
+      role="tabpanel"
+      aria-labelledby="cat-world-view-cats-tab"
+    >
       <div class="cat-world-market-head">
         <div>
           <p class="section-kicker">Cats</p>

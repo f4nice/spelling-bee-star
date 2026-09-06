@@ -4212,6 +4212,14 @@ export class CatWorldGame {
     return this.game.scene.getScene("CatWorldScene")?.cancelCarriedCat() || null;
   }
 
+  refreshViewport() {
+    if (!this.ready) return false;
+    this.game.scale.resize(VIEW_WIDTH, VIEW_HEIGHT);
+    this.game.scale.refresh();
+    this.game.scene.getScene("CatWorldScene")?.syncCamera();
+    return true;
+  }
+
   canPan() {
     return GAME_WIDTH > VIEW_WIDTH + 4;
   }

@@ -15876,6 +15876,14 @@ select {
   box-shadow: 6px 6px 0 #2c2f3a;
 }
 
+.cat-world-owned-drawer-toggle {
+  display: none;
+}
+
+.cat-world-owned-drawer-body {
+  display: contents;
+}
+
 .cat-world-owned-overview,
 .cat-world-owned-tools {
   display: grid;
@@ -16120,10 +16128,14 @@ select {
 .cat-world-learning-week {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(250px, 0.84fr) minmax(0, 2.16fr);
+  grid-template-columns: 1fr;
   min-width: 0;
   border-top: 3px solid #2c2f3a;
   background: #fffdf1;
+}
+
+.cat-world-learning-week.is-expanded {
+  grid-template-columns: minmax(250px, 0.84fr) minmax(0, 2.16fr);
 }
 
 .cat-world-learning-week-summary {
@@ -16132,9 +16144,12 @@ select {
   align-content: center;
   gap: 3px 10px;
   min-width: 0;
-  border-right: 3px solid #2c2f3a;
   padding: 9px 12px;
   background: #eefaff;
+}
+
+.cat-world-learning-week.is-expanded .cat-world-learning-week-summary {
+  border-right: 3px solid #2c2f3a;
 }
 
 .cat-world-learning-week-summary div {
@@ -16167,9 +16182,45 @@ select {
 }
 
 .cat-world-learning-week-summary > p {
+  grid-column: 1 / -1;
   align-self: end;
   color: #526178;
-  white-space: nowrap;
+}
+
+.cat-world-learning-week-toggle {
+  display: inline-flex;
+  grid-column: 2;
+  grid-row: 1;
+  align-items: center;
+  gap: 4px;
+  justify-self: end;
+  align-self: center;
+  min-height: 28px;
+  border: 2px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 4px 7px;
+  color: #263047;
+  background: #d9f6ff;
+  box-shadow: 2px 2px 0 #2c2f3a;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.cat-world-learning-week-toggle:hover,
+.cat-world-learning-week-toggle:focus-visible,
+.cat-world-learning-week.is-expanded .cat-world-learning-week-toggle {
+  color: #fff;
+  background: #1d7f5b;
+}
+
+.cat-world-learning-week-toggle svg {
+  transition: transform 140ms ease;
+}
+
+.cat-world-learning-week.is-expanded .cat-world-learning-week-toggle svg {
+  transform: rotate(180deg);
 }
 
 .cat-world-learning-week-memory {
@@ -16325,6 +16376,70 @@ select {
   gap: 14px;
 }
 
+.cat-world-view-switcher {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  border: 4px solid #2c2f3a;
+  border-radius: 5px;
+  padding: 7px;
+  background: #d9f6ff;
+  box-shadow: 5px 5px 0 #2c2f3a;
+}
+
+.cat-world-view-switcher > button {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 50px;
+  border: 3px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 6px 10px;
+  color: #263047;
+  background: #fff8df;
+  box-shadow: 3px 3px 0 #2c2f3a;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cat-world-view-switcher > button > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+
+.cat-world-view-switcher > button strong,
+.cat-world-view-switcher > button small {
+  color: inherit;
+  line-height: 1.1;
+}
+
+.cat-world-view-switcher > button strong {
+  font-size: 13px;
+}
+
+.cat-world-view-switcher > button small {
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.cat-world-view-switcher > button.active,
+.cat-world-view-switcher > button:hover,
+.cat-world-view-switcher > button:focus-visible {
+  color: #fff;
+  background: #1d7f5b;
+}
+
+#cat-world-view-room,
+#cat-world-view-shop,
+#cat-world-view-cats {
+  scroll-margin-top: 84px;
+}
+
 .cat-world-play-area {
   position: relative;
 }
@@ -16477,11 +16592,13 @@ select {
     border-left: 2px solid #d7cfb5;
   }
 
-  .cat-world-learning-week {
+  .cat-world-learning-week,
+  .cat-world-learning-week.is-expanded {
     grid-template-columns: 1fr;
   }
 
-  .cat-world-learning-week-summary {
+  .cat-world-learning-week-summary,
+  .cat-world-learning-week.is-expanded .cat-world-learning-week-summary {
     border-right: 0;
     border-bottom: 2px solid #d7cfb5;
   }
@@ -16491,6 +16608,21 @@ select {
     grid-auto-flow: column;
     grid-auto-columns: 70px;
     overflow-x: auto;
+  }
+
+  .cat-world-view-switcher {
+    gap: 4px;
+    padding: 5px;
+  }
+
+  .cat-world-view-switcher > button {
+    gap: 4px;
+    min-height: 46px;
+    padding: 5px;
+  }
+
+  .cat-world-view-switcher > button small {
+    display: none;
   }
 
   .cat-world-observation-actions {
@@ -16947,6 +17079,69 @@ select {
   .admin-reset-panel {
     grid-template-columns: 1fr;
   }
+
+  .cat-world-owned-drawer-toggle {
+    appearance: none;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    min-height: 52px;
+    border: 3px solid #2c2f3a;
+    border-radius: 3px;
+    padding: 7px 10px;
+    color: #263047;
+    background: #fff8df;
+    box-shadow: 3px 3px 0 #2c2f3a;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .cat-world-owned-drawer-toggle > span {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .cat-world-owned-drawer-toggle strong,
+  .cat-world-owned-drawer-toggle small {
+    color: inherit;
+    line-height: 1.2;
+  }
+
+  .cat-world-owned-drawer-toggle strong {
+    font-size: 13px;
+  }
+
+  .cat-world-owned-drawer-toggle small {
+    font-size: 10px;
+    font-weight: 900;
+  }
+
+  .cat-world-owned-drawer-toggle:hover,
+  .cat-world-owned-drawer-toggle:focus-visible,
+  .cat-world-owned-panel.is-drawer-open .cat-world-owned-drawer-toggle {
+    color: #fff;
+    background: #1d7f5b;
+  }
+
+  .cat-world-owned-drawer-toggle > svg:last-child {
+    transition: transform 140ms ease;
+  }
+
+  .cat-world-owned-panel.is-drawer-open .cat-world-owned-drawer-toggle > svg:last-child {
+    transform: rotate(180deg);
+  }
+
+  .cat-world-owned-panel:not(.is-drawer-open) {
+    height: auto;
+  }
+
+  .cat-world-owned-panel:not(.is-drawer-open) .cat-world-owned-drawer-body {
+    display: none;
+  }
 }
 
 @media (min-width: 761px) and (max-width: 1180px) {
@@ -16955,10 +17150,20 @@ select {
     display: grid;
     grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
     grid-template-areas:
+      "drawer drawer"
       "overview tools"
       "profiles profiles";
     align-items: start;
     height: auto;
+  }
+
+  .cat-world-owned-panel:not(.is-drawer-open) {
+    grid-template-columns: 1fr;
+    grid-template-areas: "drawer";
+  }
+
+  .cat-world-owned-drawer-toggle {
+    grid-area: drawer;
   }
 
   .cat-world-owned-overview {
