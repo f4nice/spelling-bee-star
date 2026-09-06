@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-015"
-DEFAULT_PAGE_VERSION = "v20260906.15"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-016"
+DEFAULT_PAGE_VERSION = "v20260906.16"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -5355,6 +5355,8 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
     if not profile:
         raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
     cat_id = profile.profile_id
+    cat = cat_world_cat_profile_payload(profile)
+    breed_id = profile.breed_id
     inventory = parse_cat_world_inventory(state.inventory)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
