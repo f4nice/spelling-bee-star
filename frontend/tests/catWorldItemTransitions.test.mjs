@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   catWorldItemArrivalFollower,
   catWorldItemArrivalPlan,
+  catWorldItemDeparturePlan,
+  catWorldNewHiddenItemDepartures,
   catWorldNewVisibleItemArrivals,
 } from "../src/app/catWorldItemTransitions.js";
 
@@ -43,6 +45,43 @@ test("arrival plans stay deterministic and preserve restrained pixel motion", ()
   assert.ok(first.duration >= 520 && first.duration <= 655);
   assert.ok(first.lift >= 24 && first.lift <= 36);
   assert.ok(first.startScale >= 0.82 && first.startScale <= 0.9);
+  assert.ok(Number.isInteger(first.dustColor));
+});
+
+test("only items stored from the current interactive room receive departure effects", () => {
+  assert.deepEqual(
+    catWorldNewHiddenItemDepartures([desk, ball], [desk], {
+      sameScene: true,
+      interactionLocked: false,
+    }),
+    [ball],
+  );
+  assert.deepEqual(
+    catWorldNewHiddenItemDepartures([desk], [], {
+      sameScene: false,
+      interactionLocked: false,
+    }),
+    [],
+  );
+  assert.deepEqual(
+    catWorldNewHiddenItemDepartures([desk], [], {
+      sameScene: true,
+      interactionLocked: true,
+    }),
+    [],
+  );
+});
+
+test("departure plans are deterministic and visibly gather an item upward", () => {
+  const first = catWorldItemDeparturePlan("study-desk", 2);
+  const second = catWorldItemDeparturePlan("study-desk", 2);
+
+  assert.deepEqual(first, second);
+  assert.equal(first.delay, 140);
+  assert.ok(first.duration >= 500 && first.duration <= 635);
+  assert.ok(first.lift >= 46 && first.lift <= 64);
+  assert.ok(first.drift >= -8 && first.drift <= 8);
+  assert.ok(first.targetScale >= 0.34 && first.targetScale <= 0.43);
   assert.ok(Number.isInteger(first.dustColor));
 });
 

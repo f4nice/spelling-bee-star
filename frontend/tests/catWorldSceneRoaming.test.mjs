@@ -147,6 +147,20 @@ test("newly placed furniture visibly settles at its remembered coordinate", asyn
   assert.match(game, /container\.setPosition\(target\.x, target\.y\)/);
 });
 
+test("stored furniture visibly leaves from its saved coordinate and releases cats", async () => {
+  const game = await readFile(new URL("../src/app/catWorldGame.js", import.meta.url), "utf8");
+
+  assert.match(game, /catWorldNewHiddenItemDepartures/);
+  assert.match(game, /captureItemDepartures\(itemDepartures, nextSnapshot\.scene\.id\)/);
+  assert.match(game, /this\.releaseCatsForItem\(item\.id\)/);
+  assert.match(game, /this\.owner\.itemInteractionStates\.delete\(item\.id\)/);
+  assert.match(game, /playItemDepartures\(departingItems\)/);
+  assert.match(game, /setData\("kind", "departing-item"\)/);
+  assert.match(game, /ease: "Cubic\.easeIn"/);
+  assert.match(game, /收进收纳箱/);
+  assert.doesNotMatch(game, /playItemDepartures[\s\S]{0,2600}this\.owner\.layout\[/);
+});
+
 test("a healthy cat with an individual preference notices newly placed furniture", async () => {
   const game = await readFile(new URL("../src/app/catWorldGame.js", import.meta.url), "utf8");
 

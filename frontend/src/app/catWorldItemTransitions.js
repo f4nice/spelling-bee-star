@@ -29,6 +29,12 @@ export function catWorldNewVisibleItemArrivals(previousItems = [], nextItems = [
   return normalizeVisualItems(nextItems).filter((item) => !previousIds.has(item.id));
 }
 
+export function catWorldNewHiddenItemDepartures(previousItems = [], nextItems = [], options = {}) {
+  if (!options.sameScene || options.interactionLocked) return [];
+  const nextIds = new Set(normalizeVisualItems(nextItems).map((item) => item.id));
+  return normalizeVisualItems(previousItems).filter((item) => !nextIds.has(item.id));
+}
+
 export function catWorldItemArrivalPlan(itemId = "", index = 0) {
   const hash = stableHash(itemId);
   return {
@@ -36,6 +42,18 @@ export function catWorldItemArrivalPlan(itemId = "", index = 0) {
     duration: 520 + (hash % 4) * 45,
     lift: 24 + (hash % 13),
     startScale: 0.82 + (hash % 5) * 0.02,
+    dustColor: [0xffef82, 0x7fffd4, 0xff8cad, 0x87d9ff][hash % 4],
+  };
+}
+
+export function catWorldItemDeparturePlan(itemId = "", index = 0) {
+  const hash = stableHash(itemId);
+  return {
+    delay: Math.min(Math.max(Number(index) || 0, 0), 6) * 70,
+    duration: 500 + (hash % 4) * 45,
+    lift: 46 + (hash % 19),
+    drift: (hash % 17) - 8,
+    targetScale: 0.34 + (hash % 4) * 0.03,
     dustColor: [0xffef82, 0x7fffd4, 0xff8cad, 0x87d9ff][hash % 4],
   };
 }

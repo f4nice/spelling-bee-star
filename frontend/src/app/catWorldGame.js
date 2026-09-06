@@ -44,6 +44,8 @@ import {
 import {
   catWorldItemArrivalFollower,
   catWorldItemArrivalPlan,
+  catWorldItemDeparturePlan,
+  catWorldNewHiddenItemDepartures,
   catWorldNewVisibleItemArrivals,
 } from "./catWorldItemTransitions.js";
 
@@ -513,6 +515,7 @@ class CatWorldScene extends Phaser.Scene {
     this.toyContainers = new Map();
     this.catContainers = new Map();
     this.catBubbles = new Map();
+    this.departingItemContainers = new Map();
     this.carryTargetIndicators = [];
     this.cameraDrag = {
       active: false,
@@ -744,6 +747,7 @@ class CatWorldScene extends Phaser.Scene {
     this.children.removeAll(true);
     this.decorContainers.clear();
     this.toyContainers.clear();
+    this.departingItemContainers.clear();
     this.catBubbles.clear();
     this.carryTargetIndicators = [];
     const snapshot = this.owner.snapshot;
@@ -776,6 +780,99 @@ class CatWorldScene extends Phaser.Scene {
       const spec = arrival.kind === "toy" ? ROOM_TOY_TARGETS[arrival.id] : DECOR_SPECS[arrival.id];
       if (!container?.active || !spec) return;
       this.playItemArrival(container, spec, arrival, index);
+    });
+    return true;
+  }
+
+  captureItemDepartures(items = [], nextSceneId = "") {
+    if (
+      !items.length
+      || this.isEditMode()
+      || this.isToolMode()
+      || nextSceneId !== this.owner.snapshot.scene.id
+    ) return [];
+    return items
+      .map((item) => {
+        this.releaseCatsForItem(item.id);
+        const interactionState = this.owner.itemInteractionStates.get(item.id);
+        this.owner.itemInteractionStates.delete(item.id);
+        const container = item.kind === "toy"
+          ? this.toyContainers.get(item.id)
+          : this.decorContainers.get(item.id);
+        if (!container?.active) return null;
+        return {
+          ...item,
+          x: container.x,
+          y: container.y,
+          depth: container.depth,
+          damaged: Boolean(container.getData("damaged")),
+          tone: this.owner.snapshot.roomStyles?.[item.id] || "default",
+          active: Boolean(interactionState?.active),
+        };
+      })
+      .filter(Boolean);
+  }
+
+  playItemDepartures(departures = []) {
+    if (!departures.length || this.isEditMode() || this.isToolMode()) return false;
+    departures.forEach((departure, index) => {
+      const spec = departure.kind === "toy"
+        ? ROOM_TOY_TARGETS[departure.id]
+        : DECOR_SPECS[departure.id];
+      if (!spec) return;
+      const plan = catWorldItemDeparturePlan(departure.id, index);
+      const ghost = this.add.container(departure.x, departure.y);
+      const ghostKey = `${departure.id}:${index}`;
+      ghost.setSize(spec.width, spec.height);
+      ghost.setData("kind", "departing-item");
+      ghost.setData("id", departure.id);
+      ghost.setData("itemDepartureTarget", {
+        x: departure.x + plan.drift,
+        y: departure.y - plan.lift,
+      });
+      ghost.setDepth(Math.max(Number(departure.depth || 0), CAT_INTERACTION_DEPTH + 120 + index));
+      if (departure.kind === "toy") {
+        this.drawToyShape(ghost, departure.id, spec, departure.damaged, false);
+      } else {
+        this.drawDecorShape(ghost, departure.id, spec, palette(departure.tone));
+        if (departure.id === "reading-lamp" && departure.active && !departure.damaged) {
+          this.applyLampVisual(ghost, true);
+        }
+        if (departure.damaged) this.drawDamagedOverlay(ghost, spec.width, spec.height);
+      }
+      if (departure.damaged) ghost.setAlpha(0.74);
+      this.departingItemContainers.set(ghostKey, ghost);
+
+      this.time.delayedCall(plan.delay + 60, () => {
+        if (!ghost.active) return;
+        this.spawnItemDepartureDust(
+          departure.x + spec.width / 2,
+          departure.y + spec.height / 2,
+          ghost.depth + 2,
+          plan.dustColor,
+        );
+        this.spawnItemDepartureCue(
+          departure.x + spec.width / 2,
+          Math.max(departure.y - 12, 22),
+          ghost.depth + 3,
+          departure.label,
+        );
+      });
+      this.tweens.add({
+        targets: ghost,
+        x: departure.x + plan.drift,
+        y: departure.y - plan.lift,
+        scaleX: plan.targetScale,
+        scaleY: plan.targetScale,
+        alpha: 0,
+        delay: plan.delay,
+        duration: plan.duration,
+        ease: "Cubic.easeIn",
+        onComplete: () => {
+          this.departingItemContainers.delete(ghostKey);
+          ghost.destroy();
+        },
+      });
     });
     return true;
   }
@@ -913,6 +1010,51 @@ class CatWorldScene extends Phaser.Scene {
       duration: 220,
       yoyo: true,
       hold: 520,
+      ease: "Quad.easeOut",
+      onComplete: () => cue.destroy(),
+    });
+  }
+
+  spawnItemDepartureDust(x, y, depth, color) {
+    const offsets = [-26, -15, -6, 6, 15, 26];
+    offsets.forEach((offset, index) => {
+      const dust = this.add
+        .rectangle(x + offset, y + (index % 2) * 7, index % 2 ? 5 : 7, index % 2 ? 7 : 5, color)
+        .setDepth(depth + index);
+      this.tweens.add({
+        targets: dust,
+        x: x + offset * 0.24,
+        y: y - 28 - (index % 3) * 6,
+        alpha: 0,
+        scaleX: 0.4,
+        scaleY: 0.4,
+        duration: 420 + index * 25,
+        ease: "Quad.easeIn",
+        onComplete: () => dust.destroy(),
+      });
+    });
+  }
+
+  spawnItemDepartureCue(x, y, depth, label = "物品") {
+    const cue = this.add
+      .text(x, y, `${label} · 收进收纳箱`, {
+        color: "#176f58",
+        backgroundColor: "#fff8df",
+        fontFamily: "Consolas, monospace",
+        fontSize: "11px",
+        fontStyle: "bold",
+        padding: { x: 6, y: 3 },
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(depth)
+      .setAlpha(0);
+    this.tweens.add({
+      targets: cue,
+      y: y - 20,
+      alpha: 1,
+      duration: 190,
+      yoyo: true,
+      hold: 480,
       ease: "Quad.easeOut",
       onComplete: () => cue.destroy(),
     });
@@ -5625,15 +5767,30 @@ export class CatWorldGame {
   update(snapshot) {
     const nextSnapshot = normalizeSnapshot(snapshot);
     const sameScene = nextSnapshot.scene.id === this.snapshot.scene.id;
+    const interactionLocked = Boolean(
+      this.snapshot.editMode
+      || this.snapshot.toolMode
+      || nextSnapshot.editMode
+      || nextSnapshot.toolMode
+    );
+    const previousVisibleItems = visibleRoomLayoutItems(this.snapshot);
+    const nextVisibleItems = visibleRoomLayoutItems(nextSnapshot);
     const itemArrivals = this.ready
       ? catWorldNewVisibleItemArrivals(
-        visibleRoomLayoutItems(this.snapshot),
-        visibleRoomLayoutItems(nextSnapshot),
+        previousVisibleItems,
+        nextVisibleItems,
         {
           sameScene,
-          interactionLocked: nextSnapshot.editMode || Boolean(nextSnapshot.toolMode),
+          interactionLocked,
         },
       ).map((item) => ({ ...item, sceneId: nextSnapshot.scene.id }))
+      : [];
+    const itemDepartures = this.ready
+      ? catWorldNewHiddenItemDepartures(
+        previousVisibleItems,
+        nextVisibleItems,
+        { sameScene, interactionLocked },
+      )
       : [];
     const freshSceneMoves = nextSnapshot.sceneMoves.filter((move) => {
       const token = catWorldSceneMoveToken(move);
@@ -5650,6 +5807,9 @@ export class CatWorldGame {
       this.pendingItemArrivals = this.pendingItemArrivals.slice(-16);
     }
     const gameScene = this.game.scene.getScene("CatWorldScene");
+    const departingItems = this.ready
+      ? gameScene?.captureItemDepartures(itemDepartures, nextSnapshot.scene.id) || []
+      : [];
     const departures = this.ready
       ? gameScene?.captureSceneDepartures(freshSceneMoves, nextSnapshot.scene.id) || []
       : [];
@@ -5680,6 +5840,7 @@ export class CatWorldGame {
     if (this.ready) {
       this.game.scale.resize(VIEW_WIDTH, VIEW_HEIGHT);
       gameScene?.renderSnapshot();
+      gameScene?.playItemDepartures(departingItems);
       gameScene?.playSceneDepartures(departures);
       gameScene?.syncCamera();
       this.game.scale.refresh();
