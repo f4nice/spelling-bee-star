@@ -15,18 +15,24 @@ test("autonomous room changes are announced without interrupting room controls",
   assert.match(page, /class="cat-world-notice" aria-live="polite"/);
 });
 
-test("scene map controls the whole room workspace and scrolls on narrow screens", async () => {
+test("world navigation keeps view selection and the scene map on one desktop row", async () => {
   const [page, styles] = await Promise.all([
     readFile(pageUrl, "utf8"),
     readFile(stylesUrl, "utf8"),
   ]);
+  const worldNavigationIndex = page.indexOf("'cat-world-world-navigation'");
+  const viewSwitcherIndex = page.indexOf('class="cat-world-view-switcher"');
   const sceneDockIndex = page.indexOf('class="cat-world-scene-dock"');
   const roomPanelIndex = page.indexOf('class="cat-world-room-panel panel"');
 
-  assert.ok(sceneDockIndex > 0);
+  assert.ok(worldNavigationIndex > 0);
+  assert.ok(viewSwitcherIndex > worldNavigationIndex);
+  assert.ok(sceneDockIndex > viewSwitcherIndex);
   assert.ok(roomPanelIndex > sceneDockIndex);
-  assert.match(styles, /\.cat-world-scene-dock \{[\s\S]*?grid-column: 1 \/ -1;/);
+  assert.match(styles, /\.cat-world-world-navigation\.has-scene-dock \{[\s\S]*?grid-template-columns:/);
+  assert.match(styles, /\.cat-world-world-navigation \.cat-world-scene-dock \{[\s\S]*?grid-column: auto;/);
   assert.match(styles, /\.cat-world-scene-dock \.cat-world-scene-tabs \{[\s\S]*?overflow-x: auto;/);
+  assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*?\.cat-world-world-navigation\.has-scene-dock,[\s\S]*?grid-template-columns: 1fr;/);
   assert.match(
     styles,
     /\.cat-world-scene-dock \.cat-world-scene-tabs button:not\(:disabled\):hover,[\s\S]*?color: #fff;/,

@@ -2502,44 +2502,91 @@ async function selectCat(catOrId, options = {}) {
       <button type="button" @click="openShopCategory('cat')">查看猫咪商店</button>
       </div>
 
-      <nav class="cat-world-view-switcher" role="tablist" aria-label="猫咪世界功能">
-        <button
-          id="cat-world-view-room-tab"
-          type="button"
-          role="tab"
-          :class="{ active: activeWorldView === 'room' }"
-          :aria-selected="activeWorldView === 'room'"
-          aria-controls="cat-world-view-room"
-          @click="setWorldView('room')"
+      <div
+        :class="[
+          'cat-world-world-navigation',
+          { 'has-scene-dock': activeWorldView === 'room' && scenes.length > 1 },
+        ]"
+      >
+        <nav class="cat-world-view-switcher" role="tablist" aria-label="猫咪世界功能">
+          <button
+            id="cat-world-view-room-tab"
+            type="button"
+            role="tab"
+            :class="{ active: activeWorldView === 'room' }"
+            :aria-selected="activeWorldView === 'room'"
+            aria-controls="cat-world-view-room"
+            @click="setWorldView('room')"
+          >
+            <HouseIcon :size="20" :stroke-width="2.8" aria-hidden="true" />
+            <span><strong>活动室</strong><small>{{ currentScene.label }}</small></span>
+          </button>
+          <button
+            id="cat-world-view-shop-tab"
+            type="button"
+            role="tab"
+            :class="{ active: activeWorldView === 'shop' }"
+            :aria-selected="activeWorldView === 'shop'"
+            aria-controls="cat-world-view-shop"
+            @click="setWorldView('shop')"
+          >
+            <ShoppingBagIcon :size="20" :stroke-width="2.8" aria-hidden="true" />
+            <span><strong>猫咪商店</strong><small>{{ categories.length }} 个分类</small></span>
+          </button>
+          <button
+            id="cat-world-view-cats-tab"
+            type="button"
+            role="tab"
+            :class="{ active: activeWorldView === 'cats' }"
+            :aria-selected="activeWorldView === 'cats'"
+            aria-controls="cat-world-view-cats"
+            @click="setWorldView('cats')"
+          >
+            <CatIcon :size="20" :stroke-width="2.8" aria-hidden="true" />
+            <span><strong>我的猫咪</strong><small>{{ catProfiles.length }} 只伙伴</small></span>
+          </button>
+        </nav>
+
+        <nav
+          v-if="activeWorldView === 'room' && scenes.length > 1"
+          class="cat-world-scene-dock"
+          aria-label="猫咪世界场景地图"
         >
-          <HouseIcon :size="20" :stroke-width="2.8" aria-hidden="true" />
-          <span><strong>活动室</strong><small>{{ currentScene.label }}</small></span>
-        </button>
-        <button
-          id="cat-world-view-shop-tab"
-          type="button"
-          role="tab"
-          :class="{ active: activeWorldView === 'shop' }"
-          :aria-selected="activeWorldView === 'shop'"
-          aria-controls="cat-world-view-shop"
-          @click="setWorldView('shop')"
-        >
-          <ShoppingBagIcon :size="20" :stroke-width="2.8" aria-hidden="true" />
-          <span><strong>猫咪商店</strong><small>{{ categories.length }} 个分类</small></span>
-        </button>
-        <button
-          id="cat-world-view-cats-tab"
-          type="button"
-          role="tab"
-          :class="{ active: activeWorldView === 'cats' }"
-          :aria-selected="activeWorldView === 'cats'"
-          aria-controls="cat-world-view-cats"
-          @click="setWorldView('cats')"
-        >
-          <CatIcon :size="20" :stroke-width="2.8" aria-hidden="true" />
-          <span><strong>我的猫咪</strong><small>{{ catProfiles.length }} 只伙伴</small></span>
-        </button>
-      </nav>
+          <div class="cat-world-scene-dock-label">
+            <MapPinIcon :size="20" :stroke-width="2.8" aria-hidden="true" />
+            <span>
+              <small>World Map</small>
+              <strong>场景地图</strong>
+            </span>
+          </div>
+          <div class="cat-world-scene-tabs" role="tablist" aria-label="猫咪世界场景">
+            <button
+              v-for="scene in scenes"
+              :key="scene.id"
+              type="button"
+              role="tab"
+              :aria-selected="scene.id === currentScene.id"
+              :class="{
+                active: scene.id === currentScene.id,
+                locked: scene.enabled && !scene.unlocked,
+                'has-live-activity': scene.hasActiveFood || scene.hasActiveCare,
+              }"
+              :disabled="!scene.enabled || Boolean(busySceneId)"
+              :title="sceneActionTitle(scene)"
+              @click="handleSceneAction(scene)"
+            >
+              <span>{{ scene.label }}</span>
+              <small v-if="scene.enabled && !scene.unlocked">{{ Number(scene.purchaseCost || 0).toLocaleString() }} 能量</small>
+              <small v-else-if="!scene.enabled">规划中</small>
+              <small v-else>{{ sceneStatusLabel(scene) }}</small>
+              <em v-if="scene.available && scene.attractedCatCount" class="cat-world-scene-attraction">
+                <HeartIcon :size="11" :stroke-width="3" aria-hidden="true" />
+                {{ scene.attractedCatCount }}猫喜欢
+              </em>
+            </button>
+          </div>
+        </nav>
+      </div>
 
     <section
       v-show="activeWorldView === 'room'"
@@ -2548,42 +2595,6 @@ async function selectCat(catOrId, options = {}) {
       role="tabpanel"
       aria-labelledby="cat-world-view-room-tab"
     >
-      <nav v-if="scenes.length > 1" class="cat-world-scene-dock" aria-label="猫咪世界场景地图">
-        <div class="cat-world-scene-dock-label">
-          <MapPinIcon :size="20" :stroke-width="2.8" aria-hidden="true" />
-          <span>
-            <small>World Map</small>
-            <strong>场景地图</strong>
-          </span>
-        </div>
-        <div class="cat-world-scene-tabs" role="tablist" aria-label="猫咪世界场景">
-          <button
-            v-for="scene in scenes"
-            :key="scene.id"
-            type="button"
-            role="tab"
-            :aria-selected="scene.id === currentScene.id"
-            :class="{
-              active: scene.id === currentScene.id,
-              locked: scene.enabled && !scene.unlocked,
-              'has-live-activity': scene.hasActiveFood || scene.hasActiveCare,
-            }"
-            :disabled="!scene.enabled || Boolean(busySceneId)"
-            :title="sceneActionTitle(scene)"
-            @click="handleSceneAction(scene)"
-          >
-            <span>{{ scene.label }}</span>
-            <small v-if="scene.enabled && !scene.unlocked">{{ Number(scene.purchaseCost || 0).toLocaleString() }} 能量</small>
-            <small v-else-if="!scene.enabled">规划中</small>
-            <small v-else>{{ sceneStatusLabel(scene) }}</small>
-            <em v-if="scene.available && scene.attractedCatCount" class="cat-world-scene-attraction">
-              <HeartIcon :size="11" :stroke-width="3" aria-hidden="true" />
-              {{ scene.attractedCatCount }}猫喜欢
-            </em>
-          </button>
-        </div>
-      </nav>
-
       <section class="cat-world-room-panel panel">
         <div class="cat-world-room-head">
           <div>

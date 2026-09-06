@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-021"
-DEFAULT_PAGE_VERSION = "v20260906.21"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-022"
+DEFAULT_PAGE_VERSION = "v20260906.22"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -19978,7 +19978,7 @@ def cat_world_apply_autonomous_scene_roaming(
         behavior = cat_world_current_behavior(agent_state, traits, adjusted_mood, adjusted_energy, now)
         if (
             behavior.get("sleeping")
-            or behavior.get("key") == "resting"
+            or behavior.get("key") in {"resting", "waking"}
             or profile.profile_id in busy_cat_references
             or profile.breed_id in busy_cat_references
         ):

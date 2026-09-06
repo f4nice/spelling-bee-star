@@ -16926,6 +16926,26 @@ select {
   gap: 12px;
 }
 
+.cat-world-world-navigation {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.cat-world-world-navigation.has-scene-dock {
+  grid-template-columns: minmax(360px, 0.78fr) minmax(0, 1.55fr);
+  align-items: stretch;
+}
+
+.cat-world-world-navigation .cat-world-view-switcher,
+.cat-world-world-navigation .cat-world-scene-dock {
+  min-width: 0;
+}
+
+.cat-world-world-navigation .cat-world-scene-dock {
+  grid-column: auto;
+}
+
 .cat-world-view-switcher {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -17656,6 +17676,7 @@ select {
 }
 
 @media (max-width: 1180px) {
+  .cat-world-world-navigation.has-scene-dock,
   .shell[data-quant-radar-page-key="cat-world"] .cat-world-layout,
   .admin-cat-world-settings-panel,
   .admin-energy-grant-panel,

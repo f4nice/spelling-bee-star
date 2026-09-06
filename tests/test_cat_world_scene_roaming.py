@@ -168,6 +168,41 @@ class CatWorldSceneRoamingTest(unittest.TestCase):
             self.assertIn("喜欢的", moves[0]["reason"])
             self.assertIn(m.CAT_WORLD_SHOP_BY_ID[favorite_toy_id]["label"], moves[0]["message"])
 
+    def test_waking_cat_stays_in_its_room_until_recovery_finishes(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+
+        with Session(engine) as db:
+            m.seed_cat_world_scenes(db)
+            state = self.make_state(db)
+            self.unlock_scene(db, state, "yard")
+            companion = m.create_cat_world_cat_profile(db, state, "siamese", "test")
+            profile = m.create_cat_world_cat_profile(db, state, "siamese", "test")
+            companion.current_scene_key = "main-room"
+            profile.current_scene_key = "main-room"
+            profile.favorite_scene_key = "yard"
+            state.selected_cat_profile = companion.profile_id
+            db.flush()
+
+            with (
+                patch.object(m, "cat_world_stable_ratio", return_value=0.0),
+                patch.object(
+                    m,
+                    "cat_world_current_behavior",
+                    return_value={"key": "waking", "sleeping": False},
+                ),
+            ):
+                moves, changed = m.cat_world_apply_autonomous_scene_roaming(
+                    db,
+                    state,
+                    [companion, profile],
+                    datetime(2026, 9, 7, 6, 0),
+                )
+
+            self.assertTrue(changed)
+            self.assertEqual(moves, [])
+            self.assertEqual(profile.current_scene_key, "main-room")
+
     def test_scene_catalog_explains_which_individual_cats_like_each_room(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(engine)
