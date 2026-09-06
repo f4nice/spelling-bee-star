@@ -763,6 +763,7 @@ const gameSnapshot = computed(() => ({
   learningSignal: learningRoomSignal.value,
   scene: currentScene.value,
   editMode: roomEditMode.value,
+  observationMode: playTimeLocked.value,
   toolMode: repairMode.value ? "repair" : scoopMode.value ? "scoop" : "",
 }));
 

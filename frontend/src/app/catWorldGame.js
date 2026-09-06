@@ -230,6 +230,7 @@ function normalizeSnapshot(snapshot = {}) {
     learningSignal: normalizeLearningSignal(snapshot.learningSignal),
     scene: normalizeCatWorldScene(snapshot.scene),
     editMode: Boolean(snapshot.editMode),
+    observationMode: Boolean(snapshot.observationMode),
     toolMode: ["repair", "scoop"].includes(snapshot.toolMode) ? snapshot.toolMode : "",
   };
 }
@@ -709,7 +710,11 @@ class CatWorldScene extends Phaser.Scene {
       },
     });
     this.spawnLearningSparkles(guideEntry.x + 44, guideEntry.y - 52);
-    this.spawnLearningSparkles(VIEW_WIDTH - 221, 116, { fixed: true });
+    this.spawnLearningSparkles(
+      VIEW_WIDTH - 221,
+      this.owner.snapshot.observationMode ? 224 : 116,
+      { fixed: true },
+    );
     return true;
   }
 
@@ -804,7 +809,7 @@ class CatWorldScene extends Phaser.Scene {
     const width = 390;
     const height = 96;
     const x = Math.max(VIEW_WIDTH - width - 26, 24);
-    const y = 18;
+    const y = snapshot.observationMode ? 126 : 18;
     const container = this.add.container(x, y).setDepth(CAT_INTERACTION_DEPTH - 40).setScrollFactor(0);
     const graphics = makeLocalGraphics(this, container);
     drawPixelRect(graphics, 0, 0, width, height, 0x123446, INK, 5);

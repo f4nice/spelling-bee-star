@@ -13,10 +13,12 @@ test("the activity room turns daily English progress into an interactive pixel b
 
   assert.match(page, /buildCatWorldRoomLearningSignal/);
   assert.match(page, /learningSignal:\s*learningRoomSignal\.value/);
+  assert.match(page, /observationMode:\s*playTimeLocked\.value/);
   assert.match(page, /onLearningBoardClick:\s*openRoomLearningProgress/);
   assert.match(page, /今日学习灯牌已亮 \$\{learningRoomSignal\.completedCount\}\/3 格/);
   assert.match(game, /drawLearningBoard\(this\.owner\.snapshot\)/);
   assert.match(game, /"TODAY ENGLISH"/);
+  assert.match(game, /snapshot\.observationMode \? 126 : 18/);
   assert.match(game, /this\.add\.zone\(x, y, width, height\)/);
   assert.match(game, /\.setScrollFactor\(0\)\s*\n\s*\.setInteractive\(\{ cursor: "pointer" \}\)/);
   assert.match(game, /onLearningBoardClick\?\.\(signal\)/);
