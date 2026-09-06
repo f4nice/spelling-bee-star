@@ -15215,10 +15215,13 @@ select {
 
 .cat-world-learning-memory-days > button {
   appearance: none;
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   flex: 0 0 auto;
   align-items: center;
   gap: 5px;
+  min-width: 126px;
+  min-height: 48px;
   border: 2px solid #2c2f3a;
   border-radius: 0;
   padding: 4px 6px;
@@ -15227,6 +15230,15 @@ select {
   box-shadow: none;
   font: inherit;
   cursor: pointer;
+}
+
+.cat-world-learning-memory-days > button.review-due:not(.active) {
+  background: #fff3a4;
+  box-shadow: inset 0 -3px 0 #f2bd43;
+}
+
+.cat-world-learning-memory-days > button.review-settled:not(.active) {
+  background: #e7f8f0;
 }
 
 .cat-world-learning-memory-days > button.tone-output,
@@ -15266,12 +15278,37 @@ select {
   color: #007f67;
 }
 
+.cat-world-learning-memory-days > button > small {
+  display: inline-flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 3px;
+  border-top: 1px dashed rgba(44, 47, 58, 0.3);
+  padding-top: 2px;
+  color: #56627a;
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.cat-world-learning-memory-days > button > small.due {
+  color: #8a4f00;
+}
+
+.cat-world-learning-memory-days > button > small.reviewed,
+.cat-world-learning-memory-days > button > small.settled {
+  color: #176b51;
+}
+
 .cat-world-learning-memory-days > button:hover b,
 .cat-world-learning-memory-days > button:hover em,
+.cat-world-learning-memory-days > button:hover small,
 .cat-world-learning-memory-days > button:focus-visible b,
 .cat-world-learning-memory-days > button:focus-visible em,
+.cat-world-learning-memory-days > button:focus-visible small,
 .cat-world-learning-memory-days > button.active b,
-.cat-world-learning-memory-days > button.active em {
+.cat-world-learning-memory-days > button.active em,
+.cat-world-learning-memory-days > button.active small {
   color: #fff;
 }
 
@@ -15449,6 +15486,15 @@ select {
 
 .cat-world-memory-review.complete > i > i {
   background: #1d7f5b;
+}
+
+.cat-world-memory-review.settled > header em {
+  color: #263047;
+  background: #d9f6ff;
+}
+
+.cat-world-memory-review.settled > i > i {
+  background: #5c7f9f;
 }
 
 .cat-world-memory-review > button:disabled {

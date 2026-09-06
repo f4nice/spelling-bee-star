@@ -14,6 +14,7 @@ const DEFAULT_MEMORY_STAGES = Object.freeze([
 ]);
 
 const MEMORY_DAY_KEYS = new Set(["started", "warmup", "output", "warmup-output", "loop"]);
+const MEMORY_REVIEW_STAGE_KEYS = new Set(["first", "strengthen", "settled"]);
 
 const MEMORY_VISIT_TARGETS = Object.freeze({
   "gentle-starter": Object.freeze(["learning-garden", "reading-lamp", "word-gallery"]),
@@ -83,10 +84,20 @@ function stableIndex(seed, size) {
   return size > 0 ? (hash >>> 0) % size : 0;
 }
 
+function memoryVisitDay(memory) {
+  return memory.reviewDueToday
+    ? memory.recentDays.find((day) => day.date === memory.suggestedReviewDate)
+      || memory.recentDays[0]
+    : memory.recentDays[0];
+}
+
 function memoryVisitSentence(memory) {
-  const latest = memory.recentDays[0] || {};
+  const latest = memoryVisitDay(memory) || {};
   const dayLabel = latest.dayLabel || formatCatWorldLearningMemoryDate(latest.date || memory.latestDate);
   const prefix = dayLabel ? `我想翻翻我们 ${dayLabel} 的那一页` : "我想翻翻我们的共同学习手册";
+  if (memory.reviewDueToday) {
+    return `${prefix}，今天正好到了${latest.reviewStageLabel || "回想"}的时间。`;
+  }
   const endings = {
     loop: "，那天把词汇和表达好好接在一起了。",
     "warmup-output": "，那天既练了词，也把英语用出来了。",
@@ -140,12 +151,23 @@ function normalizeMemoryStage(stage = {}, memoryPoints = 0, levelKey = "waiting"
 
 function normalizeMemoryDay(day = {}) {
   const statusKey = MEMORY_DAY_KEYS.has(String(day.statusKey)) ? String(day.statusKey) : "started";
+  const reviewStageKey = MEMORY_REVIEW_STAGE_KEYS.has(String(day.reviewStageKey))
+    ? String(day.reviewStageKey)
+    : "first";
   return {
     date: String(day.date || ""),
     dayLabel: String(day.dayLabel || formatCatWorldLearningMemoryDate(day.date)),
     statusKey,
     statusLabel: String(day.statusLabel || "留下学习足迹"),
     milestones: Array.isArray(day.milestones) ? day.milestones.map(String) : [],
+    reviewCount: safeCount(day.reviewCount),
+    reviewStageKey,
+    reviewStageLabel: String(day.reviewStageLabel || (reviewStageKey === "settled" ? "已经稳固" : "隔日回想")),
+    reviewProgressLabel: String(day.reviewProgressLabel || `${Math.min(safeCount(day.reviewCount), 2)}/2`),
+    reviewDue: Boolean(day.reviewDue),
+    reviewedToday: Boolean(day.reviewedToday),
+    lastReviewDate: String(day.lastReviewDate || ""),
+    nextReviewDate: String(day.nextReviewDate || ""),
   };
 }
 
@@ -188,9 +210,25 @@ export function normalizeCatWorldLearningMemory(memory = {}) {
     todayReviewSourceDate: String(memory.todayReviewSourceDate || ""),
     lastReviewDate: String(memory.lastReviewDate || ""),
     lastReviewSourceDate: String(memory.lastReviewSourceDate || ""),
+    reviewDueToday: Boolean(memory.reviewDueToday),
+    suggestedReviewDate: String(memory.suggestedReviewDate || ""),
+    suggestedReviewStageLabel: String(memory.suggestedReviewStageLabel || ""),
+    nextReviewDate: String(memory.nextReviewDate || ""),
     stages,
     recentDays,
   };
+}
+
+export function catWorldLearningMemoryDefaultDate(memory = {}) {
+  const normalized = normalizeCatWorldLearningMemory(memory);
+  const visibleDates = new Set(normalized.recentDays.map((day) => day.date));
+  if (normalized.reviewedToday && visibleDates.has(normalized.todayReviewSourceDate)) {
+    return normalized.todayReviewSourceDate;
+  }
+  if (normalized.reviewDueToday && visibleDates.has(normalized.suggestedReviewDate)) {
+    return normalized.suggestedReviewDate;
+  }
+  return normalized.recentDays[0]?.date || "";
 }
 
 export function formatCatWorldLearningMemoryDate(value = "") {
@@ -245,14 +283,15 @@ export function catWorldLearningMemoryVisitPlan(cat = {}, behavior = {}, context
     return null;
   }
 
-  const cadence = memory.levelIndex >= 3 ? 3 : 4;
-  const memoryToken = memory.latestDate || `${memory.levelKey}:${memory.memoryPoints}`;
+  const cadence = memory.reviewDueToday ? 3 : memory.levelIndex >= 3 ? 3 : 4;
+  const memoryToken = memory.suggestedReviewDate || memory.latestDate || `${memory.levelKey}:${memory.memoryPoints}`;
   const slot = stableIndex(`${catId}:${sceneId}:${memoryToken}:memory-visit`, cadence);
   if (cycle % cadence !== slot) return null;
 
   const requestedStyleKey = String(cat.learningStyle?.key || "balanced");
   const styleKey = MEMORY_VISIT_TARGETS[requestedStyleKey] ? requestedStyleKey : "balanced";
   const attention = Math.max(Math.min(Number(behavior.attention || 50), 100), 0);
+  const visitDay = memoryVisitDay(memory) || {};
   return {
     kind: "learning-memory",
     visitKey: `${sceneId}:${catId}:${memoryToken}`,
@@ -261,8 +300,11 @@ export function catWorldLearningMemoryVisitPlan(cat = {}, behavior = {}, context
     animation: MEMORY_VISIT_ANIMATIONS[styleKey],
     levelKey: memory.levelKey,
     levelLabel: memory.levelLabel,
-    dayLabel: memory.recentDays[0]?.dayLabel || formatCatWorldLearningMemoryDate(memory.latestDate),
+    dayLabel: visitDay.dayLabel || formatCatWorldLearningMemoryDate(visitDay.date || memory.latestDate),
     holdMs: 6400,
-    priority: Math.max(Math.min(36 + memory.levelIndex * 4 + Math.round(attention / 20), 58), 38),
+    priority: Math.max(
+      Math.min(36 + memory.levelIndex * 4 + Math.round(attention / 20) + (memory.reviewDueToday ? 4 : 0), 62),
+      38,
+    ),
   };
 }

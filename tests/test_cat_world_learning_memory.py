@@ -19,6 +19,7 @@ from app.main import (
     cat_world_learning_memory_milestones,
     cat_world_learning_memory_payload,
     cat_world_learning_memory_payloads,
+    cat_world_learning_memory_review_error,
     parse_cat_world_agent_state,
 )
 from app.models import CatWorldDailyLog
@@ -41,6 +42,28 @@ def learning_log(
         log_date=log_date,
         cat_id=cat_id,
         agent_state=json.dumps(agent_state, ensure_ascii=False),
+    )
+
+
+def review_log(
+    cat_id: str,
+    log_date: date,
+    source_date: date,
+    phone: str = "13900000000",
+) -> CatWorldDailyLog:
+    return CatWorldDailyLog(
+        phone=phone,
+        log_date=log_date,
+        cat_id=cat_id,
+        agent_state=json.dumps(
+            {
+                "learningMemoryReview": {
+                    "sourceDate": source_date.isoformat(),
+                    "reviewedAt": f"{log_date.isoformat()}T08:00:00Z",
+                }
+            },
+            ensure_ascii=False,
+        ),
     )
 
 
@@ -152,6 +175,98 @@ class CatWorldLearningMemoryTest(unittest.TestCase):
         self.assertTrue(payload["reviewedToday"])
         self.assertEqual(payload["todayReviewSourceDate"], "2026-09-06")
         self.assertEqual(payload["lastReviewDate"], "2026-09-07")
+
+    def test_learning_pages_offer_one_humane_review_when_the_next_day_arrives(self):
+        payload = cat_world_learning_memory_payload(
+            [
+                learning_log("cat-a", date(2026, 9, 6), ["started", "warmup"]),
+                learning_log("cat-a", date(2026, 9, 7), ["output"]),
+            ],
+            today=date(2026, 9, 7),
+        )
+        days = {day["date"]: day for day in payload["recentDays"]}
+
+        self.assertTrue(payload["reviewDueToday"])
+        self.assertEqual(payload["suggestedReviewDate"], "2026-09-06")
+        self.assertEqual(payload["suggestedReviewStageLabel"], "隔日回想")
+        self.assertTrue(days["2026-09-06"]["reviewDue"])
+        self.assertEqual(days["2026-09-06"]["reviewStageKey"], "first")
+        self.assertEqual(days["2026-09-06"]["reviewProgressLabel"], "0/2")
+        self.assertEqual(days["2026-09-06"]["nextReviewDate"], "2026-09-07")
+        self.assertFalse(days["2026-09-07"]["reviewDue"])
+
+    def test_second_review_waits_three_days_then_settles_the_page(self):
+        source = learning_log("cat-a", date(2026, 9, 5), ["started", "warmup", "output", "loop"])
+        first_review = review_log("cat-a", date(2026, 9, 6), date(2026, 9, 5))
+
+        waiting = cat_world_learning_memory_payload(
+            [source, first_review],
+            today=date(2026, 9, 8),
+        )
+        waiting_day = waiting["recentDays"][0]
+        self.assertFalse(waiting["reviewDueToday"])
+        self.assertEqual(waiting["nextReviewDate"], "2026-09-09")
+        self.assertEqual(waiting_day["reviewStageKey"], "strengthen")
+        self.assertEqual(waiting_day["reviewProgressLabel"], "1/2")
+
+        due = cat_world_learning_memory_payload(
+            [source, first_review],
+            today=date(2026, 9, 9),
+        )
+        self.assertTrue(due["reviewDueToday"])
+        self.assertEqual(due["suggestedReviewDate"], "2026-09-05")
+        self.assertEqual(due["suggestedReviewStageLabel"], "三日巩固")
+
+        settled = cat_world_learning_memory_payload(
+            [source, first_review, review_log("cat-a", date(2026, 9, 9), date(2026, 9, 5))],
+            today=date(2026, 9, 9),
+        )
+        settled_day = settled["recentDays"][0]
+        self.assertTrue(settled["reviewedToday"])
+        self.assertFalse(settled["reviewDueToday"])
+        self.assertEqual(settled_day["reviewStageKey"], "settled")
+        self.assertEqual(settled_day["reviewProgressLabel"], "2/2")
+        self.assertEqual(settled_day["nextReviewDate"], "")
+        self.assertEqual(
+            cat_world_learning_memory_review_error(settled, date(2026, 9, 5)),
+            "",
+        )
+
+        next_day = cat_world_learning_memory_payload(
+            [source, first_review, review_log("cat-a", date(2026, 9, 9), date(2026, 9, 5))],
+            today=date(2026, 9, 10),
+        )
+        self.assertIn(
+            "已经完成隔日回想和三日巩固",
+            cat_world_learning_memory_review_error(next_day, date(2026, 9, 5)),
+        )
+        self.assertIn(
+            "还不存在",
+            cat_world_learning_memory_review_error(next_day, date(2026, 9, 4)),
+        )
+
+    def test_due_page_stays_visible_when_it_is_older_than_the_recent_six(self):
+        learning_days = [
+            learning_log("cat-a", date(2026, 8, day), ["started", "warmup"])
+            for day in range(1, 9)
+        ]
+        review_days = []
+        review_date = 9
+        for source_day in range(3, 9):
+            review_days.append(review_log("cat-a", date(2026, 8, review_date), date(2026, 8, source_day)))
+            review_days.append(review_log("cat-a", date(2026, 8, review_date + 1), date(2026, 8, source_day)))
+            review_date += 2
+
+        payload = cat_world_learning_memory_payload(
+            [*learning_days, *review_days],
+            today=date(2026, 8, 21),
+        )
+        visible_dates = [day["date"] for day in payload["recentDays"]]
+
+        self.assertEqual(len(visible_dates), 6)
+        self.assertEqual(payload["suggestedReviewDate"], "2026-08-02")
+        self.assertIn("2026-08-02", visible_dates)
+        self.assertNotIn("2026-08-03", visible_dates)
 
     def test_daily_review_is_idempotent_and_does_not_change_cat_scores(self):
         cat = cat_world_cat_payload(CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])

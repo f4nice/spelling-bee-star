@@ -38,6 +38,7 @@ import {
   catWorldWeekMemory,
 } from "../catWorldLearningRoute.js";
 import {
+  catWorldLearningMemoryDefaultDate,
   catWorldLearningMemoryLine,
   catWorldLearningMemoryNextLine,
   catWorldLearningMemoryReflection,
@@ -954,12 +955,14 @@ const selectedCatMemoryReflection = computed(() =>
 const selectedCatMemoryReviewState = computed(() => {
   const cat = activeCatDiary.value || {};
   const memory = cat.learningMemory || {};
+  const day = selectedCatMemoryDay.value || {};
   const review = catMemoryReview.value;
-  const active = review.catId === cat.id && review.sourceDate === selectedCatMemoryDay.value.date;
+  const active = review.catId === cat.id && review.sourceDate === day.date;
   const reviewedSourceDate = String(memory.todayReviewSourceDate || "");
   const reviewedToday = Boolean(memory.reviewedToday);
+  const settled = day.reviewStageKey === "settled";
   const remainingSeconds = active ? Math.max(Number(review.remainingSeconds || 0), 0) : 0;
-  const progressPercent = reviewedToday
+  const progressPercent = reviewedToday || settled
     ? 100
     : active
       ? Math.round((CAT_MEMORY_REVIEW_SECONDS - remainingSeconds) / CAT_MEMORY_REVIEW_SECONDS * 100)
@@ -971,8 +974,12 @@ const selectedCatMemoryReviewState = computed(() => {
     remainingSeconds,
     progressPercent,
     reviewedToday,
-    reviewedThisPage: reviewedToday && reviewedSourceDate === selectedCatMemoryDay.value.date,
+    reviewedThisPage: reviewedToday && reviewedSourceDate === day.date,
     reviewedSourceLabel: formatCatWorldLearningMemoryDate(reviewedSourceDate),
+    settled,
+    reviewDue: Boolean(day.reviewDue),
+    reviewStageLabel: String(day.reviewStageLabel || "主动回想"),
+    nextReviewLabel: formatCatWorldLearningMemoryDate(day.nextReviewDate),
   };
 });
 const gameDailyLogs = computed(() =>
@@ -1270,7 +1277,7 @@ function toggleCatDiary(cat) {
   activeRoomPanel.value = "cat";
   openCatDiaryId.value = cat.id;
   focusedCatId.value = cat.id;
-  selectedCatMemoryDate.value = cat.learningMemory?.recentDays?.[0]?.date || "";
+  selectedCatMemoryDate.value = catWorldLearningMemoryDefaultDate(cat.learningMemory);
 }
 
 function focusRoomItem(itemId) {
@@ -1339,7 +1346,12 @@ async function saveCatMemoryReview(catId, sourceDate) {
 function startCatMemoryReview() {
   const cat = activeCatDiary.value;
   const sourceDate = selectedCatMemoryDay.value.date;
-  if (!cat?.id || !sourceDate || selectedCatMemoryReviewState.value.reviewedToday) return;
+  if (
+    !cat?.id
+    || !sourceDate
+    || selectedCatMemoryReviewState.value.reviewedToday
+    || selectedCatMemoryReviewState.value.settled
+  ) return;
   resetCatMemoryReview();
   catMemoryReview.value = {
     catId: cat.id,
@@ -3731,12 +3743,31 @@ async function selectCat(catOrId, options = {}) {
               v-for="day in activeCatDiary.learningMemory.recentDays"
               :key="`${activeCatDiary.id}-memory-day-${day.date}`"
               type="button"
-              :class="[`tone-${day.statusKey}`, { active: day.date === selectedCatMemoryDay.date }]"
+              :class="[
+                `tone-${day.statusKey}`,
+                {
+                  active: day.date === selectedCatMemoryDay.date,
+                  'review-due': day.reviewDue,
+                  'review-settled': day.reviewStageKey === 'settled',
+                },
+              ]"
               :aria-pressed="day.date === selectedCatMemoryDay.date"
               @click="selectCatMemoryDay(day)"
             >
               <b>{{ day.dayLabel }}</b>
               <em>{{ day.statusLabel }}</em>
+              <small v-if="day.reviewedToday" class="reviewed">
+                <CheckIcon :size="11" :stroke-width="3" aria-hidden="true" />今日完成
+              </small>
+              <small v-else-if="day.reviewDue" class="due">
+                <ClockIcon :size="11" :stroke-width="2.8" aria-hidden="true" />今日{{ day.reviewStageLabel }}
+              </small>
+              <small v-else-if="day.reviewStageKey === 'settled'" class="settled">
+                <CheckIcon :size="11" :stroke-width="3" aria-hidden="true" />已经稳固
+              </small>
+              <small v-else-if="day.reviewCount" class="waiting">
+                {{ day.reviewProgressLabel }} · 等待巩固
+              </small>
             </button>
           </div>
           <div
@@ -3755,6 +3786,7 @@ async function selectCat(catOrId, options = {}) {
                 {
                   active: selectedCatMemoryReviewState.active,
                   complete: selectedCatMemoryReviewState.reviewedToday,
+                  settled: selectedCatMemoryReviewState.settled,
                 },
               ]"
               aria-label="30 秒主动回想"
@@ -3767,6 +3799,9 @@ async function selectCat(catOrId, options = {}) {
                 <em v-if="selectedCatMemoryReviewState.reviewedToday">今日已完成</em>
                 <em v-else-if="selectedCatMemoryReviewState.busy">正在保存</em>
                 <em v-else-if="selectedCatMemoryReviewState.active">剩余 {{ selectedCatMemoryReviewState.remainingSeconds }} 秒</em>
+                <em v-else-if="selectedCatMemoryReviewState.settled">两轮已稳固</em>
+                <em v-else-if="selectedCatMemoryReviewState.reviewDue">今日{{ selectedCatMemoryReviewState.reviewStageLabel }}</em>
+                <em v-else-if="selectedCatMemoryReviewState.nextReviewLabel">{{ selectedCatMemoryReviewState.nextReviewLabel }}再回想</em>
                 <em v-else>今天一次就好</em>
               </header>
               <p v-if="selectedCatMemoryReviewState.reviewedToday">
@@ -3777,7 +3812,15 @@ async function selectCat(catOrId, options = {}) {
                   今天已经回想过 {{ selectedCatMemoryReviewState.reviewedSourceLabel || "另一页" }}，明天再翻新的一页。
                 </template>
               </p>
-              <p v-else>先不看答案，在心里找回这一天的 1 个词和 1 句话；想不完整也没关系。</p>
+              <p v-else-if="selectedCatMemoryReviewState.settled">
+                这页已经完成隔日回想和三日巩固。今天可以停在这里，也可以去留下新的英语足迹。
+              </p>
+              <p v-else-if="selectedCatMemoryReviewState.reviewDue">
+                这页正好到了{{ selectedCatMemoryReviewState.reviewStageLabel }}：先不看答案，找回 1 个词和 1 句话。
+              </p>
+              <p v-else>
+                先不看答案，在心里找回这一天的 1 个词和 1 句话；还没到巩固日，想不完整也没关系。
+              </p>
               <i
                 role="progressbar"
                 :aria-valuenow="selectedCatMemoryReviewState.progressPercent"
@@ -3789,12 +3832,13 @@ async function selectCat(catOrId, options = {}) {
               </i>
               <button
                 type="button"
-                :disabled="selectedCatMemoryReviewState.reviewedToday || selectedCatMemoryReviewState.active"
+                :disabled="selectedCatMemoryReviewState.reviewedToday || selectedCatMemoryReviewState.active || selectedCatMemoryReviewState.settled"
                 @click="startCatMemoryReview"
               >
-                <CheckIcon v-if="selectedCatMemoryReviewState.reviewedToday" :size="13" :stroke-width="3" aria-hidden="true" />
+                <CheckIcon v-if="selectedCatMemoryReviewState.reviewedToday || selectedCatMemoryReviewState.settled" :size="13" :stroke-width="3" aria-hidden="true" />
                 <ClockIcon v-else :size="13" :stroke-width="2.8" aria-hidden="true" />
                 <template v-if="selectedCatMemoryReviewState.reviewedToday">今日回想已完成</template>
+                <template v-else-if="selectedCatMemoryReviewState.settled">这页已经稳固</template>
                 <template v-else-if="selectedCatMemoryReviewState.busy">正在保存回想</template>
                 <template v-else-if="selectedCatMemoryReviewState.active">安静回想中</template>
                 <template v-else>开始 30 秒回想</template>

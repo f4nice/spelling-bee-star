@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { buildCatWorldRoomLearningSignal } from "../src/app/catWorldLearningRoute.js";
 import {
+  catWorldLearningMemoryDefaultDate,
   catWorldLearningMemoryLine,
   catWorldLearningMemoryNextLine,
   catWorldLearningMemoryReflection,
@@ -35,6 +36,10 @@ test("cat learning memory keeps humane per-cat progress and readable titles", ()
     todayReviewSourceDate: "2026-09-06",
     lastReviewDate: "2026-09-07",
     lastReviewSourceDate: "2026-09-06",
+    reviewDueToday: true,
+    suggestedReviewDate: "2026-09-06",
+    suggestedReviewStageLabel: "三日巩固",
+    nextReviewDate: "2026-09-10",
     stages: [
       { key: "starter", label: "起步搭子", threshold: 1, unlocked: true },
       { key: "familiar", label: "熟悉节奏", threshold: 4, unlocked: true, current: true },
@@ -55,6 +60,8 @@ test("cat learning memory keeps humane per-cat progress and readable titles", ()
   assert.equal(memory.reviewCount, 2);
   assert.equal(memory.reviewedToday, true);
   assert.equal(memory.todayReviewSourceDate, "2026-09-06");
+  assert.equal(memory.reviewDueToday, true);
+  assert.equal(memory.suggestedReviewStageLabel, "三日巩固");
   assert.equal(formatCatWorldLearningMemoryDate(memory.latestDate), "9月7日");
   assert.match(catWorldLearningMemoryRoomCue(memory), /最新一页写在 9月7日/);
   assert.match(catWorldLearningMemoryRoomCue(memory, true), /完成 1 次英语闭环/);
@@ -145,6 +152,51 @@ test("the room signal carries the selected cat's own learning memory", () => {
   assert.equal(signal.learningMemory.loopDays, 2);
 });
 
+test("a cat opens the due page and names its gentle two-step review rhythm", () => {
+  const dueMemory = {
+    hasMemory: true,
+    companionDays: 4,
+    memoryPoints: 5,
+    levelIndex: 2,
+    levelCount: 5,
+    reviewDueToday: true,
+    suggestedReviewDate: "2026-09-06",
+    suggestedReviewStageLabel: "三日巩固",
+    recentDays: [
+      { date: "2026-09-07", dayLabel: "9/7", statusKey: "loop" },
+      {
+        date: "2026-09-06",
+        dayLabel: "9/6",
+        statusKey: "warmup",
+        reviewCount: 1,
+        reviewStageKey: "strengthen",
+        reviewStageLabel: "三日巩固",
+        reviewProgressLabel: "1/2",
+        reviewDue: true,
+      },
+    ],
+  };
+
+  assert.equal(catWorldLearningMemoryDefaultDate(dueMemory), "2026-09-06");
+  const cat = { id: "cat-review", learningMemory: dueMemory };
+  const behavior = { canWalk: true, energy: 82, restThreshold: 34, attention: 70 };
+  const plan = [1, 2, 3].map((cycle) => catWorldLearningMemoryVisitPlan(
+    cat,
+    behavior,
+    { cycle, sceneId: "main-room" },
+  )).find(Boolean);
+  assert.ok(plan);
+  assert.match(plan.message, /9\/6.*三日巩固/);
+  assert.equal(plan.dayLabel, "9/6");
+  assert.ok(plan.priority >= 42);
+
+  assert.equal(catWorldLearningMemoryDefaultDate({
+    ...dueMemory,
+    reviewedToday: true,
+    todayReviewSourceDate: "2026-09-07",
+  }), "2026-09-07");
+});
+
 test("cat cards, profile and room expose the same personal learning history", async () => {
   const [page, game, styles, routes] = await Promise.all([
     readFile(new URL("../src/app/pages/CatWorldPage.vue", import.meta.url), "utf8"),
@@ -169,12 +221,16 @@ test("cat cards, profile and room expose the same personal learning history", as
   assert.match(page, /CAT_MEMORY_REVIEW_SECONDS = 30/);
   assert.match(page, /@click="startCatMemoryReview"/);
   assert.match(page, /selectedCatMemoryReviewState\.reviewedToday/);
+  assert.match(page, /catWorldLearningMemoryDefaultDate\(cat\.learningMemory\)/);
+  assert.match(page, /day\.reviewStageKey === 'settled'/);
+  assert.match(page, /今日\{\{ day\.reviewStageLabel \}\}/);
   assert.match(routes, /catWorldLearningMemoryReview: \(\) => "\/api\/vue\/cat-world\/learning-memory\/review"/);
   assert.match(page, /:aria-pressed="day\.date === selectedCatMemoryDay\.date"/);
   assert.match(styles, /\.cat-world-learning-memory-days > button\.active\s*\{[^}]*color:\s*#fff;[^}]*background:\s*#1d7f5b;/s);
   assert.match(styles, /\.cat-world-learning-memory-actions button:hover,[\s\S]*?color:\s*#fff;\s*background:\s*#1d7f5b;/);
   assert.match(styles, /\.cat-world-memory-review > button:not\(:disabled\):hover,[\s\S]*?color:\s*#fff;\s*background:\s*#1d7f5b;/);
   assert.match(styles, /\.cat-world-memory-review\.complete > button\s*\{[^}]*color:\s*#fff;[^}]*background:\s*#1d7f5b;/s);
+  assert.match(styles, /\.cat-world-learning-memory-days > button\.review-due:not\(\.active\)/);
   assert.match(
     styles,
     /\.cat-world-cat-chip\.active \.cat-world-cat-learning-memory,[\s\S]*?background:\s*rgba\(255, 255, 255, 0\.16\)/,

@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-024"
-DEFAULT_PAGE_VERSION = "v20260907.24"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-025"
+DEFAULT_PAGE_VERSION = "v20260907.25"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -6196,9 +6196,9 @@ async def vue_cat_world_learning_memory_review_api(request: Request, db: Session
         ).all()
     )
     memory = cat_world_learning_memory_payload(profile_logs, today=today)
-    memory_dates = {str(day.get("date") or "") for day in memory.get("recentDays", [])}
-    if source_date.isoformat() not in memory_dates:
-        raise HTTPException(status_code=400, detail="这页学习足迹还不存在，不能生成回想记录。")
+    validation_error = cat_world_learning_memory_review_error(memory, source_date)
+    if validation_error:
+        raise HTTPException(status_code=400, detail=validation_error)
 
     now = datetime.utcnow()
     log = get_or_create_cat_world_daily_log(
@@ -17595,6 +17595,7 @@ CAT_WORLD_LEARNING_MEMORY_STAGES = (
 CAT_WORLD_LEARNING_MEMORY_KEYS = frozenset(
     str(milestone["key"]) for milestone in CAT_WORLD_LEARNING_COMPANION_MILESTONES
 )
+CAT_WORLD_LEARNING_MEMORY_REVIEW_INTERVAL_DAYS = (1, 3)
 CAT_WORLD_LEARNING_MEMORY_STATUS_KEYS = {
     "started": frozenset({"started"}),
     "warmup": frozenset({"started", "warmup"}),
@@ -17844,6 +17845,68 @@ def cat_world_learning_memory_review_record(agent_state: dict[str, Any] | None) 
     }
 
 
+def cat_world_learning_memory_review_schedule(
+    memory_date: date,
+    review_rows: list[dict[str, str]] | tuple[dict[str, str], ...],
+    today: date,
+) -> dict[str, Any]:
+    ordered_reviews = sorted(
+        (
+            row
+            for row in review_rows
+            if isinstance(row, dict) and str(row.get("reviewDate") or "")
+        ),
+        key=lambda row: (str(row.get("reviewDate") or ""), str(row.get("reviewedAt") or "")),
+    )
+    review_count = len(ordered_reviews)
+    last_review_date = str(ordered_reviews[-1].get("reviewDate") or "") if ordered_reviews else ""
+    reviewed_today = any(str(row.get("reviewDate") or "") == today.isoformat() for row in ordered_reviews)
+    if review_count >= len(CAT_WORLD_LEARNING_MEMORY_REVIEW_INTERVAL_DAYS):
+        return {
+            "reviewCount": review_count,
+            "reviewStageKey": "settled",
+            "reviewStageLabel": "已经稳固",
+            "reviewProgressLabel": "2/2",
+            "reviewDue": False,
+            "reviewedToday": reviewed_today,
+            "lastReviewDate": last_review_date,
+            "nextReviewDate": "",
+        }
+
+    interval_days = CAT_WORLD_LEARNING_MEMORY_REVIEW_INTERVAL_DAYS[review_count]
+    anchor_date = memory_date
+    if last_review_date:
+        anchor_date = max(anchor_date, date.fromisoformat(last_review_date))
+    next_review_date = anchor_date + timedelta(days=interval_days)
+    return {
+        "reviewCount": review_count,
+        "reviewStageKey": "first" if review_count == 0 else "strengthen",
+        "reviewStageLabel": "隔日回想" if review_count == 0 else "三日巩固",
+        "reviewProgressLabel": f"{review_count}/2",
+        "reviewDue": next_review_date <= today,
+        "reviewedToday": reviewed_today,
+        "lastReviewDate": last_review_date,
+        "nextReviewDate": next_review_date.isoformat(),
+    }
+
+
+def cat_world_learning_memory_review_error(memory: dict[str, Any], source_date: date) -> str:
+    source_date_key = source_date.isoformat()
+    source_memory_day = next(
+        (
+            day
+            for day in memory.get("recentDays", [])
+            if isinstance(day, dict) and str(day.get("date") or "") == source_date_key
+        ),
+        None,
+    )
+    if not source_memory_day:
+        return "这页学习足迹还不存在，不能生成回想记录。"
+    if source_memory_day.get("reviewStageKey") == "settled" and not memory.get("reviewedToday"):
+        return "这页已经完成隔日回想和三日巩固，可以去留下新的学习足迹。"
+    return ""
+
+
 def cat_world_apply_learning_memory_review(
     log: CatWorldDailyLog,
     cat: dict[str, Any],
@@ -17968,8 +18031,11 @@ def cat_world_learning_memory_payload(
         {},
     )
     last_review = ordered_reviews[-1] if ordered_reviews else {}
-    recent_days = []
-    for memory_date in reversed(ordered_dates[-6:]):
+    reviews_by_source_date: dict[str, list[dict[str, str]]] = {}
+    for row in ordered_reviews:
+        reviews_by_source_date.setdefault(row["sourceDate"], []).append(row)
+    memory_days = []
+    for memory_date in reversed(ordered_dates):
         milestones = milestones_by_date.get(memory_date, set())
         if "loop" in milestones:
             status_key = "loop"
@@ -17986,15 +18052,64 @@ def cat_world_learning_memory_payload(
         else:
             status_key = "started"
             status_label = "点亮 5 词起步"
-        recent_days.append(
+        memory_date_key = memory_date.isoformat()
+        memory_days.append(
             {
-                "date": memory_date.isoformat(),
+                "date": memory_date_key,
                 "dayLabel": f"{memory_date.month}/{memory_date.day}",
                 "statusKey": status_key,
                 "statusLabel": status_label,
                 "milestones": sorted(milestones),
+                **cat_world_learning_memory_review_schedule(
+                    memory_date,
+                    reviews_by_source_date.get(memory_date_key, []),
+                    source_date,
+                ),
             }
         )
+    due_days = [day for day in memory_days if day["reviewDue"]]
+    due_days.sort(
+        key=lambda day: (
+            0 if day["reviewStageKey"] == "strengthen" else 1,
+            date.fromisoformat(day["nextReviewDate"]).toordinal()
+            if day["reviewStageKey"] == "strengthen"
+            else -date.fromisoformat(day["date"]).toordinal(),
+        )
+    )
+    suggested_review_day = due_days[0] if due_days else {}
+    pinned_dates = {
+        value
+        for value in (
+            str(today_review.get("sourceDate") or ""),
+            str(suggested_review_day.get("date") or ""),
+        )
+        if value
+    }
+    recent_days = memory_days[:6]
+    for pinned_date in pinned_dates:
+        if any(day["date"] == pinned_date for day in recent_days):
+            continue
+        pinned_day = next((day for day in memory_days if day["date"] == pinned_date), None)
+        if not pinned_day:
+            continue
+        if len(recent_days) < 6:
+            recent_days.append(pinned_day)
+            continue
+        replace_index = next(
+            (
+                index
+                for index in range(len(recent_days) - 1, -1, -1)
+                if recent_days[index]["date"] not in pinned_dates
+            ),
+            len(recent_days) - 1,
+        )
+        recent_days[replace_index] = pinned_day
+    recent_days.sort(key=lambda day: day["date"], reverse=True)
+    upcoming_review_dates = [
+        day["nextReviewDate"]
+        for day in memory_days
+        if day["nextReviewDate"] and not day["reviewDue"]
+    ]
     stage_rows = [
         {
             "key": str(memory_stage["key"]),
@@ -18029,6 +18144,10 @@ def cat_world_learning_memory_payload(
         "todayReviewSourceDate": str(today_review.get("sourceDate") or ""),
         "lastReviewDate": str(last_review.get("reviewDate") or ""),
         "lastReviewSourceDate": str(last_review.get("sourceDate") or ""),
+        "reviewDueToday": bool(suggested_review_day) and not bool(today_review),
+        "suggestedReviewDate": str(suggested_review_day.get("date") or ""),
+        "suggestedReviewStageLabel": str(suggested_review_day.get("reviewStageLabel") or ""),
+        "nextReviewDate": min(upcoming_review_dates) if upcoming_review_dates else "",
         "stages": stage_rows,
         "recentDays": recent_days,
     }
