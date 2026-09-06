@@ -5142,7 +5142,9 @@ class CatWorldScene extends Phaser.Scene {
       itemId: selected.itemId,
       itemKind: selected.point.itemKind,
       label: selected.point.label || "学习角",
-      message: `${visit.message} 我去${selected.point.label || "学习角"}旁边安静看一会儿。`,
+      message: exactTreasureTarget
+        ? visit.message
+        : `${visit.message} 我去${selected.point.label || "学习角"}旁边安静看一会儿。`,
       plaqueX: selected.point.plaqueX,
       plaqueY: selected.point.plaqueY,
       x: exactTreasureTarget
@@ -5495,6 +5497,7 @@ class CatWorldScene extends Phaser.Scene {
   spawnLearningMemoryBubble(container, cat, target = {}) {
     if (!container?.active) return;
     const message = `${cat?.displayLabel || cat?.label || "猫咪"}：${target.message || "我想翻翻我们的共同学习手册。"}`;
+    const holdMs = Math.max(Number(target.holdMs || 6400), 3200);
     const bubbleWidth = VIEW_WIDTH < 900 ? 220 : 270;
     const bubbleX = clamp(container.x + 36, bubbleWidth / 2 + 76, VIEW_WIDTH - bubbleWidth / 2 - 76);
     const bubble = this.add
@@ -5514,8 +5517,8 @@ class CatWorldScene extends Phaser.Scene {
       targets: bubble,
       y: bubble.y - 18,
       alpha: 0,
-      delay: 3000,
-      duration: 1400,
+      delay: Math.max(holdMs - 2000, 3400),
+      duration: 1600,
       ease: "Cubic.easeOut",
       onComplete: () => bubble.destroy(),
     });

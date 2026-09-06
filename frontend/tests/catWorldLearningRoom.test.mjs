@@ -121,6 +121,9 @@ test("each eligible cat can quietly revisit its own learning memory in the room"
   assert.match(game, /const bubbleWidth = VIEW_WIDTH < 900 \? 220 : 270/);
   assert.match(game, /clamp\(container\.x \+ 36, bubbleWidth \/ 2 \+ 76, VIEW_WIDTH - bubbleWidth \/ 2 - 76\)/);
   assert.match(game, /wordWrap:\s*\{ width: bubbleWidth \}/);
+  assert.match(game, /const holdMs = Math\.max\(Number\(target\.holdMs \|\| 6400\), 3200\)/);
+  assert.match(game, /delay: Math\.max\(holdMs - 2000, 3400\)/);
+  assert.match(game, /duration: 1600/);
   assert.match(game, /this\.learningMemoryVisits = new Set\(\)/);
   assert.match(styles, /\.cat-world-context-intent\.tone-memory\s*\{/);
 });

@@ -38,6 +38,68 @@ const MEMORY_VISIT_ANIMATIONS = Object.freeze({
   balanced: "book",
 });
 
+const MEMORY_VISIT_RITUALS = Object.freeze({
+  "gentle-starter": Object.freeze({
+    label: "轻声复述",
+    statusVerb: "正在轻声复述",
+    memoryStatus: "正在轻声翻看学习脚印",
+    regularLead: (word) => `我想把 ${word} 轻声念一遍，你写过：`,
+    todayLead: (word) => `今天刚找回的 ${word}，我想轻声再念一遍：`,
+  }),
+  "story-builder": Object.freeze({
+    label: "句子续写",
+    statusVerb: "正在把词放回句子",
+    memoryStatus: "正在翻看我们的故事页",
+    regularLead: (word) => `我把 ${word} 放回你写过的小故事里：`,
+    todayLead: (word) => `今天刚找回的 ${word}，我把它放回这句话里：`,
+  }),
+  "idea-sparring": Object.freeze({
+    label: "试新用法",
+    statusVerb: "正在试一个新用法",
+    memoryStatus: "正在琢磨旧词的新用法",
+    regularLead: (word) => `我在想 ${word} 还能用进哪句话，先看看你写过的：`,
+    todayLead: (word) => `今天刚找回的 ${word}，我已经在想它的新用法了：`,
+  }),
+  "loop-keeper": Object.freeze({
+    label: "遮答回想",
+    statusVerb: "正在遮答回想",
+    memoryStatus: "正在遮住答案回想",
+    regularLead: (word) => `我先遮住词义找回 ${word}，再对照你写过的：`,
+    todayLead: (word) => `今天刚找回的 ${word}，我再遮住答案试一次：`,
+  }),
+  "streak-keeper": Object.freeze({
+    label: "守住熟练",
+    statusVerb: "正在守住熟练爪印",
+    memoryStatus: "正在守住这页学习脚印",
+    regularLead: (word) => `我来守住 ${word} 这枚熟练爪印，你写过：`,
+    todayLead: (word) => `今天刚找回的 ${word}，这枚熟练爪印要收好：`,
+  }),
+  "review-organizer": Object.freeze({
+    label: "整理复习页",
+    statusVerb: "正在整理复习页",
+    memoryStatus: "正在整理共同学习手册",
+    regularLead: (word) => `我把 ${word} 放回复习页的正确位置，你写过：`,
+    todayLead: (word) => `今天刚找回的 ${word}，我把它收回复习页：`,
+  }),
+  balanced: Object.freeze({
+    label: "再看一遍",
+    statusVerb: "正在再看一遍",
+    memoryStatus: "正在翻看共同学习手册",
+    regularLead: (word) => `我再看一遍 ${word}，还记得你写过：`,
+    todayLead: (word) => `今天刚找回的 ${word}，我想再看一遍：`,
+  }),
+});
+
+const MEMORY_VISIT_TONES = Object.freeze({
+  calm: Object.freeze(["这次慢慢看就好。", "我想安静陪它待一会儿。"]),
+  clingy: Object.freeze(["我想贴着你再念一遍。", "这次也要和你一起记住。"]),
+  guardian: Object.freeze(["这一页我会替你守好。", "这个词先交给我看着。"]),
+  chatty: Object.freeze(["下次也想听你亲口说。", "我已经想听它出现在新句子里了。"]),
+  gentle: Object.freeze(["不用赶，想起一点就很好。", "我们轻轻记住这一页就好。"]),
+  adventurous: Object.freeze(["下次再给它找个新句子。", "这个词还能带我们去新地方。"]),
+  balanced: Object.freeze(["这一页先好好留住。", "下次见到它就更熟了。"]),
+});
+
 const MEMORY_REFLECTION_COPY = Object.freeze({
   started: Object.freeze({
     achievement: "那天先迈出了最小的一步，点亮了起步爪印。",
@@ -139,14 +201,35 @@ function memoryVisitTreasure(memory, catId, sceneId, memoryToken) {
   ];
 }
 
-function memoryTreasureVisitSentence(memory, treasure) {
-  const sentence = compactMemorySentence(treasure.sentence);
+function memoryVisitTone(cat, memoryToken) {
+  const temperament = String(cat.traits?.temperament || cat.temperament || "balanced");
+  const tonePool = MEMORY_VISIT_TONES[temperament] || MEMORY_VISIT_TONES.balanced;
+  const catId = String(cat.id || cat.profileId || cat.nickname || cat.label || "cat");
+  return tonePool[stableIndex(`${catId}:${memoryToken}:memory-visit-tone`, tonePool.length)];
+}
+
+function memoryTreasureVisitCopy(memory, treasure, cat, styleKey) {
+  const ritual = MEMORY_VISIT_RITUALS[styleKey] || MEMORY_VISIT_RITUALS.balanced;
+  const sentence = compactMemorySentence(treasure.sentence, 54);
   const recalledToday = treasure.word.toLocaleLowerCase("en-US")
     === memory.todayRecallWord.toLocaleLowerCase("en-US");
-  if (memory.reviewedToday && recalledToday) {
-    return `今天刚找回的 ${treasure.word}，我还记得你写过：${sentence}`;
-  }
-  return `我在词牌上看见 ${treasure.word}，还记得你写过：${sentence}`;
+  const lead = memory.reviewedToday && recalledToday
+    ? ritual.todayLead(treasure.word)
+    : ritual.regularLead(treasure.word);
+  return {
+    message: `${lead}${sentence} ${memoryVisitTone(cat, treasure.key)}`,
+    ritualLabel: ritual.label,
+    statusLabel: `${ritual.statusVerb} ${treasure.word}`,
+  };
+}
+
+function memoryPageVisitCopy(memory, cat, styleKey, memoryToken) {
+  const ritual = MEMORY_VISIT_RITUALS[styleKey] || MEMORY_VISIT_RITUALS.balanced;
+  return {
+    message: `${memoryVisitSentence(memory)} ${memoryVisitTone(cat, memoryToken)}`,
+    ritualLabel: ritual.label,
+    statusLabel: ritual.memoryStatus,
+  };
 }
 
 export function catWorldLearningMemoryReflection(day = {}, cat = {}) {
@@ -378,17 +461,21 @@ export function catWorldLearningMemoryVisitPlan(cat = {}, behavior = {}, context
   const attention = Math.max(Math.min(Number(behavior.attention || 50), 100), 0);
   const visitDay = memoryVisitDay(memory) || {};
   const treasure = memoryVisitTreasure(memory, catId, sceneId, memoryToken);
+  const visitCopy = treasure
+    ? memoryTreasureVisitCopy(memory, treasure, cat, styleKey)
+    : memoryPageVisitCopy(memory, cat, styleKey, memoryToken);
   return {
     kind: "learning-memory",
     visitKey: `${sceneId}:${catId}:${memoryToken}`,
     targetItemIds: [...MEMORY_VISIT_TARGETS[styleKey]],
-    message: treasure ? memoryTreasureVisitSentence(memory, treasure) : memoryVisitSentence(memory),
+    message: visitCopy.message,
     animation: MEMORY_VISIT_ANIMATIONS[styleKey],
+    ritualLabel: visitCopy.ritualLabel,
     levelKey: memory.levelKey,
     levelLabel: memory.levelLabel,
     dayLabel: visitDay.dayLabel || formatCatWorldLearningMemoryDate(visitDay.date || memory.latestDate),
     treasure,
-    statusLabel: treasure ? `正在回看 ${treasure.word}` : "正在回看学习脚印",
+    statusLabel: visitCopy.statusLabel,
     targetLabel: treasure ? `珍藏词 ${treasure.word}` : "共同学习手册",
     holdMs: 6400,
     priority: Math.max(

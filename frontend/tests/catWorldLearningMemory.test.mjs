@@ -276,7 +276,7 @@ test("a cat opens the due page and names its gentle two-step review rhythm", () 
   assert.match(reviewedPlan.message, /今天刚找回的 steady/);
   assert.match(reviewedPlan.message, /I can make steady progress/);
   assert.equal(reviewedPlan.treasure.word, "steady");
-  assert.equal(reviewedPlan.statusLabel, "正在回看 steady");
+  assert.equal(reviewedPlan.statusLabel, "正在再看一遍 steady");
 });
 
 test("a due review never reveals its answer through a room treasure", () => {
@@ -375,6 +375,87 @@ test("a cat chooses the same personal word treasure for the same memory visit", 
   assert.ok(repeatedPlan);
   assert.deepEqual(repeatedPlan.treasure, plan.treasure);
   assert.equal(repeatedPlan.targetLabel, plan.targetLabel);
+});
+
+test("word treasure visits follow each cat's own learning ritual instead of its breed", () => {
+  const memory = {
+    hasMemory: true,
+    companionDays: 7,
+    memoryPoints: 10,
+    levelIndex: 2,
+    levelCount: 5,
+    latestDate: "2026-09-07",
+    recallTreasures: [{
+      key: "curious",
+      word: "curious",
+      sentence: "A curious learner keeps asking useful questions.",
+      sourceDate: "2026-09-07",
+    }],
+  };
+  const behavior = { canWalk: true, energy: 82, restThreshold: 34, attention: 72 };
+  const expectations = [
+    ["gentle-starter", "轻声复述", "正在轻声复述", "blink"],
+    ["story-builder", "句子续写", "正在把词放回句子", "book"],
+    ["idea-sparring", "试新用法", "正在试一个新用法", "chirp"],
+    ["loop-keeper", "遮答回想", "正在遮答回想", "paw"],
+    ["streak-keeper", "守住熟练", "正在守住熟练爪印", "heart"],
+    ["review-organizer", "整理复习页", "正在整理复习页", "book"],
+    ["balanced", "再看一遍", "正在再看一遍", "book"],
+  ];
+
+  const plans = expectations.map(([styleKey]) => [1, 2, 3, 4]
+    .map((cycle) => catWorldLearningMemoryVisitPlan({
+      id: `same-breed-${styleKey}`,
+      breedKey: "british-shorthair",
+      traits: { temperament: "calm" },
+      learningStyle: { key: styleKey },
+      learningMemory: memory,
+    }, behavior, { cycle, sceneId: "main-room" }))
+    .find(Boolean));
+
+  plans.forEach((plan, index) => {
+    const [, ritualLabel, statusVerb, animation] = expectations[index];
+    assert.ok(plan);
+    assert.equal(plan.ritualLabel, ritualLabel);
+    assert.equal(plan.statusLabel, `${statusVerb} curious`);
+    assert.equal(plan.animation, animation);
+    assert.match(plan.message, /A curious learner keeps asking useful questions/);
+  });
+  assert.equal(new Set(plans.map((plan) => plan.message)).size, expectations.length);
+});
+
+test("cats sharing a learning style still keep stable individual memory tones", () => {
+  const memory = {
+    hasMemory: true,
+    companionDays: 7,
+    memoryPoints: 10,
+    levelIndex: 2,
+    levelCount: 5,
+    latestDate: "2026-09-07",
+    recallTreasures: [{
+      key: "steady",
+      word: "steady",
+      sentence: "I keep a steady learning rhythm.",
+      sourceDate: "2026-09-07",
+    }],
+  };
+  const behavior = { canWalk: true, energy: 82, restThreshold: 34, attention: 72 };
+  const planFor = (id) => [1, 2, 3, 4]
+    .map((cycle) => catWorldLearningMemoryVisitPlan({
+      id,
+      breedKey: "siamese",
+      traits: { temperament: "chatty" },
+      learningStyle: { key: "idea-sparring" },
+      learningMemory: memory,
+    }, behavior, { cycle, sceneId: "main-room" }))
+    .find(Boolean);
+  const first = planFor("same-style-cat-1");
+  const replay = planFor("same-style-cat-1");
+  const individualMessages = Array.from({ length: 12 }, (_, index) => planFor(`same-style-cat-${index + 1}`).message);
+
+  assert.equal(replay.message, first.message);
+  assert.equal(new Set(individualMessages).size, 2);
+  assert.ok(individualMessages.every((message) => message.includes("steady")));
 });
 
 test("cat cards, profile and room expose the same personal learning history", async () => {
