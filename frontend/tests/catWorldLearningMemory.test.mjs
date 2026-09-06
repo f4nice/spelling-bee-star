@@ -33,7 +33,27 @@ test("cat learning memory keeps humane per-cat progress and readable titles", ()
     nextRemaining: 6,
     latestDate: "2026-09-07",
     reviewCount: 2,
+    recallTreasureCount: 2,
+    recallTreasures: [
+      {
+        key: "steady",
+        word: "steady",
+        sentence: "I can make steady progress.",
+        sourceDate: "2026-09-06",
+        reviewDate: "2026-09-07",
+        reviewCount: 2,
+      },
+      {
+        word: "resilient",
+        sentence: "I can stay resilient.",
+        sourceDate: "2026-09-05",
+        reviewDate: "2026-09-06",
+        reviewCount: 1,
+      },
+    ],
     reviewedToday: true,
+    todayRecallWord: "steady",
+    todayRecallSentence: "I can make steady progress.",
     todayReviewSourceDate: "2026-09-06",
     lastReviewDate: "2026-09-07",
     lastReviewSourceDate: "2026-09-06",
@@ -66,7 +86,11 @@ test("cat learning memory keeps humane per-cat progress and readable titles", ()
   assert.deepEqual(memory.stages.filter((stage) => stage.unlocked).map((stage) => stage.key), ["starter", "familiar"]);
   assert.equal(memory.recentDays[0].statusLabel, "完成学习闭环");
   assert.equal(memory.reviewCount, 2);
+  assert.equal(memory.recallTreasureCount, 2);
+  assert.equal(memory.recallTreasures[0].reviewCount, 2);
+  assert.equal(memory.recallTreasures[1].key, "resilient");
   assert.equal(memory.reviewedToday, true);
+  assert.equal(memory.todayRecallWord, "steady");
   assert.equal(memory.todayReviewSourceDate, "2026-09-06");
   assert.equal(memory.reviewDueToday, true);
   assert.equal(memory.suggestedReviewStageLabel, "三日巩固");
@@ -74,6 +98,7 @@ test("cat learning memory keeps humane per-cat progress and readable titles", ()
   assert.equal(memory.recentDays[0].latestRecallSentence, "I can make steady progress.");
   assert.equal(formatCatWorldLearningMemoryDate(memory.latestDate), "9月7日");
   assert.match(catWorldLearningMemoryRoomCue(memory), /最新一页写在 9月7日/);
+  assert.match(catWorldLearningMemoryRoomCue(memory), /珍藏着 2 个回想词/);
   assert.match(catWorldLearningMemoryRoomCue(memory, true), /完成 1 次英语闭环/);
 });
 
@@ -188,6 +213,15 @@ test("a cat opens the due page and names its gentle two-step review rhythm", () 
     reviewDueToday: true,
     suggestedReviewDate: "2026-09-06",
     suggestedReviewStageLabel: "三日巩固",
+    recallTreasureCount: 1,
+    recallTreasures: [{
+      key: "steady",
+      word: "steady",
+      sentence: "I can make steady progress.",
+      sourceDate: "2026-09-06",
+      reviewDate: "2026-09-07",
+      reviewCount: 1,
+    }],
     recentDays: [
       { date: "2026-09-07", dayLabel: "9/7", statusKey: "loop" },
       {
@@ -213,6 +247,7 @@ test("a cat opens the due page and names its gentle two-step review rhythm", () 
   )).find(Boolean);
   assert.ok(plan);
   assert.match(plan.message, /9\/6.*三日巩固/);
+  assert.doesNotMatch(plan.message, /steady/);
   assert.equal(plan.dayLabel, "9/6");
   assert.ok(plan.priority >= 42);
 
@@ -221,6 +256,24 @@ test("a cat opens the due page and names its gentle two-step review rhythm", () 
     reviewedToday: true,
     todayReviewSourceDate: "2026-09-07",
   }), "2026-09-07");
+
+  const reviewedCat = {
+    ...cat,
+    learningMemory: {
+      ...dueMemory,
+      reviewDueToday: false,
+      reviewedToday: true,
+      todayRecallWord: "steady",
+      todayRecallSentence: "I can make steady progress.",
+    },
+  };
+  const reviewedPlan = [1, 2, 3, 4].map((cycle) => catWorldLearningMemoryVisitPlan(
+    reviewedCat,
+    behavior,
+    { cycle, sceneId: "main-room" },
+  )).find(Boolean);
+  assert.ok(reviewedPlan);
+  assert.match(reviewedPlan.message, /今天刚找回的 steady/);
 });
 
 test("cat cards, profile and room expose the same personal learning history", async () => {
@@ -243,6 +296,10 @@ test("cat cards, profile and room expose the same personal learning history", as
   assert.match(styles, /\.cat-world-learning-memory-days\s*\{[^}]*overflow-x:\s*auto/s);
   assert.match(page, /@click="selectCatMemoryDay\(day\)"/);
   assert.match(page, /class="cat-world-learning-memory-reflection"/);
+  assert.match(page, /class="cat-world-recall-treasures"/);
+  assert.match(page, /@click="selectCatRecallTreasure\(treasure\)"/);
+  assert.match(page, /catRecallTreasureDetailRef\.value\?\.scrollIntoView\(\{ block: "nearest" \}\)/);
+  assert.match(page, /珍藏 \{\{ cat\.learningMemory\.recallTreasureCount \}\} 词/);
   assert.match(page, /@click="focusSelectedCatMemory"/);
   assert.match(page, /CAT_MEMORY_REVIEW_SECONDS = 30/);
   assert.match(page, /@click="handleCatMemoryReviewAction"/);
@@ -264,6 +321,9 @@ test("cat cards, profile and room expose the same personal learning history", as
   assert.match(styles, /\.cat-world-memory-review\.complete > button\s*\{[^}]*color:\s*#fff;[^}]*background:\s*#1d7f5b;/s);
   assert.match(styles, /\.cat-world-memory-recall-form\s*\{[^}]*grid-template-columns:/s);
   assert.match(styles, /\.cat-world-memory-recall-form input:focus,[\s\S]*?border-color:\s*#007f67;/);
+  assert.match(styles, /\.cat-world-recall-treasure-list\s*\{[^}]*grid-template-columns:\s*repeat\(4,/s);
+  assert.match(styles, /\.cat-world-recall-treasure-list > button\.active\s*\{[^}]*color:\s*#fff;[^}]*background:\s*#1d7f5b;/s);
+  assert.match(styles, /\.cat-world-recall-treasure-list > button\s*\{[^}]*transition:\s*transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;/s);
   assert.match(styles, /\.cat-world-learning-memory-days > button\.review-due:not\(\.active\)/);
   assert.match(
     styles,

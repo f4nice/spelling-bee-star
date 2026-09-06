@@ -15539,6 +15539,165 @@ select {
   padding-top: 0;
 }
 
+.cat-world-recall-treasures {
+  display: grid;
+  gap: 7px;
+  border-top: 2px dashed rgba(44, 47, 58, 0.34);
+  padding-top: 8px;
+}
+
+.cat-world-recall-treasures > header,
+.cat-world-recall-treasures > header > span,
+.cat-world-recall-treasures > header > span > span {
+  display: flex;
+  align-items: center;
+}
+
+.cat-world-recall-treasures > header {
+  justify-content: space-between;
+  gap: 9px;
+}
+
+.cat-world-recall-treasures > header > span {
+  gap: 6px;
+  color: #176f58;
+}
+
+.cat-world-recall-treasures > header > span > span {
+  display: grid;
+  gap: 1px;
+}
+
+.cat-world-recall-treasures > header small,
+.cat-world-recall-treasures > header strong,
+.cat-world-recall-treasures > header em {
+  color: #40516b;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.cat-world-recall-treasures > header small {
+  color: #007f67;
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.cat-world-recall-treasures > header strong {
+  color: #263047;
+  font-size: 11px;
+}
+
+.cat-world-recall-treasures > header em {
+  flex: 0 0 auto;
+  border: 1px solid #2c2f3a;
+  padding: 2px 5px;
+  background: #fff3a4;
+}
+
+.cat-world-recall-treasure-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.cat-world-recall-treasure-list > button {
+  appearance: none;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 43px;
+  border: 2px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 5px 7px;
+  color: #263047;
+  background: #fff8df;
+  box-shadow: 2px 2px 0 #2c2f3a;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.cat-world-recall-treasure-list > button strong,
+.cat-world-recall-treasure-list > button small {
+  min-width: 0;
+  color: inherit;
+  font-weight: 900;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.cat-world-recall-treasure-list > button strong {
+  font-size: 11px;
+}
+
+.cat-world-recall-treasure-list > button small {
+  color: #657086;
+  font-size: 8px;
+}
+
+.cat-world-recall-treasure-list > button:hover,
+.cat-world-recall-treasure-list > button:focus-visible,
+.cat-world-recall-treasure-list > button.active {
+  color: #fff;
+  background: #1d7f5b;
+}
+
+.cat-world-recall-treasure-list > button:hover small,
+.cat-world-recall-treasure-list > button:focus-visible small,
+.cat-world-recall-treasure-list > button.active small {
+  color: #fff;
+}
+
+.cat-world-recall-treasure-list > button:focus-visible {
+  outline: 2px solid #f9c84a;
+  outline-offset: 2px;
+}
+
+.cat-world-recall-treasure-detail {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.32fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+  border-left: 5px solid #e6827b;
+  padding: 7px 9px;
+  background: #eaf7ff;
+}
+
+.cat-world-recall-treasure-detail > span {
+  display: grid;
+  gap: 2px;
+}
+
+.cat-world-recall-treasure-detail small,
+.cat-world-recall-treasure-detail strong,
+.cat-world-recall-treasure-detail p,
+.cat-world-recall-treasure-hint {
+  margin: 0;
+  color: #40516b;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1.4;
+}
+
+.cat-world-recall-treasure-detail small {
+  color: #a34f47;
+  font-size: 8px;
+}
+
+.cat-world-recall-treasure-detail strong {
+  color: #263047;
+  font-size: 12px;
+}
+
+.cat-world-recall-treasure-hint {
+  padding: 1px 2px;
+  color: #657086;
+}
+
 .cat-world-memory-review > i {
   align-self: center;
   height: 9px;
@@ -16176,6 +16335,14 @@ select {
 
   .cat-world-learning-scrapbook-foot em {
     text-align: left;
+  }
+
+  .cat-world-recall-treasure-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cat-world-recall-treasure-detail {
+    grid-template-columns: 1fr;
   }
 
   .cat-world-lost-alert,

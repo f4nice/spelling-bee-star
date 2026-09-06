@@ -137,6 +137,20 @@ class CatWorldLearningMemoryTest(unittest.TestCase):
                     learning_log("cat-a", date(2026, 9, 6), ["started"]),
                     learning_log("cat-a", date(2026, 9, 7), ["output"]),
                     learning_log("cat-b", date(2026, 9, 7), ["started", "warmup"]),
+                    review_log(
+                        "cat-a",
+                        date(2026, 9, 5),
+                        date(2026, 9, 4),
+                        recalled_word="steady",
+                        recalled_sentence="I can make steady progress.",
+                    ),
+                    review_log(
+                        "cat-b",
+                        date(2026, 9, 6),
+                        date(2026, 9, 5),
+                        recalled_word="brave",
+                        recalled_sentence="I can be brave today.",
+                    ),
                     learning_log(
                         "cat-a",
                         date(2026, 9, 7),
@@ -156,6 +170,12 @@ class CatWorldLearningMemoryTest(unittest.TestCase):
         self.assertEqual(payloads["cat-a"]["companionDays"], 2)
         self.assertEqual(payloads["cat-a"]["loopDays"], 0)
         self.assertEqual(payloads["cat-b"]["warmupDays"], 1)
+        self.assertEqual(payloads["cat-a"]["recallTreasures"][0]["word"], "steady")
+        self.assertEqual(payloads["cat-b"]["recallTreasures"][0]["word"], "brave")
+        self.assertNotEqual(
+            payloads["cat-a"]["recallTreasures"],
+            payloads["cat-b"]["recallTreasures"],
+        )
         self.assertFalse(payloads["cat-empty"]["hasMemory"])
         self.assertEqual(payloads["cat-empty"]["recentDays"], [])
         self.assertFalse(any(stage["unlocked"] for stage in payloads["cat-empty"]["stages"]))
@@ -184,6 +204,8 @@ class CatWorldLearningMemoryTest(unittest.TestCase):
         self.assertEqual(payload["memoryPoints"], 1)
         self.assertEqual(payload["reviewCount"], 1)
         self.assertTrue(payload["reviewedToday"])
+        self.assertEqual(payload["todayRecallWord"], "steady")
+        self.assertEqual(payload["todayRecallSentence"], "I can make steady progress.")
         self.assertEqual(payload["todayReviewSourceDate"], "2026-09-06")
         self.assertEqual(payload["lastReviewDate"], "2026-09-07")
         self.assertEqual(payload["recentDays"][0]["latestRecallWord"], "steady")
@@ -218,6 +240,48 @@ class CatWorldLearningMemoryTest(unittest.TestCase):
             with self.subTest(word=word, sentence=sentence):
                 with self.assertRaises(HTTPException):
                     cat_world_normalize_learning_memory_recall(word, sentence)
+
+    def test_recalled_words_become_deduplicated_cat_treasures(self):
+        payload = cat_world_learning_memory_payload(
+            [
+                learning_log("cat-a", date(2026, 9, 1), ["started", "warmup"]),
+                review_log(
+                    "cat-a",
+                    date(2026, 9, 2),
+                    date(2026, 9, 1),
+                    recalled_word="Steady",
+                    recalled_sentence="I can make steady progress.",
+                ),
+                review_log(
+                    "cat-a",
+                    date(2026, 9, 5),
+                    date(2026, 9, 1),
+                    recalled_word="steady",
+                    recalled_sentence="I study English at a steady pace.",
+                ),
+                review_log(
+                    "cat-a",
+                    date(2026, 9, 6),
+                    date(2026, 9, 4),
+                    recalled_word="resilient",
+                    recalled_sentence="I can stay resilient every day.",
+                ),
+                review_log("cat-a", date(2026, 9, 7), date(2026, 9, 6)),
+            ],
+            today=date(2026, 9, 7),
+        )
+
+        self.assertEqual(payload["reviewCount"], 4)
+        self.assertEqual(payload["recallTreasureCount"], 2)
+        self.assertEqual(
+            [treasure["word"] for treasure in payload["recallTreasures"]],
+            ["resilient", "steady"],
+        )
+        steady = payload["recallTreasures"][1]
+        self.assertEqual(steady["key"], "steady")
+        self.assertEqual(steady["reviewCount"], 2)
+        self.assertEqual(steady["reviewDate"], "2026-09-05")
+        self.assertEqual(steady["sentence"], "I study English at a steady pace.")
 
     def test_learning_pages_offer_one_humane_review_when_the_next_day_arrives(self):
         payload = cat_world_learning_memory_payload(

@@ -94,6 +94,9 @@ function memoryVisitDay(memory) {
 }
 
 function memoryVisitSentence(memory) {
+  if (memory.reviewedToday && memory.todayRecallWord) {
+    return `今天刚找回的 ${memory.todayRecallWord}，我想再悄悄念一次。`;
+  }
   const latest = memoryVisitDay(memory) || {};
   const dayLabel = latest.dayLabel || formatCatWorldLearningMemoryDate(latest.date || memory.latestDate);
   const prefix = dayLabel ? `我想翻翻我们 ${dayLabel} 的那一页` : "我想翻翻我们的共同学习手册";
@@ -175,6 +178,19 @@ function normalizeMemoryDay(day = {}) {
   };
 }
 
+function normalizeRecallTreasure(treasure = {}) {
+  const word = String(treasure.word || "").trim();
+  const sentence = String(treasure.sentence || "").trim();
+  return {
+    key: String(treasure.key || word.toLocaleLowerCase("en-US")).trim(),
+    word,
+    sentence,
+    sourceDate: String(treasure.sourceDate || ""),
+    reviewDate: String(treasure.reviewDate || ""),
+    reviewCount: Math.max(safeCount(treasure.reviewCount), 1),
+  };
+}
+
 export function catWorldLearningRecallDraft(rawWord = "", rawSentence = "") {
   const word = String(rawWord || "").replace(/\s+/g, " ").trim();
   const sentence = String(rawSentence || "").replace(/\s+/g, " ").trim();
@@ -207,6 +223,12 @@ export function normalizeCatWorldLearningMemory(memory = {}) {
   const recentDays = Array.isArray(memory.recentDays)
     ? memory.recentDays.map(normalizeMemoryDay).filter((day) => day.date).slice(0, 6)
     : [];
+  const recallTreasures = Array.isArray(memory.recallTreasures)
+    ? memory.recallTreasures
+      .map(normalizeRecallTreasure)
+      .filter((treasure) => treasure.key && treasure.word && treasure.sentence)
+      .slice(0, 8)
+    : [];
   return {
     hasMemory: Boolean(memory.hasMemory || companionDays),
     companionDays,
@@ -226,7 +248,11 @@ export function normalizeCatWorldLearningMemory(memory = {}) {
     firstDate: String(memory.firstDate || ""),
     latestDate: String(memory.latestDate || ""),
     reviewCount: safeCount(memory.reviewCount),
+    recallTreasureCount: Math.max(safeCount(memory.recallTreasureCount), recallTreasures.length),
+    recallTreasures,
     reviewedToday: Boolean(memory.reviewedToday),
+    todayRecallWord: String(memory.todayRecallWord || "").trim(),
+    todayRecallSentence: String(memory.todayRecallSentence || "").trim(),
     todayReviewSourceDate: String(memory.todayReviewSourceDate || ""),
     lastReviewDate: String(memory.lastReviewDate || ""),
     lastReviewSourceDate: String(memory.lastReviewSourceDate || ""),
@@ -275,11 +301,14 @@ export function catWorldLearningMemoryRoomCue(memory = {}, complete = false) {
   if (complete && normalized.loopDays) {
     return `我们已经一起完成 ${normalized.loopDays} 次英语闭环，这次也好好记住了。`;
   }
+  const treasureLine = normalized.recallTreasureCount
+    ? `，手册里还珍藏着 ${normalized.recallTreasureCount} 个回想词`
+    : "";
   const latestDate = formatCatWorldLearningMemoryDate(normalized.latestDate);
   if (latestDate) {
-    return `我们的最新一页写在 ${latestDate}，已经一起学过 ${normalized.companionDays} 天。`;
+    return `我们的最新一页写在 ${latestDate}，已经一起学过 ${normalized.companionDays} 天${treasureLine}。`;
   }
-  return `我记得我们已经一起学过 ${normalized.companionDays} 天。`;
+  return `我记得我们已经一起学过 ${normalized.companionDays} 天${treasureLine}。`;
 }
 
 export function catWorldLearningMemoryVisitPlan(cat = {}, behavior = {}, context = {}) {

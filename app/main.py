@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-026"
-DEFAULT_PAGE_VERSION = "v20260907.26"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-027"
+DEFAULT_PAGE_VERSION = "v20260907.27"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -18081,6 +18081,31 @@ def cat_world_learning_memory_payload(
     ordered_dates = sorted(companion_dates)
     source_date = today or date.today()
     ordered_reviews = sorted(review_rows, key=lambda row: (row["reviewDate"], row["reviewedAt"]))
+    recall_treasures_by_key: dict[str, dict[str, Any]] = {}
+    for review in ordered_reviews:
+        recalled_word = str(review.get("recalledWord") or "").strip()
+        recalled_sentence = str(review.get("recalledSentence") or "").strip()
+        if not recalled_word or not recalled_sentence:
+            continue
+        treasure_key = recalled_word.casefold()
+        previous = recall_treasures_by_key.get(treasure_key, {})
+        recall_treasures_by_key[treasure_key] = {
+            "key": treasure_key,
+            "word": recalled_word,
+            "sentence": recalled_sentence,
+            "sourceDate": str(review.get("sourceDate") or ""),
+            "reviewDate": str(review.get("reviewDate") or ""),
+            "reviewCount": int(previous.get("reviewCount") or 0) + 1,
+        }
+    recall_treasures = sorted(
+        recall_treasures_by_key.values(),
+        key=lambda treasure: (
+            str(treasure.get("reviewDate") or ""),
+            str(treasure.get("sourceDate") or ""),
+            str(treasure.get("key") or ""),
+        ),
+        reverse=True,
+    )
     today_review = next(
         (row for row in reversed(ordered_reviews) if row["reviewDate"] == source_date.isoformat()),
         {},
@@ -18195,7 +18220,11 @@ def cat_world_learning_memory_payload(
         "firstDate": ordered_dates[0].isoformat() if ordered_dates else "",
         "latestDate": ordered_dates[-1].isoformat() if ordered_dates else "",
         "reviewCount": len(ordered_reviews),
+        "recallTreasureCount": len(recall_treasures),
+        "recallTreasures": recall_treasures[:8],
         "reviewedToday": bool(today_review),
+        "todayRecallWord": str(today_review.get("recalledWord") or ""),
+        "todayRecallSentence": str(today_review.get("recalledSentence") or ""),
         "todayReviewSourceDate": str(today_review.get("sourceDate") or ""),
         "lastReviewDate": str(last_review.get("reviewDate") or ""),
         "lastReviewSourceDate": str(last_review.get("sourceDate") or ""),

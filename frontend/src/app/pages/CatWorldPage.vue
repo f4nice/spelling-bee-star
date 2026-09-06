@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Clock as ClockIcon, Hammer as HammerIcon, Heart as HeartIcon, House as HouseIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, ShoppingBag as ShoppingBagIcon, Shovel as ShovelIcon, Sprout as SproutIcon, Undo2 as UndoIcon, X as XIcon } from "lucide-vue-next";
+import { Archive as ArchiveIcon, Award as AwardIcon, BookMarked as BookMarkedIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Clock as ClockIcon, Hammer as HammerIcon, Heart as HeartIcon, House as HouseIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, ShoppingBag as ShoppingBagIcon, Shovel as ShovelIcon, Sprout as SproutIcon, Undo2 as UndoIcon, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -118,6 +118,8 @@ const learningRouteExpanded = ref(false);
 const learningWeekExpanded = ref(false);
 const selectedLearningWeekDate = ref("");
 const selectedCatMemoryDate = ref("");
+const selectedCatRecallTreasureKey = ref("");
+const catRecallTreasureDetailRef = ref(null);
 const catMemoryReviewWordInputRef = ref(null);
 const catMemoryReview = ref({
   catId: "",
@@ -956,6 +958,10 @@ const selectedCatMemoryDay = computed(() => {
 const selectedCatMemoryReflection = computed(() =>
   catWorldLearningMemoryReflection(selectedCatMemoryDay.value, activeCatDiary.value || {}),
 );
+const selectedCatRecallTreasure = computed(() => {
+  const treasures = activeCatDiary.value?.learningMemory?.recallTreasures || [];
+  return treasures.find((treasure) => treasure.key === selectedCatRecallTreasureKey.value) || null;
+});
 const selectedCatMemoryReviewState = computed(() => {
   const cat = activeCatDiary.value || {};
   const memory = cat.learningMemory || {};
@@ -1293,6 +1299,7 @@ function toggleCatDiary(cat) {
   openCatDiaryId.value = cat.id;
   focusedCatId.value = cat.id;
   selectedCatMemoryDate.value = catWorldLearningMemoryDefaultDate(cat.learningMemory);
+  selectedCatRecallTreasureKey.value = "";
 }
 
 function focusRoomItem(itemId) {
@@ -1309,12 +1316,23 @@ function closeCatDiary() {
   resetCatMemoryReview();
   openCatDiaryId.value = "";
   selectedCatMemoryDate.value = "";
+  selectedCatRecallTreasureKey.value = "";
 }
 
 function selectCatMemoryDay(day = {}) {
   if (!day.date) return;
   if (day.date !== selectedCatMemoryDate.value) resetCatMemoryReview();
   selectedCatMemoryDate.value = day.date;
+}
+
+function selectCatRecallTreasure(treasure = {}) {
+  const key = String(treasure.key || "");
+  if (!key) return;
+  const selecting = selectedCatRecallTreasureKey.value !== key;
+  selectedCatRecallTreasureKey.value = selecting ? key : "";
+  if (selecting) {
+    nextTick(() => catRecallTreasureDetailRef.value?.scrollIntoView({ block: "nearest" }));
+  }
 }
 
 function resetCatMemoryReview() {
@@ -3956,6 +3974,45 @@ async function selectCat(catOrId, options = {}) {
               </span>
             </footer>
           </div>
+          <section
+            v-if="activeCatDiary.learningMemory.recallTreasures.length"
+            class="cat-world-recall-treasures"
+            aria-label="猫咪珍藏词"
+          >
+            <header>
+              <span>
+                <BookMarkedIcon :size="16" :stroke-width="2.8" aria-hidden="true" />
+                <span><small>Word Treasures</small><strong>猫咪珍藏词</strong></span>
+              </span>
+              <em>{{ activeCatDiary.learningMemory.recallTreasureCount }} 个珍藏词</em>
+            </header>
+            <div class="cat-world-recall-treasure-list" role="group" aria-label="已找回的英文词">
+              <button
+                v-for="treasure in activeCatDiary.learningMemory.recallTreasures"
+                :key="`${activeCatDiary.id}-recall-treasure-${treasure.key}`"
+                type="button"
+                :class="{ active: treasure.key === selectedCatRecallTreasureKey }"
+                :aria-pressed="treasure.key === selectedCatRecallTreasureKey"
+                @click="selectCatRecallTreasure(treasure)"
+              >
+                <strong>{{ treasure.word }}</strong>
+                <small>回想 {{ treasure.reviewCount }} 次</small>
+              </button>
+            </div>
+            <div
+              v-if="selectedCatRecallTreasure"
+              ref="catRecallTreasureDetailRef"
+              class="cat-world-recall-treasure-detail"
+              aria-live="polite"
+            >
+              <span>
+                <small>{{ formatCatWorldLearningMemoryDate(selectedCatRecallTreasure.sourceDate) }}的学习足迹</small>
+                <strong>{{ selectedCatRecallTreasure.word }}</strong>
+              </span>
+              <p>{{ selectedCatRecallTreasure.sentence }}</p>
+            </div>
+            <p v-else class="cat-world-recall-treasure-hint">点一个词，看看你当时用自己的英语写下了什么。</p>
+          </section>
           <p
             v-if="!activeCatDiary.learningMemory.recentDays.length"
             class="cat-world-learning-memory-empty"
@@ -4379,7 +4436,7 @@ async function selectCat(catOrId, options = {}) {
               :title="catWorldLearningMemoryNextLine(cat.learningMemory)"
             >
               <b>陪学记忆</b>
-              <em>{{ cat.learningMemory.levelLabel }} · {{ cat.learningMemory.companionDays }} 天 / {{ cat.learningMemory.loopDays }} 闭环</em>
+              <em>{{ cat.learningMemory.levelLabel }} · {{ cat.learningMemory.companionDays }} 天 / {{ cat.learningMemory.loopDays }} 闭环<span v-if="cat.learningMemory.recallTreasureCount"> · 珍藏 {{ cat.learningMemory.recallTreasureCount }} 词</span></em>
             </p>
             <p class="cat-world-cat-card-location">
               <b><MapPinIcon :size="14" :stroke-width="2.6" aria-hidden="true" />{{ cat.currentSceneLabel }}</b>
