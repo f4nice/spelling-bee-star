@@ -134,3 +134,15 @@ test("moving furniture back to a room explains that its remembered position was 
   assert.match(page, /effect\.restoredPosition/);
   assert.match(page, /回到了上次摆放的位置/);
 });
+
+test("newly placed furniture visibly settles at its remembered coordinate", async () => {
+  const game = await readFile(new URL("../src/app/catWorldGame.js", import.meta.url), "utf8");
+
+  assert.match(game, /catWorldNewVisibleItemArrivals/);
+  assert.match(game, /playPendingItemArrivals\(\)/);
+  assert.match(game, /setData\("itemArrivalTarget", target\)/);
+  assert.match(game, /ease: "Back\.easeOut"/);
+  assert.match(game, /spawnItemArrivalDust/);
+  assert.match(game, /"摆好啦"/);
+  assert.match(game, /container\.setPosition\(target\.x, target\.y\)/);
+});

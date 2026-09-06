@@ -41,6 +41,10 @@ import {
   catWorldSceneMoveToken,
   normalizeCatWorldSceneMoves,
 } from "./catWorldSceneTransitions.js";
+import {
+  catWorldItemArrivalPlan,
+  catWorldNewVisibleItemArrivals,
+} from "./catWorldItemTransitions.js";
 
 let VIEW_WIDTH = 1280;
 let VIEW_HEIGHT = 560;
@@ -326,6 +330,16 @@ function yToPercent(y) {
 
 function owned(inventory, itemId) {
   return Number(inventory?.[itemId] || 0) > 0;
+}
+
+function visibleRoomLayoutItems(snapshot = {}) {
+  const decor = Object.entries(DECOR_SPECS)
+    .filter(([itemId]) => owned(snapshot.inventory, itemId) && sceneAllowsItem(snapshot.scene, itemId, "decor"))
+    .map(([id, spec]) => ({ id, kind: "decor", label: spec.label }));
+  const toys = Object.entries(ROOM_TOY_TARGETS)
+    .filter(([itemId]) => owned(snapshot.inventory, itemId) && sceneAllowsItem(snapshot.scene, itemId, "toy"))
+    .map(([id, spec]) => ({ id, kind: "toy", label: spec.label }));
+  return [...decor, ...toys];
 }
 
 function isDamaged(snapshot, itemId) {
@@ -736,6 +750,7 @@ class CatWorldScene extends Phaser.Scene {
     this.drawRoom();
     this.drawInventoryItems(snapshot);
     this.drawOwnedDecor(snapshot);
+    this.playPendingItemArrivals();
     if (snapshot.editMode) {
       this.drawEditModeHint();
     } else if (snapshot.scene.features.cats) {
@@ -748,6 +763,110 @@ class CatWorldScene extends Phaser.Scene {
     }
     this.syncCamera();
     if (lockedCatId) this.focusCat(lockedCatId);
+  }
+
+  playPendingItemArrivals() {
+    const arrivals = this.owner.takePendingItemArrivals(this.owner.snapshot.scene.id);
+    if (!arrivals.length || this.isEditMode() || this.isToolMode()) return false;
+    arrivals.forEach((arrival, index) => {
+      const container = arrival.kind === "toy"
+        ? this.toyContainers.get(arrival.id)
+        : this.decorContainers.get(arrival.id);
+      const spec = arrival.kind === "toy" ? ROOM_TOY_TARGETS[arrival.id] : DECOR_SPECS[arrival.id];
+      if (!container?.active || !spec) return;
+      this.playItemArrival(container, spec, arrival, index);
+    });
+    return true;
+  }
+
+  playItemArrival(container, spec, arrival, index = 0) {
+    const plan = catWorldItemArrivalPlan(arrival.id, index);
+    const target = { x: container.x, y: container.y };
+    const baseDepth = container.depth;
+    container.setData("itemArrivalTarget", target);
+    container.setPosition(target.x, target.y - plan.lift);
+    container.setScale(plan.startScale);
+    container.setAlpha(0);
+    if (container.input) container.input.enabled = false;
+
+    this.tweens.add({
+      targets: container,
+      x: target.x,
+      y: target.y,
+      scaleX: 1,
+      scaleY: 1,
+      alpha: 1,
+      delay: plan.delay,
+      duration: plan.duration,
+      ease: "Back.easeOut",
+      onComplete: () => {
+        if (!container.active) return;
+        container.setPosition(target.x, target.y);
+        container.setScale(1);
+        container.setAlpha(1);
+        container.setDepth(baseDepth);
+        container.setData("itemArrivalTarget", null);
+        if (container.input) container.input.enabled = true;
+      },
+    });
+
+    this.time.delayedCall(plan.delay + Math.round(plan.duration * 0.72), () => {
+      if (!container.active) return;
+      this.spawnItemArrivalDust(
+        target.x + spec.width / 2,
+        target.y + spec.height,
+        baseDepth + 2,
+        plan.dustColor,
+      );
+      this.spawnItemArrivalCue(
+        target.x + spec.width / 2,
+        Math.max(target.y - 10, 18),
+        baseDepth + 3,
+      );
+    });
+  }
+
+  spawnItemArrivalDust(x, y, depth, color) {
+    const offsets = [-30, -18, -8, 8, 18, 30];
+    offsets.forEach((offset, index) => {
+      const dust = this.add
+        .rectangle(x + offset / 2, y - 2, index % 2 ? 6 : 8, index % 2 ? 5 : 7, color)
+        .setDepth(depth + index);
+      this.tweens.add({
+        targets: dust,
+        x: x + offset,
+        y: y - 12 - (index % 3) * 5,
+        alpha: 0,
+        duration: 430 + index * 30,
+        ease: "Cubic.easeOut",
+        onComplete: () => dust.destroy(),
+      });
+    });
+  }
+
+  spawnItemArrivalCue(x, y, depth) {
+    const cue = this.add
+      .text(x, y, "摆好啦", {
+        color: "#176f58",
+        backgroundColor: "#fff8df",
+        fontFamily: "Consolas, monospace",
+        fontSize: "11px",
+        fontStyle: "bold",
+        padding: { x: 5, y: 3 },
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(depth)
+      .setAlpha(0);
+    this.tweens.add({
+      targets: cue,
+      y: y - 18,
+      alpha: 1,
+      duration: 220,
+      yoyo: true,
+      hold: 520,
+      ease: "Quad.easeOut",
+      onComplete: () => cue.destroy(),
+    });
   }
 
   playPendingLearningMilestone() {
@@ -5430,6 +5549,7 @@ export class CatWorldGame {
     this.learningRitualVisits = new Set();
     this.playedSceneMoveTokens = new Set();
     this.pendingSceneMoves = [];
+    this.pendingItemArrivals = [];
     this.ready = false;
     this.snapshot = normalizeSnapshot();
     applySceneConfig(this.snapshot.scene);
@@ -5455,6 +5575,17 @@ export class CatWorldGame {
 
   update(snapshot) {
     const nextSnapshot = normalizeSnapshot(snapshot);
+    const sameScene = nextSnapshot.scene.id === this.snapshot.scene.id;
+    const itemArrivals = this.ready
+      ? catWorldNewVisibleItemArrivals(
+        visibleRoomLayoutItems(this.snapshot),
+        visibleRoomLayoutItems(nextSnapshot),
+        {
+          sameScene,
+          interactionLocked: nextSnapshot.editMode || Boolean(nextSnapshot.toolMode),
+        },
+      ).map((item) => ({ ...item, sceneId: nextSnapshot.scene.id }))
+      : [];
     const freshSceneMoves = nextSnapshot.sceneMoves.filter((move) => {
       const token = catWorldSceneMoveToken(move);
       if (!token || this.playedSceneMoveTokens.has(token)) return false;
@@ -5465,6 +5596,10 @@ export class CatWorldGame {
       this.playedSceneMoveTokens = new Set([...this.playedSceneMoveTokens].slice(-48));
     }
     this.pendingSceneMoves.push(...freshSceneMoves);
+    this.pendingItemArrivals.push(...itemArrivals);
+    if (this.pendingItemArrivals.length > 16) {
+      this.pendingItemArrivals = this.pendingItemArrivals.slice(-16);
+    }
     const gameScene = this.game.scene.getScene("CatWorldScene");
     const departures = this.ready
       ? gameScene?.captureSceneDepartures(freshSceneMoves, nextSnapshot.scene.id) || []
@@ -5510,6 +5645,12 @@ export class CatWorldGame {
       (move) => catWorldSceneMoveForScene(move, sceneId) === "remote",
     );
     if (this.pendingSceneMoves.length > 24) this.pendingSceneMoves = this.pendingSceneMoves.slice(-24);
+    return matching;
+  }
+
+  takePendingItemArrivals(sceneId) {
+    const matching = this.pendingItemArrivals.filter((arrival) => arrival.sceneId === sceneId);
+    this.pendingItemArrivals = this.pendingItemArrivals.filter((arrival) => arrival.sceneId !== sceneId);
     return matching;
   }
 
@@ -5568,6 +5709,7 @@ export class CatWorldGame {
     this.catReactions.clear();
     this.catItemActions.clear();
     this.itemInteractionStates.clear();
+    this.pendingItemArrivals = [];
     this.wandCatIds.clear();
     this.game?.destroy(true);
   }
