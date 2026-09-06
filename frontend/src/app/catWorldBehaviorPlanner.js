@@ -1,5 +1,14 @@
 const URGENT_KINDS = new Set(["food", "rest", "care"]);
 
+const DAILY_MOOD_AFFINITIES = Object.freeze({
+  bright: Object.freeze({ social: 16, favorite: 7, habit: 4, learning: 3 }),
+  curious: Object.freeze({ habit: 16, goal: 9, learning: 6, social: 2 }),
+  clingy: Object.freeze({ social: 18, favorite: 8, habit: 3 }),
+  lazy: Object.freeze({ favorite: 15, rest: 11, social: -5, learning: -6, habit: -2 }),
+  quiet: Object.freeze({ learning: 16, favorite: 8, habit: 4, social: -8 }),
+  grumpy: Object.freeze({ favorite: 18, habit: 8, goal: 4, social: -11, learning: -5 }),
+});
+
 function clamp(value, min, max) {
   return Math.min(Math.max(Number(value) || 0, min), max);
 }
@@ -48,6 +57,28 @@ function kindAffinity(kind, target, context) {
   return 0;
 }
 
+export function catDailyMoodAffinity(moodKey = "", kind = "") {
+  return Number(DAILY_MOOD_AFFINITIES[String(moodKey || "")]?.[String(kind || "")] || 0);
+}
+
+export function catDailyMoodActionReason(moodKey = "", kind = "", target = {}) {
+  const label = String(target.partnerLabel || target.label || "前面");
+  if (moodKey === "bright" && kind === "social") return `今天心情亮晶晶，想去找${label}一起玩。`;
+  if (moodKey === "bright" && kind === "favorite") return `今天心情很好，想去${label}旁边待一会儿。`;
+  if (moodKey === "curious" && kind === "habit") return `今天特别好奇，想按自己的习惯去${label}看看。`;
+  if (moodKey === "curious" && kind === "goal") return `今天特别好奇，想去${label}探个究竟。`;
+  if (moodKey === "curious" && kind === "learning") return `今天特别好奇，想去${label}学点新的。`;
+  if (moodKey === "clingy" && kind === "social") return `今天有点黏人，想去找${label}待一会儿。`;
+  if (moodKey === "clingy" && kind === "favorite") return `今天有点黏人，想在熟悉的${label}旁边等你。`;
+  if (moodKey === "lazy" && kind === "favorite") return `今天想慢慢来，先去${label}趴一会儿。`;
+  if (moodKey === "lazy" && kind === "rest") return `今天想慢慢来，去${label}好好休息。`;
+  if (moodKey === "quiet" && kind === "learning") return `今天想安静一点，去${label}陪你学一会儿。`;
+  if (moodKey === "quiet" && kind === "favorite") return `今天想安静一点，去${label}独处一会儿。`;
+  if (moodKey === "grumpy" && kind === "favorite") return `今天有点闹脾气，想先去${label}缓一缓。`;
+  if (moodKey === "grumpy" && kind === "habit") return `今天有点闹脾气，想按自己的小习惯缓一缓。`;
+  return "";
+}
+
 export function rankCatVisitPlans(candidates = [], context = {}) {
   const catId = String(context.cat?.id || context.catId || "cat");
   const cycle = Math.max(Number(context.cycle || 0), 0);
@@ -63,12 +94,19 @@ export function rankCatVisitPlans(candidates = [], context = {}) {
       const urgent = URGENT_KINDS.has(kind) && priority >= 86;
       const repeatPenalty = !urgent && kind === lastKind ? Math.min(9 * Math.max(repeatCount, 1), 27) : 0;
       const jitter = (stableRatio(`${catId}:${cycle}:${candidateIdentity(candidate)}`) - 0.5) * 8;
-      const score = priority + kindAffinity(kind, target, context) - repeatPenalty + jitter;
+      const moodKey = String(context.behavior?.dailyMoodKey || "");
+      const moodBonus = urgent ? 0 : catDailyMoodAffinity(moodKey, kind);
+      const score = priority + kindAffinity(kind, target, context) + moodBonus - repeatPenalty + jitter;
       return {
         kind,
         target,
         urgent,
         score: Math.round(score * 10) / 10,
+        moodKey,
+        moodBonus,
+        moodReason: !urgent && moodBonus >= 6
+          ? catDailyMoodActionReason(moodKey, kind, target)
+          : "",
       };
     })
     .filter((candidate) => candidate.target && candidate.score > 0)
@@ -112,6 +150,7 @@ export function chooseCatVisitPlan(candidates = [], context = {}) {
 export function catVisitPlanMessage(plan = {}) {
   const target = plan.target || {};
   const label = String(target.label || target.targetLabel || "前面");
+  if (plan.moodReason) return String(plan.moodReason);
   if (plan.kind === "food") return `闻到${label}了，先去吃一点。`;
   if (plan.kind === "rest") return `体力有点低，去${label}趴一会儿。`;
   if (plan.kind === "care") return `现在最需要${label}，先过去看看。`;

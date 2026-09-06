@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  catDailyMoodActionReason,
+  catDailyMoodAffinity,
   catVisitPlanMessage,
   catVisitPlanStatus,
   chooseCatVisitPlan,
@@ -66,6 +68,72 @@ test("individual traits alter the same room choices", () => {
 
   assert.equal(focused[0].kind, "learning");
   assert.equal(outgoing[0].kind, "social");
+});
+
+test("daily moods change how the same cat ranks ordinary room choices", () => {
+  const candidates = [
+    { kind: "learning", target: target(64, { label: "英文书桌" }) },
+    { kind: "social", target: target(64, { partnerLabel: "小伙伴", chemistryScore: 60 }) },
+    { kind: "habit", target: target(64, { label: "窗边" }) },
+    { kind: "favorite", target: target(64, { label: "云朵地毯" }) },
+    { kind: "goal", target: target(64, { label: "新角落" }) },
+  ];
+  const topKind = (dailyMoodKey) => rankCatVisitPlans(candidates, {
+    catId: "cat-same-profile",
+    cycle: 5,
+    behavior: {
+      dailyMoodKey,
+      attention: 50,
+      curiosity: 50,
+      socialNeed: 50,
+      activityBias: 50,
+      mood: 62,
+    },
+  })[0].kind;
+
+  assert.equal(topKind("bright"), "social");
+  assert.equal(topKind("curious"), "habit");
+  assert.equal(topKind("clingy"), "social");
+  assert.equal(topKind("lazy"), "favorite");
+  assert.equal(topKind("quiet"), "learning");
+  assert.equal(topKind("grumpy"), "favorite");
+});
+
+test("mood preference stays explainable without replacing urgent care text", () => {
+  const quietPlan = rankCatVisitPlans([
+    { kind: "learning", target: target(68, { label: "英文书架" }) },
+  ], {
+    catId: "cat-quiet",
+    cycle: 2,
+    behavior: { dailyMoodKey: "quiet", attention: 62 },
+  })[0];
+  const urgentPlan = chooseCatVisitPlan([
+    { kind: "favorite", target: target(100, { label: "窗台" }) },
+    { kind: "food", target: target(92, { label: "猫粮" }) },
+  ], {
+    catId: "cat-hungry",
+    cycle: 2,
+    behavior: { dailyMoodKey: "grumpy", energy: 10, restThreshold: 34 },
+  });
+  const urgentRest = [{ kind: "rest", target: target(90, { label: "猫窝" }) }];
+  const plainUrgentScore = rankCatVisitPlans(urgentRest, {
+    catId: "cat-tired",
+    cycle: 2,
+    behavior: { energy: 30, restThreshold: 34 },
+  })[0].score;
+  const lazyUrgentScore = rankCatVisitPlans(urgentRest, {
+    catId: "cat-tired",
+    cycle: 2,
+    behavior: { dailyMoodKey: "lazy", energy: 30, restThreshold: 34 },
+  })[0].score;
+
+  assert.equal(catDailyMoodAffinity("quiet", "learning"), 16);
+  assert.match(catDailyMoodActionReason("quiet", "learning", { label: "英文书架" }), /安静.*英文书架/);
+  assert.match(catVisitPlanMessage(quietPlan), /安静.*英文书架/);
+  assert.equal(urgentPlan.kind, "food");
+  assert.equal(urgentPlan.moodReason, "");
+  assert.equal(catVisitPlanMessage(urgentPlan), "闻到猫粮了，先去吃一点。");
+  assert.equal(lazyUrgentScore, plainUrgentScore);
 });
 
 test("repeating an ordinary action lowers its score without weakening urgent needs", () => {
