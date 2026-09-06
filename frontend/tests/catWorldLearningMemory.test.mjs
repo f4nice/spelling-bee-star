@@ -276,6 +276,7 @@ test("a cat opens the due page and names its gentle two-step review rhythm", () 
   assert.match(reviewedPlan.message, /今天刚找回的 steady/);
   assert.match(reviewedPlan.message, /I can make steady progress/);
   assert.equal(reviewedPlan.treasure.word, "steady");
+  assert.equal(reviewedPlan.selectionLabel, "今日新记");
   assert.equal(reviewedPlan.statusLabel, "正在再看一遍 steady");
 });
 
@@ -377,6 +378,93 @@ test("a cat chooses the same personal word treasure for the same memory visit", 
   assert.equal(repeatedPlan.targetLabel, plan.targetLabel);
 });
 
+test("each learning style chooses a word that supports its own study method", () => {
+  const learningMemory = {
+    hasMemory: true,
+    companionDays: 8,
+    memoryPoints: 12,
+    levelIndex: 2,
+    levelCount: 5,
+    latestDate: "2026-09-07",
+    recallTreasures: [
+      {
+        key: "cat",
+        word: "cat",
+        sentence: "I know this cat.",
+        sourceDate: "2026-09-06",
+        reviewDate: "2026-09-06",
+        reviewCount: 1,
+      },
+      {
+        key: "journey",
+        word: "journey",
+        sentence: "Every careful English sentence can carry a vivid story forward.",
+        sourceDate: "2026-09-05",
+        reviewDate: "2026-09-05",
+        reviewCount: 2,
+      },
+      {
+        key: "perspective",
+        word: "perspective",
+        sentence: "A new perspective can change my answer.",
+        sourceDate: "2026-09-04",
+        reviewDate: "2026-09-04",
+        reviewCount: 1,
+      },
+      {
+        key: "steady",
+        word: "steady",
+        sentence: "I learn at a steady pace.",
+        sourceDate: "2026-08-01",
+        reviewDate: "2026-09-06",
+        reviewCount: 1,
+      },
+      {
+        key: "routine",
+        word: "routine",
+        sentence: "My routine keeps me learning.",
+        sourceDate: "2026-09-01",
+        reviewDate: "2026-09-06",
+        reviewCount: 5,
+      },
+      {
+        key: "fragile",
+        word: "fragile",
+        sentence: "I can strengthen a fragile memory.",
+        sourceDate: "2026-08-20",
+        reviewDate: "2026-08-21",
+        reviewCount: 1,
+      },
+    ],
+  };
+  const behavior = { canWalk: true, energy: 82, restThreshold: 34, attention: 72 };
+  const expected = {
+    "gentle-starter": ["cat", "短句起步"],
+    "story-builder": ["journey", "长句续写"],
+    "idea-sparring": ["perspective", "生词试用"],
+    "loop-keeper": ["steady", "旧词接力"],
+    "streak-keeper": ["routine", "熟词守护"],
+    "review-organizer": ["fragile", "薄弱词整理"],
+  };
+
+  for (const [styleKey, [word, selectionLabel]] of Object.entries(expected)) {
+    const plan = [1, 2, 3, 4].map((cycle) => catWorldLearningMemoryVisitPlan({
+      id: `method-cat-${styleKey}`,
+      breedKey: "mimi",
+      traits: { temperament: "balanced" },
+      learningStyle: { key: styleKey },
+      learningMemory,
+    }, behavior, { cycle, sceneId: "main-room" })).find(Boolean);
+
+    assert.ok(plan);
+    assert.equal(plan.treasure.word, word);
+    assert.equal(plan.selectionLabel, selectionLabel);
+    assert.equal(plan.styleKey, styleKey);
+    assert.match(plan.message, new RegExp(`^${selectionLabel}。`));
+    assert.equal(plan.targetLabel, `珍藏词 ${word} · ${selectionLabel}`);
+  }
+});
+
 test("word treasure visits follow each cat's own learning ritual instead of its breed", () => {
   const memory = {
     hasMemory: true,
@@ -417,6 +505,7 @@ test("word treasure visits follow each cat's own learning ritual instead of its 
     const [, ritualLabel, statusVerb, animation] = expectations[index];
     assert.ok(plan);
     assert.equal(plan.ritualLabel, ritualLabel);
+    assert.equal(plan.styleKey, expectations[index][0]);
     assert.equal(plan.statusLabel, `${statusVerb} curious`);
     assert.equal(plan.animation, animation);
     assert.match(plan.message, /A curious learner keeps asking useful questions/);

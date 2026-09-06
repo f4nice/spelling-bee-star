@@ -76,6 +76,15 @@ const CREAM = 0xfff8df;
 const CAT_INTERACTION_DEPTH = 980;
 const CAMERA_DRAG_THRESHOLD = 6;
 const CAT_SOCIAL_PAIR_COOLDOWN_MS = 45 * 60 * 1000;
+const LEARNING_MEMORY_RITUAL_PALETTES = Object.freeze({
+  "gentle-starter": Object.freeze({ paper: 0xe9fff7, accent: 0x55bfa6, mark: "短" }),
+  "story-builder": Object.freeze({ paper: 0xfff2cf, accent: 0xe58b52, mark: "长" }),
+  "idea-sparring": Object.freeze({ paper: 0xe8f4ff, accent: 0x4d8fd6, mark: "新" }),
+  "loop-keeper": Object.freeze({ paper: 0xf1eaff, accent: 0x8b6fc9, mark: "旧" }),
+  "streak-keeper": Object.freeze({ paper: 0xffe7ef, accent: 0xe26791, mark: "熟" }),
+  "review-organizer": Object.freeze({ paper: 0xf0f4f7, accent: 0x657889, mark: "整" }),
+  balanced: Object.freeze({ paper: 0xfff8df, accent: 0x1d7f5b, mark: "忆" }),
+});
 const CAT_HITBOX = { x: -58, y: -74, width: 232, height: 184 };
 const FEATHER_WAND_CURSOR = 'url("/static/cursors/feather-wand-cursor.svg") 4 28, crosshair';
 const CAT_CARRY_CURSOR = "grabbing";
@@ -5186,7 +5195,9 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   spawnLearningMemoryPageCue(container, target = {}) {
-    if (!container?.active) return;
+    if (!container?.active || VIEW_WIDTH < 900) return;
+    const palette = LEARNING_MEMORY_RITUAL_PALETTES[target.styleKey]
+      || LEARNING_MEMORY_RITUAL_PALETTES.balanced;
     const cue = this.add.container(
       clamp(container.x + 84, 48, GAME_WIDTH - 72),
       clamp(container.y - 96, 42, FLOOR_BOTTOM - 120),
@@ -5194,23 +5205,18 @@ class CatWorldScene extends Phaser.Scene {
     const paper = makeLocalGraphics(this, cue);
     paper.fillStyle(0x2c2f3a, 1);
     paper.fillRect(-2, -2, 48, 36);
-    paper.fillStyle(0xfff8df, 1);
+    paper.fillStyle(palette.paper, 1);
     paper.fillRect(2, 2, 40, 28);
-    paper.fillStyle(0xff8cad, 1);
-    paper.fillRect(7, 7, 8, 8);
-    paper.fillStyle(0x1d7f5b, 1);
-    paper.fillRect(20, 8, 16, 3);
-    paper.fillRect(8, 20, 28, 3);
-    paper.fillRect(8, 25, 21, 3);
-    const label = this.add.text(22, 38, target.treasure?.word || target.dayLabel || target.levelLabel || "学习脚印", {
-      color: "#263047",
-      backgroundColor: "#fff07d",
+    paper.fillStyle(palette.accent, 1);
+    paper.fillRect(7, 7, 30, 3);
+    paper.fillRect(7, 26, 30, 2);
+    const ritualMark = this.add.text(22, 17, palette.mark, {
+      color: `#${palette.accent.toString(16).padStart(6, "0")}`,
       fontFamily: "Consolas, monospace",
-      fontSize: "9px",
+      fontSize: "12px",
       fontStyle: "bold",
-      padding: { x: 4, y: 2 },
-    }).setOrigin(0.5, 0);
-    cue.add(label);
+    }).setOrigin(0.5);
+    cue.add(ritualMark);
     this.tweens.add({
       targets: cue,
       y: cue.y - 12,

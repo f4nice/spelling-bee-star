@@ -100,6 +100,16 @@ const MEMORY_VISIT_TONES = Object.freeze({
   balanced: Object.freeze(["这一页先好好留住。", "下次见到它就更熟了。"]),
 });
 
+const MEMORY_TREASURE_SELECTION_LABELS = Object.freeze({
+  "gentle-starter": "短句起步",
+  "story-builder": "长句续写",
+  "idea-sparring": "生词试用",
+  "loop-keeper": "旧词接力",
+  "streak-keeper": "熟词守护",
+  "review-organizer": "薄弱词整理",
+  balanced: "随手回看",
+});
+
 const MEMORY_REFLECTION_COPY = Object.freeze({
   started: Object.freeze({
     achievement: "那天先迈出了最小的一步，点亮了起步爪印。",
@@ -183,7 +193,43 @@ function compactMemorySentence(sentence, maxLength = 68) {
   return `${clipped.slice(0, wordBoundary >= Math.floor(maxLength * 0.62) ? wordBoundary : maxLength).trim()}...`;
 }
 
-function memoryVisitTreasure(memory, catId, sceneId, memoryToken) {
+function memoryTreasureWordCount(treasure) {
+  return String(treasure.sentence || "").match(RECALL_SENTENCE_WORD_PATTERN)?.length || 0;
+}
+
+function memoryTreasureReviewDate(treasure) {
+  return String(treasure.reviewDate || treasure.sourceDate || "9999-12-31");
+}
+
+function compareMemoryTreasures(left, right, styleKey) {
+  if (styleKey === "gentle-starter") {
+    return memoryTreasureWordCount(left) - memoryTreasureWordCount(right)
+      || left.sentence.length - right.sentence.length;
+  }
+  if (styleKey === "story-builder") {
+    return memoryTreasureWordCount(right) - memoryTreasureWordCount(left)
+      || right.sentence.length - left.sentence.length;
+  }
+  if (styleKey === "idea-sparring") {
+    return left.reviewCount - right.reviewCount
+      || right.word.length - left.word.length;
+  }
+  if (styleKey === "loop-keeper") {
+    return String(left.sourceDate || "9999-12-31").localeCompare(String(right.sourceDate || "9999-12-31"))
+      || left.reviewCount - right.reviewCount;
+  }
+  if (styleKey === "streak-keeper") {
+    return right.reviewCount - left.reviewCount
+      || memoryTreasureReviewDate(right).localeCompare(memoryTreasureReviewDate(left));
+  }
+  if (styleKey === "review-organizer") {
+    return left.reviewCount - right.reviewCount
+      || memoryTreasureReviewDate(left).localeCompare(memoryTreasureReviewDate(right));
+  }
+  return 0;
+}
+
+function memoryVisitTreasure(memory, catId, sceneId, memoryToken, styleKey) {
   const hiddenSourceDate = memory.reviewDueToday ? memory.suggestedReviewDate : "";
   const visibleTreasures = memory.recallTreasures.filter(
     (treasure) => !hiddenSourceDate || treasure.sourceDate !== hiddenSourceDate,
@@ -193,12 +239,25 @@ function memoryVisitTreasure(memory, catId, sceneId, memoryToken) {
   const todayKey = String(memory.todayRecallWord || "").toLocaleLowerCase("en-US");
   if (memory.reviewedToday && todayKey) {
     const todayTreasure = visibleTreasures.find((treasure) => treasure.key.toLocaleLowerCase("en-US") === todayKey);
-    if (todayTreasure) return todayTreasure;
+    if (todayTreasure) return { treasure: todayTreasure, selectionLabel: "今日新记" };
   }
 
-  return visibleTreasures[
-    stableIndex(`${catId}:${sceneId}:${memoryToken}:word-treasure`, visibleTreasures.length)
-  ];
+  const rankedTreasures = visibleTreasures
+    .map((treasure) => ({
+      treasure,
+      tieRank: stableIndex(
+        `${catId}:${sceneId}:${memoryToken}:${treasure.key}:word-treasure`,
+        0x100000000,
+      ),
+    }))
+    .sort((left, right) => (
+      compareMemoryTreasures(left.treasure, right.treasure, styleKey)
+      || left.tieRank - right.tieRank
+    ));
+  return {
+    treasure: rankedTreasures[0].treasure,
+    selectionLabel: MEMORY_TREASURE_SELECTION_LABELS[styleKey] || MEMORY_TREASURE_SELECTION_LABELS.balanced,
+  };
 }
 
 function memoryVisitTone(cat, memoryToken) {
@@ -208,7 +267,7 @@ function memoryVisitTone(cat, memoryToken) {
   return tonePool[stableIndex(`${catId}:${memoryToken}:memory-visit-tone`, tonePool.length)];
 }
 
-function memoryTreasureVisitCopy(memory, treasure, cat, styleKey) {
+function memoryTreasureVisitCopy(memory, treasure, cat, styleKey, selectionLabel) {
   const ritual = MEMORY_VISIT_RITUALS[styleKey] || MEMORY_VISIT_RITUALS.balanced;
   const sentence = compactMemorySentence(treasure.sentence, 54);
   const recalledToday = treasure.word.toLocaleLowerCase("en-US")
@@ -217,7 +276,7 @@ function memoryTreasureVisitCopy(memory, treasure, cat, styleKey) {
     ? ritual.todayLead(treasure.word)
     : ritual.regularLead(treasure.word);
   return {
-    message: `${lead}${sentence} ${memoryVisitTone(cat, treasure.key)}`,
+    message: `${selectionLabel}。${lead}${sentence} ${memoryVisitTone(cat, treasure.key)}`,
     ritualLabel: ritual.label,
     statusLabel: `${ritual.statusVerb} ${treasure.word}`,
   };
@@ -460,9 +519,11 @@ export function catWorldLearningMemoryVisitPlan(cat = {}, behavior = {}, context
   const styleKey = MEMORY_VISIT_TARGETS[requestedStyleKey] ? requestedStyleKey : "balanced";
   const attention = Math.max(Math.min(Number(behavior.attention || 50), 100), 0);
   const visitDay = memoryVisitDay(memory) || {};
-  const treasure = memoryVisitTreasure(memory, catId, sceneId, memoryToken);
+  const treasureChoice = memoryVisitTreasure(memory, catId, sceneId, memoryToken, styleKey);
+  const treasure = treasureChoice?.treasure || null;
+  const selectionLabel = treasureChoice?.selectionLabel || "";
   const visitCopy = treasure
-    ? memoryTreasureVisitCopy(memory, treasure, cat, styleKey)
+    ? memoryTreasureVisitCopy(memory, treasure, cat, styleKey, selectionLabel)
     : memoryPageVisitCopy(memory, cat, styleKey, memoryToken);
   return {
     kind: "learning-memory",
@@ -470,13 +531,15 @@ export function catWorldLearningMemoryVisitPlan(cat = {}, behavior = {}, context
     targetItemIds: [...MEMORY_VISIT_TARGETS[styleKey]],
     message: visitCopy.message,
     animation: MEMORY_VISIT_ANIMATIONS[styleKey],
+    styleKey,
     ritualLabel: visitCopy.ritualLabel,
+    selectionLabel,
     levelKey: memory.levelKey,
     levelLabel: memory.levelLabel,
     dayLabel: visitDay.dayLabel || formatCatWorldLearningMemoryDate(visitDay.date || memory.latestDate),
     treasure,
     statusLabel: visitCopy.statusLabel,
-    targetLabel: treasure ? `珍藏词 ${treasure.word}` : "共同学习手册",
+    targetLabel: treasure ? `珍藏词 ${treasure.word} · ${selectionLabel}` : "共同学习手册",
     holdMs: 6400,
     priority: Math.max(
       Math.min(36 + memory.levelIndex * 4 + Math.round(attention / 20) + (memory.reviewDueToday ? 4 : 0), 62),
