@@ -25,6 +25,7 @@ import {
 import { catWorldTimeAmbience } from "./catWorldTimeAmbience.js";
 import {
   catVisitPlanMessage,
+  catVisitPlanStatus,
   chooseCatVisitPlan,
 } from "./catWorldBehaviorPlanner.js";
 
@@ -3410,6 +3411,10 @@ class CatWorldScene extends Phaser.Scene {
     const movement = Number(behavior.walkSpeed || 0.62);
     container.setData("behavior", behavior);
     if (!behavior.canWalk) {
+      this.reportCatIntent(cat, {
+        kind: behavior.sleeping ? "sleep" : "idle",
+        target: { label: behavior.sleeping ? "睡眠时间" : "原地" },
+      }, "arrived");
       this.tweens.add({
         targets: container,
         y: container.y - 3,
@@ -3457,6 +3462,7 @@ class CatWorldScene extends Phaser.Scene {
         repeatCount: Number(container.getData("lastVisitStreak") || 0),
       });
       if (!visitPlan && this.shouldCatIdle(latestBehavior)) {
+        this.reportCatIntent(cat, { kind: "idle", target: { label: "原地" } }, "arrived");
         this.playCatIdle(container, index, cat, latestBehavior);
         return;
       }
@@ -3469,6 +3475,11 @@ class CatWorldScene extends Phaser.Scene {
         );
         this.spawnPlannedActionBubble(container, cat, visitPlan);
       }
+      this.reportCatIntent(
+        cat,
+        visitPlan || { kind: "wander", target: { label: "房间里" } },
+        "moving",
+      );
       const nextX = visitPlan?.target.x ?? Phaser.Math.Between(38, GAME_WIDTH - 132);
       const nextY = visitPlan?.target.y ?? Phaser.Math.Between(FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
       const duration = Math.round(Phaser.Math.Between(34000, 56000) / Math.max(Number(latestBehavior.walkSpeed || movement), 0.34));
@@ -3487,6 +3498,11 @@ class CatWorldScene extends Phaser.Scene {
           }
           if (container.getData("interactionActive")) return;
           this.rememberCatPosition({ cat, container, index });
+          this.reportCatIntent(
+            cat,
+            visitPlan || { kind: "wander", target: { label: "房间里" } },
+            "arrived",
+          );
           if (visitPlan?.kind === "food") {
             this.spawnFoodPlayBubble(container, cat, visitPlan.target);
           } else if (visitPlan?.kind === "rest") {
@@ -3535,6 +3551,15 @@ class CatWorldScene extends Phaser.Scene {
     this.rememberCatPosition({ cat, container, index }, { notify: false });
     this.scheduleCatWalk(container, index, cat);
     return true;
+  }
+
+  reportCatIntent(cat, plan = {}, phase = "moving") {
+    const intent = catVisitPlanStatus(plan, phase);
+    this.owner.handlers.onCatIntent?.(cat, {
+      ...intent,
+      sceneId: this.owner.snapshot.scene?.id || "main-room",
+      updatedAt: Date.now(),
+    });
   }
 
   scheduleCatMicroAnimation(container, index, cat = {}) {

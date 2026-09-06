@@ -16118,6 +16118,166 @@ select {
   padding: 6px 10px;
 }
 
+.cat-world-room-live-activity {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 8px;
+  margin: 0 0 9px;
+  border-top: 2px solid rgba(44, 47, 58, 0.24);
+  border-bottom: 2px solid rgba(44, 47, 58, 0.24);
+  padding: 7px 0;
+}
+
+.cat-world-room-live-activity > header {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 2px 5px;
+}
+
+.cat-world-room-live-activity > header span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #14715b;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.cat-world-room-live-activity > header strong {
+  color: #263047;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.cat-world-room-live-list {
+  display: grid;
+  grid-auto-columns: minmax(142px, 1fr);
+  grid-auto-flow: column;
+  gap: 7px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 1px 3px 4px 1px;
+  scrollbar-width: thin;
+}
+
+.cat-world-room-live-list > button {
+  appearance: none;
+  position: relative;
+  display: grid;
+  grid-template-columns: 31px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 43px;
+  border: 2px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 5px 7px 5px 5px;
+  color: #263047;
+  background: #fff8df;
+  box-shadow: 2px 2px 0 #2c2f3a;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cat-world-room-live-list > button:hover,
+.cat-world-room-live-list > button:focus-visible {
+  border-color: #14715b;
+  color: #176f58;
+  background: #eaf9f5;
+}
+
+.cat-world-room-live-list > button.active {
+  color: #fff;
+  background: #1d7f5b;
+}
+
+.cat-world-room-live-list > button.active :where(strong, small, em, span) {
+  color: #fff;
+}
+
+.cat-world-room-live-list > button.is-moving::after {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 5px;
+  height: 5px;
+  border: 1px solid currentColor;
+  background: #ff6f91;
+  box-shadow: 1px 1px 0 #2c2f3a;
+  content: "";
+  animation: cat-world-live-pulse 1.2s steps(2, end) infinite;
+}
+
+.cat-world-room-live-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 29px;
+  height: 29px;
+  border: 2px solid #2c2f3a;
+  color: #263047;
+  background: var(--cat-icon-color, #ffbfd7);
+  box-shadow: 1px 1px 0 #2c2f3a;
+}
+
+.cat-world-room-live-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cat-world-room-live-copy strong,
+.cat-world-room-live-copy small {
+  display: block;
+  overflow: hidden;
+  color: inherit;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cat-world-room-live-copy strong {
+  font-size: 10px;
+}
+
+.cat-world-room-live-copy strong em {
+  margin-left: 4px;
+  color: #14715b;
+  font-size: 7px;
+  font-style: normal;
+}
+
+.cat-world-room-live-copy small {
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.cat-world-room-live-list > button.tone-learning {
+  border-bottom-color: #d8a70a;
+}
+
+.cat-world-room-live-list > button.tone-need {
+  border-bottom-color: #e24d76;
+}
+
+.cat-world-room-live-list > button.tone-social,
+.cat-world-room-live-list > button.tone-favorite {
+  border-bottom-color: #a267c2;
+}
+
+@keyframes cat-world-live-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
 .shell[data-quant-radar-page-key="cat-world"] .cat-world-ai-panel {
   margin-bottom: 8px;
   padding: 7px 9px;
@@ -16261,6 +16421,70 @@ select {
   font-size: 10px;
   font-weight: 800;
   line-height: 1.45;
+}
+
+.cat-world-context-intent {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 7px;
+  margin: 0;
+  border-left: 5px solid #14715b;
+  padding: 7px 8px;
+  color: #263047;
+  background: #fff6bd;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.cat-world-context-intent > span {
+  color: #14715b;
+  font-weight: 900;
+}
+
+.cat-world-context-intent > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cat-world-context-intent > em {
+  grid-column: 1 / -1;
+  color: #526178;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.cat-world-context-intent.tone-need {
+  border-left-color: #e24d76;
+  background: #fff0f4;
+}
+
+.cat-world-context-intent.tone-learning {
+  border-left-color: #d8a70a;
+}
+
+.cat-world-context-intent.tone-social,
+.cat-world-context-intent.tone-favorite {
+  border-left-color: #a267c2;
+  background: #f8efff;
+}
+
+@media (max-width: 920px) {
+  .cat-world-room-live-activity {
+    grid-template-columns: 1fr;
+  }
+
+  .cat-world-room-live-activity > header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 640px) {
+  .cat-world-room-live-list {
+    grid-auto-columns: minmax(168px, 78vw);
+  }
 }
 
 .cat-world-context-cat-live {

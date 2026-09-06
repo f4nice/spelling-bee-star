@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   catVisitPlanMessage,
+  catVisitPlanStatus,
   chooseCatVisitPlan,
   rankCatVisitPlans,
 } from "../src/app/catWorldBehaviorPlanner.js";
@@ -76,4 +77,24 @@ test("plans are deterministic per cat and cycle and explain the next move", () =
 
   assert.deepEqual(second, first);
   assert.match(catVisitPlanMessage(first), /20 词热身|阳光窗台/);
+});
+
+test("a plan exposes stable live status for the room interface", () => {
+  const plan = {
+    kind: "learning",
+    target: target(74, { label: "英文书桌", message: "我先在英文书桌旁等你。" }),
+  };
+
+  assert.deepEqual(catVisitPlanStatus(plan, "moving"), {
+    kind: "learning",
+    phase: "moving",
+    statusLabel: "去学习角等你",
+    targetLabel: "英文书桌",
+    message: "我先在英文书桌旁等你。",
+    tone: "learning",
+  });
+  assert.equal(catVisitPlanStatus(plan, "arrived").statusLabel, "正在陪你学习");
+  const sleeping = catVisitPlanStatus({ kind: "sleep", target: { label: "睡眠时间" } }, "arrived");
+  assert.equal(sleeping.tone, "rest");
+  assert.match(sleeping.message, /梦里也要陪你记一个单词/);
 });

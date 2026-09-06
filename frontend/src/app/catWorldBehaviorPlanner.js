@@ -116,5 +116,37 @@ export function catVisitPlanMessage(plan = {}) {
   if (plan.kind === "habit") return String(target.message || `按自己的习惯去${label}待一会儿。`);
   if (plan.kind === "favorite") return `想去喜欢的${label}旁边待一会儿。`;
   if (plan.kind === "goal") return String(target.message || `今天想去${label}看看。`);
+  if (plan.kind === "sleep") return "到睡眠时间了，梦里也要陪你记一个单词。";
+  if (plan.kind === "idle") return "先停下来看看你今天学到哪里了。";
+  if (plan.kind === "wander") return `去${label}随心走走，顺便巡视学习角。`;
   return "";
+}
+
+const PLAN_STATUS = Object.freeze({
+  food: { moving: "去吃东西", arrived: "正在进食", tone: "need" },
+  rest: { moving: "去找地方休息", arrived: "正在休息", tone: "rest" },
+  care: { moving: "去处理需求", arrived: "正在照顾自己", tone: "need" },
+  learning: { moving: "去学习角等你", arrived: "正在陪你学习", tone: "learning" },
+  social: { moving: "去找猫咪伙伴", arrived: "正在和伙伴相处", tone: "social" },
+  goal: { moving: "去完成今日愿望", arrived: "正在实现愿望", tone: "goal" },
+  habit: { moving: "按自己的习惯行动", arrived: "正在享受独处", tone: "habit" },
+  favorite: { moving: "去找喜欢的物品", arrived: "正在享受喜欢的物品", tone: "favorite" },
+  idle: { moving: "停下来观察", arrived: "正在原地观察", tone: "idle" },
+  wander: { moving: "随心散步", arrived: "正在看看房间", tone: "wander" },
+  sleep: { moving: "准备睡觉", arrived: "正在睡觉", tone: "rest" },
+});
+
+export function catVisitPlanStatus(plan = {}, phase = "moving") {
+  const kind = String(plan.kind || "wander");
+  const target = plan.target || {};
+  const status = PLAN_STATUS[kind] || PLAN_STATUS.wander;
+  const normalizedPhase = phase === "arrived" ? "arrived" : "moving";
+  return {
+    kind,
+    phase: normalizedPhase,
+    statusLabel: status[normalizedPhase],
+    targetLabel: String(target.partnerLabel || target.label || "").trim(),
+    message: catVisitPlanMessage(plan) || String(target.message || "正在按自己的节奏活动。"),
+    tone: status.tone,
+  };
 }

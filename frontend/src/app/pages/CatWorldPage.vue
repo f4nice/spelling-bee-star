@@ -93,6 +93,7 @@ const selectedCollectionCatId = ref("");
 const petBusyCatId = ref("");
 const roomCanPan = ref(false);
 const roomPanActive = ref(false);
+const liveCatIntents = ref({});
 const catOsExpanded = ref(false);
 const learningRouteExpanded = ref(false);
 const learningWeekExpanded = ref(false);
@@ -102,6 +103,7 @@ const busyLocationItemId = ref("");
 const ambientEventCooldowns = new Map();
 const foodNibbleCooldowns = new Map();
 const catPositionSyncs = new Map();
+const liveCatIntentTimers = new Map();
 
 const catReactionTexts = [
   "收到摸摸指令，开心值上升",
@@ -136,6 +138,8 @@ onBeforeUnmount(() => {
   document.removeEventListener("visibilitychange", handlePlayTimeVisibilityChange);
   catPositionSyncs.forEach((entry) => window.clearTimeout(entry.timer));
   catPositionSyncs.clear();
+  liveCatIntentTimers.forEach((timer) => window.clearTimeout(timer));
+  liveCatIntentTimers.clear();
   catWorldGame.value?.destroy();
   catWorldGame.value = null;
 });
@@ -193,6 +197,7 @@ onMounted(async () => {
         showCatReaction(cat, message, { anchor: false });
       }
     },
+    onCatIntent: updateLiveCatIntent,
     onLearningBoardClick: openRoomLearningProgress,
     onCatAmbient: recordCatAmbientEvent,
     onFoodVisit: recordCatFoodNibble,
@@ -204,6 +209,31 @@ onMounted(async () => {
   announceSceneMoves(payload.value);
   announceLearningCompanionOnEntry();
 });
+
+function updateLiveCatIntent(cat = {}, intent = {}) {
+  const catId = String(cat.id || "");
+  if (!catId || !intent.statusLabel) return;
+  const updatedAt = Number(intent.updatedAt || Date.now());
+  const nextIntent = {
+    ...intent,
+    catId,
+    catLabel: cat.displayLabel || cat.label || "猫咪",
+    updatedAt,
+  };
+  liveCatIntents.value = {
+    ...liveCatIntents.value,
+    [catId]: nextIntent,
+  };
+  window.clearTimeout(liveCatIntentTimers.get(catId));
+  const timer = window.setTimeout(() => {
+    if (Number(liveCatIntents.value[catId]?.updatedAt || 0) !== updatedAt) return;
+    const next = { ...liveCatIntents.value };
+    delete next[catId];
+    liveCatIntents.value = next;
+    liveCatIntentTimers.delete(catId);
+  }, 90000);
+  liveCatIntentTimers.set(catId, timer);
+}
 
 const categories = [
   { key: "food", label: "猫粮" },
@@ -690,6 +720,31 @@ const catAgentCards = computed(() =>
       latestEvent,
     };
   }),
+);
+const roomLiveActivity = computed(() => {
+  const currentRoomIds = new Set(roomCats.value.map((cat) => cat.id));
+  const focusedId = focusedCat.value.id;
+  return catAgentCards.value
+    .filter((cat) => currentRoomIds.has(cat.id))
+    .map((cat) => {
+      const intent = liveCatIntents.value[cat.id];
+      const live = intent && (!intent.sceneId || intent.sceneId === currentScene.value.id) ? intent : null;
+      return {
+        id: cat.id,
+        cat,
+        catLabel: cat.displayLabel || cat.label || "猫咪",
+        statusLabel: live?.statusLabel || cat.behaviorLabel || "自由活动",
+        targetLabel: live?.targetLabel || "",
+        message: live?.message || cat.agent?.voiceLine || cat.agent?.routine || "正在按自己的节奏观察房间。",
+        phase: live?.phase || "settled",
+        tone: live?.tone || "steady",
+        live: Boolean(live),
+      };
+    })
+    .sort((left, right) => Number(right.id === focusedId) - Number(left.id === focusedId));
+});
+const focusedLiveIntent = computed(() =>
+  roomLiveActivity.value.find((entry) => entry.id === focusedCat.value.id) || null,
 );
 const catAgentDiaries = computed(() =>
   catAgentCards.value
@@ -2225,6 +2280,14 @@ async function handleCatCardClick(cat) {
   await selectCat(cat, { carry: true });
 }
 
+function focusLiveCat(entry = {}) {
+  const cat = entry.cat || catForId(entry.id);
+  if (!cat?.id) return;
+  activeRoomPanel.value = "cat";
+  focusedCatId.value = cat.id;
+  catWorldGame.value?.focusCat?.(cat.id);
+}
+
 async function selectCat(catOrId, options = {}) {
   const profile = typeof catOrId === "object" ? catOrId : catForId(catOrId);
   const catId = catBreedId(profile) || String(catOrId || "");
@@ -2639,6 +2702,43 @@ async function selectCat(catOrId, options = {}) {
           </div>
         </div>
 
+        <section
+          v-if="roomLiveActivity.length"
+          class="cat-world-room-live-activity"
+          aria-label="房间猫咪实时动向"
+        >
+          <header>
+            <span><PawPrintIcon :size="14" :stroke-width="3" aria-hidden="true" />Room Pulse</span>
+            <strong>猫咪此刻在做什么</strong>
+          </header>
+          <div class="cat-world-room-live-list">
+            <button
+              v-for="entry in roomLiveActivity"
+              :key="`room-live-${entry.id}`"
+              type="button"
+              :class="[
+                `tone-${entry.tone}`,
+                {
+                  active: focusedCat.id === entry.id,
+                  'is-live': entry.live,
+                  'is-moving': entry.phase === 'moving',
+                },
+              ]"
+              :aria-label="`锁定${entry.catLabel}：${entry.statusLabel}${entry.targetLabel ? `，目标${entry.targetLabel}` : ''}`"
+              :title="entry.message"
+              @click="focusLiveCat(entry)"
+            >
+              <span class="cat-world-room-live-icon" :style="{ '--cat-icon-color': catIconColor(entry.id) }">
+                <CatIcon :size="17" :stroke-width="2.7" aria-hidden="true" />
+              </span>
+              <span class="cat-world-room-live-copy">
+                <strong>{{ entry.catLabel }}<em>{{ entry.phase === "moving" ? "途中" : entry.live ? "此刻" : "日程" }}</em></strong>
+                <small>{{ entry.statusLabel }}<span v-if="entry.targetLabel"> · {{ entry.targetLabel }}</span></small>
+              </span>
+            </button>
+          </div>
+        </section>
+
         <div
           :class="[
             'cat-world-room',
@@ -2857,6 +2957,11 @@ async function selectCat(catOrId, options = {}) {
               </div>
             </div>
             <p class="cat-world-context-thought">{{ focusedCatThought }}</p>
+            <p v-if="focusedLiveIntent" :class="['cat-world-context-intent', `tone-${focusedLiveIntent.tone}`]">
+              <span>{{ focusedLiveIntent.live ? "实时动向" : "当前日程" }}</span>
+              <strong>{{ focusedLiveIntent.statusLabel }}</strong>
+              <em>{{ focusedLiveIntent.message }}</em>
+            </p>
 
             <section :class="['cat-world-context-cat-live', { expanded: catOsExpanded }]" aria-live="polite">
               <button
