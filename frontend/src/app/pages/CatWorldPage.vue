@@ -26,6 +26,7 @@ import {
   buildCatWorldWeekTrail,
   catWorldLearningCompanionGrowthLabel,
   catWorldLearningCompanionToken,
+  catWorldWeekMemory,
 } from "../catWorldLearningRoute.js";
 import {
   formatCatWorldPlayTime,
@@ -89,6 +90,7 @@ const petBusyCatId = ref("");
 const roomCanPan = ref(false);
 const roomPanActive = ref(false);
 const catOsExpanded = ref(false);
+const selectedLearningWeekDate = ref("");
 const busySceneId = ref("");
 const busyLocationItemId = ref("");
 const ambientEventCooldowns = new Map();
@@ -372,6 +374,15 @@ const learningCompanionGrowthLabel = computed(() =>
   catWorldLearningCompanionGrowthLabel(learningCompanion.value),
 );
 const learningWeekTrail = computed(() => buildCatWorldWeekTrail(energy.value.habit || {}));
+const selectedLearningWeekDay = computed(() =>
+  learningWeekTrail.value.days.find((day) => day.date === selectedLearningWeekDate.value)
+  || learningWeekTrail.value.days.find((day) => day.today)
+  || learningWeekTrail.value.days.at(-1)
+  || {},
+);
+const learningWeekMemory = computed(() =>
+  catWorldWeekMemory(selectedLearningWeekDay.value, learningGuideCat.value),
+);
 const mood = computed(() => state.value.mood || {});
 const focusedDailyLog = computed(
   () => individualizeCatLog(
@@ -1714,6 +1725,13 @@ function showCatReaction(cat = selectedCat.value, message = "", options = {}) {
   }, CAT_BUBBLE_TOTAL_MS);
 }
 
+function selectLearningWeekDay(day = {}) {
+  if (!day.date) return;
+  selectedLearningWeekDate.value = day.date;
+  const memory = catWorldWeekMemory(day, learningGuideCat.value);
+  showCatReaction(learningGuideCat.value, memory.catMessage);
+}
+
 async function showLearningCompanionReaction(options = {}) {
   const companion = learningCompanion.value;
   let cat = catForId(companion.catId) || learningGuideCat.value;
@@ -2214,24 +2232,39 @@ async function selectCat(catOrId, options = {}) {
             <strong id="cat-world-learning-week-title">最近七天陪学足迹</strong>
           </div>
           <p>{{ learningWeekTrail.summary }}</p>
-          <em>{{ learningWeekTrail.todayMessage }}</em>
+          <div class="cat-world-learning-week-memory" aria-live="polite">
+            <p><span>{{ learningWeekMemory.dateLabel }}</span> · {{ learningWeekMemory.detail }}</p>
+            <p>{{ learningWeekMemory.catName }}：{{ learningWeekMemory.catMessage }}</p>
+          </div>
         </header>
         <ol class="cat-world-learning-week-days">
           <li
             v-for="day in learningWeekTrail.days"
             :key="day.date"
-            :class="[`is-${day.statusKey}`, { 'is-today': day.today }]"
-            :title="day.detail"
-            :aria-label="`${day.weekdayLabel} ${day.dayLabel}：${day.detail}`"
+            :class="[
+              `is-${day.statusKey}`,
+              {
+                'is-today': day.today,
+                'is-selected': day.date === selectedLearningWeekDay.date,
+              },
+            ]"
           >
-            <span>{{ day.weekdayLabel }}</span>
-            <i class="cat-world-learning-week-marker" aria-hidden="true">
-              <CheckIcon v-if="day.loopComplete" :size="14" :stroke-width="3" />
-              <PawPrintIcon v-else-if="day.active" :size="13" :stroke-width="2.8" />
-              <span v-else>·</span>
-            </i>
-            <strong>{{ day.statusLabel }}</strong>
-            <small>{{ day.dayLabel }}</small>
+            <button
+              type="button"
+              :title="day.detail"
+              :aria-label="`${day.weekdayLabel} ${day.dayLabel}：${day.detail}`"
+              :aria-pressed="day.date === selectedLearningWeekDay.date"
+              @click="selectLearningWeekDay(day)"
+            >
+              <span>{{ day.weekdayLabel }}</span>
+              <i class="cat-world-learning-week-marker" aria-hidden="true">
+                <CheckIcon v-if="day.loopComplete" :size="14" :stroke-width="3" />
+                <PawPrintIcon v-else-if="day.active" :size="13" :stroke-width="2.8" />
+                <span v-else>·</span>
+              </i>
+              <strong>{{ day.statusLabel }}</strong>
+              <small>{{ day.dayLabel }}</small>
+            </button>
           </li>
         </ol>
       </section>

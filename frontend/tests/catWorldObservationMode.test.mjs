@@ -39,6 +39,9 @@ test("daily learning route stays outside the locked play area", async () => {
   assert.match(page, /pause: options\.pause !== false/);
   assert.match(page, /}, CAT_BUBBLE_TOTAL_MS\);/);
   assert.match(page, /learningCompanion\.statusLabel/);
+  assert.match(page, /:aria-pressed="day\.date === selectedLearningWeekDay\.date"/);
+  assert.match(page, /@click="selectLearningWeekDay\(day\)"/);
+  assert.match(page, /learningWeekMemory\.catMessage/);
   assert.match(game, /pauseCatForReaction\(container, cat\)/);
   assert.match(game, /container\.setData\("walkTween", walkTween\)/);
 });

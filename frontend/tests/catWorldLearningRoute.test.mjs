@@ -6,6 +6,7 @@ import {
   buildCatWorldWeekTrail,
   catWorldLearningCompanionGrowthLabel,
   catWorldLearningCompanionToken,
+  catWorldWeekMemory,
 } from "../src/app/catWorldLearningRoute.js";
 
 test("weekly trail distinguishes starts, input, output, and completed loops", () => {
@@ -17,15 +18,47 @@ test("weekly trail distinguishes starts, input, output, and completed loops", ()
       { date: "2026-09-04", weekdayLabel: "周五", dayLabel: "9/4", statusKey: "input", statusLabel: "练词", active: true },
       { date: "2026-09-05", weekdayLabel: "周六", dayLabel: "9/5", statusKey: "output", statusLabel: "表达", active: true },
       { date: "2026-09-06", weekdayLabel: "周日", dayLabel: "9/6", statusKey: "rest", statusLabel: "休息" },
-      { date: "2026-09-07", weekdayLabel: "周一", dayLabel: "9/7", statusKey: "loop", statusLabel: "闭环", active: true, loopComplete: true, today: true },
+      { date: "2026-09-07", weekdayLabel: "周一", dayLabel: "9/7", statusKey: "loop", statusLabel: "闭环", detail: "50 词 · 作文 · 完成闭环", spellingCount: 50, hasEssay: true, active: true, loopComplete: true, today: true },
     ],
   });
 
   assert.equal(trail.days.length, 7);
   assert.equal(trail.activeDays, 4);
   assert.equal(trail.loopDays, 1);
+  assert.equal(trail.days.at(-1).spellingCount, 50);
+  assert.equal(trail.days.at(-1).hasEssay, true);
   assert.equal(trail.todayMessage, "今天闭环完成");
   assert.match(trail.summary, /4 天有学习/);
+});
+
+test("weekly memories keep day detail and follow the individual cat temperament", () => {
+  const day = {
+    date: "2026-09-07",
+    weekdayLabel: "周一",
+    dayLabel: "9/7",
+    statusKey: "loop",
+    detail: "50 词 · 作文 · 完成闭环",
+  };
+  const calm = catWorldWeekMemory(day, {
+    id: "cat-calm",
+    nickname: "小静",
+    traits: { temperament: "calm" },
+  });
+  const chatty = catWorldWeekMemory(day, {
+    id: "cat-chatty",
+    nickname: "话话",
+    traits: { temperament: "chatty" },
+  });
+
+  assert.equal(calm.dateLabel, "周一 9/7");
+  assert.equal(calm.detail, day.detail);
+  assert.equal(calm.catName, "小静");
+  assert.match(calm.catMessage, /输入和表达都完成/);
+  assert.notEqual(calm.catMessage, chatty.catMessage);
+  assert.match(
+    catWorldWeekMemory({ statusKey: "unavailable" }, calm).catMessage,
+    /从现在开始.*新的脚印/,
+  );
 });
 
 test("learning route starts with a gentle spelling target", () => {
