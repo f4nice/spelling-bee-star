@@ -274,6 +274,107 @@ test("a cat opens the due page and names its gentle two-step review rhythm", () 
   )).find(Boolean);
   assert.ok(reviewedPlan);
   assert.match(reviewedPlan.message, /今天刚找回的 steady/);
+  assert.match(reviewedPlan.message, /I can make steady progress/);
+  assert.equal(reviewedPlan.treasure.word, "steady");
+  assert.equal(reviewedPlan.statusLabel, "正在回看 steady");
+});
+
+test("a due review never reveals its answer through a room treasure", () => {
+  const memory = {
+    hasMemory: true,
+    companionDays: 6,
+    memoryPoints: 8,
+    levelIndex: 2,
+    levelCount: 5,
+    latestDate: "2026-09-07",
+    reviewDueToday: true,
+    suggestedReviewDate: "2026-09-06",
+    recallTreasures: [
+      {
+        key: "steady",
+        word: "steady",
+        sentence: "I can make steady progress every day.",
+        sourceDate: "2026-09-06",
+        reviewDate: "2026-09-07",
+        reviewCount: 1,
+      },
+      {
+        key: "curious",
+        word: "curious",
+        sentence: "A curious learner keeps asking useful questions.",
+        sourceDate: "2026-09-03",
+        reviewDate: "2026-09-04",
+        reviewCount: 2,
+      },
+    ],
+    recentDays: [{
+      date: "2026-09-06",
+      dayLabel: "9/6",
+      statusKey: "warmup",
+      reviewStageLabel: "三日巩固",
+    }],
+  };
+  const cat = { id: "cat-safe", learningMemory: memory };
+  const behavior = { canWalk: true, energy: 82, restThreshold: 34, attention: 70 };
+  const plans = [1, 2, 3].map((cycle) => catWorldLearningMemoryVisitPlan(
+    cat,
+    behavior,
+    { cycle, sceneId: "main-room" },
+  )).filter(Boolean);
+
+  assert.equal(plans.length, 1);
+  assert.equal(plans[0].treasure.word, "curious");
+  assert.match(plans[0].message, /A curious learner/);
+  assert.doesNotMatch(plans[0].message, /steady/);
+
+  const hiddenOnlyCat = {
+    ...cat,
+    learningMemory: { ...memory, recallTreasures: memory.recallTreasures.slice(0, 1) },
+  };
+  const hiddenOnlyPlan = [1, 2, 3].map((cycle) => catWorldLearningMemoryVisitPlan(
+    hiddenOnlyCat,
+    behavior,
+    { cycle, sceneId: "main-room" },
+  )).find(Boolean);
+  assert.ok(hiddenOnlyPlan);
+  assert.equal(hiddenOnlyPlan.treasure, null);
+  assert.match(hiddenOnlyPlan.message, /9\/6.*三日巩固/);
+  assert.doesNotMatch(hiddenOnlyPlan.message, /steady/);
+});
+
+test("a cat chooses the same personal word treasure for the same memory visit", () => {
+  const cat = {
+    id: "cat-deterministic",
+    learningMemory: {
+      hasMemory: true,
+      companionDays: 7,
+      memoryPoints: 9,
+      levelIndex: 2,
+      levelCount: 5,
+      latestDate: "2026-09-07",
+      recallTreasures: [
+        { key: "curious", word: "curious", sentence: "I stay curious about new words.", sourceDate: "2026-09-07" },
+        { key: "resilient", word: "resilient", sentence: "Practice makes me resilient.", sourceDate: "2026-09-05" },
+        { key: "steady", word: "steady", sentence: "I keep a steady learning rhythm.", sourceDate: "2026-09-03" },
+      ],
+    },
+  };
+  const behavior = { canWalk: true, energy: 80, restThreshold: 34, attention: 68 };
+  const plan = [1, 2, 3, 4].map((cycle) => catWorldLearningMemoryVisitPlan(
+    cat,
+    behavior,
+    { cycle, sceneId: "main-room" },
+  )).find(Boolean);
+  const repeatedPlan = [5, 6, 7, 8].map((cycle) => catWorldLearningMemoryVisitPlan(
+    cat,
+    behavior,
+    { cycle, sceneId: "main-room" },
+  )).find(Boolean);
+
+  assert.ok(plan);
+  assert.ok(repeatedPlan);
+  assert.deepEqual(repeatedPlan.treasure, plan.treasure);
+  assert.equal(repeatedPlan.targetLabel, plan.targetLabel);
 });
 
 test("cat cards, profile and room expose the same personal learning history", async () => {

@@ -113,6 +113,42 @@ function memoryVisitSentence(memory) {
   return `${prefix}${endings[latest.statusKey] || "，看看我们一起走过的学习脚印。"}`;
 }
 
+function compactMemorySentence(sentence, maxLength = 68) {
+  const value = String(sentence || "").replace(/\s+/g, " ").trim();
+  if (value.length <= maxLength) return value;
+  const clipped = value.slice(0, maxLength + 1);
+  const wordBoundary = clipped.lastIndexOf(" ");
+  return `${clipped.slice(0, wordBoundary >= Math.floor(maxLength * 0.62) ? wordBoundary : maxLength).trim()}...`;
+}
+
+function memoryVisitTreasure(memory, catId, sceneId, memoryToken) {
+  const hiddenSourceDate = memory.reviewDueToday ? memory.suggestedReviewDate : "";
+  const visibleTreasures = memory.recallTreasures.filter(
+    (treasure) => !hiddenSourceDate || treasure.sourceDate !== hiddenSourceDate,
+  );
+  if (!visibleTreasures.length) return null;
+
+  const todayKey = String(memory.todayRecallWord || "").toLocaleLowerCase("en-US");
+  if (memory.reviewedToday && todayKey) {
+    const todayTreasure = visibleTreasures.find((treasure) => treasure.key.toLocaleLowerCase("en-US") === todayKey);
+    if (todayTreasure) return todayTreasure;
+  }
+
+  return visibleTreasures[
+    stableIndex(`${catId}:${sceneId}:${memoryToken}:word-treasure`, visibleTreasures.length)
+  ];
+}
+
+function memoryTreasureVisitSentence(memory, treasure) {
+  const sentence = compactMemorySentence(treasure.sentence);
+  const recalledToday = treasure.word.toLocaleLowerCase("en-US")
+    === memory.todayRecallWord.toLocaleLowerCase("en-US");
+  if (memory.reviewedToday && recalledToday) {
+    return `今天刚找回的 ${treasure.word}，我还记得你写过：${sentence}`;
+  }
+  return `我在词牌上看见 ${treasure.word}，还记得你写过：${sentence}`;
+}
+
 export function catWorldLearningMemoryReflection(day = {}, cat = {}) {
   const normalizedDay = normalizeMemoryDay(day);
   const statusKey = normalizedDay.statusKey;
@@ -341,15 +377,19 @@ export function catWorldLearningMemoryVisitPlan(cat = {}, behavior = {}, context
   const styleKey = MEMORY_VISIT_TARGETS[requestedStyleKey] ? requestedStyleKey : "balanced";
   const attention = Math.max(Math.min(Number(behavior.attention || 50), 100), 0);
   const visitDay = memoryVisitDay(memory) || {};
+  const treasure = memoryVisitTreasure(memory, catId, sceneId, memoryToken);
   return {
     kind: "learning-memory",
     visitKey: `${sceneId}:${catId}:${memoryToken}`,
     targetItemIds: [...MEMORY_VISIT_TARGETS[styleKey]],
-    message: memoryVisitSentence(memory),
+    message: treasure ? memoryTreasureVisitSentence(memory, treasure) : memoryVisitSentence(memory),
     animation: MEMORY_VISIT_ANIMATIONS[styleKey],
     levelKey: memory.levelKey,
     levelLabel: memory.levelLabel,
     dayLabel: visitDay.dayLabel || formatCatWorldLearningMemoryDate(visitDay.date || memory.latestDate),
+    treasure,
+    statusLabel: treasure ? `正在回看 ${treasure.word}` : "正在回看学习脚印",
+    targetLabel: treasure ? `珍藏词 ${treasure.word}` : "共同学习手册",
     holdMs: 6400,
     priority: Math.max(
       Math.min(36 + memory.levelIndex * 4 + Math.round(attention / 20) + (memory.reviewDueToday ? 4 : 0), 62),

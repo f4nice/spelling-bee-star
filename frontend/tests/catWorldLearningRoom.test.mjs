@@ -113,6 +113,14 @@ test("each eligible cat can quietly revisit its own learning memory in the room"
   assert.match(game, /this\.owner\.learningMemoryVisits\.add\(visitPlan\.target\.visitKey\)/);
   assert.match(game, /startLearningMemoryMoment/);
   assert.match(game, /spawnLearningMemoryPageCue/);
+  assert.match(game, /learningTreasureFocusPoint\(cat = \{\}, treasure = \{\}, index = 0\)/);
+  assert.match(game, /itemKind:\s*"learning-treasure"/);
+  assert.match(game, /target\.statusLabel \|\| "正在回看学习脚印"/);
+  assert.match(game, /target\.treasure\?\.word \|\| target\.dayLabel/);
+  assert.match(game, /this\.spawnLearningSparkles\(target\.plaqueX, target\.plaqueY\)/);
+  assert.match(game, /const bubbleWidth = VIEW_WIDTH < 900 \? 220 : 270/);
+  assert.match(game, /clamp\(container\.x \+ 36, bubbleWidth \/ 2 \+ 76, VIEW_WIDTH - bubbleWidth \/ 2 - 76\)/);
+  assert.match(game, /wordWrap:\s*\{ width: bubbleWidth \}/);
   assert.match(game, /this\.learningMemoryVisits = new Set\(\)/);
   assert.match(styles, /\.cat-world-context-intent\.tone-memory\s*\{/);
 });

@@ -1384,6 +1384,31 @@ class CatWorldScene extends Phaser.Scene {
     };
   }
 
+  learningTreasureFocusPoint(cat = {}, treasure = {}, index = 0) {
+    const signal = this.owner.snapshot.learningSignal || {};
+    const guideCatId = String(signal.guideCatId || this.owner.snapshot.selectedCatId || "");
+    if (!guideCatId || String(cat.id || "") !== guideCatId) return null;
+    const treasureKey = String(treasure.key || treasure.word || "").toLocaleLowerCase("en-US");
+    const visibleTreasures = Array.isArray(signal.learningMemory?.recallTreasures)
+      ? signal.learningMemory.recallTreasures.slice(0, 3)
+      : [];
+    const plaqueIndex = visibleTreasures.findIndex((candidate) => (
+      String(candidate.key || candidate.word || "").toLocaleLowerCase("en-US") === treasureKey
+    ));
+    if (!treasureKey || plaqueIndex < 0) return null;
+    const fixture = this.learningGardenFixturePosition();
+    const plaqueX = fixture.x + 74;
+    const plaqueY = fixture.y - 10 + plaqueIndex * 35;
+    return {
+      itemKind: "learning-treasure",
+      label: `珍藏词 ${shortCatText(treasure.word, 12)}`,
+      plaqueX: plaqueX + 62,
+      plaqueY: plaqueY + 15,
+      x: clamp(plaqueX + 17 + seededOffset(`${cat.id}:${treasureKey}:plaque-x`, 12), 38, GAME_WIDTH - 132),
+      y: clamp(FLOOR_TOP + 66 + seededOffset(`${cat.id}:${treasureKey}:plaque-y`, 8), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+    };
+  }
+
   drawLearningGardenFixture(snapshot) {
     const signal = snapshot.learningSignal || {};
     if (!Array.isArray(signal.steps) || signal.steps.length !== 3) return;
@@ -5097,6 +5122,9 @@ class CatWorldScene extends Phaser.Scene {
       carePriority: Number(careTarget?.priority || 0),
     });
     if (!visit || this.owner.learningMemoryVisits.has(visit.visitKey)) return null;
+    const treasurePoint = visit.treasure
+      ? this.learningTreasureFocusPoint(cat, visit.treasure, index)
+      : null;
     const gardenPoint = this.learningGardenFocusPoint(index);
     const availableTargets = visit.targetItemIds
       .map((itemId) => ({
@@ -5104,16 +5132,25 @@ class CatWorldScene extends Phaser.Scene {
         point: itemId === "learning-garden" ? gardenPoint : this.roomItemFocusPoint(itemId, index),
       }))
       .filter((entry) => entry.point);
-    if (!availableTargets.length) return null;
-    const selected = availableTargets[0];
+    if (!treasurePoint && !availableTargets.length) return null;
+    const selected = treasurePoint
+      ? { itemId: `learning-treasure:${visit.treasure.key}`, point: treasurePoint }
+      : availableTargets[0];
+    const exactTreasureTarget = selected.point.itemKind === "learning-treasure";
     return {
       ...visit,
       itemId: selected.itemId,
       itemKind: selected.point.itemKind,
       label: selected.point.label || "学习角",
-      message: `${visit.message} 我去${selected.point.label || "学习角"}安静看一会儿。`,
-      x: clamp(selected.point.x + seededOffset(`${cat.id}:${visit.visitKey}:memory-x`, 28), 38, GAME_WIDTH - 132),
-      y: clamp(selected.point.y + seededOffset(`${cat.id}:${visit.visitKey}:memory-y`, 14), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+      message: `${visit.message} 我去${selected.point.label || "学习角"}旁边安静看一会儿。`,
+      plaqueX: selected.point.plaqueX,
+      plaqueY: selected.point.plaqueY,
+      x: exactTreasureTarget
+        ? selected.point.x
+        : clamp(selected.point.x + seededOffset(`${cat.id}:${visit.visitKey}:memory-x`, 28), 38, GAME_WIDTH - 132),
+      y: exactTreasureTarget
+        ? selected.point.y
+        : clamp(selected.point.y + seededOffset(`${cat.id}:${visit.visitKey}:memory-y`, 14), FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
     };
   }
 
@@ -5125,14 +5162,17 @@ class CatWorldScene extends Phaser.Scene {
     this.reportLiveCatIntent(entry.cat, {
       kind: "learning-memory",
       phase: "arrived",
-      statusLabel: "正在回看学习脚印",
-      targetLabel: target.label || "学习角",
+      statusLabel: target.statusLabel || "正在回看学习脚印",
+      targetLabel: target.targetLabel || target.label || "学习角",
       message: target.message || "正在翻看共同学习手册。",
       tone: "memory",
       expiresAt: Date.now() + holdMs,
     });
     this.spawnLearningMemoryBubble(entry.container, entry.cat, target);
     this.spawnLearningMemoryPageCue(entry.container, target);
+    if (target.itemKind === "learning-treasure") {
+      this.spawnLearningSparkles(target.plaqueX, target.plaqueY);
+    }
     this.playCatMicroAnimation(
       entry.container,
       entry.cat,
@@ -5160,7 +5200,7 @@ class CatWorldScene extends Phaser.Scene {
     paper.fillRect(20, 8, 16, 3);
     paper.fillRect(8, 20, 28, 3);
     paper.fillRect(8, 25, 21, 3);
-    const label = this.add.text(22, 38, target.dayLabel || target.levelLabel || "学习脚印", {
+    const label = this.add.text(22, 38, target.treasure?.word || target.dayLabel || target.levelLabel || "学习脚印", {
       color: "#263047",
       backgroundColor: "#fff07d",
       fontFamily: "Consolas, monospace",
@@ -5455,15 +5495,17 @@ class CatWorldScene extends Phaser.Scene {
   spawnLearningMemoryBubble(container, cat, target = {}) {
     if (!container?.active) return;
     const message = `${cat?.displayLabel || cat?.label || "猫咪"}：${target.message || "我想翻翻我们的共同学习手册。"}`;
+    const bubbleWidth = VIEW_WIDTH < 900 ? 220 : 270;
+    const bubbleX = clamp(container.x + 36, bubbleWidth / 2 + 76, VIEW_WIDTH - bubbleWidth / 2 - 76);
     const bubble = this.add
-      .text(container.x + 36, container.y - 36, message, {
+      .text(bubbleX, container.y - 36, message, {
         color: "#263047",
         backgroundColor: "#ffe6c7",
         fontFamily: "Consolas, monospace",
         fontSize: "12px",
         fontStyle: "bold",
         padding: { x: 8, y: 5 },
-        wordWrap: { width: 270 },
+        wordWrap: { width: bubbleWidth },
         align: "center",
       })
       .setOrigin(0.5)
