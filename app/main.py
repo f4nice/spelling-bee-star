@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-016"
-DEFAULT_PAGE_VERSION = "v20260906.16"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-017"
+DEFAULT_PAGE_VERSION = "v20260906.17"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -5080,8 +5080,14 @@ async def vue_cat_world_play_api(request: Request, db: Session = Depends(get_db)
     if not item or item["category"] not in {"toy", "food"}:
         raise HTTPException(status_code=400, detail="请选择已经拥有的食物或玩具。")
     state = get_or_create_cat_world_state(db, phone)
-    if not parse_cat_world_cats(state.cats):
-        raise HTTPException(status_code=400, detail="活动室里没有猫咪，请先去商店重新领养。")
+    active_scene_key = str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+    room_profiles = [
+        profile
+        for profile in cat_world_active_cat_profiles(db, state.phone)
+        if str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) == active_scene_key
+    ]
+    if not room_profiles:
+        raise HTTPException(status_code=400, detail="当前房间里没有猫咪，先从猫咪卡片把一只猫带过来。")
     inventory = parse_cat_world_inventory(state.inventory)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     if item_id in damaged_items:
@@ -5911,9 +5917,17 @@ async def vue_cat_world_select_cat_api(request: Request, db: Session = Depends(g
     state.selected_cat_profile = profile.profile_id
     state.selected_cat = profile.breed_id
     moved_scene = False
-    if move_to_current_scene and str(profile.current_scene_key or "") != state.current_scene_key:
+    previous_scene_key = str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+    if move_to_current_scene and previous_scene_key != state.current_scene_key:
         profile.current_scene_key = state.current_scene_key
         db.add(profile)
+        cat_world_record_manual_scene_move(
+            db,
+            state,
+            profile,
+            previous_scene_key,
+            state.current_scene_key,
+        )
         moved_scene = True
     db.add(state)
     db.commit()
@@ -16185,6 +16199,34 @@ def cat_world_active_scene_layout(
     )
 
 
+def cat_world_scene_environment(
+    db: Session,
+    state: CatWorldState,
+    inventory: dict[str, int],
+    scene_key: str,
+) -> dict[str, Any]:
+    scene = cat_world_scene_row(db, scene_key, enabled_only=True)
+    if not scene:
+        scene = cat_world_scene_row(db, CAT_WORLD_DEFAULT_SCENE_KEY, enabled_only=True)
+    if not scene:
+        return {"sceneId": CAT_WORLD_DEFAULT_SCENE_KEY, "inventory": inventory, "layout": {}}
+    user_scene, _ = get_or_create_cat_world_user_scene(db, state, scene)
+    config = cat_world_scene_config(scene)
+    item_locations = parse_cat_world_item_locations(state.item_locations, inventory)
+    scene_inventory = cat_world_inventory_for_scene(inventory, item_locations, scene.scene_key)
+    layout = parse_cat_world_room_layout(
+        user_scene.layout,
+        scene_inventory,
+        config.get("defaultLayout"),
+        config.get("itemRules"),
+    )
+    return {
+        "sceneId": scene.scene_key,
+        "inventory": scene_inventory,
+        "layout": layout,
+    }
+
+
 def cat_world_active_scene_styles(
     db: Session,
     state: CatWorldState,
@@ -16250,6 +16292,31 @@ def cat_world_scene_catalog_payload(db: Session, state: CatWorldState) -> list[d
             }
         )
     return payload
+
+
+def cat_world_available_scene_choices(db: Session, state: CatWorldState) -> list[dict[str, str]]:
+    user_rows = {
+        row.scene_key: row
+        for row in db.scalars(select(CatWorldUserScene).where(CatWorldUserScene.phone == state.phone)).all()
+    }
+    choices: list[dict[str, str]] = []
+    for row in db.scalars(select(CatWorldScene).order_by(CatWorldScene.sort_order, CatWorldScene.id)).all():
+        if not row.is_enabled:
+            continue
+        config = cat_world_scene_config(row)
+        user_row = user_rows.get(row.scene_key)
+        unlocked = bool(user_row.is_unlocked) if user_row else bool(config.get("unlockByDefault"))
+        features = config.get("features") if isinstance(config.get("features"), dict) else {}
+        if not unlocked or features.get("cats") is False:
+            continue
+        choices.append(
+            {
+                "id": row.scene_key,
+                "label": row.label,
+                "sceneType": row.scene_type,
+            }
+        )
+    return choices
 
 
 def cat_world_blind_box_catalog_payload(
@@ -16972,6 +17039,11 @@ CAT_WORLD_AGENT_STATE_CARRY_KEYS = {
     "mischiefRepairCost",
     "petCount",
     "routinePeriodEvents",
+    "sceneRoamAt",
+    "sceneRoamFrom",
+    "sceneRoamPeriod",
+    "sceneRoamReason",
+    "sceneRoamTo",
 }
 
 
@@ -18638,7 +18710,12 @@ def cat_world_apply_agent_damage_events(
     now = datetime.utcnow()
     today = date.today()
     changed = False
-    profiles = cat_world_active_cat_profiles(db, state.phone)
+    active_scene_key = str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+    profiles = [
+        profile
+        for profile in cat_world_active_cat_profiles(db, state.phone)
+        if str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) == active_scene_key
+    ]
     for profile in profiles:
         cat = cat_world_cat_profile_payload(profile)
         cat_id = profile.profile_id
@@ -18741,7 +18818,12 @@ def cat_world_apply_favorite_decor_rewards(
 ) -> list[dict[str, Any]]:
     now = now or datetime.utcnow()
     rewards: list[dict[str, Any]] = []
-    profiles = cat_world_active_cat_profiles(db, state.phone)
+    active_scene_key = str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+    profiles = [
+        profile
+        for profile in cat_world_active_cat_profiles(db, state.phone)
+        if str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) == active_scene_key
+    ]
     for profile in profiles:
         cat = cat_world_cat_profile_payload(profile)
         cat_id = profile.profile_id
@@ -19406,6 +19488,237 @@ def cat_world_refresh_litter(
     }
 
 
+def cat_world_scene_roam_period_token(now: datetime | None = None) -> str:
+    period_key, _ = cat_world_routine_period(now)
+    return f"{cat_world_local_now(now).date().isoformat()}:{period_key}"
+
+
+def cat_world_record_manual_scene_move(
+    db: Session,
+    state: CatWorldState,
+    profile: CatWorldCatProfile,
+    from_scene_id: str,
+    to_scene_id: str,
+    now: datetime | None = None,
+) -> None:
+    now = now or datetime.utcnow()
+    cat = cat_world_cat_profile_payload(profile)
+    traits = cat_world_cat_traits(cat)
+    log = get_or_create_cat_world_daily_log(
+        db,
+        state.phone,
+        profile.profile_id,
+        date.today(),
+        now,
+        cat,
+    )
+    from_scene = CAT_WORLD_SCENE_SEED_BY_KEY.get(from_scene_id, {})
+    to_scene = CAT_WORLD_SCENE_SEED_BY_KEY.get(to_scene_id, {})
+    cat_label = str(cat.get("displayLabel") or cat.get("label") or "猫咪")
+    message = (
+        f"你把{cat_label}从{from_scene.get('label') or from_scene_id}带到"
+        f"{to_scene.get('label') or to_scene_id}，本时段会先安心待在这里。"
+    )
+    agent_state = append_cat_world_agent_event(
+        log,
+        cat,
+        traits,
+        "scene-move",
+        "被带到新房间",
+        message,
+        now,
+    )
+    agent_state["sceneRoamPeriod"] = cat_world_scene_roam_period_token(now)
+    agent_state["sceneRoamAt"] = now.replace(microsecond=0).isoformat() + "Z"
+    agent_state["sceneRoamFrom"] = from_scene_id
+    agent_state["sceneRoamTo"] = to_scene_id
+    agent_state["sceneRoamReason"] = "被你带到这里"
+    log.agent_state = encode_cat_world_agent_state(agent_state)
+    db.add(log)
+
+
+def cat_world_apply_autonomous_scene_roaming(
+    db: Session,
+    state: CatWorldState,
+    cat_profiles: list[CatWorldCatProfile],
+    now: datetime | None = None,
+) -> tuple[list[dict[str, Any]], bool]:
+    now = now or datetime.utcnow()
+    choices = cat_world_available_scene_choices(db, state)
+    if len(choices) < 2 or not cat_profiles:
+        return [], False
+    choices_by_id = {choice["id"]: choice for choice in choices}
+    available_ids = list(choices_by_id)
+    period_key, period_label = cat_world_routine_period(now)
+    period_token = cat_world_scene_roam_period_token(now)
+    roam_date = cat_world_local_now(now).date()
+    active_scene_id = str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+    busy_cat_references = {
+        str(state.active_food_cat_id or ""),
+        str(state.active_care_cat_id or ""),
+    }
+    moves: list[dict[str, Any]] = []
+    changed = False
+
+    for profile in cat_profiles:
+        cat = cat_world_cat_profile_payload(profile)
+        traits = cat_world_cat_traits(cat)
+        log = get_or_create_cat_world_daily_log(
+            db,
+            state.phone,
+            profile.profile_id,
+            date.today(),
+            now,
+            cat,
+        )
+        agent_state, agent_changed = ensure_cat_world_agent_state(log, cat, traits)
+        if agent_state.get("sceneRoamPeriod") == period_token:
+            if agent_changed:
+                db.add(log)
+                changed = True
+            continue
+        previous_log = db.scalar(
+            select(CatWorldDailyLog)
+            .where(
+                CatWorldDailyLog.phone == normalize_login_phone(state.phone),
+                CatWorldDailyLog.cat_id == profile.profile_id,
+                CatWorldDailyLog.log_date < log.log_date,
+            )
+            .order_by(CatWorldDailyLog.log_date.desc(), CatWorldDailyLog.id.desc())
+            .limit(1)
+        )
+        previous_agent_state = (
+            parse_cat_world_agent_state(previous_log.agent_state)
+            if previous_log
+            else {}
+        )
+        if previous_agent_state.get("sceneRoamPeriod") == period_token:
+            for key in (
+                "sceneRoamAt",
+                "sceneRoamFrom",
+                "sceneRoamPeriod",
+                "sceneRoamReason",
+                "sceneRoamTo",
+            ):
+                if key in previous_agent_state:
+                    agent_state[key] = previous_agent_state[key]
+            log.agent_state = encode_cat_world_agent_state(agent_state)
+            db.add(log)
+            changed = True
+            continue
+
+        current_scene_id = str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+        if current_scene_id not in choices_by_id:
+            current_scene_id = available_ids[0]
+            profile.current_scene_key = current_scene_id
+            db.add(profile)
+            changed = True
+        agent_state["sceneRoamPeriod"] = period_token
+        agent_state["sceneRoamAt"] = now.replace(microsecond=0).isoformat() + "Z"
+        log.agent_state = encode_cat_world_agent_state(agent_state)
+        db.add(log)
+        changed = True
+
+        if profile.profile_id == str(state.selected_cat_profile or "") and current_scene_id == active_scene_id:
+            continue
+
+        adjusted_mood = clamp_cat_world_score(
+            int(log.mood_score or 0) + int(agent_state.get("moodOffset") or 0)
+        )
+        adjusted_energy = clamp_cat_world_score(
+            int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0)
+        )
+        behavior = cat_world_current_behavior(agent_state, traits, adjusted_mood, adjusted_energy, now)
+        if (
+            behavior.get("sleeping")
+            or behavior.get("key") == "resting"
+            or profile.profile_id in busy_cat_references
+            or profile.breed_id in busy_cat_references
+        ):
+            continue
+
+        candidates = [scene_id for scene_id in available_ids if scene_id != current_scene_id]
+        if not candidates:
+            continue
+        favorite_scene_id = str(profile.favorite_scene_key or "")
+        favorite_available = favorite_scene_id in candidates
+        activity_bias = min(max(int(agent_state.get("activityBias") or 50), 0), 100)
+        probability = 0.28 + ((activity_bias - 50) * 0.004)
+        mood_key = str(agent_state.get("dailyMoodKey") or "")
+        if behavior.get("key") == "exploring" or mood_key == "curious":
+            probability += 0.2
+        elif behavior.get("key") == "slow" or mood_key in {"lazy", "quiet"}:
+            probability -= 0.1
+        if favorite_available:
+            probability += 0.16
+        if adjusted_energy < int(traits.get("restThreshold") or 34) + 10:
+            probability -= 0.24
+        probability = min(max(probability, 0.08), 0.78)
+        seed = (
+            f"{cat_world_daily_agent_seed(roam_date, profile.profile_id, state.phone)}"
+            f":scene-roam:{period_key}"
+        )
+        if cat_world_stable_ratio(seed) > probability:
+            continue
+
+        temperament = str(traits.get("temperament") or "balanced")
+        target_scene_id = ""
+        reason = "换个地方活动"
+        if temperament == "clingy" and active_scene_id in candidates:
+            target_scene_id = active_scene_id
+            reason = "听见你在这里，自己找了过来"
+        elif favorite_available:
+            favorite_bias = 0.58 if mood_key == "curious" else 0.82
+            if mood_key in {"lazy", "quiet", "grumpy"}:
+                favorite_bias = 0.94
+            if cat_world_stable_ratio(f"{seed}:favorite") <= favorite_bias:
+                target_scene_id = favorite_scene_id
+                reason = "想去自己最喜欢的地方待一会儿"
+        if not target_scene_id:
+            target_index = min(
+                int(cat_world_stable_ratio(f"{seed}:target") * len(candidates)),
+                len(candidates) - 1,
+            )
+            target_scene_id = candidates[target_index]
+            reason = "今天想探索另一个房间"
+
+        from_scene = choices_by_id[current_scene_id]
+        to_scene = choices_by_id[target_scene_id]
+        cat_label = str(cat.get("displayLabel") or cat.get("label") or "猫咪")
+        message = (
+            f"{cat_label}{period_label}{reason}，从{from_scene['label']}去了{to_scene['label']}。"
+        )
+        profile.current_scene_key = target_scene_id
+        db.add(profile)
+        agent_state = append_cat_world_agent_event(
+            log,
+            cat,
+            traits,
+            "scene-roam",
+            "自主换房",
+            message,
+            now,
+        )
+        agent_state["sceneRoamFrom"] = current_scene_id
+        agent_state["sceneRoamTo"] = target_scene_id
+        agent_state["sceneRoamReason"] = reason
+        log.agent_state = encode_cat_world_agent_state(agent_state)
+        db.add(log)
+        moves.append(
+            {
+                "catId": profile.profile_id,
+                "catLabel": cat_label,
+                "fromSceneId": current_scene_id,
+                "fromSceneLabel": from_scene["label"],
+                "toSceneId": target_scene_id,
+                "toSceneLabel": to_scene["label"],
+                "period": period_key,
+                "message": message,
+            }
+        )
+    return moves, changed
+
+
 def cat_world_apply_daily_decay(
     db: Session,
     state: CatWorldState,
@@ -19413,6 +19726,7 @@ def cat_world_apply_daily_decay(
     cat_profiles: list[CatWorldCatProfile],
     room_layout: dict[str, dict[str, float]],
     learning_habit: dict[str, Any] | None = None,
+    scene_environments: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     now = datetime.utcnow()
     today = date.today()
@@ -19440,20 +19754,43 @@ def cat_world_apply_daily_decay(
         cat_id = profile.profile_id
         breed_id = profile.breed_id
         traits = cat_world_cat_traits(cat)
-        favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, inventory, room_layout)
+        scene_key = str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+        environment = (scene_environments or {}).get(scene_key, {})
+        cat_inventory = (
+            environment.get("inventory")
+            if isinstance(environment.get("inventory"), dict)
+            else inventory
+        )
+        cat_room_layout = (
+            environment.get("layout")
+            if isinstance(environment.get("layout"), dict)
+            else room_layout
+        )
+        favorite_active_ids = cat_world_active_favorite_decor_ids(
+            breed_id,
+            cat_inventory,
+            cat_room_layout,
+        )
         log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, today, now, cat)
         hygiene = cat_world_cat_hygiene_payload(state, cat_id, care, now, cat)
         changed = apply_cat_world_hourly_decay(
             log,
             traits,
-            inventory,
+            cat_inventory,
             len(favorite_active_ids),
             now,
             cat_world_cat_litter_count(state, cat),
             int(hygiene.get("moodDecayBonus") or 0),
             cat,
         ) or changed
-        changed = cat_world_apply_agent_routine_event(log, cat, traits, inventory, favorite_active_ids, now) or changed
+        changed = cat_world_apply_agent_routine_event(
+            log,
+            cat,
+            traits,
+            cat_inventory,
+            favorite_active_ids,
+            now,
+        ) or changed
         if cat_id == selected_profile_id:
             learning_companion = cat_world_apply_learning_companion_rewards(
                 state,
@@ -19465,7 +19802,7 @@ def cat_world_apply_daily_decay(
             )
             changed = bool(learning_companion.get("changed")) or changed
         db.add(log)
-        row = cat_world_daily_log_payload(log, favorite_active_ids, inventory, room_layout, cat)
+        row = cat_world_daily_log_payload(log, favorite_active_ids, cat_inventory, cat_room_layout, cat)
         row["hygiene"] = hygiene
         neglect, neglect_changed = cat_world_update_neglect_status(
             cat_id,
@@ -20145,14 +20482,23 @@ def cat_world_effect_target_cat_id(
     effect_type: str,
     item_id: str = "",
 ) -> str:
-    profiles = cat_world_active_cat_profiles(db, state.phone)
+    active_scene_key = str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+    profiles = [
+        profile
+        for profile in cat_world_active_cat_profiles(db, state.phone)
+        if str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) == active_scene_key
+    ]
     selected_profile = cat_world_profile_for_reference(
         db,
         state,
         state.selected_cat_profile or state.selected_cat,
         profiles,
     )
-    selected_cat_id = selected_profile.profile_id if selected_profile else ""
+    selected_cat_id = (
+        selected_profile.profile_id
+        if selected_profile
+        else (profiles[0].profile_id if profiles else "")
+    )
     if effect_type != "food":
         return selected_cat_id
     now = datetime.utcnow()
@@ -20309,12 +20655,18 @@ def cat_world_mood(
     room_layout: dict[str, dict[str, float]] | None = None,
     daily_logs: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    if not owned_cats:
+    room_profiles = [
+        profile
+        for profile in cat_world_active_cat_profiles(db, state.phone)
+        if str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+        == str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+    ]
+    if not owned_cats or not room_profiles:
         return {
             "score": 0,
-            "label": "房间里没有猫咪",
+            "label": "当前房间没有猫咪" if owned_cats else "房间里没有猫咪",
             "catEnergy": 0,
-            "catEnergyLabel": "等待重新领养",
+            "catEnergyLabel": "可以从猫咪卡片带一只过来" if owned_cats else "等待重新领养",
             "canWalk": False,
             "activeFood": {"active": False, "itemId": "", "remainingSeconds": 0},
             "dailyLog": {},
@@ -20330,11 +20682,13 @@ def cat_world_mood(
             "energyCost": 0,
             "emptyRoom": True,
         }
-    selected_cat = cat_world_cat_for_reference(
+    selected_profile = cat_world_profile_for_reference(
         db,
         state,
         state.selected_cat_profile or state.selected_cat,
-    ) or cat_world_cat_payload(CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+        room_profiles,
+    ) or room_profiles[0]
+    selected_cat = cat_world_cat_profile_payload(selected_profile)
     selected_cat_id = str(selected_cat.get("profileId") or selected_cat.get("id"))
     selected_breed_id = str(selected_cat.get("breedId") or selected_cat.get("id"))
     traits = cat_world_cat_traits(selected_cat)
@@ -20509,6 +20863,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     if cat_profiles_changed:
         db.commit()
         db.refresh(state)
+    scene_moves, _ = cat_world_apply_autonomous_scene_roaming(db, state, cat_profiles)
     cat_bonds = parse_cat_world_bonds(state.cat_bonds)
     blind_box_catalog = cat_world_blind_box_catalog_payload(db, state, owned_cats)
     collection_catalog = cat_world_collection_catalog_payload(blind_box_catalog, owned_cats)
@@ -20639,6 +20994,13 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         db.add(state)
         db.commit()
         db.refresh(state)
+    scene_environments = {
+        scene_key: cat_world_scene_environment(db, state, usable_inventory, scene_key)
+        for scene_key in {
+            str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+            for profile in cat_profiles
+        }
+    }
     daily_logs, learning_companion = cat_world_apply_daily_decay(
         db,
         state,
@@ -20646,9 +21008,12 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         cat_profiles,
         room_layout,
         habit_energy_source,
+        scene_environments,
     )
     owned_cats = parse_cat_world_cats(state.cats)
     cat_profiles = cat_world_active_cat_profiles(db, state.phone)
+    active_profile_ids = {profile.profile_id for profile in cat_profiles}
+    scene_moves = [move for move in scene_moves if move.get("catId") in active_profile_ids]
     cat_bonds = parse_cat_world_bonds(state.cat_bonds)
     cat_care = parse_cat_world_care(state.cat_care)
     lost_cats = cat_world_lost_cats_payload(db, state.phone, cat_care, owned_cats)
@@ -20718,6 +21083,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "selectedCat": state.selected_cat,
             "selectedCatProfile": state.selected_cat_profile or "",
             "roomCatIds": room_cat_ids,
+            "sceneMoves": scene_moves,
             "hygiene": litter_status,
             "activeCare": active_care,
             "dailyLogs": daily_logs,

@@ -201,6 +201,7 @@ onMounted(async () => {
     },
   });
   updateCatWorldGame();
+  announceSceneMoves(payload.value);
   announceLearningCompanionOnEntry();
 });
 
@@ -805,7 +806,18 @@ function replacePayload(nextPayload) {
   if (nextPayload?.energy && nextPayload?.state) {
     payload.value = nextPayload;
     playTimeSyncedAt.value = Date.now();
+    announceSceneMoves(nextPayload);
   }
+}
+
+function announceSceneMoves(nextPayload) {
+  const moves = Array.isArray(nextPayload?.state?.sceneMoves)
+    ? nextPayload.state.sceneMoves.filter((move) => move?.message)
+    : [];
+  if (!moves.length) return;
+  notice.value = moves.length === 1
+    ? moves[0].message
+    : `${moves[0].message} 另外还有 ${moves.length - 1} 只猫咪去了别的房间。`;
 }
 
 function setPlayTime(nextPlayTime) {
@@ -2496,8 +2508,15 @@ async function selectCat(catOrId, options = {}) {
       role="tabpanel"
       aria-labelledby="cat-world-view-room-tab"
     >
-      <section class="cat-world-room-panel panel">
-        <div v-if="scenes.length > 1" class="cat-world-scene-tabs" role="tablist" aria-label="猫咪世界场景">
+      <nav v-if="scenes.length > 1" class="cat-world-scene-dock" aria-label="猫咪世界场景地图">
+        <div class="cat-world-scene-dock-label">
+          <MapPinIcon :size="20" :stroke-width="2.8" aria-hidden="true" />
+          <span>
+            <small>World Map</small>
+            <strong>场景地图</strong>
+          </span>
+        </div>
+        <div class="cat-world-scene-tabs" role="tablist" aria-label="猫咪世界场景">
           <button
             v-for="scene in scenes"
             :key="scene.id"
@@ -2515,6 +2534,9 @@ async function selectCat(catOrId, options = {}) {
             <small v-else>{{ scene.catCount || 0 }}只 · {{ scene.itemCount || 0 }}件</small>
           </button>
         </div>
+      </nav>
+
+      <section class="cat-world-room-panel panel">
         <div class="cat-world-room-head">
           <div>
             <p class="section-kicker">{{ currentScene.englishName || "Room" }}</p>
