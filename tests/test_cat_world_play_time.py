@@ -19,10 +19,14 @@ from app.models import CatWorldPlayTimeGrant, CatWorldState
 
 
 class CatWorldPlayTimeTest(unittest.TestCase):
-    def test_daily_spelling_unlocks_ten_and_twenty_minute_tiers(self):
-        self.assertEqual(cat_world_play_time_earned_seconds(99), 0)
-        self.assertEqual(cat_world_play_time_earned_seconds(100), 600)
-        self.assertEqual(cat_world_play_time_earned_seconds(199), 600)
+    def test_daily_spelling_unlocks_gradual_play_time_tiers(self):
+        self.assertEqual(cat_world_play_time_earned_seconds(19), 0)
+        self.assertEqual(cat_world_play_time_earned_seconds(20), 180)
+        self.assertEqual(cat_world_play_time_earned_seconds(49), 180)
+        self.assertEqual(cat_world_play_time_earned_seconds(50), 360)
+        self.assertEqual(cat_world_play_time_earned_seconds(99), 360)
+        self.assertEqual(cat_world_play_time_earned_seconds(100), 720)
+        self.assertEqual(cat_world_play_time_earned_seconds(199), 720)
         self.assertEqual(cat_world_play_time_earned_seconds(200), 1200)
 
     def test_reward_time_stacks_on_top_of_spelling_time(self):
@@ -40,10 +44,10 @@ class CatWorldPlayTimeTest(unittest.TestCase):
             today=today,
         )
 
-        self.assertEqual(payload["baseEarnedSeconds"], 600)
+        self.assertEqual(payload["baseEarnedSeconds"], 720)
         self.assertEqual(payload["rewardMinutes"], 15)
-        self.assertEqual(payload["earnedSeconds"], 1500)
-        self.assertEqual(payload["remainingSeconds"], 1380)
+        self.assertEqual(payload["earnedSeconds"], 1620)
+        self.assertEqual(payload["remainingSeconds"], 1500)
 
     def test_reward_time_source_only_sums_the_requested_day(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")
@@ -102,7 +106,7 @@ class CatWorldPlayTimeTest(unittest.TestCase):
         )
 
         self.assertEqual(state.play_time_used_seconds, 130)
-        self.assertEqual(payload["remainingSeconds"], 470)
+        self.assertEqual(payload["remainingSeconds"], 590)
         self.assertTrue(payload["sessionActive"])
 
     def test_stale_session_is_not_charged(self):
@@ -124,7 +128,7 @@ class CatWorldPlayTimeTest(unittest.TestCase):
         )
 
         self.assertEqual(state.play_time_used_seconds, 120)
-        self.assertEqual(payload["remainingSeconds"], 480)
+        self.assertEqual(payload["remainingSeconds"], 600)
 
     def test_new_day_resets_usage(self):
         old_day = date(2026, 7, 29)

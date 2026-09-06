@@ -118,8 +118,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260816-002"
-DEFAULT_PAGE_VERSION = "v20260816.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-001"
+DEFAULT_PAGE_VERSION = "v20260906.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -258,6 +258,12 @@ GROWTH_BADGE_CONFIG = [
 
 CAT_WORLD_DEFAULT_CAT_ID = "mimi"
 CAT_WORLD_DEBATE_ENERGY_GRANT_SOURCE = "system:debate"
+CAT_WORLD_HABIT_REWARD_START_DATE = date(2026, 9, 6)
+CAT_WORLD_SPELLING_HABIT_ENERGY_TIERS = ((20, 10), (50, 15), (100, 20), (200, 20))
+CAT_WORLD_HABIT_OUTPUT_ENERGY = 15
+CAT_WORLD_HABIT_BALANCE_ENERGY = 20
+CAT_WORLD_HABIT_STREAK_STEP_ENERGY = 5
+CAT_WORLD_HABIT_STREAK_MAX_ENERGY = 20
 CAT_WORLD_MOVEMENT_SPEED_SETTING_KEY = "movement_speed"
 CAT_WORLD_DEFAULT_MOVEMENT_SPEED = 1.0
 CAT_WORLD_MIN_MOVEMENT_SPEED = 0.4
@@ -278,7 +284,7 @@ CAT_WORLD_RENAME_CARD_ITEM_ID = "cat-rename-card"
 CAT_WORLD_LIMITED_GIFT_ITEM_ID = "limited-gift-toy"
 CAT_WORLD_LIMITED_GIFT_INITIAL_STOCK = 12
 CAT_WORLD_PET_REWARD_COOLDOWN_SECONDS = 60 * 60
-CAT_WORLD_PLAY_TIME_TIERS = ((200, 20 * 60), (100, 10 * 60))
+CAT_WORLD_PLAY_TIME_TIERS = ((200, 20 * 60), (100, 12 * 60), (50, 6 * 60), (20, 3 * 60))
 CAT_WORLD_PLAY_TIME_HEARTBEAT_GRACE_SECONDS = 30
 CAT_WORLD_LITTER_MAX = 4
 CAT_WORLD_LITTER_MOOD_PENALTY_PER_PILE = 2
@@ -14412,16 +14418,147 @@ def cat_world_operating_energy_source(
     }
 
 
+def cat_world_spelling_habit_energy(spelling_count: int) -> int:
+    count = max(int(spelling_count or 0), 0)
+    return sum(energy for target, energy in CAT_WORLD_SPELLING_HABIT_ENERGY_TIERS if count >= target)
+
+
+def cat_world_learning_habit_source(
+    db: Session,
+    phone: str,
+    today: date | None = None,
+) -> dict[str, Any]:
+    source_date = today or date.today()
+    if source_date < CAT_WORLD_HABIT_REWARD_START_DATE:
+        return {
+            "key": "learning_habit",
+            "label": "学习习惯奖励",
+            "value": 0,
+            "unit": "能量",
+            "energyPerUnit": 1,
+            "energy": 0,
+            "todayValue": 0,
+            "todayEnergy": 0,
+            "currentStreak": 0,
+            "todayDetail": "新学习节奏尚未开始",
+        }
+
+    spelling_by_date = {
+        row.stat_date: max(int(row.correct_count or 0), 0) + max(int(row.wrong_count or 0), 0)
+        for row in db.scalars(
+            select(ChallengeDailyStat)
+            .where(ChallengeDailyStat.stat_date >= CAT_WORLD_HABIT_REWARD_START_DATE)
+            .where(ChallengeDailyStat.stat_date <= source_date)
+        ).all()
+    }
+    essay_dates = {
+        created_at.date()
+        for created_at, word_count in db.execute(
+            select(EssayEntry.created_at, EssayEntry.word_count).where(EssayEntry.phone == phone)
+        ).all()
+        if created_at
+        and CAT_WORLD_HABIT_REWARD_START_DATE <= created_at.date() <= source_date
+        and max(int(word_count or 0), 0) >= 80
+    }
+    debate_dates = {
+        created_at.date()
+        for created_at in db.scalars(
+            select(CatWorldEnergyGrant.created_at)
+            .where(CatWorldEnergyGrant.phone == phone)
+            .where(CatWorldEnergyGrant.granted_by_phone == CAT_WORLD_DEBATE_ENERGY_GRANT_SOURCE)
+        ).all()
+        if created_at and CAT_WORLD_HABIT_REWARD_START_DATE <= created_at.date() <= source_date
+    }
+    active_dates = sorted(
+        day
+        for day in set(spelling_by_date) | essay_dates | debate_dates
+        if spelling_by_date.get(day, 0) >= 20 or day in essay_dates or day in debate_dates
+    )
+
+    daily_rewards: dict[date, dict[str, Any]] = {}
+    previous_active_date: date | None = None
+    streak = 0
+    for active_date in active_dates:
+        streak = streak + 1 if previous_active_date and active_date == previous_active_date + timedelta(days=1) else 1
+        previous_active_date = active_date
+        spelling_count = spelling_by_date.get(active_date, 0)
+        has_essay = active_date in essay_dates
+        has_debate = active_date in debate_dates
+        spelling_energy = cat_world_spelling_habit_energy(spelling_count)
+        output_energy = (CAT_WORLD_HABIT_OUTPUT_ENERGY if has_essay else 0) + (
+            CAT_WORLD_HABIT_OUTPUT_ENERGY if has_debate else 0
+        )
+        balance_energy = CAT_WORLD_HABIT_BALANCE_ENERGY if spelling_count >= 20 and (has_essay or has_debate) else 0
+        streak_energy = min(max(streak - 1, 0) * CAT_WORLD_HABIT_STREAK_STEP_ENERGY, CAT_WORLD_HABIT_STREAK_MAX_ENERGY)
+        daily_rewards[active_date] = {
+            "energy": spelling_energy + output_energy + balance_energy + streak_energy,
+            "spellingCount": spelling_count,
+            "spellingEnergy": spelling_energy,
+            "hasEssay": has_essay,
+            "hasDebate": has_debate,
+            "outputEnergy": output_energy,
+            "balanceEnergy": balance_energy,
+            "streak": streak,
+            "streakEnergy": streak_energy,
+        }
+
+    today_reward = daily_rewards.get(source_date, {})
+    today_spelling = spelling_by_date.get(source_date, 0)
+    today_energy = int(today_reward.get("energy") or 0)
+    detail_parts: list[str] = []
+    if int(today_reward.get("spellingEnergy") or 0) > 0:
+        detail_parts.append(f"分级练习 +{today_reward['spellingEnergy']}")
+    if today_reward.get("hasEssay"):
+        detail_parts.append(f"英文写作 +{CAT_WORLD_HABIT_OUTPUT_ENERGY}")
+    if today_reward.get("hasDebate"):
+        detail_parts.append(f"AI Debate +{CAT_WORLD_HABIT_OUTPUT_ENERGY}")
+    if int(today_reward.get("balanceEnergy") or 0) > 0:
+        detail_parts.append(f"输入输出组合 +{today_reward['balanceEnergy']}")
+    if int(today_reward.get("streakEnergy") or 0) > 0:
+        detail_parts.append(f"连续 {today_reward['streak']} 天 +{today_reward['streakEnergy']}")
+
+    next_tier = next(
+        ((target, energy) for target, energy in CAT_WORLD_SPELLING_HABIT_ENERGY_TIERS if today_spelling < target),
+        None,
+    )
+    if next_tier:
+        target, energy = next_tier
+        next_action = f"再完成 {target - today_spelling} 词，习惯奖励再 +{energy}"
+    elif not (today_reward.get("hasEssay") or today_reward.get("hasDebate")):
+        next_action = "再完成一篇 80 词英文作文或 AI Debate，练习输出能力"
+    else:
+        next_action = "今日学习闭环已完成，明天继续会增加连续奖励"
+    today_detail = " · ".join(detail_parts + [next_action])
+    total_energy = sum(int(row["energy"]) for row in daily_rewards.values())
+
+    return {
+        "key": "learning_habit",
+        "label": "学习习惯奖励",
+        "value": total_energy,
+        "unit": "能量",
+        "energyPerUnit": 1,
+        "energy": total_energy,
+        "todayValue": today_energy,
+        "todayEnergy": today_energy,
+        "todaySpellingCount": today_spelling,
+        "currentStreak": int(today_reward.get("streak") or 0),
+        "todayDetail": today_detail,
+        "detail": "每天少量开始，组合拼写、写作和口语，并用连续学习获得额外奖励。",
+    }
+
+
 def cat_world_earned_energy(db: Session, phone: str, growth: dict[str, Any] | None = None) -> int:
     growth = growth or learning_growth_summary(db)
     essay_source = cat_world_essay_energy_source(db, phone)
     debate_source = cat_world_debate_energy_source(db, phone)
     operating_source = cat_world_operating_energy_source(db, phone)
+    habit_source = cat_world_learning_habit_source(db, phone)
     return (
         max(int(growth.get("points") or 0), 0)
         + int(essay_source["energy"])
         + int(debate_source["energy"])
         + int(operating_source["energy"])
+        + int(habit_source["energy"])
     )
 
 
@@ -14438,6 +14575,7 @@ def cat_world_today_energy_source_rows(
     essay_source: dict[str, Any],
     debate_source: dict[str, Any],
     operating_source: dict[str, Any],
+    habit_source: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     rules = {item["key"]: item for item in growth.get("scoreRules", []) if isinstance(item, dict)}
     missions = {item["key"]: item for item in growth.get("dailyMissions", []) if isinstance(item, dict)}
@@ -14454,7 +14592,9 @@ def cat_world_today_energy_source_rows(
             "energy": spelling_energy,
         }
     ]
-    for source in (essay_source, debate_source, operating_source):
+    for source in (essay_source, debate_source, operating_source, habit_source or {}):
+        if not source:
+            continue
         today_energy = max(int(source.get("todayEnergy") or 0), 0)
         rows.append(
             {
@@ -14467,7 +14607,11 @@ def cat_world_today_energy_source_rows(
                 "detail": source.get("todayDetail") or "",
             }
         )
-    return [row for row in rows if int(row.get("energy") or 0) > 0]
+    return [
+        row
+        for row in rows
+        if int(row.get("energy") or 0) > 0 or row.get("key") == "learning_habit"
+    ]
 
 
 def cat_world_today_spelling_count(db: Session, today: date | None = None) -> int:
@@ -14543,15 +14687,10 @@ def cat_world_play_time_payload(
             live_seconds = min(elapsed_seconds, earned_seconds - stored_used_seconds)
     used_seconds = min(stored_used_seconds + live_seconds, earned_seconds)
     remaining_seconds = max(earned_seconds - used_seconds, 0)
-    if count < 100:
-        next_target = 100
-        next_reward_minutes = 10
-    elif count < 200:
-        next_target = 200
-        next_reward_minutes = 20
-    else:
-        next_target = 0
-        next_reward_minutes = 0
+    ascending_tiers = sorted(CAT_WORLD_PLAY_TIME_TIERS, key=lambda item: item[0])
+    next_tier = next(((target, seconds) for target, seconds in ascending_tiers if count < target), None)
+    next_target = int(next_tier[0]) if next_tier else 0
+    next_reward_minutes = int(next_tier[1] // 60) if next_tier else 0
     return {
         "date": current_day.isoformat(),
         "spellingCount": count,
@@ -14564,6 +14703,10 @@ def cat_world_play_time_payload(
         "remainingSeconds": remaining_seconds,
         "nextTarget": next_target,
         "nextRewardMinutes": next_reward_minutes,
+        "tiers": [
+            {"target": int(target), "minutes": int(seconds // 60)}
+            for target, seconds in ascending_tiers
+        ],
         "sessionActive": bool(state.play_time_last_seen_at and remaining_seconds > 0),
     }
 
@@ -14586,7 +14729,7 @@ def cat_world_update_play_time_session(
         elapsed_seconds = max(int((current_time - state.play_time_last_seen_at).total_seconds()), 0)
         if elapsed_seconds <= CAT_WORLD_PLAY_TIME_HEARTBEAT_GRACE_SECONDS:
             used_seconds += min(elapsed_seconds, earned_seconds - used_seconds)
-    state.play_time_used_seconds = min(used_seconds, max(earned_seconds, 20 * 60))
+    state.play_time_used_seconds = min(used_seconds, earned_seconds)
     remaining_seconds = max(earned_seconds - state.play_time_used_seconds, 0)
     state.play_time_last_seen_at = current_time if active and remaining_seconds > 0 else None
     return cat_world_play_time_payload(
@@ -19747,17 +19890,20 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     essay_energy_source = cat_world_essay_energy_source(db, state.phone)
     debate_energy_source = cat_world_debate_energy_source(db, state.phone)
     operating_energy_source = cat_world_operating_energy_source(db, state.phone)
+    habit_energy_source = cat_world_learning_habit_source(db, state.phone)
     earned_energy = (
         max(int(growth.get("points") or 0), 0)
         + int(essay_energy_source["energy"])
         + int(debate_energy_source["energy"])
         + int(operating_energy_source["energy"])
+        + int(habit_energy_source["energy"])
     )
     today_energy_sources = cat_world_today_energy_source_rows(
         growth,
         essay_energy_source,
         debate_energy_source,
         operating_energy_source,
+        habit_energy_source,
     )
     today_energy = sum(int(source["energy"]) for source in today_energy_sources)
     spent_energy = max(int(state.energy_spent or 0), 0)
@@ -19945,8 +20091,10 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
                 essay_energy_source,
                 debate_energy_source,
                 operating_energy_source,
+                habit_energy_source,
             ],
             "todaySources": today_energy_sources,
+            "habit": habit_energy_source,
         },
         "state": {
             "inventory": inventory,

@@ -12,10 +12,12 @@ from app.database import Base
 from app.main import (
     CAT_WORLD_DEBATE_ENERGY_GRANT_SOURCE,
     cat_world_debate_energy_source,
+    cat_world_learning_habit_source,
     cat_world_operating_energy_source,
+    cat_world_spelling_habit_energy,
     cat_world_today_energy_source_rows,
 )
-from app.models import CatWorldEnergyGrant
+from app.models import CatWorldEnergyGrant, ChallengeDailyStat, EssayEntry
 
 
 class CatWorldEnergyTest(unittest.TestCase):
@@ -80,6 +82,46 @@ class CatWorldEnergyTest(unittest.TestCase):
 
         self.assertEqual([row["key"] for row in rows], ["spelling_words", "ai_debate"])
         self.assertEqual([row["energy"] for row in rows], [24, 88])
+
+    def test_spelling_habit_energy_uses_gentle_milestones(self):
+        self.assertEqual(cat_world_spelling_habit_energy(19), 0)
+        self.assertEqual(cat_world_spelling_habit_energy(20), 10)
+        self.assertEqual(cat_world_spelling_habit_energy(50), 25)
+        self.assertEqual(cat_world_spelling_habit_energy(100), 45)
+        self.assertEqual(cat_world_spelling_habit_energy(200), 65)
+
+    def test_habit_reward_values_consistency_and_mixed_learning(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            db.add_all(
+                [
+                    ChallengeDailyStat(stat_date=date(2026, 9, 6), correct_count=20, wrong_count=0),
+                    ChallengeDailyStat(stat_date=date(2026, 9, 7), correct_count=45, wrong_count=5),
+                    EssayEntry(
+                        phone="13900000000",
+                        title="A useful habit",
+                        body="word " * 80,
+                        word_count=80,
+                        created_at=datetime(2026, 9, 7, 10, 0),
+                    ),
+                    CatWorldEnergyGrant(
+                        phone="13900000000",
+                        amount=88,
+                        reason="AI Debate 今日完成",
+                        granted_by_phone=CAT_WORLD_DEBATE_ENERGY_GRANT_SOURCE,
+                        created_at=datetime(2026, 9, 7, 11, 0),
+                    ),
+                ]
+            )
+            db.commit()
+
+            source = cat_world_learning_habit_source(db, "13900000000", today=date(2026, 9, 7))
+
+        self.assertEqual(source["todayEnergy"], 80)
+        self.assertEqual(source["energy"], 90)
+        self.assertEqual(source["currentStreak"], 2)
+        self.assertIn("输入输出组合 +20", source["todayDetail"])
 
 
 if __name__ == "__main__":

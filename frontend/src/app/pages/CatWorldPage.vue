@@ -22,6 +22,8 @@ import { catPortraitModel } from "../catWorldPortrait.js";
 import { catRarityBadge } from "../catWorldRarity.js";
 import {
   formatCatWorldPlayTime,
+  formatCatWorldPlayTimeProgress,
+  formatCatWorldPlayTimeTiers,
   isCatWorldPlayTimeLocked,
   projectCatWorldPlayTime,
 } from "../catWorldPlayTime.js";
@@ -245,14 +247,8 @@ const playTimeRemainingSeconds = computed(() =>
 );
 const playTimeClock = computed(() => formatCatWorldPlayTime(playTimeRemainingSeconds.value));
 const playTimeLocked = computed(() => isCatWorldPlayTimeLocked(playTimeRemainingSeconds.value));
-const playTimeProgressLabel = computed(() => {
-  const count = Math.max(Number(playTime.value.spellingCount || 0), 0);
-  const rewardMinutes = Math.max(Number(playTime.value.rewardMinutes || 0), 0);
-  let learningLabel = "今日已解锁 20 分钟";
-  if (count < 100) learningLabel = `还差 ${100 - count} 词解锁 10 分钟`;
-  else if (count < 200) learningLabel = `已解锁 10 分钟 · 再拼 ${200 - count} 词`;
-  return rewardMinutes > 0 ? `${learningLabel} · 奖励 +${rewardMinutes} 分钟` : learningLabel;
-});
+const playTimeTierLabel = computed(() => formatCatWorldPlayTimeTiers(playTime.value));
+const playTimeProgressLabel = computed(() => formatCatWorldPlayTimeProgress(playTime.value));
 const playTimeCardState = computed(() => {
   if (Number(playTime.value.earnedSeconds || 0) <= 0) return "waiting";
   if (playTimeRemainingSeconds.value <= 0) return "finished";
@@ -2060,7 +2056,7 @@ async function selectCat(catOrId, options = {}) {
           <span>今日陪伴倒计时</span>
           <strong>{{ playTimeClock }}</strong>
           <em>{{ playTimeProgressLabel }}</em>
-          <small>100 词 10 分钟 · 200 词 20 分钟</small>
+          <small>{{ playTimeTierLabel }}</small>
         </section>
         <button class="cat-world-wallet" type="button" aria-label="猫咪世界能量" @click="energyModalOpen = true">
           <span>可用能量</span>
@@ -2975,7 +2971,7 @@ async function selectCat(catOrId, options = {}) {
           <div>
             <p class="section-kicker">Energy</p>
             <h2 id="cat-world-energy-title">学习产能</h2>
-            <p>这里仅显示今天通过学习、作文、AI Debate 和运营活动获得的能量。</p>
+            <p>这里只显示今天获得的能量，并用额外奖励鼓励少量开始、输入输出结合和连续学习。</p>
           </div>
           <button class="secondary-button compact-button" type="button" @click="energyModalOpen = false">关闭</button>
         </header>
@@ -2992,7 +2988,7 @@ async function selectCat(catOrId, options = {}) {
             <small>{{ source.detail || `${source.value}${source.unit} x ${source.energyPerUnit}` }}</small>
           </div>
         </div>
-        <p v-else class="cat-world-energy-empty">今天还没有获取猫咪能量，完成拼写、作文或 AI Debate 后会显示在这里。</p>
+        <p v-else class="cat-world-energy-empty">今天还没有获取猫咪能量，先完成 20 个拼写词开始今天的学习节奏。</p>
       </section>
     </div>
   </section>
