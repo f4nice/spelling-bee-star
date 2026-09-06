@@ -86,6 +86,10 @@ from app.services.debate import (
 )
 from app.services.image_storage import is_local_media_url, remove_local_image, store_uploaded_word_image, store_word_image
 from app.services.images import ImageClient
+from app.services.page_performance import (
+    TextAssetGZipMiddleware, batch_challenge_states, batch_pending_wrong_word_count,
+    batch_word_list_cards, public_stats_cache,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -3734,6 +3738,7 @@ def preferred_admin_user_ai(db: Session, request: Request) -> AdminUserSetting |
 
 
 app = FastAPI(title=settings.app_name)
+app.add_middleware(TextAssetGZipMiddleware)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
@@ -3758,8 +3763,15 @@ async def require_phone_login(request: Request, call_next):
 async def add_cache_headers(request: Request, call_next):
     response = await call_next(request)
     path = request.url.path
+    if request.method not in {"GET", "HEAD", "OPTIONS"} and response.status_code < 400:
+        if path != "/api/vue/cat-world/play-time":
+            public_stats_cache.clear()
     if path.startswith("/static/vue/"):
-        response.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
+        response.headers["Cache-Control"] = (
+            "public, max-age=31536000, immutable"
+            if re.search(r"-[A-Za-z0-9_-]{8}\.(js|css)$", path)
+            else "no-cache, max-age=0, must-revalidate"
+        )
     elif path.startswith("/static/") or path.startswith("/media/"):
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     elif path == "/tts" or re.fullmatch(r"/words/\d+/(tts|audio)", path):
@@ -4549,7 +4561,7 @@ def challenge_page(
 def vue_home_api(db: Session = Depends(get_db)):
     today = date.today()
     word_lists = regular_word_lists(db)
-    cards = [serialize_word_list_card(word_list_card(db, word_list)) for word_list in word_lists]
+    cards = [serialize_word_list_card(card) for card in batch_word_list_cards(db, word_lists, challenge_state)]
     today_stat = db.scalar(select(ChallengeDailyStat).where(ChallengeDailyStat.stat_date == today))
     today_wrong_list = get_wrong_word_list(db, today)
     today_wrong_count = db.scalar(select(func.count(WrongWord.id)).where(WrongWord.wrong_date == today)) or 0
@@ -6122,15 +6134,9 @@ async def vue_admin_cat_world_reset_api(request: Request, db: Session = Depends(
 def vue_shell_api(request: Request, db: Session = Depends(get_db)):
     current_phone = authenticated_phone_from_request(request)
     admin_user = get_or_create_admin_user(db, current_phone) if current_phone else None
-    return serialize_shell_context({
-        "app_name": settings.app_name,
-        "current_user_phone": authenticated_phone_from_request(request),
-        "current_admin_user": admin_user,
-        "daily_quote": get_daily_quote(db),
-        "sidebar_challenges": sidebar_challenge_progress(db),
-        "wrong_word_count": pending_wrong_word_count(db),
-        "learning_growth": learning_growth_summary(db),
-    })
+    shell = public_shell_context(db)
+    shell["currentUser"] = admin_user_summary(admin_user, current_phone)
+    return shell
 
 
 def essay_word_count(text_value: str | None) -> int:
@@ -10112,13 +10118,24 @@ def word_list_group_map(db: Session) -> dict[int, WordListGroup]:
 
 
 def lists_payload(db: Session) -> dict[str, Any]:
-    groups = [serialize_word_list_group(db, group) for group in word_list_groups(db)]
-    groups_by_id = {group["id"]: group for group in groups}
+    word_lists = regular_word_lists(db)
+    raw_cards = batch_word_list_cards(db, word_lists, challenge_state)
+    counts = {card["list"].id: card["count"] for card in raw_cards}
     model_groups = word_list_group_map(db)
+    groups = []
+    for group in model_groups.values():
+        members = [item for item in word_lists if item.group_id == group.id]
+        groups.append({
+            "id": group.id, "name": group.name, "display_order": group.display_order,
+            "list_count": len(members), "word_count": sum(counts[item.id] for item in members),
+            "list_ids": [item.id for item in members],
+        })
+    groups_by_id = {group["id"]: group for group in groups}
     cards: list[dict[str, Any]] = []
-    for index, word_list in enumerate(regular_word_lists(db), start=1):
+    for index, raw_card in enumerate(raw_cards, start=1):
+        word_list = raw_card["list"]
         group = model_groups.get(word_list.group_id or 0)
-        card = serialize_word_list_card(word_list_card(db, word_list), group)
+        card = serialize_word_list_card(raw_card, group)
         card["sequence"] = index
         if word_list.group_id and word_list.group_id in groups_by_id:
             card["list"]["group"] = {
@@ -10185,10 +10202,13 @@ def spb_missing_detail_count(db: Session, group: dict[str, Any]) -> int:
 
 def serialize_spb_word_bank_group(db: Session, group: dict[str, Any]) -> dict[str, Any]:
     word_lists = spb_word_lists_for_group(db, group)
-    cards = [serialize_word_list_card(word_list_card(db, word_list)) for word_list in word_lists]
+    cards = [serialize_word_list_card(card) for card in batch_word_list_cards(db, word_lists, challenge_state)]
     for card, word_list in zip(cards, word_lists):
         card["is_new"] = is_spb_incremental_list(word_list)
-    total_count = len(spb_words_for_group(db, group))
+    total_count = int(db.scalar(
+        select(func.count(func.distinct(WordListItem.word_id)))
+        .where(WordListItem.word_list_id.in_([item.id for item in word_lists]))
+    ) or 0) if word_lists else 0
     synced = total_count > 0
     cached_source_count = count_spb_cached_source_words(group)
     source_url_configured = bool(str(group.get("source_url") or "").strip())
@@ -20195,17 +20215,29 @@ def page_context(request: Request, db: Session, extra: dict | None = None) -> di
         "app_name": settings.app_name,
         "current_user_phone": current_user_phone,
         "current_admin_user": current_admin,
-        "daily_quote": get_daily_quote(db),
-        "sidebar_challenges": sidebar_challenge_progress(db),
-        "wrong_word_count": pending_wrong_word_count(db),
-        "learning_growth": learning_growth_summary(db),
         "version_matrix": ensure_version_matrix_file(),
         "static_version": static_asset_version(),
     }
-    context["shell_context"] = serialize_shell_context(context)
+    context["shell_context"] = public_shell_context(db)
+    context["shell_context"]["currentUser"] = admin_user_summary(current_admin, current_user_phone)
     if extra:
         context.update(extra)
     return context
+
+
+def public_shell_context(db: Session) -> dict[str, Any]:
+    def produce():
+        shell = serialize_shell_context({
+            "daily_quote": get_daily_quote(db),
+            "sidebar_challenges": sidebar_challenge_progress(db),
+            "wrong_word_count": pending_wrong_word_count(db),
+            "learning_growth": learning_growth_summary(db),
+        })
+        shell.pop("currentUser", None)
+        return shell
+
+    bind = db.get_bind()
+    return public_stats_cache.get((getattr(bind, "engine", bind), date.today()), produce)
 
 
 def serialize_shell_context(context: dict[str, Any]) -> dict[str, Any]:
@@ -21043,7 +21075,7 @@ def wrong_word_date_group_payload(db: Session, wrong_date: date) -> dict[str, An
 
 
 def pending_wrong_word_count(db: Session) -> int:
-    return sum(len(challenge_day_pending_wrong_word_ids(db, wrong_date)) for wrong_date in wrong_word_dates(db))
+    return batch_pending_wrong_word_count(db, wrong_word_list_date_from_name)
 
 
 def needs_image_sync(word: Word) -> bool:
@@ -21617,9 +21649,10 @@ def word_navigation_context(
 
 def sidebar_challenge_progress(db: Session) -> list[dict]:
     word_lists = regular_word_lists(db)
+    states = batch_challenge_states(db, word_lists, challenge_state)
     items = []
     for word_list in word_lists:
-        state = challenge_state(db, word_list)
+        state = states[word_list.id]
         if 0 < state["completed"] < state["total"]:
             items.append({"list": word_list, "challenge": state})
     return items
