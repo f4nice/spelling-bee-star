@@ -157,6 +157,9 @@ export function catVisitPlanMessage(plan = {}) {
   if (plan.kind === "learning") return String(target.message || `去${label}陪你学习。`);
   if (plan.kind === "social") return `想去找${target.partnerLabel || "猫咪伙伴"}打个招呼。`;
   if (plan.kind === "habit") return String(target.message || `按自己的习惯去${label}待一会儿。`);
+  if (plan.kind === "favorite" && target.kind === "remembered-decor") {
+    return String(target.message || `你常把我放在${label}，我想再回去待一会儿。`);
+  }
   if (plan.kind === "favorite") return `想去喜欢的${label}旁边待一会儿。`;
   if (plan.kind === "goal") return String(target.message || `今天想去${label}看看。`);
   if (plan.kind === "sleep") return "到睡眠时间了，梦里也要陪你记一个单词。";

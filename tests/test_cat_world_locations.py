@@ -10,9 +10,11 @@ from app.main import (
     CAT_WORLD_DEFAULT_SCENE_KEY,
     CAT_WORLD_SCENE_SEED_BY_KEY,
     CAT_WORLD_SHOP_BY_ID,
+    CAT_WORLD_SPOT_MEMORY_MAX_STRENGTH,
     CAT_WORLD_STORAGE_LOCATION,
     cat_world_inventory_for_scene,
     cat_world_layout_item_allowed,
+    cat_world_position_with_spot_memory,
     encode_cat_world_item_locations,
     encode_cat_world_scene_positions,
     normalize_cat_world_scene_position,
@@ -104,6 +106,100 @@ class CatWorldLocationTest(unittest.TestCase):
             {"main-room": {"x": 42.12, "y": 68.75, "facing": 1}},
         )
         self.assertNotIn("unknown-room", json.loads(encoded))
+
+    def test_scene_position_preserves_valid_spot_memory(self):
+        encoded = encode_cat_world_scene_positions(
+            {
+                "main-room": {
+                    "x": 42.125,
+                    "y": 68.75,
+                    "facing": 1,
+                    "memoryItemId": "sun-window",
+                    "memoryStrength": 3,
+                }
+            }
+        )
+
+        self.assertEqual(
+            parse_cat_world_scene_positions(encoded)["main-room"],
+            {
+                "x": 42.12,
+                "y": 68.75,
+                "facing": 1,
+                "memoryItemId": "sun-window",
+                "memoryStrength": 3,
+            },
+        )
+
+    def test_manual_furniture_placement_builds_individual_spot_memory(self):
+        inventory = {"sun-window": 1, "cloud-rug": 1}
+        room_layout = {"sun-window": {"x": 10, "y": 20}, "cloud-rug": {"x": 30, "y": 40}}
+        position = {"x": 50, "y": 60, "facing": -1}
+
+        first = cat_world_position_with_spot_memory(
+            position, None, "sun-window", inventory, room_layout, {}
+        )
+        repeated = cat_world_position_with_spot_memory(
+            position, first, "sun-window", inventory, room_layout, {}
+        )
+        changed = cat_world_position_with_spot_memory(
+            position, repeated, "cloud-rug", inventory, room_layout, {}
+        )
+
+        self.assertEqual((first["memoryItemId"], first["memoryStrength"]), ("sun-window", 1))
+        self.assertEqual((repeated["memoryItemId"], repeated["memoryStrength"]), ("sun-window", 2))
+        self.assertEqual((changed["memoryItemId"], changed["memoryStrength"]), ("cloud-rug", 1))
+
+    def test_spot_memory_is_capped_and_ordinary_walks_keep_it(self):
+        inventory = {"sun-window": 1}
+        room_layout = {"sun-window": {"x": 10, "y": 20}}
+        previous = {
+            "x": 10,
+            "y": 20,
+            "facing": 1,
+            "memoryItemId": "sun-window",
+            "memoryStrength": CAT_WORLD_SPOT_MEMORY_MAX_STRENGTH,
+        }
+
+        capped = cat_world_position_with_spot_memory(
+            {"x": 30, "y": 40, "facing": -1},
+            previous,
+            "sun-window",
+            inventory,
+            room_layout,
+            {},
+        )
+        walked = cat_world_position_with_spot_memory(
+            {"x": 70, "y": 80, "facing": 1},
+            capped,
+            "",
+            inventory,
+            room_layout,
+            {},
+        )
+
+        self.assertEqual(capped["memoryStrength"], CAT_WORLD_SPOT_MEMORY_MAX_STRENGTH)
+        self.assertEqual((walked["memoryItemId"], walked["memoryStrength"]), ("sun-window", 5))
+
+    def test_invalid_or_damaged_furniture_cannot_become_a_spot_memory(self):
+        position = {"x": 50, "y": 60, "facing": 1}
+        inventory = {"sun-window": 1, "cloud-rug": 1}
+        room_layout = {"sun-window": {"x": 10, "y": 20}}
+
+        not_in_room = cat_world_position_with_spot_memory(
+            position, None, "cloud-rug", inventory, room_layout, {}
+        )
+        damaged = cat_world_position_with_spot_memory(
+            position,
+            {**position, "memoryItemId": "sun-window", "memoryStrength": 3},
+            "sun-window",
+            inventory,
+            room_layout,
+            {"sun-window": {"itemId": "sun-window"}},
+        )
+
+        self.assertNotIn("memoryItemId", not_in_room)
+        self.assertNotIn("memoryItemId", damaged)
 
 
 if __name__ == "__main__":

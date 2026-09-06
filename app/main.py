@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-018"
-DEFAULT_PAGE_VERSION = "v20260907.18"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-019"
+DEFAULT_PAGE_VERSION = "v20260907.19"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -5961,7 +5961,9 @@ async def vue_cat_world_cat_position_api(request: Request, db: Session = Depends
     payload = payload if isinstance(payload, dict) else {}
     profile_id = str(payload.get("profileId") or "").strip()
     scene_key = str(payload.get("sceneId") or "").strip()
-    position = normalize_cat_world_scene_position(payload.get("position"))
+    submitted_position = payload.get("position")
+    position = normalize_cat_world_scene_position(submitted_position)
+    placed_item_id = str(payload.get("placedItemId") or "").strip()
     if not profile_id or not position:
         raise HTTPException(status_code=400, detail="请提交有效的猫咪坐标。")
     state = cat_world_locked_state(db, phone)
@@ -5979,11 +5981,26 @@ async def vue_cat_world_cat_position_api(request: Request, db: Session = Depends
     if not profile or str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) != scene_key:
         raise HTTPException(status_code=409, detail="猫咪已经不在这个区域。")
     positions = parse_cat_world_scene_positions(profile.scene_positions)
-    positions[scene_key] = position
+    inventory = parse_cat_world_inventory(state.inventory)
+    room_layout = cat_world_active_scene_layout(db, state, inventory)
+    damaged_items = parse_cat_world_damaged_items(state.damaged_items)
+    positions[scene_key] = cat_world_position_with_spot_memory(
+        submitted_position,
+        positions.get(scene_key),
+        placed_item_id,
+        inventory,
+        room_layout,
+        damaged_items,
+    )
     profile.scene_positions = encode_cat_world_scene_positions(positions)
     db.add(profile)
     db.commit()
-    return {"ok": True, "profileId": profile.profile_id, "sceneId": scene_key, "position": position}
+    return {
+        "ok": True,
+        "profileId": profile.profile_id,
+        "sceneId": scene_key,
+        "position": positions[scene_key],
+    }
 
 
 @app.post("/api/vue/cat-world/select-cat")
@@ -15429,7 +15446,10 @@ def cat_world_ensure_item_locations(
     return locations, changed
 
 
-def normalize_cat_world_scene_position(value: Any) -> dict[str, float | int] | None:
+CAT_WORLD_SPOT_MEMORY_MAX_STRENGTH = 5
+
+
+def normalize_cat_world_scene_position(value: Any) -> dict[str, float | int | str] | None:
     if not isinstance(value, dict):
         return None
     try:
@@ -15443,21 +15463,75 @@ def normalize_cat_world_scene_position(value: Any) -> dict[str, float | int] | N
         facing = -1 if int(value.get("facing") or 1) == -1 else 1
     except (TypeError, ValueError):
         facing = 1
-    return {
+    normalized: dict[str, float | int | str] = {
         "x": round(min(max(x, 0.0), 100.0), 2),
         "y": round(min(max(y, 0.0), 100.0), 2),
         "facing": facing,
     }
+    memory_item_id = str(value.get("memoryItemId") or "").strip()
+    memory_item = CAT_WORLD_SHOP_BY_ID.get(memory_item_id, {})
+    if memory_item_id and memory_item.get("category") == "decor":
+        try:
+            memory_strength = min(
+                max(int(value.get("memoryStrength") or 1), 1),
+                CAT_WORLD_SPOT_MEMORY_MAX_STRENGTH,
+            )
+        except (TypeError, ValueError):
+            memory_strength = 1
+        normalized["memoryItemId"] = memory_item_id
+        normalized["memoryStrength"] = memory_strength
+    return normalized
 
 
-def parse_cat_world_scene_positions(raw: str | None) -> dict[str, dict[str, float | int]]:
+def cat_world_position_with_spot_memory(
+    position: dict[str, Any],
+    previous_position: dict[str, Any] | None,
+    placed_item_id: str,
+    inventory: dict[str, int],
+    room_layout: dict[str, Any],
+    damaged_items: dict[str, dict[str, Any]],
+) -> dict[str, float | int | str]:
+    normalized = normalize_cat_world_scene_position(position)
+    if not normalized:
+        raise ValueError("invalid cat position")
+    previous = normalize_cat_world_scene_position(previous_position) or {}
+
+    def valid_memory_item(item_id: str) -> bool:
+        item = CAT_WORLD_SHOP_BY_ID.get(item_id, {})
+        return bool(
+            item_id
+            and item.get("category") == "decor"
+            and int(inventory.get(item_id, 0) or 0) > 0
+            and item_id in room_layout
+            and item_id not in damaged_items
+        )
+
+    requested_item_id = str(placed_item_id or "").strip()
+    previous_item_id = str(previous.get("memoryItemId") or "").strip()
+    memory_item_id = requested_item_id if valid_memory_item(requested_item_id) else previous_item_id
+    if not valid_memory_item(memory_item_id):
+        normalized.pop("memoryItemId", None)
+        normalized.pop("memoryStrength", None)
+        return normalized
+
+    previous_strength = int(previous.get("memoryStrength") or 0)
+    if requested_item_id == memory_item_id:
+        memory_strength = previous_strength + 1 if previous_item_id == memory_item_id else 1
+    else:
+        memory_strength = max(previous_strength, 1)
+    normalized["memoryItemId"] = memory_item_id
+    normalized["memoryStrength"] = min(memory_strength, CAT_WORLD_SPOT_MEMORY_MAX_STRENGTH)
+    return normalized
+
+
+def parse_cat_world_scene_positions(raw: str | None) -> dict[str, dict[str, float | int | str]]:
     try:
         loaded = json.loads(raw or "{}")
     except json.JSONDecodeError:
         loaded = {}
     if not isinstance(loaded, dict):
         return {}
-    positions: dict[str, dict[str, float | int]] = {}
+    positions: dict[str, dict[str, float | int | str]] = {}
     for scene_key, value in loaded.items():
         key = str(scene_key)
         if key not in CAT_WORLD_SCENE_SEED_BY_KEY:
@@ -15469,7 +15543,7 @@ def parse_cat_world_scene_positions(raw: str | None) -> dict[str, dict[str, floa
 
 
 def encode_cat_world_scene_positions(positions: dict[str, Any]) -> str:
-    clean: dict[str, dict[str, float | int]] = {}
+    clean: dict[str, dict[str, float | int | str]] = {}
     for scene_key, value in positions.items():
         key = str(scene_key)
         if key not in CAT_WORLD_SCENE_SEED_BY_KEY:

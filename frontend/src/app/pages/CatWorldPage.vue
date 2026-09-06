@@ -23,6 +23,7 @@ import { catWorldGaitProfile } from "../catWorldGait.js";
 import { catPortraitModel } from "../catWorldPortrait.js";
 import { catRarityBadge } from "../catWorldRarity.js";
 import { catWorldSocialKindLabel } from "../catWorldSocialMoment.js";
+import { catSpotMemorySummary } from "../catWorldSpotMemory.js";
 import {
   catWorldSceneMoveForScene,
   normalizeCatWorldSceneMoves,
@@ -736,6 +737,7 @@ const catAgentCards = computed(() =>
       energy: energyScore,
       restThreshold: cat.traits?.restThreshold,
     });
+    const spotMemory = catSpotMemorySummary(cat.scenePosition, shopById.value);
     return {
       ...cat,
       portrait: catPortraitModel(cat),
@@ -749,6 +751,7 @@ const catAgentCards = computed(() =>
       moodScore,
       energyScore,
       gait,
+      spotMemory,
       bondScore: clampCatScore(bond.score ?? 18),
       bondLabel: bond.levelLabel || "刚开始熟悉",
       bondDetailLabel: bond.detailLabel || "还没有照顾记录",
@@ -1094,7 +1097,7 @@ function openRoomLearningProgress(signal = learningRoomSignal.value) {
   energyModalOpen.value = true;
 }
 
-function syncCatPosition(cat, position) {
+function syncCatPosition(cat, position, options = {}) {
   const profileId = cat?.profileId || cat?.id;
   const sceneId = currentScene.value.id;
   if (!profileId || !sceneId || cat?.currentSceneId !== sceneId || !position) return;
@@ -1107,10 +1110,36 @@ function syncCatPosition(cat, position) {
     fetchJson(routeApiPaths.catWorldCatPosition(), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ profileId, sceneId: pending.sceneId, position: pending.position }),
+      body: JSON.stringify({
+        profileId,
+        sceneId: pending.sceneId,
+        position: pending.position,
+        placedItemId: pending.placedItemId,
+      }),
+    }).then((response) => {
+      if (!pending.placedItemId || !response?.position) return;
+      payload.value = {
+        ...payload.value,
+        catProfiles: (payload.value.catProfiles || []).map((profile) => {
+          if (profile.id !== profileId || profile.currentSceneId !== pending.sceneId) return profile;
+          return {
+            ...profile,
+            scenePosition: response.position,
+            scenePositions: {
+              ...(profile.scenePositions || {}),
+              [pending.sceneId]: response.position,
+            },
+          };
+        }),
+      };
     }).catch(() => {});
   }, 900);
-  catPositionSyncs.set(profileId, { timer, sceneId, position });
+  catPositionSyncs.set(profileId, {
+    timer,
+    sceneId,
+    position,
+    placedItemId: String(options.placedItemId || ""),
+  });
 }
 
 function panRoomBy(delta) {
@@ -3562,6 +3591,7 @@ async function selectCat(catOrId, options = {}) {
           <div><dt>当前需求</dt><dd>{{ activeCatDiary.needLabel }} · {{ activeCatDiary.needActionLabel }}</dd></div>
           <div><dt>减耗</dt><dd>{{ activeCatDiary.comfortLabel }}</dd></div>
           <div><dt>个体偏好</dt><dd>{{ activeCatDiary.favoriteItemLabel }}</dd></div>
+          <div><dt>熟悉角落</dt><dd>{{ activeCatDiary.spotMemory.itemId ? `${activeCatDiary.spotMemory.label} · ${activeCatDiary.spotMemory.levelLabel} ${activeCatDiary.spotMemory.strength}/5` : "还没有形成固定习惯" }}</dd></div>
           <div><dt>家具加成</dt><dd>{{ activeCatDiary.activeFavoriteLabel }}</dd></div>
           <div><dt>互动</dt><dd>{{ activeCatDiary.countsLabel }}</dd></div>
           <div><dt>破坏风险</dt><dd>{{ activeCatDiary.damageRiskLabel }}</dd></div>
@@ -3903,6 +3933,10 @@ async function selectCat(catOrId, options = {}) {
             <p v-if="cat.favoriteItemLabels?.length" class="cat-world-cat-individual-preference">
               <b>个体偏好</b>
               <em>{{ cat.favoriteItemLabels.slice(0, 3).join("、") }}</em>
+            </p>
+            <p v-if="cat.spotMemory.itemId" class="cat-world-cat-individual-preference">
+              <b>熟悉角落</b>
+              <em>{{ cat.spotMemory.label }} · {{ cat.spotMemory.levelLabel }} {{ cat.spotMemory.strength }}/5</em>
             </p>
             <p v-if="cat.learningStyle?.label" class="cat-world-cat-learning-style">
               <b>陪学专长</b>

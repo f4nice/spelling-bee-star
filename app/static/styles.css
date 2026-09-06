@@ -15553,9 +15553,9 @@ select {
 
   .cat-world-cats {
     box-sizing: border-box;
-    width: calc(100vw - 20px);
-    max-width: calc(100vw - 20px);
-    justify-self: start;
+    width: 100%;
+    max-width: 100%;
+    justify-self: stretch;
   }
 
   .cat-world-cat-chip {
