@@ -134,6 +134,57 @@ class CatWorldEnergyTest(unittest.TestCase):
         self.assertEqual(source["recentDays"][-1]["statusKey"], "loop")
         self.assertTrue(source["recentDays"][-1]["today"])
 
+    def test_habit_rhythm_bonus_survives_one_intentional_rest_day(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            db.add_all(
+                [
+                    ChallengeDailyStat(stat_date=date(2026, 9, 6), correct_count=20, wrong_count=0),
+                    ChallengeDailyStat(stat_date=date(2026, 9, 8), correct_count=20, wrong_count=0),
+                    EssayEntry(
+                        phone="13900000000",
+                        title="A calm return",
+                        body="word " * 80,
+                        word_count=80,
+                        created_at=datetime(2026, 9, 8, 10, 0),
+                    ),
+                ]
+            )
+            db.commit()
+
+            source = cat_world_learning_habit_source(db, "13900000000", today=date(2026, 9, 8))
+
+        self.assertEqual(source["currentStreak"], 1)
+        self.assertEqual(source["todayEnergy"], 50)
+        self.assertEqual(source["energy"], 60)
+        self.assertIn("近 7 日节奏 2 天 +5", source["todayDetail"])
+        self.assertEqual(source["recentDays"][-3]["statusKey"], "input")
+        self.assertEqual(source["recentDays"][-2]["statusKey"], "rest")
+        self.assertEqual(source["recentDays"][-1]["statusKey"], "loop")
+
+    def test_five_word_touchpoint_supports_rhythm_without_granting_base_energy(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            db.add_all(
+                [
+                    ChallengeDailyStat(stat_date=date(2026, 9, 6), correct_count=20, wrong_count=0),
+                    ChallengeDailyStat(stat_date=date(2026, 9, 7), correct_count=5, wrong_count=0),
+                    ChallengeDailyStat(stat_date=date(2026, 9, 8), correct_count=20, wrong_count=0),
+                ]
+            )
+            db.commit()
+
+            source = cat_world_learning_habit_source(db, "13900000000", today=date(2026, 9, 8))
+
+        self.assertEqual(source["todayEnergy"], 20)
+        self.assertEqual(source["energy"], 30)
+        self.assertEqual(source["totalActiveDays"], 3)
+        self.assertIn("近 7 日节奏 3 天 +10", source["todayDetail"])
+        self.assertEqual(source["recentDays"][-2]["statusKey"], "started")
+        self.assertTrue(source["recentDays"][-2]["active"])
+
 
 if __name__ == "__main__":
     unittest.main()

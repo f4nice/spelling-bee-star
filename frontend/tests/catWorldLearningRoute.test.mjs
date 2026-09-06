@@ -8,6 +8,7 @@ import {
   buildCatWorldLearningRoute,
   buildCatWorldRoomLearningSignal,
   buildCatWorldWeekTrail,
+  buildCatWorldWeeklyRhythm,
   catWorldLearningCompanionGrowthLabel,
   catWorldLearningCompanionToken,
   catWorldWeekMemory,
@@ -136,6 +137,37 @@ test("weekly trail distinguishes starts, input, output, and completed loops", ()
   assert.match(trail.summary, /4 天有学习/);
 });
 
+test("weekly rhythm rewards five humane touchpoints while preserving two rest days", () => {
+  const recentDays = [
+    { statusKey: "loop", active: true, loopComplete: true },
+    { statusKey: "rest", active: false },
+    { statusKey: "input", active: true },
+    { statusKey: "loop", active: true, loopComplete: true },
+    { statusKey: "rest", active: false },
+    { statusKey: "started", active: true },
+    { statusKey: "loop", active: true, loopComplete: true, today: true },
+  ];
+  const rhythm = buildCatWorldWeeklyRhythm(
+    { recentDays },
+    { nickname: "小静", traits: { temperament: "calm" } },
+  );
+
+  assert.equal(rhythm.statusKey, "complete");
+  assert.equal(rhythm.activeDays, 5);
+  assert.equal(rhythm.activeTarget, 5);
+  assert.equal(rhythm.loopDays, 3);
+  assert.equal(rhythm.loopTarget, 3);
+  assert.equal(rhythm.restAllowance, 2);
+  assert.equal(rhythm.activePercent, 100);
+  assert.match(rhythm.detail, /安心收工/);
+  assert.match(rhythm.catLine, /小静/);
+  assert.match(rhythm.catLine, /休息/);
+
+  const starter = buildCatWorldWeeklyRhythm({ recentDays: [] });
+  assert.equal(starter.statusKey, "starter");
+  assert.match(starter.detail, /5 个词/);
+});
+
 test("weekly memories keep day detail and follow the individual cat temperament", () => {
   const day = {
     date: "2026-09-07",
@@ -233,7 +265,9 @@ test("learning route recognizes input, output, and a returning learner", () => {
   assert.equal(route.steps.every((step) => step.completed), true);
   assert.equal(route.steps[2].label, "完成今日闭环");
   assert.equal(route.steps[2].actionKind, "energy");
-  assert.match(route.steps[2].detail, /连续学习 4 天/);
+  assert.match(route.steps[2].detail, /最近七天已有/);
+  assert.equal(route.weeklyRhythm.activeDays, 1);
+  assert.equal(route.weeklyRhythm.loopDays, 1);
 });
 
 test("room learning signal lights input, output, and the completed loop independently", () => {

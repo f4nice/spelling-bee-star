@@ -121,13 +121,23 @@ test("the workspace separates play, shopping, and cat management into tabs", asy
 });
 
 test("the weekly learning trail opens on demand", async () => {
-  const page = await readFile(pageUrl, "utf8");
+  const [page, styles] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
 
   assert.match(page, /const learningWeekExpanded = ref\(false\);/);
   assert.match(page, /class="cat-world-learning-week-toggle"/);
   assert.match(page, /:aria-expanded="learningWeekExpanded"/);
   assert.match(page, /v-if="learningWeekExpanded" id="cat-world-learning-week-days"/);
   assert.match(page, /learningWeekExpanded \? "收起记录" : "查看七天"/);
+  assert.match(page, /class="cat-world-learning-rhythm-badge"/);
+  assert.match(page, /'cat-world-weekly-rhythm'/);
+  assert.match(page, /学习触点/);
+  assert.match(page, /完整闭环/);
+  assert.doesNotMatch(page, /最长连续/);
+  assert.match(styles, /\.cat-world-weekly-rhythm\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,/);
+  assert.match(styles, /@media \(max-width: 560px\)[\s\S]*?\.cat-world-weekly-rhythm\s*\{[\s\S]*?grid-template-columns:\s*1fr;/);
 });
 
 test("medium and small screens collapse the bag into an on-demand drawer", async () => {

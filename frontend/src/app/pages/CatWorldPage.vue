@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Clock as ClockIcon, Flame as FlameIcon, Hammer as HammerIcon, Heart as HeartIcon, House as HouseIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, ShoppingBag as ShoppingBagIcon, Shovel as ShovelIcon, Sprout as SproutIcon, X as XIcon } from "lucide-vue-next";
+import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Clock as ClockIcon, Hammer as HammerIcon, Heart as HeartIcon, House as HouseIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, ShoppingBag as ShoppingBagIcon, Shovel as ShovelIcon, Sprout as SproutIcon, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -27,6 +27,7 @@ import {
   buildCatWorldLearningRoute,
   buildCatWorldRoomLearningSignal,
   buildCatWorldWeekTrail,
+  buildCatWorldWeeklyRhythm,
   catWorldLearningCompanionGrowthLabel,
   catWorldLearningCompanionToken,
   catWorldWeekMemory,
@@ -477,6 +478,9 @@ const learningCompanionGrowthLabel = computed(() =>
   catWorldLearningCompanionGrowthLabel(learningCompanion.value),
 );
 const learningWeekTrail = computed(() => buildCatWorldWeekTrail(energy.value.habit || {}));
+const learningWeekRhythm = computed(() =>
+  buildCatWorldWeeklyRhythm(energy.value.habit || {}, learningGuideCat.value),
+);
 const selectedLearningWeekDay = computed(() =>
   learningWeekTrail.value.days.find((day) => day.date === selectedLearningWeekDate.value)
   || learningWeekTrail.value.days.find((day) => day.today)
@@ -2555,9 +2559,13 @@ async function selectCat(catOrId, options = {}) {
             <span>{{ learningRouteExpanded ? "收起" : "展开路线" }}</span>
             <ChevronDown :size="17" :stroke-width="3" aria-hidden="true" />
           </button>
-          <span class="cat-world-learning-streak">
-            <FlameIcon :size="15" :stroke-width="2.8" aria-hidden="true" />
-            {{ learningRoute.streak ? `${learningRoute.streak} 天` : "今天开始" }}
+          <span
+            class="cat-world-learning-rhythm-badge"
+            :title="learningWeekRhythm.detail"
+            :aria-label="`最近七天学习节奏：${learningWeekRhythm.activeDays}/${learningWeekRhythm.activeTarget} 天有学习触点`"
+          >
+            <PawPrintIcon :size="15" :stroke-width="2.8" aria-hidden="true" />
+            7日 {{ learningWeekRhythm.activeDays }}/{{ learningWeekRhythm.activeTarget }}
           </span>
         </div>
       </header>
@@ -2629,8 +2637,25 @@ async function selectCat(catOrId, options = {}) {
               </template>
             </span>
           </p>
+          <div
+            :class="['cat-world-weekly-rhythm', `tone-${learningWeekRhythm.statusKey}`]"
+            role="group"
+            :aria-label="`${learningWeekRhythm.statusLabel}：${learningWeekRhythm.detail}`"
+          >
+            <p>
+              <span><PawPrintIcon :size="12" :stroke-width="2.8" aria-hidden="true" />学习触点</span>
+              <i aria-hidden="true"><i :style="{ width: `${learningWeekRhythm.activePercent}%` }"></i></i>
+              <strong>{{ learningWeekRhythm.activeDays }}/{{ learningWeekRhythm.activeTarget }} 天</strong>
+            </p>
+            <p>
+              <span><CheckIcon :size="12" :stroke-width="3" aria-hidden="true" />完整闭环</span>
+              <i aria-hidden="true"><i :style="{ width: `${learningWeekRhythm.loopPercent}%` }"></i></i>
+              <strong>{{ learningWeekRhythm.loopDays }}/{{ learningWeekRhythm.loopTarget }} 天</strong>
+            </p>
+            <small><b>{{ learningWeekRhythm.statusLabel }}</b> · {{ learningWeekRhythm.detail }}</small>
+          </div>
           <p class="cat-world-learning-week-counts">
-            {{ learningWeekTrail.summary }} · 最长连续 {{ learningRoute.garden.bestStreak }} 天
+            {{ learningWeekRhythm.catLine }}
           </p>
           <div v-if="learningWeekExpanded" class="cat-world-learning-week-memory" aria-live="polite">
             <p><span>{{ learningWeekMemory.dateLabel }}</span> · {{ learningWeekMemory.detail }}</p>
@@ -3909,7 +3934,7 @@ async function selectCat(catOrId, options = {}) {
           <div>
             <p class="section-kicker">Energy</p>
             <h2 id="cat-world-energy-title">学习产能</h2>
-            <p>这里只显示今天获得的能量，并用额外奖励鼓励少量开始、输入输出结合和连续学习。</p>
+            <p>这里只显示今天获得的能量，并用额外奖励鼓励少量开始、输入输出结合和稳定的七日节奏。</p>
           </div>
           <button class="secondary-button compact-button" type="button" @click="energyModalOpen = false">关闭</button>
         </header>
@@ -3929,7 +3954,7 @@ async function selectCat(catOrId, options = {}) {
             <p>
               {{ learningRoute.garden.activeDays }} 天有效开始 ·
               {{ learningRoute.garden.loopDays }} 天完成闭环 ·
-              最长连续 {{ learningRoute.garden.bestStreak }} 天
+              最近七天 {{ learningWeekRhythm.activeDays }}/{{ learningWeekRhythm.activeTarget }} 天有学习触点
             </p>
           </div>
           <span v-if="learningRoute.garden.nextRemaining">

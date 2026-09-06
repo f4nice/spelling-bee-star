@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-007"
-DEFAULT_PAGE_VERSION = "v20260907.7"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-008"
+DEFAULT_PAGE_VERSION = "v20260907.8"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -267,8 +267,8 @@ CAT_WORLD_HABIT_REWARD_START_DATE = date(2026, 9, 6)
 CAT_WORLD_SPELLING_HABIT_ENERGY_TIERS = ((20, 10), (50, 15), (100, 20), (200, 20))
 CAT_WORLD_HABIT_OUTPUT_ENERGY = 15
 CAT_WORLD_HABIT_BALANCE_ENERGY = 20
-CAT_WORLD_HABIT_STREAK_STEP_ENERGY = 5
-CAT_WORLD_HABIT_STREAK_MAX_ENERGY = 20
+CAT_WORLD_HABIT_RHYTHM_STEP_ENERGY = 5
+CAT_WORLD_HABIT_RHYTHM_MAX_ENERGY = 20
 CAT_WORLD_MOVEMENT_SPEED_SETTING_KEY = "movement_speed"
 CAT_WORLD_DEFAULT_MOVEMENT_SPEED = 1.0
 CAT_WORLD_MIN_MOVEMENT_SPEED = 0.4
@@ -660,7 +660,7 @@ CAT_WORLD_CAT_LEARNING_STYLES = [
     },
     {
         "key": "streak-keeper",
-        "label": "连续学习守护搭档",
+        "label": "稳定节奏守护搭档",
         "focusKey": "streak",
         "focusLabel": "每天留下一点记录",
         "preferredOutput": "debate",
@@ -670,7 +670,7 @@ CAT_WORLD_CAT_LEARNING_STYLES = [
             "started": "今天已经留下第一笔记录，再慢慢走到 20 词就很好。",
             "warmup": "今天已经顺利开始，再表达一次会让这天更完整。",
             "output": "今天已经用过英语，再补 20 词就能守住完整记录。",
-            "loop": "今天的连续记录已经稳稳留下，明天我还会等你。",
+            "loop": "今天的学习触点已经稳稳留下，休息后回来我还会等你。",
         },
     },
     {
@@ -14857,7 +14857,7 @@ def cat_world_learning_week_days(
                 "spellingCount": spelling_count,
                 "hasEssay": has_essay,
                 "hasDebate": has_debate,
-                "active": available and (spelling_count > 0 or has_output),
+                "active": available and (spelling_count >= 5 or has_output),
                 "loopComplete": loop_complete,
                 "today": trail_date == source_date,
             }
@@ -14925,6 +14925,11 @@ def cat_world_learning_habit_source(
         for day in set(spelling_by_date) | essay_dates | debate_dates
         if spelling_by_date.get(day, 0) >= 20 or day in essay_dates or day in debate_dates
     )
+    touchpoint_dates = sorted(
+        day
+        for day in set(spelling_by_date) | essay_dates | debate_dates
+        if spelling_by_date.get(day, 0) >= 5 or day in essay_dates or day in debate_dates
+    )
 
     daily_rewards: dict[date, dict[str, Any]] = {}
     previous_active_date: date | None = None
@@ -14935,14 +14940,22 @@ def cat_world_learning_habit_source(
         spelling_count = spelling_by_date.get(active_date, 0)
         has_essay = active_date in essay_dates
         has_debate = active_date in debate_dates
+        rhythm_days = sum(
+            1
+            for candidate_date in touchpoint_dates
+            if active_date - timedelta(days=6) <= candidate_date <= active_date
+        )
         spelling_energy = cat_world_spelling_habit_energy(spelling_count)
         output_energy = (CAT_WORLD_HABIT_OUTPUT_ENERGY if has_essay else 0) + (
             CAT_WORLD_HABIT_OUTPUT_ENERGY if has_debate else 0
         )
         balance_energy = CAT_WORLD_HABIT_BALANCE_ENERGY if spelling_count >= 20 and (has_essay or has_debate) else 0
-        streak_energy = min(max(streak - 1, 0) * CAT_WORLD_HABIT_STREAK_STEP_ENERGY, CAT_WORLD_HABIT_STREAK_MAX_ENERGY)
+        rhythm_energy = min(
+            max(rhythm_days - 1, 0) * CAT_WORLD_HABIT_RHYTHM_STEP_ENERGY,
+            CAT_WORLD_HABIT_RHYTHM_MAX_ENERGY,
+        )
         daily_rewards[active_date] = {
-            "energy": spelling_energy + output_energy + balance_energy + streak_energy,
+            "energy": spelling_energy + output_energy + balance_energy + rhythm_energy,
             "spellingCount": spelling_count,
             "spellingEnergy": spelling_energy,
             "hasEssay": has_essay,
@@ -14950,7 +14963,9 @@ def cat_world_learning_habit_source(
             "outputEnergy": output_energy,
             "balanceEnergy": balance_energy,
             "streak": streak,
-            "streakEnergy": streak_energy,
+            "rhythmDays": rhythm_days,
+            "rhythmEnergy": rhythm_energy,
+            "streakEnergy": rhythm_energy,
         }
 
     today_reward = daily_rewards.get(source_date, {})
@@ -14965,8 +14980,8 @@ def cat_world_learning_habit_source(
         detail_parts.append(f"AI Debate +{CAT_WORLD_HABIT_OUTPUT_ENERGY}")
     if int(today_reward.get("balanceEnergy") or 0) > 0:
         detail_parts.append(f"输入输出组合 +{today_reward['balanceEnergy']}")
-    if int(today_reward.get("streakEnergy") or 0) > 0:
-        detail_parts.append(f"连续 {today_reward['streak']} 天 +{today_reward['streakEnergy']}")
+    if int(today_reward.get("rhythmEnergy") or 0) > 0:
+        detail_parts.append(f"近 7 日节奏 {today_reward['rhythmDays']} 天 +{today_reward['rhythmEnergy']}")
 
     next_tier = next(
         ((target, energy) for target, energy in CAT_WORLD_SPELLING_HABIT_ENERGY_TIERS if today_spelling < target),
@@ -14980,16 +14995,9 @@ def cat_world_learning_habit_source(
     elif not (today_reward.get("hasEssay") or today_reward.get("hasDebate")):
         next_action = "再完成一篇 80 词英文作文或 AI Debate，练习输出能力"
     else:
-        next_action = "今日学习闭环已完成，明天继续会增加连续奖励"
+        next_action = "今日学习闭环已完成；最近七天保持 5 天学习即可留出 2 天休息"
     today_detail = " · ".join(detail_parts + [next_action])
     total_energy = sum(int(row["energy"]) for row in daily_rewards.values())
-    garden_active_dates = {
-        learning_date
-        for learning_date in set(spelling_by_date) | essay_dates | debate_dates
-        if spelling_by_date.get(learning_date, 0) >= 5
-        or learning_date in essay_dates
-        or learning_date in debate_dates
-    }
     total_loop_days = sum(1 for row in daily_rewards.values() if int(row.get("balanceEnergy") or 0) > 0)
     best_streak = max((int(row.get("streak") or 0) for row in daily_rewards.values()), default=0)
     recent_days = cat_world_learning_week_days(source_date, spelling_by_date, essay_dates, debate_dates)
@@ -15008,13 +15016,13 @@ def cat_world_learning_habit_source(
         "todayHasDebate": bool(today_reward.get("hasDebate")),
         "todayBalanceComplete": int(today_reward.get("balanceEnergy") or 0) > 0,
         "currentStreak": int(today_reward.get("streak") or 0),
-        "totalActiveDays": len(garden_active_dates),
+        "totalActiveDays": len(touchpoint_dates),
         "totalLoopDays": total_loop_days,
         "bestStreak": best_streak,
         "recentDays": recent_days,
         "todayDetail": today_detail,
         "nextAction": next_action,
-        "detail": "每天少量开始，组合拼写、写作和口语，并用连续学习获得额外奖励。",
+        "detail": "每天少量开始，组合拼写、写作和口语；最近七天保持稳定节奏即可获得额外奖励。",
     }
 
 
@@ -17515,7 +17523,7 @@ def cat_world_learning_companion_message(
             "gentle": "表达已经完成了，再慢慢练 20 个词，今天就很完整。",
         },
         "loop": {
-            "calm": "今天的输入和输出都完成了，我会安静记住我们的连续学习。",
+            "calm": "今天的输入和输出都完成了，我会安静记住我们的七日节奏。",
             "clingy": "今天的学习闭环完成啦，我越来越喜欢这样陪着你。",
             "chatty": "单词和表达都完成了，喵！明天再讲新的给我听。",
             "guardian": "今日学习路线全部完成，我已经替你把成果守好了。",

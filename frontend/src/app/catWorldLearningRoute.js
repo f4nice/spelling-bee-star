@@ -1,5 +1,7 @@
 const MINIMUM_SPELLING_TARGET = 20;
 const STARTER_SPELLING_TARGET = 5;
+const WEEKLY_TOUCHPOINT_TARGET = 5;
+const WEEKLY_LOOP_TARGET = 3;
 
 const ROOM_LEARNING_STEPS = Object.freeze([
   Object.freeze({ key: "warmup", label: "20词" }),
@@ -113,6 +115,16 @@ const WEEK_MEMORY_OPENINGS = {
   input: "这天的词汇热身完成了。",
   output: "这天已经把英语用出来了。",
   loop: "这天输入和表达都完成了。",
+};
+
+const WEEKLY_RHYTHM_TONES = {
+  calm: "留两天休息也没关系，稳定回来比每天满格更重要。",
+  clingy: "我会把休息日也留在身边，下一次回来再一起接上。",
+  guardian: "五天有学习触点就很稳，另外两天放心交给我守着。",
+  chatty: "不用天天说很多，五天里让我听见一点英语就很好。",
+  gentle: "给自己留两天空白，轻松一点反而更容易坚持。",
+  adventurous: "一周探索五天就够了，休息两天再出发也算节奏。",
+  balanced: "最近七天学五天、休两天，会比硬撑每天更容易坚持。",
 };
 
 function safeCount(value) {
@@ -265,6 +277,7 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
     : { action: essayAction, href: "/essays", alternateAction: debateAction, alternateHref: "/debate" };
   const garden = buildCatWorldHabitGarden(habit);
   const pace = buildCatWorldLearningPace(habit);
+  const weeklyRhythm = buildCatWorldWeeklyRhythm(habit, cat);
 
   const steps = [
     {
@@ -298,7 +311,7 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
       key: "wrapup",
       label: "完成今日闭环",
       detail: learningLoopComplete
-        ? `输入和输出都完成，已连续学习 ${streak || 1} 天`
+        ? `输入和输出都完成，最近七天已有 ${weeklyRhythm.activeDays} 天学习触点`
         : warmupComplete
           ? "再完成一次英语输出，就能收好今天的成果"
           : hasOutput
@@ -328,6 +341,7 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
     ritual,
     streak,
     garden,
+    weeklyRhythm,
     starterTarget: STARTER_SPELLING_TARGET,
     starterCount: Math.min(spellingCount, STARTER_SPELLING_TARGET),
     starterRemaining: Math.max(STARTER_SPELLING_TARGET - spellingCount, 0),
@@ -453,6 +467,65 @@ export function buildCatWorldWeekTrail(habit = {}) {
     loopDays,
     summary: `${activeDays} 天有学习 · ${loopDays} 天完成闭环`,
     todayMessage,
+  };
+}
+
+export function buildCatWorldWeeklyRhythm(habit = {}, cat = {}) {
+  const trail = buildCatWorldWeekTrail(habit);
+  const todaySpellingCount = safeCount(habit.todaySpellingCount);
+  const todayHasOutput = Boolean(habit.todayHasEssay || habit.todayHasDebate);
+  const activeDays = trail.days.length
+    ? trail.activeDays
+    : Number(todaySpellingCount >= STARTER_SPELLING_TARGET || todayHasOutput);
+  const loopDays = trail.days.length
+    ? trail.loopDays
+    : Number(Boolean(habit.todayBalanceComplete) || (todaySpellingCount >= MINIMUM_SPELLING_TARGET && todayHasOutput));
+  const activeRemaining = Math.max(WEEKLY_TOUCHPOINT_TARGET - activeDays, 0);
+  const loopRemaining = Math.max(WEEKLY_LOOP_TARGET - loopDays, 0);
+  const touchpointComplete = activeRemaining === 0;
+  const loopComplete = loopRemaining === 0;
+  const statusKey = touchpointComplete && loopComplete
+    ? "complete"
+    : touchpointComplete
+      ? "touchpoint"
+      : loopComplete
+        ? "loop"
+        : activeDays || loopDays
+          ? "steady"
+          : "starter";
+  const statusLabels = {
+    complete: "七日节奏达标",
+    touchpoint: "学习触点达标",
+    loop: "完整闭环达标",
+    steady: "节奏正在形成",
+    starter: "从今天开始",
+  };
+  let detail = `再安排 ${activeRemaining} 天学习触点，其中 ${loopRemaining} 天完成输入和输出。`;
+  if (statusKey === "complete") {
+    detail = "五天保持了英语触点，其中三天完成闭环；今天可以安心收工。";
+  } else if (statusKey === "touchpoint") {
+    detail = `学习触点已经够了；状态合适时再完成 ${loopRemaining} 天输入输出闭环。`;
+  } else if (statusKey === "loop") {
+    detail = `完整闭环已经够了；再用 ${activeRemaining} 天各完成 5 个词，就能保持稳定节奏。`;
+  } else if (statusKey === "starter") {
+    detail = "先用 5 个词留下今天的学习触点，不要求一次做满。";
+  }
+  const temperament = String(cat?.traits?.temperament || cat?.temperament || "balanced");
+  const catName = cat.nickname || cat.displayLabel || cat.label || cat.breedLabel || "今日陪学猫";
+  return {
+    statusKey,
+    statusLabel: statusLabels[statusKey],
+    detail,
+    activeDays,
+    activeTarget: WEEKLY_TOUCHPOINT_TARGET,
+    activeRemaining,
+    activePercent: Math.min(Math.round((activeDays / WEEKLY_TOUCHPOINT_TARGET) * 100), 100),
+    loopDays,
+    loopTarget: WEEKLY_LOOP_TARGET,
+    loopRemaining,
+    loopPercent: Math.min(Math.round((loopDays / WEEKLY_LOOP_TARGET) * 100), 100),
+    restAllowance: 2,
+    catLine: `${catName}：${WEEKLY_RHYTHM_TONES[temperament] || WEEKLY_RHYTHM_TONES.balanced}`,
   };
 }
 
