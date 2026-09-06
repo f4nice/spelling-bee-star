@@ -52,5 +52,5 @@ export const routeApiPaths = {
   wordDetail: (route) => `/api/vue/words/${route.params.id}${window.location.search}`,
   preview: (route) => `/api/vue/upload/preview/${route.params.id}${window.location.search}`,
   newspaper: () => "/api/vue/newspaper",
-  newspaperArticle: (route) => `/api/vue/newspaper/${route.params.section}/${route.params.index}`,
+  newspaperArticle: (route) => `/api/vue/newspaper/${route.params.section}/${route.params.index}${route.query?.url ? `?url=${encodeURIComponent(route.query.url)}` : ""}`,
 };

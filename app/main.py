@@ -68,6 +68,7 @@ from app.services.audio_storage import audio_candidates_with_dictionary, is_loca
 from app.services.ai_image_generation import generate_dashscope_prompt_image, generate_word_image
 from app.services.ai_tts import generate_word_ai_audio
 from app.services.chinadaily import get_chinadaily_article, load_chinadaily_articles
+from app.services.newspaper_cache import NewspaperCache
 from app.services.debate import (
     DEBATE_ARGUMENT_MAX_CHARS,
     DEBATE_CHALLENGE_ROUNDS,
@@ -87,7 +88,7 @@ from app.services.debate import (
 from app.services.image_storage import is_local_media_url, remove_local_image, store_uploaded_word_image, store_word_image
 from app.services.images import ImageClient
 from app.services.page_performance import (
-    TextAssetGZipMiddleware, batch_challenge_states, batch_pending_wrong_word_count,
+    PublicStatsCache, TextAssetGZipMiddleware, batch_challenge_states, batch_pending_wrong_word_count,
     batch_word_list_cards, public_stats_cache,
 )
 
@@ -3738,6 +3739,8 @@ def preferred_admin_user_ai(db: Session, request: Request) -> AdminUserSetting |
 
 
 app = FastAPI(title=settings.app_name)
+newspaper_cache = NewspaperCache(SessionLocal)
+word_detail_cache = PublicStatsCache(ttl=15)
 app.add_middleware(TextAssetGZipMiddleware)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
@@ -3766,6 +3769,7 @@ async def add_cache_headers(request: Request, call_next):
     if request.method not in {"GET", "HEAD", "OPTIONS"} and response.status_code < 400:
         if path != "/api/vue/cat-world/play-time":
             public_stats_cache.clear()
+            word_detail_cache.clear()
     if path.startswith("/static/vue/"):
         response.headers["Cache-Control"] = (
             "public, max-age=31536000, immutable"
@@ -4075,15 +4079,7 @@ def newspaper_article_page(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    try:
-        cached_json(
-            db,
-            cache_key=f"chinadaily:detail:{date.today().isoformat()}:{section_key}:{article_index}",
-            ttl=timedelta(hours=6),
-            producer=lambda: get_chinadaily_article(section_key, article_index),
-        )
-    except (ValueError, IndexError):
-        raise HTTPException(status_code=404, detail="Article not found")
+    # Render the shell immediately; the API resolves the cached article.
     return vue_shell(request, db, f"newspaper/{section_key}/{article_index}")
 
 
@@ -8191,6 +8187,15 @@ def vue_word_detail_api(
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
+    bind = db.get_bind()
+    cache_key = (getattr(bind, "engine", bind), word.id, word.updated_at, edit, list_id, challenge_day, challenge_status)
+    return word_detail_cache.get(cache_key, lambda: word_detail_payload(
+        db, word, edit, list_id, challenge_day, challenge_status,
+    ))
+
+
+def word_detail_payload(db: Session, word: Word, edit: int, list_id: int | None,
+                        challenge_day: str | None, challenge_status: str | None) -> dict:
     apply_word_resource(db, word, commit=True, include_image=False)
     cleaned_error = friendly_enrichment_error(word.enrichment_error)
     if cleaned_error != word.enrichment_error:
@@ -8202,7 +8207,8 @@ def vue_word_detail_api(
     nav_word_list = db.get(WordList, nav.get("list_id")) if nav.get("list_id") else None
     if nav_word_list:
         nav["word_list_name"] = nav_word_list.name
-    audio_version = str(int(datetime.utcnow().timestamp()))
+    # Stable until this word changes, so repeated visits can reuse audio bytes.
+    audio_version = word.updated_at.strftime("%Y%m%d%H%M%S%f") if word.updated_at else "1"
     audio_sources = {
         "us": word_audio_source(word, "us", audio_version),
         "gb": word_audio_source(word, "gb", audio_version),
@@ -8520,26 +8526,22 @@ async def complete_word_from_sources(db: Session, word: Word, *, list_id: int | 
 
 @app.get("/api/vue/newspaper")
 def vue_newspaper_api(db: Session = Depends(get_db)):
-    return cached_json(
-        db,
-        cache_key=f"chinadaily:list:{date.today().isoformat()}:6",
-        ttl=timedelta(minutes=45),
-        producer=lambda: load_chinadaily_articles(limit_per_feed=6),
-        fallback={"sections": []},
-    )
+    return newspaper_cache.list_payload(db)
+
+
+@app.post("/api/vue/newspaper/refresh")
+def vue_newspaper_refresh_api(db: Session = Depends(get_db)):
+    return newspaper_cache.list_payload(db, force=True)
 
 
 @app.get("/api/vue/newspaper/{section_key}/{article_index}")
-def vue_newspaper_article_api(section_key: str, article_index: int, db: Session = Depends(get_db)):
+def vue_newspaper_article_api(section_key: str, article_index: int, db: Session = Depends(get_db), url: str = ""):
     try:
-        return cached_json(
-            db,
-            cache_key=f"chinadaily:detail:{date.today().isoformat()}:{section_key}:{article_index}",
-            ttl=timedelta(hours=6),
-            producer=lambda: get_chinadaily_article(section_key, article_index),
-        )
+        return newspaper_cache.article_payload(db, section_key, article_index, url)
     except (ValueError, IndexError):
         raise HTTPException(status_code=404, detail="Article not found")
+    except httpx.HTTPError:
+        raise HTTPException(status_code=503, detail="新闻源暂时不可用，请稍后重试。")
 
 
 @app.get("/api/vue/upload/options")

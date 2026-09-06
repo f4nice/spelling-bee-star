@@ -17,6 +17,7 @@ defineProps({
 <template>
   <article class="panel newspaper-section">
     <NewspaperSectionHeader :section="section" />
+    <p v-if="section.stale" class="notice">此栏目暂用上次缓存内容。</p>
     <p v-if="section.error" class="newspaper-error">{{ section.error }}</p>
     <div v-else class="newspaper-list">
       <NewspaperArticleCard
@@ -24,7 +25,7 @@ defineProps({
         :key="article.link || article.title"
         :article="article"
         :lead="index === 0"
-        @open="go(`/newspaper/${section.key}/${index}`)"
+        @open="go(`/newspaper/${section.key}/${index}?url=${encodeURIComponent(article.link)}`)"
       />
     </div>
   </article>

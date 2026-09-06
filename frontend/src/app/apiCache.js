@@ -1,6 +1,8 @@
 const CACHE_PREFIX = "speakeasy.apiCache:";
 
 const CACHE_RULES = [
+  { test: (url) => url === "/api/vue/newspaper", ttl: 5 * 60 * 1000 },
+  { test: (url) => url.startsWith("/api/vue/newspaper/"), ttl: 10 * 60 * 1000 },
   { test: (url) => url.startsWith("/api/vue/words/"), ttl: 2 * 60 * 1000 },
   { test: (url) => url.startsWith("/api/vue/lists"), ttl: 60 * 1000 },
   { test: (url) => url === "/api/vue/shell", ttl: 30 * 1000 },
@@ -31,7 +33,9 @@ export function readApiCache(url) {
   if (!ttl || !store) return null;
   try {
     const item = JSON.parse(store.getItem(cacheKey(url)) || "null");
-    if (!item || Date.now() - item.createdAt > ttl) {
+    const newspaperDayChanged = url.startsWith("/api/vue/newspaper") && item
+      && new Date(item.createdAt).toDateString() !== new Date().toDateString();
+    if (!item || Date.now() - item.createdAt > ttl || newspaperDayChanged) {
       store.removeItem(cacheKey(url));
       return null;
     }
@@ -43,6 +47,9 @@ export function readApiCache(url) {
 }
 
 export function writeApiCache(url, payload) {
+  if (url === "/api/vue/newspaper" && (
+    payload?.cache?.refreshing || payload?.cache?.stale || payload?.cache?.error || !payload?.sections?.length
+  )) return;
   const ttl = cacheTtl(url);
   const store = storage();
   if (!ttl || !store || payload == null) return;
@@ -65,6 +72,10 @@ export function clearApiCache(predicate = () => true) {
 }
 
 export function invalidateApiCacheForMutation(url, context = {}) {
+  if (url.startsWith("/api/vue/newspaper")) {
+    clearApiCache((key) => key.startsWith("/api/vue/newspaper"));
+    return;
+  }
   if (url.startsWith("/api/vue/words/")) {
     const wordId = url.split("/")[4];
     clearApiCache((key) => key.startsWith(`/api/vue/words/${wordId}`) || key.startsWith("/api/vue/lists"));

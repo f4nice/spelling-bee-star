@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import html
 import re
@@ -31,16 +32,17 @@ SECTIONS = [
 
 
 def load_chinadaily_articles(limit_per_feed: int = 6) -> dict:
-    sections = []
     today = datetime.now().strftime("%Y-%m-%d")
-    for section in SECTIONS:
+    def load_section(section):
         try:
             articles = fetch_section_articles(section, limit=limit_per_feed, today=today)
             error = None
         except Exception as exc:
             articles = []
             error = str(exc)
-        sections.append({"key": section.key, "name": section.name, "articles": articles, "error": error})
+        return {"key": section.key, "name": section.name, "articles": articles, "error": error}
+    with ThreadPoolExecutor(max_workers=3, thread_name_prefix="newspaper-source") as pool:
+        sections = list(pool.map(load_section, SECTIONS))
     return {
         "source": "China Daily",
         "source_url": CHINADAILY_HOME,
@@ -81,7 +83,7 @@ def fetch_section_articles(section: ChinaDailySection, limit: int, today: str) -
             detail = fetch_article_detail(article["link"])
         except Exception:
             continue
-        for key in ("summary", "excerpt", "author", "image_url"):
+        for key in ("summary", "excerpt", "author", "image_url", "body"):
             if detail.get(key):
                 article[key] = detail[key]
     return articles
