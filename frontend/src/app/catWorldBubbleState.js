@@ -1,5 +1,5 @@
-export const CAT_BUBBLE_HOLD_MS = 6500;
-export const CAT_BUBBLE_FADE_MS = 2500;
+export const CAT_BUBBLE_HOLD_MS = 8000;
+export const CAT_BUBBLE_FADE_MS = 3000;
 export const CAT_BUBBLE_TOTAL_MS = CAT_BUBBLE_HOLD_MS + CAT_BUBBLE_FADE_MS;
 
 export function createCatBubbleReaction(message, now = Date.now()) {

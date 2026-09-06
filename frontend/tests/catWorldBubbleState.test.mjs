@@ -14,9 +14,9 @@ test("cat bubble keeps its original lifetime after a scene refresh", () => {
   assert.equal(reaction.expiresAt, startedAt + CAT_BUBBLE_TOTAL_MS);
   assert.deepEqual(resolveCatBubbleTiming(reaction, startedAt + 400), {
     active: true,
-    remainingMs: 8600,
-    holdDelay: 6100,
-    fadeDuration: 2500,
+    remainingMs: 10600,
+    holdDelay: 7600,
+    fadeDuration: 3000,
     initialAlpha: 1,
   });
 });
@@ -24,12 +24,12 @@ test("cat bubble keeps its original lifetime after a scene refresh", () => {
 test("cat bubble resumes the remaining fade instead of disappearing", () => {
   const reaction = createCatBubbleReaction("测试气泡", 1000);
 
-  assert.deepEqual(resolveCatBubbleTiming(reaction, 8000), {
+  assert.deepEqual(resolveCatBubbleTiming(reaction, 10000), {
     active: true,
     remainingMs: 2000,
     holdDelay: 0,
     fadeDuration: 2000,
-    initialAlpha: 0.8,
+    initialAlpha: 2 / 3,
   });
-  assert.equal(resolveCatBubbleTiming(reaction, 10001).active, false);
+  assert.equal(resolveCatBubbleTiming(reaction, 12001).active, false);
 });

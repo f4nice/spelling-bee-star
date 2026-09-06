@@ -3140,6 +3140,19 @@ class CatWorldScene extends Phaser.Scene {
 
   scheduleCatWalk(container, index, cat = {}) {
     if (!container?.active || container.getData("interactionActive")) return;
+    const reaction = this.owner.catReactions.get(cat.id);
+    const reactionTiming = reaction ? resolveCatBubbleTiming(reaction) : null;
+    if (reactionTiming?.active) {
+      const resumeTimer = this.time.delayedCall(reactionTiming.remainingMs + 80, () => {
+        container.setData("walkTimer", null);
+        if (container.active && !container.getData("interactionActive")) {
+          this.scheduleCatWalk(container, index, cat);
+        }
+      });
+      container.setData("walkTimer", resumeTimer);
+      return;
+    }
+    if (reaction) this.owner.catReactions.delete(cat.id);
     const behavior = this.catBehavior(cat, index);
     const movement = Number(behavior.walkSpeed || 0.62);
     container.setData("behavior", behavior);
@@ -3208,7 +3221,8 @@ class CatWorldScene extends Phaser.Scene {
             : Phaser.Math.Between(FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
       const duration = Math.round(Phaser.Math.Between(34000, 56000) / Math.max(Number(latestBehavior.walkSpeed || movement), 0.34));
       this.turnCat(container, nextX);
-      this.tweens.add({
+      let walkTween;
+      walkTween = this.tweens.add({
         targets: container,
         x: nextX,
         y: nextY,
@@ -3216,6 +3230,9 @@ class CatWorldScene extends Phaser.Scene {
         ease: "Sine.easeInOut",
         onUpdate: () => container.setDepth(CAT_INTERACTION_DEPTH + index),
         onComplete: () => {
+          if (container.getData("walkTween") === walkTween) {
+            container.setData("walkTween", null);
+          }
           if (container.getData("interactionActive")) return;
           this.rememberCatPosition({ cat, container, index });
           if (shouldVisitFood) {
@@ -3243,8 +3260,25 @@ class CatWorldScene extends Phaser.Scene {
           this.scheduleCatWalk(container, index, cat);
         },
       });
+      container.setData("walkTween", walkTween);
     });
     container.setData("walkTimer", walkTimer);
+  }
+
+  pauseCatForReaction(container, cat) {
+    if (!container?.active || container.getData("interactionActive") || this.owner.carriedCat?.catId === cat.id) {
+      return false;
+    }
+    const timing = resolveCatBubbleTiming(this.owner.catReactions.get(cat.id));
+    if (!timing.active) return false;
+    container.getData("walkTimer")?.remove?.(false);
+    container.setData("walkTimer", null);
+    container.getData("walkTween")?.stop?.();
+    container.setData("walkTween", null);
+    const index = Math.max(this.visibleRoomCats().findIndex((item) => item.id === cat.id), 0);
+    this.rememberCatPosition({ cat, container, index }, { notify: false });
+    this.scheduleCatWalk(container, index, cat);
+    return true;
   }
 
   scheduleCatMicroAnimation(container, index, cat = {}) {
@@ -4000,13 +4034,15 @@ class CatWorldScene extends Phaser.Scene {
     }
   }
 
-  showCatReaction(catId, message) {
+  showCatReaction(catId, message, options = {}) {
     if (this.isEditMode()) return false;
     const container = this.catContainers.get(catId);
     const cat = this.owner.snapshot?.cats?.find((item) => item.id === catId);
     if (!container?.active || !cat) return false;
     this.children.bringToTop(container);
-    this.spawnCatBubble(container, cat, message);
+    const reactionMessage = this.spawnCatBubble(container, cat, message);
+    if (!reactionMessage) return false;
+    if (options.pause !== false) this.pauseCatForReaction(container, cat);
     return true;
   }
 
@@ -4160,8 +4196,8 @@ export class CatWorldGame {
     return cloneLayout(this.layout);
   }
 
-  showCatReaction(catId, message) {
-    return Boolean(this.game.scene.getScene("CatWorldScene")?.showCatReaction(catId, message));
+  showCatReaction(catId, message, options = {}) {
+    return Boolean(this.game.scene.getScene("CatWorldScene")?.showCatReaction(catId, message, options));
   }
 
   focusCat(catId) {

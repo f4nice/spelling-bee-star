@@ -18,6 +18,7 @@ import {
   resolveCollectionCat,
   resolveCollectionSection,
 } from "../catWorldCollectionAtlas.js";
+import { CAT_BUBBLE_TOTAL_MS } from "../catWorldBubbleState.js";
 import { catPortraitModel } from "../catWorldPortrait.js";
 import { catRarityBadge } from "../catWorldRarity.js";
 import {
@@ -99,7 +100,6 @@ const catReactionTexts = [
   "尾巴雷达晃了晃，发现新单词",
   "想法缓存刷新，准备继续陪你学",
 ];
-const CAT_REACTION_DURATION_MS = 9000;
 let catReactionTimer = 0;
 let learningCompanionReactionTimer = 0;
 let activeFoodClockTimer = 0;
@@ -1701,13 +1701,15 @@ function showCatReaction(cat = selectedCat.value, message = "", options = {}) {
   catReaction.value = `${catLabel}: ${reactionMessage}`;
   catReactionAnchored.value = options.anchor === false
     ? true
-    : Boolean(catWorldGame.value?.showCatReaction(cat?.id, reactionMessage));
+    : Boolean(catWorldGame.value?.showCatReaction(cat?.id, reactionMessage, {
+        pause: options.pause !== false,
+      }));
   catPetSequence.value += 1;
   window.clearTimeout(catReactionTimer);
   catReactionTimer = window.setTimeout(() => {
     catReaction.value = "";
     catReactionAnchored.value = false;
-  }, CAT_REACTION_DURATION_MS);
+  }, CAT_BUBBLE_TOTAL_MS);
 }
 
 async function showLearningCompanionReaction(options = {}) {
