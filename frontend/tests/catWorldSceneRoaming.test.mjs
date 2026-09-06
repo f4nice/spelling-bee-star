@@ -86,3 +86,24 @@ test("scene map explains room attraction without weakening active-state contrast
     /button\.active \.cat-world-scene-attraction,[\s\S]*?color: #fff;/,
   );
 });
+
+test("scene map makes every cat's current room visible", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
+
+  assert.match(page, /const scenePresenceById = computed/);
+  assert.match(page, /cat\.currentSceneId === scene\.id/);
+  assert.match(page, /class="cat-world-scene-residents"/);
+  assert.match(page, /scenePresence\(scene\)\.preview/);
+  assert.match(page, /scenePresence\(scene\)\.summary/);
+  assert.match(page, /class="cat-world-scene-cat-avatar"/);
+  assert.match(page, /cat\.portrait\.style/);
+  assert.match(page, /暂无猫咪/);
+  assert.match(styles, /\.cat-world-scene-cat-avatar\s*\{[\s\S]*?width:\s*24px;[\s\S]*?height:\s*24px;/);
+  assert.match(
+    styles,
+    /button\.active \.cat-world-scene-residents > b,[\s\S]*?color:\s*#fff;/,
+  );
+});

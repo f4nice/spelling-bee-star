@@ -12,14 +12,19 @@ test("expired play time keeps the room visible in observation mode", async () =>
     readFile(stylesUrl, "utf8"),
   ]);
   const lockRule = styles.match(/\.cat-world-play-lock\s*\{([^}]*)\}/)?.[1] || "";
+  const lockCardRule = styles.match(/\.cat-world-play-lock-card\s*\{([^}]*)\}/)?.[1] || "";
 
   assert.match(page, /Observation Mode/);
+  assert.match(page, /class="cat-world-play-lock-copy"/);
   assert.match(page, /:inert="playTimeLocked \? '' : null"/);
   assert.match(page, /aria-label="观察房间下一屏"/);
   assert.doesNotMatch(page, /:aria-hidden="playTimeLocked/);
   assert.match(lockRule, /position:\s*sticky\s*;/);
   assert.doesNotMatch(lockRule, /inset:\s*0\s*;/);
   assert.doesNotMatch(lockRule, /background:\s*rgba\(32, 48, 64/);
+  assert.match(lockCardRule, /padding:\s*7px 10px;/);
+  assert.match(styles, /\.cat-world-play-lock-copy\s*\{[\s\S]*?display:\s*flex;[\s\S]*?align-items:\s*center;/);
+  assert.match(styles, /@media \(max-width: 560px\)[\s\S]*?\.cat-world-observation-actions\s*\{[\s\S]*?grid-column:\s*1 \/ -1;/);
 });
 
 test("daily learning route stays outside the locked play area", async () => {

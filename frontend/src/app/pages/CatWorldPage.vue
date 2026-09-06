@@ -371,8 +371,11 @@ function sceneActionTitle(scene) {
     : scene.enabled
       ? `购买${scene.label}`
       : `${scene.label}尚未开放`;
+  const residentSummary = scene.available ? scenePresence(scene).summary : "";
   const attraction = sceneAttractionSummary(scene, 4);
-  return attraction ? `${base}。${attraction}` : base;
+  return [base, residentSummary ? `当前：${residentSummary}` : "", attraction]
+    .filter(Boolean)
+    .join("。");
 }
 const currentSceneAttractionText = computed(() => sceneAttractionSummary(currentScene.value, 3));
 const inventory = computed(() => state.value.inventory || {});
@@ -745,6 +748,42 @@ const catAgentCards = computed(() =>
     };
   }),
 );
+const scenePresenceById = computed(() => Object.fromEntries(
+  scenes.value.map((scene) => {
+    const residents = catAgentCards.value
+      .filter((cat) => cat.owned && !cat.escaped && cat.currentSceneId === scene.id)
+      .map((cat) => {
+        const live = liveCatIntents.value[cat.id];
+        const currentIntent = live && (!live.sceneId || live.sceneId === scene.id) ? live : null;
+        return {
+          ...cat,
+          statusLabel: currentIntent?.statusLabel || cat.behaviorLabel || "自由活动",
+        };
+      })
+      .sort((left, right) => (
+        Number(right.id === focusedCat.value.id) - Number(left.id === focusedCat.value.id)
+        || Number(right.needPriority || 0) - Number(left.needPriority || 0)
+        || String(left.displayLabel || left.label || "").localeCompare(String(right.displayLabel || right.label || ""), "zh-CN")
+      ));
+    const summary = residents.length
+      ? residents.map((cat) => `${cat.displayLabel || cat.label || "猫咪"}（${cat.statusLabel}）`).join("、")
+      : "暂无猫咪";
+    return [scene.id, {
+      residents,
+      preview: residents.slice(0, 3),
+      overflowCount: Math.max(residents.length - 3, 0),
+      summary,
+    }];
+  }),
+));
+function scenePresence(scene = {}) {
+  return scenePresenceById.value[scene.id] || {
+    residents: [],
+    preview: [],
+    overflowCount: 0,
+    summary: "暂无猫咪",
+  };
+}
 const roomLiveActivity = computed(() => {
   const currentRoomIds = new Set(roomCats.value.map((cat) => cat.id));
   const focusedId = focusedCat.value.id;
@@ -2638,9 +2677,11 @@ async function selectCat(catOrId, options = {}) {
           <span class="cat-world-play-lock-icon" aria-hidden="true">
             <LockIcon :size="22" :stroke-width="2.8" />
           </span>
-          <div>
-            <p class="section-kicker">Observation Mode</p>
-            <h2 id="cat-world-play-lock-title">观察模式</h2>
+          <div class="cat-world-play-lock-copy">
+            <span>
+              <p class="section-kicker">Observation Mode</p>
+              <h2 id="cat-world-play-lock-title">观察模式</h2>
+            </span>
             <p>猫咪仍会照常生活；完成学习任务后即可抱猫、喂食和玩耍。</p>
           </div>
           <div class="cat-world-observation-actions">
@@ -2742,10 +2783,32 @@ async function selectCat(catOrId, options = {}) {
               :title="sceneActionTitle(scene)"
               @click="handleSceneAction(scene)"
             >
-              <span>{{ scene.label }}</span>
-              <small v-if="scene.enabled && !scene.unlocked">{{ Number(scene.purchaseCost || 0).toLocaleString() }} 能量</small>
-              <small v-else-if="!scene.enabled">规划中</small>
-              <small v-else>{{ sceneStatusLabel(scene) }}</small>
+              <span class="cat-world-scene-copy">
+                <strong>{{ scene.label }}</strong>
+                <small v-if="scene.enabled && !scene.unlocked">{{ Number(scene.purchaseCost || 0).toLocaleString() }} 能量</small>
+                <small v-else-if="!scene.enabled">规划中</small>
+                <small v-else>{{ sceneStatusLabel(scene) }}</small>
+              </span>
+              <span
+                v-if="scene.available"
+                class="cat-world-scene-residents"
+                :aria-label="`${scene.label}：${scenePresence(scene).summary}`"
+              >
+                <i
+                  v-for="cat in scenePresence(scene).preview"
+                  :key="`${scene.id}-resident-${cat.id}`"
+                  class="cat-world-scene-cat-avatar"
+                  :style="cat.portrait.style"
+                  :title="`${cat.displayLabel || cat.label} · ${cat.statusLabel}`"
+                  aria-hidden="true"
+                >
+                  <CatIcon :size="14" :stroke-width="2.8" />
+                </i>
+                <b v-if="scenePresence(scene).overflowCount">+{{ scenePresence(scene).overflowCount }}</b>
+                <em v-if="!scenePresence(scene).residents.length" class="empty">
+                  <PawPrintIcon :size="13" :stroke-width="2.8" aria-hidden="true" />暂无猫咪
+                </em>
+              </span>
               <em v-if="scene.available && scene.attractedCatCount" class="cat-world-scene-attraction">
                 <HeartIcon :size="11" :stroke-width="3" aria-hidden="true" />
                 {{ scene.attractedCatCount }}猫喜欢
