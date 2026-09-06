@@ -22,6 +22,7 @@ import {
   sceneInitialScroll,
   scenePageTarget,
 } from "./catWorldSceneConfig.js";
+import { catWorldTimeAmbience } from "./catWorldTimeAmbience.js";
 
 let VIEW_WIDTH = 1280;
 let VIEW_HEIGHT = 560;
@@ -778,6 +779,7 @@ class CatWorldScene extends Phaser.Scene {
 
   drawRoom() {
     const palette = this.owner.snapshot.scene?.palette || {};
+    const ambience = catWorldTimeAmbience(new Date());
     const bg = this.add.graphics();
     bg.fillGradientStyle(
       sceneColor(palette.wallTopLeft, 0xcff7ee),
@@ -791,6 +793,7 @@ class CatWorldScene extends Phaser.Scene {
     bg.fillRect(0, FLOOR_TOP - 10, GAME_WIDTH, 10);
     bg.fillStyle(sceneColor(palette.floor, 0xc29258), 1);
     bg.fillRect(0, FLOOR_TOP, GAME_WIDTH, GAME_HEIGHT - FLOOR_TOP);
+    this.drawRoomTimeAmbience(bg, ambience);
 
     bg.lineStyle(1, sceneColor(palette.grid, 0x2c2f3a), 0.12);
     for (let x = 0; x <= GAME_WIDTH; x += 12) bg.lineBetween(x, 0, x, GAME_HEIGHT);
@@ -800,7 +803,57 @@ class CatWorldScene extends Phaser.Scene {
     bg.strokeRect(2, 2, GAME_WIDTH - 4, GAME_HEIGHT - 4);
     bg.lineStyle(3, 0xfff8df, 0.5);
     bg.strokeRect(11, 11, GAME_WIDTH - 22, GAME_HEIGHT - 22);
+    this.drawRoomTimeBadge(ambience);
     this.drawLearningBoard(this.owner.snapshot);
+  }
+
+  drawRoomTimeAmbience(graphics, ambience = {}) {
+    graphics.fillStyle(Number(ambience.wallTint || 0xffffff), Number(ambience.wallAlpha || 0));
+    graphics.fillRect(0, 0, GAME_WIDTH, FLOOR_TOP);
+    graphics.fillStyle(Number(ambience.floorTint || 0xffffff), Number(ambience.floorAlpha || 0));
+    graphics.fillRect(0, FLOOR_TOP, GAME_WIDTH, GAME_HEIGHT - FLOOR_TOP);
+
+    if (ambience.key === "night") {
+      graphics.fillStyle(Number(ambience.accent || 0xd9f6ff), 0.72);
+      for (let index = 0, x = 74; x < GAME_WIDTH - 30; index += 1, x += 137) {
+        const y = 34 + ((index * 47) % Math.max(FLOOR_TOP - 94, 48));
+        const size = index % 3 === 0 ? 4 : 3;
+        graphics.fillRect(x, y, size, size);
+        if (index % 4 === 1) graphics.fillRect(x + size + 2, y + size + 2, 2, 2);
+      }
+      return;
+    }
+
+    if (ambience.key === "dawn" || ambience.key === "dusk") {
+      graphics.fillStyle(Number(ambience.accent || 0xfff07d), ambience.key === "dawn" ? 0.08 : 0.06);
+      for (let x = 54; x < GAME_WIDTH; x += 286) {
+        graphics.fillRect(x, 18, 44, Math.max(FLOOR_TOP - 38, 40));
+      }
+    }
+  }
+
+  drawRoomTimeBadge(ambience = {}) {
+    const width = 142;
+    const height = 42;
+    const container = this.add.container(18, 18).setDepth(CAT_INTERACTION_DEPTH - 35).setScrollFactor(0);
+    const graphics = makeLocalGraphics(this, container);
+    drawPixelRect(graphics, 0, 0, width, height, 0x123446, INK, 4);
+    graphics.fillStyle(Number(ambience.accent || 0xd9f6ff), 1);
+    graphics.fillRect(9, 9, 6, 6);
+    graphics.fillRect(12, 6, 6, 6);
+    const title = this.add.text(24, 6, String(ambience.englishLabel || "DAYLIGHT"), {
+      color: "#7fffd4",
+      fontFamily: "Consolas, monospace",
+      fontSize: "10px",
+      fontStyle: "bold",
+    });
+    const status = this.add.text(10, 21, `${ambience.clockLabel || "--:--"} · ${ambience.label || "白天"}`, {
+      color: "#fff8df",
+      fontFamily: "Consolas, monospace",
+      fontSize: "12px",
+      fontStyle: "bold",
+    });
+    container.add([title, status]);
   }
 
   drawLearningBoard(snapshot) {
