@@ -3527,6 +3527,11 @@ async function selectCat(catOrId, options = {}) {
               </div>
             </div>
             <p class="cat-world-context-thought">{{ focusedCatThought }}</p>
+            <p v-if="focusedCat.actionRhythm?.label" class="cat-world-context-rhythm">
+              <span>行动节奏</span>
+              <strong>{{ focusedCat.actionRhythm.label }}</strong>
+              <em>{{ focusedCat.actionRhythm.description }}</em>
+            </p>
             <p v-if="focusedLiveIntent" :class="['cat-world-context-intent', `tone-${focusedLiveIntent.tone}`]">
               <span>{{ focusedLiveIntent.live ? "实时动向" : "当前日程" }}</span>
               <strong>{{ focusedLiveIntent.statusLabel }}</strong>
@@ -4079,6 +4084,7 @@ async function selectCat(catOrId, options = {}) {
         <dl class="cat-world-agent-facts">
           <div><dt>个体档案</dt><dd>{{ activeCatDiary.genderLabel }} · {{ activeCatDiary.patternLabel }} · {{ activeCatDiary.featureLabel }}</dd></div>
           <div><dt>个人小习惯</dt><dd>{{ activeCatDiary.individualHabit?.label || "还在慢慢观察" }}</dd></div>
+          <div><dt>行动节奏</dt><dd>{{ activeCatDiary.actionRhythm?.label || "按状态决定" }} · {{ activeCatDiary.actionRhythm?.description || "会根据体力、心情和需求安排活动" }}</dd></div>
           <div><dt>今日步态</dt><dd>{{ activeCatDiary.gait?.label || "自在散步" }} · 会留下短暂的像素爪印</dd></div>
           <div><dt>陪学专长</dt><dd>{{ activeCatDiary.learningStyle?.label || "平衡陪学搭档" }} · {{ activeCatDiary.learningStyle?.focusLabel || "少量输入再表达" }}</dd></div>
           <div><dt>陪学记忆</dt><dd>{{ catWorldLearningMemoryLine(activeCatDiary.learningMemory) }} · {{ catWorldLearningMemoryNextLine(activeCatDiary.learningMemory) }}</dd></div>
@@ -4436,6 +4442,10 @@ async function selectCat(catOrId, options = {}) {
             <p v-if="cat.individualHabit?.label" class="cat-world-cat-individual-habit">
               <b>个人小习惯</b>
               <em>{{ cat.individualHabit.label }}</em>
+            </p>
+            <p v-if="cat.actionRhythm?.label" class="cat-world-cat-action-rhythm">
+              <b>行动节奏</b>
+              <em>{{ cat.actionRhythm.label }}</em>
             </p>
             <p v-if="cat.favoriteItemLabels?.length" class="cat-world-cat-individual-preference">
               <b>个体偏好</b>

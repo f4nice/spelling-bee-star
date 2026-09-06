@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-031"
-DEFAULT_PAGE_VERSION = "v20260907.31"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-032"
+DEFAULT_PAGE_VERSION = "v20260907.32"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -595,6 +595,50 @@ CAT_WORLD_CAT_INDIVIDUAL_HABITS = [
         "animation": "blink",
         "targetItemIds": ["sun-window", "felt-cat-bed"],
         "priority": 50,
+    },
+]
+CAT_WORLD_CAT_ACTION_RHYTHMS = [
+    {
+        "key": "observe-then-decide",
+        "label": "先观察再回想",
+        "description": "通常先看一会儿，再从旧记忆和安静活动里挑一件事。",
+        "thought": "我喜欢先看清房间，再决定今天从哪件事开始。",
+        "focusKinds": ["memory", "learning", "habit"],
+    },
+    {
+        "key": "study-signal-first",
+        "label": "学习信号优先",
+        "description": "看见学习灯牌或共同手册有动静时，会更愿意先靠近。",
+        "thought": "学习灯牌一亮，我就想先过去陪你一会儿。",
+        "focusKinds": ["learning", "memory", "goal"],
+    },
+    {
+        "key": "companion-seeker",
+        "label": "先找伙伴",
+        "description": "状态稳定时会先看看人和猫咪伙伴在哪里。",
+        "thought": "做决定以前，我总想先看看熟悉的伙伴在哪里。",
+        "focusKinds": ["social", "favorite"],
+    },
+    {
+        "key": "familiar-corner-first",
+        "label": "熟悉角落优先",
+        "description": "喜欢先回常待的家具和舒适位置，再安排下一段活动。",
+        "thought": "先回熟悉的角落待一会儿，我会更安心。",
+        "focusKinds": ["favorite", "rest", "memory"],
+    },
+    {
+        "key": "new-route-scout",
+        "label": "新路线优先",
+        "description": "体力允许时会优先探索新目标和自己的小习惯。",
+        "thought": "只要体力够，我就想先看看今天有没有新的路线。",
+        "focusKinds": ["goal", "habit"],
+    },
+    {
+        "key": "play-before-rest",
+        "label": "先玩一下再安静",
+        "description": "没有紧急需求时，常先找喜欢的东西活动一下。",
+        "thought": "先玩一小会儿，我就更容易安静下来陪你。",
+        "focusKinds": ["favorite", "habit", "social"],
     },
 ]
 CAT_WORLD_CAT_LEARNING_STYLES = [
@@ -19472,6 +19516,20 @@ def cat_world_profile_learning_style(profile: CatWorldCatProfile) -> dict[str, A
     }
 
 
+def cat_world_profile_action_rhythm(profile: CatWorldCatProfile) -> dict[str, Any]:
+    profile_id, digest = cat_world_profile_identity_digest(profile)
+    rhythm = CAT_WORLD_CAT_ACTION_RHYTHMS[digest[8] % len(CAT_WORLD_CAT_ACTION_RHYTHMS)]
+    profile_code = profile_id.rsplit("-", 1)[-1][:4].lower() or "cat"
+    return {
+        "id": f"{rhythm['key']}-{profile_code}",
+        "key": str(rhythm["key"]),
+        "label": str(rhythm["label"]),
+        "description": str(rhythm["description"]),
+        "thought": str(rhythm["thought"]),
+        "focusKinds": list(rhythm.get("focusKinds") or []),
+    }
+
+
 def create_cat_world_cat_profile(
     db: Session,
     state: CatWorldState,
@@ -19542,6 +19600,7 @@ def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]
     personality_thoughts = personality.get("thoughts") if isinstance(personality.get("thoughts"), list) else []
     individual_habit = cat_world_profile_individual_habit(profile)
     learning_style = cat_world_profile_learning_style(profile)
+    action_rhythm = cat_world_profile_action_rhythm(profile)
     favorite_decor_ids = cat_world_profile_favorite_item_ids(profile, {"decor"})
     favorite_food_ids = cat_world_profile_favorite_item_ids(profile, {"food"})
     favorite_toy_ids = cat_world_profile_favorite_item_ids(profile, {"toy"})
@@ -19571,8 +19630,9 @@ def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]
         "personalityKey": str(profile.personality_key or ""),
         "personality": personality_label,
         "traits": cat_world_profile_traits(profile, breed),
-        "thoughts": [*personality_thoughts, individual_habit["thought"]],
+        "thoughts": [*personality_thoughts, individual_habit["thought"], action_rhythm["thought"]],
         "individualHabit": individual_habit,
+        "actionRhythm": action_rhythm,
         "favoriteDecorIds": favorite_decor_ids,
         "favoriteDecorLabels": [
             CAT_WORLD_DECOR_LABELS.get(decor_id, decor_id)

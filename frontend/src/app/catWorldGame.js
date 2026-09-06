@@ -4383,6 +4383,7 @@ class CatWorldScene extends Phaser.Scene {
       temperament,
       activity: String(traits.activity || "balanced"),
       routine: agent.routine || traits.routine || "观察房间里的学习节奏",
+      actionRhythmKey: String(cat.actionRhythm?.key || ""),
       canWalk: !sleeping && energy >= restThreshold,
       energy,
       mood,

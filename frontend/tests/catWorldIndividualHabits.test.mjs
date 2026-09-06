@@ -19,6 +19,7 @@ test("each cat can follow a stable personal habit inside the room", async () => 
   assert.match(game, /this\.spawnIndividualHabitBubble\(container, cat, visitPlan\.target\)/);
   assert.match(animation, /cat\.individualHabit\?\.animation/);
   assert.match(game, /activity: String\(traits\.activity \|\| "balanced"\)/);
+  assert.match(game, /actionRhythmKey: String\(cat\.actionRhythm\?\.key \|\| ""\)/);
   assert.match(game, /playCatMicroAnimation\(container, cat = \{\}, behavior = \{\}, forcedKind = ""\)/);
   assert.match(game, /catWorldIdleAnimationPlan\(cat, behavior, cycle\)\.kind/);
   assert.match(game, /microAnimationCycle/);
@@ -43,13 +44,19 @@ test("the cat profile exposes the individual habit without weakening active-stat
   ]);
 
   assert.match(page, /cat\?\.individualHabit\?\.label/);
+  assert.match(page, /focusedCat\.actionRhythm\?\.label/);
+  assert.match(page, /cat\.actionRhythm\?\.label/);
   assert.match(page, /<dt>个人小习惯<\/dt>/);
+  assert.match(page, /<dt>行动节奏<\/dt>/);
   assert.match(page, /<dt>陪学专长<\/dt>/);
   assert.match(page, /class="cat-world-cat-individual-habit"/);
   assert.match(page, /class="cat-world-cat-learning-style"/);
   assert.match(page, /class="cat-world-learning-style"/);
   assert.match(styles, /\.cat-world-cat-individual-habit[,{]/);
+  assert.match(styles, /\.cat-world-cat-action-rhythm[,{]/);
+  assert.match(styles, /\.cat-world-context-rhythm\s*\{/);
   assert.match(styles, /\.cat-world-cat-learning-style \{/);
   assert.match(styles, /\.cat-world-cat-chip\.active \.cat-world-cat-individual-habit,/);
+  assert.match(styles, /\.cat-world-cat-chip\.active \.cat-world-cat-action-rhythm,/);
   assert.match(styles, /\.cat-world-cat-chip\.active :where\([^)]+\)[^{]*\{\s*color: #fff;/s);
 });

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  catActionRhythmAffinity,
+  catActionRhythmReason,
   catDailyMoodActionReason,
   catDailyMoodAffinity,
   catVisitPlanMessage,
@@ -97,6 +99,59 @@ test("daily moods change how the same cat ranks ordinary room choices", () => {
   assert.equal(topKind("lazy"), "favorite");
   assert.equal(topKind("quiet"), "learning");
   assert.equal(topKind("grumpy"), "favorite");
+});
+
+test("stable per-cat action rhythms change ordinary choices even with the same scores", () => {
+  const topKind = (rhythmKey, candidates) => rankCatVisitPlans(candidates, {
+    cat: { id: `cat-${rhythmKey}`, actionRhythm: { key: rhythmKey } },
+    cycle: 4,
+    behavior: {
+      attention: 50,
+      curiosity: 50,
+      socialNeed: 50,
+      activityBias: 50,
+      mood: 62,
+      energy: 72,
+    },
+  })[0].kind;
+  const pair = (first, second) => [
+    { kind: first, target: target(64, { label: `${first}目标`, partnerLabel: "伙伴" }) },
+    { kind: second, target: target(64, { label: `${second}目标`, partnerLabel: "伙伴" }) },
+  ];
+
+  assert.equal(topKind("observe-then-decide", pair("memory", "social")), "memory");
+  assert.equal(topKind("study-signal-first", pair("learning", "favorite")), "learning");
+  assert.equal(topKind("companion-seeker", pair("social", "learning")), "social");
+  assert.equal(topKind("familiar-corner-first", pair("favorite", "social")), "favorite");
+  assert.equal(topKind("new-route-scout", pair("goal", "favorite")), "goal");
+  assert.equal(topKind("play-before-rest", pair("favorite", "memory")), "favorite");
+  assert.equal(catActionRhythmAffinity("study-signal-first", "learning"), 15);
+  assert.match(catActionRhythmReason("companion-seeker", "social", { partnerLabel: "布偶猫" }), /先找布偶猫/);
+});
+
+test("action rhythm explains ordinary choices but never changes urgent care priority", () => {
+  const ordinary = rankCatVisitPlans([
+    { kind: "learning", target: target(66, { label: "学习灯牌" }) },
+  ], {
+    cat: { id: "cat-study-first", actionRhythm: { key: "study-signal-first" } },
+    cycle: 2,
+    behavior: { attention: 50, energy: 70, restThreshold: 34 },
+  })[0];
+  const urgent = chooseCatVisitPlan([
+    { kind: "favorite", target: target(100, { label: "熟悉窗台" }) },
+    { kind: "care", target: target(92, { label: "马上洗澡" }) },
+  ], {
+    cat: { id: "cat-comfort-first", actionRhythm: { key: "familiar-corner-first" } },
+    cycle: 2,
+    behavior: { energy: 70, restThreshold: 34 },
+  });
+
+  assert.equal(ordinary.rhythmBonus, 15);
+  assert.match(catVisitPlanMessage(ordinary), /学习信号.*学习灯牌/);
+  assert.equal(urgent.kind, "care");
+  assert.equal(urgent.rhythmBonus, 0);
+  assert.equal(urgent.rhythmReason, "");
+  assert.equal(catVisitPlanMessage(urgent), "现在最需要马上洗澡，先过去看看。");
 });
 
 test("mood preference stays explainable without replacing urgent care text", () => {

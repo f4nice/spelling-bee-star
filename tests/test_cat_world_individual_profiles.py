@@ -22,6 +22,7 @@ from app.main import (
     cat_world_learning_companion_profile_id,
     cat_world_learning_companion_message,
     cat_world_normalize_nickname,
+    cat_world_profile_action_rhythm,
     cat_world_profile_learning_style,
     create_cat_world_cat_profile,
     encode_cat_world_bonds,
@@ -33,7 +34,7 @@ from app.main import (
     parse_cat_world_agent_state,
     parse_cat_world_bonds,
 )
-from app.models import CatWorldDailyLog, CatWorldState
+from app.models import CatWorldCatProfile, CatWorldDailyLog, CatWorldState
 
 
 def utc_now() -> datetime:
@@ -41,6 +42,28 @@ def utc_now() -> datetime:
 
 
 class CatWorldIndividualProfileTest(unittest.TestCase):
+    def test_action_rhythm_is_stable_per_cat_instance_instead_of_breed(self):
+        first = CatWorldCatProfile(
+            profile_id="mimi-rhythm-alpha",
+            phone="13900000031",
+            breed_id="mimi",
+        )
+        second = CatWorldCatProfile(
+            profile_id="mimi-rhythm-beta",
+            phone="13900000031",
+            breed_id="mimi",
+        )
+
+        first_rhythm = cat_world_profile_action_rhythm(first)
+        second_rhythm = cat_world_profile_action_rhythm(second)
+        self.assertNotEqual(first_rhythm["key"], second_rhythm["key"])
+        self.assertEqual(first_rhythm, cat_world_profile_action_rhythm(first))
+        self.assertTrue(first_rhythm["description"])
+        self.assertTrue(first_rhythm["focusKinds"])
+
+        first.breed_id = "ragdoll"
+        self.assertEqual(first_rhythm, cat_world_profile_action_rhythm(first))
+
     def test_learning_companion_stays_assigned_across_room_and_cat_changes(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(engine)
@@ -323,6 +346,11 @@ class CatWorldIndividualProfileTest(unittest.TestCase):
                 first_cat["learningStyle"],
                 cat_world_profile_learning_style(first),
             )
+            self.assertEqual(
+                first_cat["actionRhythm"],
+                cat_world_profile_action_rhythm(first),
+            )
+            self.assertIn(first_cat["actionRhythm"]["thought"], first_cat["thoughts"])
             original_learning_style = first_cat["learningStyle"]
             first.breed_id = "ragdoll"
             self.assertEqual(

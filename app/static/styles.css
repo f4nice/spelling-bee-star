@@ -14636,6 +14636,7 @@ select {
 }
 
 .cat-world-cat-individual-habit,
+.cat-world-cat-action-rhythm,
 .cat-world-cat-individual-preference,
 .cat-world-cat-learning-style,
 .cat-world-cat-learning-memory {
@@ -14654,6 +14655,10 @@ select {
   background: #d9f6ff;
 }
 
+.cat-world-cat-action-rhythm {
+  background: #ffe8d6;
+}
+
 .cat-world-cat-learning-memory {
   background: #ffe6c7;
 }
@@ -14663,6 +14668,7 @@ select {
 }
 
 .cat-world-cat-individual-habit b,
+.cat-world-cat-action-rhythm b,
 .cat-world-cat-individual-preference b,
 .cat-world-cat-learning-style b,
 .cat-world-cat-learning-memory b {
@@ -14670,6 +14676,7 @@ select {
 }
 
 .cat-world-cat-individual-habit em,
+.cat-world-cat-action-rhythm em,
 .cat-world-cat-individual-preference em,
 .cat-world-cat-learning-style em,
 .cat-world-cat-learning-memory em {
@@ -14678,6 +14685,8 @@ select {
 
 .cat-world-cat-chip.active .cat-world-cat-individual-habit,
 .cat-world-cat-chip:not(:disabled):hover .cat-world-cat-individual-habit,
+.cat-world-cat-chip.active .cat-world-cat-action-rhythm,
+.cat-world-cat-chip:not(:disabled):hover .cat-world-cat-action-rhythm,
 .cat-world-cat-chip.active .cat-world-cat-individual-preference,
 .cat-world-cat-chip:not(:disabled):hover .cat-world-cat-individual-preference,
 .cat-world-cat-chip.active .cat-world-cat-learning-style,
@@ -17366,6 +17375,38 @@ select {
   font-size: 10px;
   font-weight: 800;
   line-height: 1.45;
+}
+
+.cat-world-context-rhythm {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 7px;
+  margin: 0;
+  border: 2px solid rgba(44, 47, 58, 0.28);
+  border-left: 5px solid #e58b52;
+  padding: 7px 8px;
+  color: #263047;
+  background: #fff0df;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.cat-world-context-rhythm > span {
+  color: #a24f2a;
+  font-weight: 900;
+}
+
+.cat-world-context-rhythm > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cat-world-context-rhythm > em {
+  grid-column: 1 / -1;
+  color: #526178;
+  font-style: normal;
+  font-weight: 800;
 }
 
 .cat-world-context-intent {

@@ -9,6 +9,15 @@ const DAILY_MOOD_AFFINITIES = Object.freeze({
   grumpy: Object.freeze({ favorite: 18, habit: 8, goal: 4, social: -11, learning: -5, memory: -4 }),
 });
 
+const ACTION_RHYTHM_AFFINITIES = Object.freeze({
+  "observe-then-decide": Object.freeze({ memory: 13, learning: 8, habit: 5, social: -3 }),
+  "study-signal-first": Object.freeze({ learning: 15, memory: 12, goal: 3 }),
+  "companion-seeker": Object.freeze({ social: 15, favorite: 4, learning: -2 }),
+  "familiar-corner-first": Object.freeze({ favorite: 14, rest: 8, memory: 3, social: -3 }),
+  "new-route-scout": Object.freeze({ goal: 14, habit: 12, favorite: -2 }),
+  "play-before-rest": Object.freeze({ favorite: 11, habit: 9, social: 4, memory: -3 }),
+});
+
 function clamp(value, min, max) {
   return Math.min(Math.max(Number(value) || 0, min), max);
 }
@@ -80,6 +89,36 @@ export function catDailyMoodActionReason(moodKey = "", kind = "", target = {}) {
   return "";
 }
 
+export function catActionRhythmAffinity(rhythmKey = "", kind = "") {
+  return Number(ACTION_RHYTHM_AFFINITIES[String(rhythmKey || "")]?.[String(kind || "")] || 0);
+}
+
+export function catActionRhythmReason(rhythmKey = "", kind = "", target = {}) {
+  const label = String(target.partnerLabel || target.label || target.targetLabel || "前面");
+  if (rhythmKey === "observe-then-decide" && kind === "memory") {
+    return "我习惯先翻一页旧记忆，再决定接下来做什么。";
+  }
+  if (rhythmKey === "observe-then-decide" && ["learning", "habit"].includes(kind)) {
+    return `我先观察了一会儿，现在想去${label}。`;
+  }
+  if (rhythmKey === "study-signal-first" && ["learning", "memory", "goal"].includes(kind)) {
+    return `我一看见学习信号，就想先到${label}陪你。`;
+  }
+  if (rhythmKey === "companion-seeker" && kind === "social") {
+    return `我习惯先找${label}待一会儿，再决定去哪里。`;
+  }
+  if (rhythmKey === "familiar-corner-first" && ["favorite", "rest", "memory"].includes(kind)) {
+    return `我会先回熟悉的${label}，在那里更容易安心。`;
+  }
+  if (rhythmKey === "new-route-scout" && ["goal", "habit"].includes(kind)) {
+    return `我总想先去${label}看看，今天也许会发现新路线。`;
+  }
+  if (rhythmKey === "play-before-rest" && ["favorite", "habit", "social"].includes(kind)) {
+    return `我通常先去${label}活动一下，再安静下来陪你。`;
+  }
+  return "";
+}
+
 export function rankCatVisitPlans(candidates = [], context = {}) {
   const catId = String(context.cat?.id || context.catId || "cat");
   const cycle = Math.max(Number(context.cycle || 0), 0);
@@ -97,7 +136,9 @@ export function rankCatVisitPlans(candidates = [], context = {}) {
       const jitter = (stableRatio(`${catId}:${cycle}:${candidateIdentity(candidate)}`) - 0.5) * 8;
       const moodKey = String(context.behavior?.dailyMoodKey || "");
       const moodBonus = urgent ? 0 : catDailyMoodAffinity(moodKey, kind);
-      const score = priority + kindAffinity(kind, target, context) + moodBonus - repeatPenalty + jitter;
+      const rhythmKey = String(context.cat?.actionRhythm?.key || context.behavior?.actionRhythmKey || "");
+      const rhythmBonus = urgent ? 0 : catActionRhythmAffinity(rhythmKey, kind);
+      const score = priority + kindAffinity(kind, target, context) + moodBonus + rhythmBonus - repeatPenalty + jitter;
       return {
         kind,
         target,
@@ -107,6 +148,11 @@ export function rankCatVisitPlans(candidates = [], context = {}) {
         moodBonus,
         moodReason: !urgent && moodBonus >= 6
           ? catDailyMoodActionReason(moodKey, kind, target)
+          : "",
+        rhythmKey,
+        rhythmBonus,
+        rhythmReason: !urgent && rhythmBonus >= 6
+          ? catActionRhythmReason(rhythmKey, kind, target)
           : "",
       };
     })
@@ -151,7 +197,10 @@ export function chooseCatVisitPlan(candidates = [], context = {}) {
 export function catVisitPlanMessage(plan = {}) {
   const target = plan.target || {};
   const label = String(target.label || target.targetLabel || "前面");
-  if (plan.moodReason) return String(plan.moodReason);
+  if (plan.moodReason && (!plan.rhythmReason || plan.moodBonus >= plan.rhythmBonus)) {
+    return String(plan.moodReason);
+  }
+  if (plan.rhythmReason) return String(plan.rhythmReason);
   if (plan.kind === "food") return `闻到${label}了，先去吃一点。`;
   if (plan.kind === "rest") return `体力有点低，去${label}趴一会儿。`;
   if (plan.kind === "care") return `现在最需要${label}，先过去看看。`;
