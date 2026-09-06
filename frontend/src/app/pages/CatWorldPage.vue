@@ -1647,7 +1647,7 @@ async function moveOwnedItem(item, locationId) {
     const effect = nextPayload.itemLocation || {};
     notice.value = locationId === "storage"
       ? `${effect.label || item.label} 已收进收纳箱。`
-      : `${effect.label || item.label} 已放到${effect.locationLabel || currentScene.value.label}，进入编辑模式后可以继续调整位置。`;
+      : `${effect.label || item.label} 已放到${effect.locationLabel || currentScene.value.label}，${effect.restoredPosition ? "回到了上次摆放的位置。" : "进入编辑模式后可以继续调整位置。"}`;
   } catch (error) {
     notice.value = error.message || "物品位置保存失败，请稍后再试。";
   } finally {

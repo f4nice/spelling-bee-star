@@ -127,3 +127,10 @@ test("scene map makes every cat's current room visible", async () => {
     /button\.active \.cat-world-scene-residents > b,[\s\S]*?color:\s*#fff;/,
   );
 });
+
+test("moving furniture back to a room explains that its remembered position was restored", async () => {
+  const page = await readFile(pageUrl, "utf8");
+
+  assert.match(page, /effect\.restoredPosition/);
+  assert.match(page, /回到了上次摆放的位置/);
+});

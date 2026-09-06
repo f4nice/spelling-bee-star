@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-011"
-DEFAULT_PAGE_VERSION = "v20260907.11"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-012"
+DEFAULT_PAGE_VERSION = "v20260907.12"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -5800,6 +5800,7 @@ async def vue_cat_world_room_layout_api(request: Request, db: Session = Depends(
     active_scene, active_user_scene, active_scene_config = cat_world_active_scene_context(db, state)
     item_locations = parse_cat_world_item_locations(state.item_locations, inventory)
     scene_inventory = cat_world_inventory_for_scene(inventory, item_locations, active_scene.scene_key)
+    stored_layout = parse_cat_world_scene_json(active_user_scene.layout, {})
     current_layout = parse_cat_world_room_layout(
         active_user_scene.layout,
         scene_inventory,
@@ -5812,7 +5813,7 @@ async def vue_cat_world_room_layout_api(request: Request, db: Session = Depends(
         if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") in {"decor", "toy"}
         and cat_world_layout_item_allowed(item_id, active_scene_config.get("itemRules"))
     }
-    saved_layout = {**current_layout}
+    saved_layout = {**stored_layout, **current_layout}
     for item_id, position in incoming.items():
         item_key = str(item_id)
         if item_key not in owned_layout_item_ids:
@@ -5908,26 +5909,23 @@ async def vue_cat_world_item_location_api(request: Request, db: Session = Depend
     previous_location = locations.get(item_id, CAT_WORLD_DEFAULT_SCENE_KEY)
     if previous_location == target_location:
         return {"ok": True, "alreadyPlaced": True, **serialize_cat_world_payload(db, state)}
-    user_scenes = db.scalars(
-        select(CatWorldUserScene).where(CatWorldUserScene.phone == state.phone)
-    ).all()
-    user_scene_by_key = {row.scene_key: row for row in user_scenes}
+    restored_position = False
+    target_position: dict[str, float] | None = None
     if target_scene and target_user_scene:
-        user_scene_by_key[target_scene.scene_key] = target_user_scene
-    for scene_key, user_scene in user_scene_by_key.items():
-        raw_layout = parse_cat_world_scene_json(user_scene.layout, {})
-        raw_layout.pop(item_id, None)
-        if target_scene and scene_key == target_scene.scene_key:
+        raw_layout = parse_cat_world_scene_json(target_user_scene.layout, {})
+        target_position = normalize_cat_world_room_position(raw_layout.get(item_id))
+        restored_position = bool(target_position)
+        if not target_position:
             default_layout = target_config.get("defaultLayout") if isinstance(target_config.get("defaultLayout"), dict) else {}
             default_position = default_layout.get(
                 item_id,
                 CAT_WORLD_ROOM_DEFAULT_LAYOUT.get(item_id, {"x": 8, "y": 58}),
             )
-            normalized = normalize_cat_world_room_position(default_position)
-            if normalized:
-                raw_layout[item_id] = normalized
-        save_cat_world_active_scene_layout(state, user_scene, raw_layout)
-        db.add(user_scene)
+            target_position = normalize_cat_world_room_position(default_position)
+            if target_position:
+                raw_layout[item_id] = target_position
+        save_cat_world_active_scene_layout(state, target_user_scene, raw_layout)
+        db.add(target_user_scene)
     locations[item_id] = target_location
     state.item_locations = encode_cat_world_item_locations(locations)
     db.add(state)
@@ -5946,6 +5944,8 @@ async def vue_cat_world_item_location_api(request: Request, db: Session = Depend
             "previousLocationId": previous_location,
             "locationId": target_location,
             "locationLabel": destination_label,
+            "position": target_position,
+            "restoredPosition": restored_position,
         },
         **serialize_cat_world_payload(db, state),
     }
