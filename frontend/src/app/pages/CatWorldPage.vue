@@ -301,6 +301,13 @@ const scenes = computed(() => payload.value.scenes || []);
 const currentScene = computed(
   () => state.value.currentScene || scenes.value.find((scene) => scene.id === state.value.currentSceneId) || {},
 );
+function sceneStatusLabel(scene) {
+  const activity = [
+    scene?.hasActiveFood ? "进食中" : "",
+    scene?.hasActiveCare ? "猫草中" : "",
+  ].filter(Boolean);
+  return `${scene?.catCount || 0}只 · ${scene?.itemCount || 0}件${activity.length ? ` · ${activity.join(" · ")}` : ""}`;
+}
 const inventory = computed(() => state.value.inventory || {});
 const usableInventory = computed(() => state.value.usableInventory || inventory.value);
 const sceneInventory = computed(() => state.value.sceneInventory || inventory.value);
@@ -437,7 +444,12 @@ const activeFoodRemainingSeconds = computed(() => {
 });
 const activeFood = computed(() => ({
   ...rawActiveFood.value,
-  active: Boolean(rawActiveFood.value?.active && activeFoodRemainingSeconds.value > 0 && Number(rawActiveFood.value?.remainingEnergy ?? 1) > 0),
+  active: Boolean(
+    rawActiveFood.value?.active
+    && rawActiveFood.value?.inCurrentScene !== false
+    && activeFoodRemainingSeconds.value > 0
+    && Number(rawActiveFood.value?.remainingEnergy ?? 1) > 0
+  ),
   remainingSeconds: activeFoodRemainingSeconds.value,
   moodEffective: Number(rawActiveFood.value?.moodEffective || 0),
   catEnergyEffective: Number(rawActiveFood.value?.catEnergyEffective || 0),
@@ -456,7 +468,11 @@ const activeCareRemainingSeconds = computed(() => {
 });
 const activeCare = computed(() => ({
   ...rawActiveCare.value,
-  active: Boolean(rawActiveCare.value?.active && activeCareRemainingSeconds.value > 0),
+  active: Boolean(
+    rawActiveCare.value?.active
+    && rawActiveCare.value?.inCurrentScene !== false
+    && activeCareRemainingSeconds.value > 0
+  ),
   remainingSeconds: activeCareRemainingSeconds.value,
 }));
 const catEnergyScore = computed(() => Number(mood.value.catEnergy ?? 0));
@@ -1743,7 +1759,7 @@ function purchaseHint(item) {
             : item.useType === "cat-bath"
               ? `给当前猫洗澡、解除炸毛并增加心情 +${item.mood || 0}`
               : item.useType === "room-care"
-                ? `所有猫心情 +${item.mood || 0}`
+                ? `当前房间所有猫心情 +${item.mood || 0}`
                 : `当前猫心情 +${item.mood || 0}`;
     return `扣 ${item.cost} 能量 · ${effect} · 剩余 ${remaining}`;
   }
@@ -2523,7 +2539,11 @@ async function selectCat(catOrId, options = {}) {
             type="button"
             role="tab"
             :aria-selected="scene.id === currentScene.id"
-            :class="{ active: scene.id === currentScene.id, locked: scene.enabled && !scene.unlocked }"
+            :class="{
+              active: scene.id === currentScene.id,
+              locked: scene.enabled && !scene.unlocked,
+              'has-live-activity': scene.hasActiveFood || scene.hasActiveCare,
+            }"
             :disabled="!scene.enabled || Boolean(busySceneId)"
             :title="scene.available ? `进入${scene.label}` : scene.enabled ? `购买${scene.label}` : `${scene.label}尚未开放`"
             @click="handleSceneAction(scene)"
@@ -2531,7 +2551,7 @@ async function selectCat(catOrId, options = {}) {
             <span>{{ scene.label }}</span>
             <small v-if="scene.enabled && !scene.unlocked">{{ Number(scene.purchaseCost || 0).toLocaleString() }} 能量</small>
             <small v-else-if="!scene.enabled">规划中</small>
-            <small v-else>{{ scene.catCount || 0 }}只 · {{ scene.itemCount || 0 }}件</small>
+            <small v-else>{{ sceneStatusLabel(scene) }}</small>
           </button>
         </div>
       </nav>
@@ -3064,13 +3084,14 @@ async function selectCat(catOrId, options = {}) {
             <span>{{ activeCatDiary.bathScheduleLabel }}</span>
           </div>
           <button
-            v-if="activeCatDiary.bathKitCount"
+            v-if="activeCatDiary.bathKitCount && activeCatDiary.currentSceneId === currentScene.id"
             type="button"
             :disabled="busyItemId === 'cat-bath-kit'"
             @click="useConsumable(shopById['cat-bath-kit'])"
           >
             {{ busyItemId === 'cat-bath-kit' ? "洗澡中..." : `使用泡泡浴套装 (${activeCatDiary.bathKitCount})` }}
           </button>
+          <small v-else-if="activeCatDiary.bathKitCount">先把它带到{{ currentScene.label }}，再使用泡泡浴套装。</small>
           <small v-else>背包里没有泡泡浴套装，请到消耗品商店购买。</small>
         </div>
         <dl class="cat-world-agent-facts">

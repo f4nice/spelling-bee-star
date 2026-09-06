@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-017"
-DEFAULT_PAGE_VERSION = "v20260906.17"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-018"
+DEFAULT_PAGE_VERSION = "v20260906.18"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -829,7 +829,7 @@ CAT_WORLD_SHOP = [
         "englishName": "Room Deodorizer",
         "cost": 90,
         "mood": 5,
-        "description": "一次为房间除味，让所有已拥有猫咪的心情都增加一点。",
+        "description": "一次为当前房间除味，让这个房间里的所有猫咪心情都增加一点。",
     },
     {
         "id": CAT_WORLD_CAT_GRASS_ITEM_ID,
@@ -5096,6 +5096,15 @@ async def vue_cat_world_play_api(request: Request, db: Session = Depends(get_db)
     if inventory.get(item_id, 0) <= 0:
         raise HTTPException(status_code=400, detail="还没有这个道具，先用能量值买一个。")
     if item["category"] == "food":
+        active_food = cat_world_active_food(db, state)
+        if int(active_food.get("remainingSeconds") or 0) > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{active_food.get('sceneLabel') or '另一个房间'}里的"
+                    f"{active_food.get('targetCatLabel') or '猫咪'}还在进食，吃完后再放新的食物。"
+                ),
+            )
         inventory[item_id] = max(inventory.get(item_id, 0) - 1, 0)
         if inventory[item_id] <= 0:
             inventory.pop(item_id, None)
@@ -5134,6 +5143,15 @@ async def vue_cat_world_food_nibble_api(request: Request, db: Session = Depends(
     profile = cat_world_profile_for_reference(db, state, cat_id)
     if not profile:
         raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
+    active_scene_key = str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+    if str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) != active_scene_key:
+        raise HTTPException(status_code=400, detail="这只猫不在当前房间，不能隔着房间喂它。")
+    active_food = cat_world_active_food(db, state)
+    if (
+        int(active_food.get("remainingSeconds") or 0) > 0
+        and str(active_food.get("sceneId") or active_scene_key) != active_scene_key
+    ):
+        raise HTTPException(status_code=400, detail="正在吃的食物不在当前房间，不能隔着房间喂食。")
     cat_id = profile.profile_id
     cat = cat_world_cat_profile_payload(profile)
     breed_id = profile.breed_id
@@ -5210,26 +5228,61 @@ async def vue_cat_world_use_consumable_api(request: Request, db: Session = Depen
     active_litter_row = cat_world_scene_litter_row(state, active_scene_key)
     if use_type == "litter-prevent" and int(active_litter_row.get("readyCount") or 0) > 0:
         raise HTTPException(status_code=400, detail="活动室里已经放好一份豆腐猫砂，等猫咪使用后再放新的。")
-    inventory[item_id] = max(inventory.get(item_id, 0) - 1, 0)
-    if inventory[item_id] <= 0:
-        inventory.pop(item_id, None)
-    state.inventory = encode_cat_world_inventory(inventory)
-    usable_inventory = cat_world_usable_inventory(inventory, parse_cat_world_damaged_items(state.damaged_items))
-    room_layout = cat_world_active_scene_layout(db, state, usable_inventory)
+    if use_type == "room-place":
+        active_care = cat_world_active_care_payload(db, state)
+        if int(active_care.get("remainingSeconds") or 0) > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{active_care.get('sceneLabel') or '另一个房间'}里的"
+                    f"{active_care.get('targetCatLabel') or '猫咪'}还在互动，结束后再放新的猫草。"
+                ),
+            )
     owned_cats = parse_cat_world_cats(state.cats)
     if not owned_cats:
         raise HTTPException(status_code=400, detail="活动室里没有猫咪，请先去商店重新领养。")
     now = datetime.utcnow()
     active_profiles = cat_world_active_cat_profiles(db, state.phone)
-    target_profile = cat_world_profile_for_reference(
-        db,
-        state,
-        str(payload.get("catId") or state.selected_cat_profile or state.selected_cat),
-        active_profiles,
-    )
+    room_profiles = [
+        profile
+        for profile in active_profiles
+        if str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) == active_scene_key
+    ]
+    target_reference = str(payload.get("catId") or "").strip()
+    if use_type == "room-care":
+        target_profile = cat_world_profile_for_reference(
+            db,
+            state,
+            state.selected_cat_profile or state.selected_cat,
+            room_profiles,
+        ) or (room_profiles[0] if room_profiles else None)
+    elif use_type == "litter-prevent":
+        target_profile = room_profiles[0] if room_profiles else (active_profiles[0] if active_profiles else None)
+    else:
+        target_profile = cat_world_profile_for_reference(
+            db,
+            state,
+            target_reference or state.selected_cat_profile or state.selected_cat,
+            active_profiles,
+        )
+    if use_type != "litter-prevent" and not room_profiles:
+        raise HTTPException(status_code=400, detail="当前房间没有猫咪，先从猫咪档案带一只过来。")
     if not target_profile:
         raise HTTPException(status_code=400, detail="没有找到要照顾的猫咪个体。")
+    if (
+        use_type in {"cat-care", "cat-bath", "room-place"}
+        and str(target_profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) != active_scene_key
+    ):
+        raise HTTPException(status_code=400, detail="这只猫不在当前房间，先把它带过来再使用。")
     target_cat_id = target_profile.profile_id
+    inventory[item_id] = max(inventory.get(item_id, 0) - 1, 0)
+    if inventory[item_id] <= 0:
+        inventory.pop(item_id, None)
+    state.inventory = encode_cat_world_inventory(inventory)
+    usable_inventory = cat_world_usable_inventory(inventory, parse_cat_world_damaged_items(state.damaged_items))
+    scene_environment = cat_world_scene_environment(db, state, usable_inventory, active_scene_key)
+    usable_scene_inventory = scene_environment["inventory"]
+    room_layout = scene_environment["layout"]
     if use_type == "litter-prevent":
         litter_scenes = cat_world_litter_scenes(state)
         active_litter_row["readyCount"] = 1
@@ -5254,7 +5307,7 @@ async def vue_cat_world_use_consumable_api(request: Request, db: Session = Depen
             **serialize_cat_world_payload(db, state),
         }
     target_ids = (
-        [profile.profile_id for profile in active_profiles]
+        [profile.profile_id for profile in room_profiles]
         if use_type == "room-care"
         else [target_cat_id]
     )
@@ -5265,12 +5318,12 @@ async def vue_cat_world_use_consumable_api(request: Request, db: Session = Depen
             continue
         breed_id = str(cat.get("breedId") or cat.get("id"))
         traits = cat_world_cat_traits(cat)
-        favorite_ids = cat_world_active_favorite_decor_ids(breed_id, usable_inventory, room_layout)
+        favorite_ids = cat_world_active_favorite_decor_ids(breed_id, usable_scene_inventory, room_layout)
         log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now, cat)
         apply_cat_world_hourly_decay(
             log,
             traits,
-            usable_inventory,
+            usable_scene_inventory,
             len(favorite_ids),
             now,
             cat_world_cat_litter_count(state, cat),
@@ -5914,11 +5967,21 @@ async def vue_cat_world_select_cat_api(request: Request, db: Session = Depends(g
         profile = cat_world_profile_for_reference(db, state, requested_cat_id)
         if not profile:
             raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
-    state.selected_cat_profile = profile.profile_id
-    state.selected_cat = profile.breed_id
     moved_scene = False
     previous_scene_key = str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
     if move_to_current_scene and previous_scene_key != state.current_scene_key:
+        active_food = cat_world_active_food(db, state)
+        active_care = cat_world_active_care_payload(db, state)
+        if (
+            int(active_food.get("remainingSeconds") or 0) > 0
+            and str(active_food.get("targetCatId") or "") == profile.profile_id
+        ):
+            raise HTTPException(status_code=400, detail="这只猫正在进食，吃完后再带它换房。")
+        if (
+            int(active_care.get("remainingSeconds") or 0) > 0
+            and str(active_care.get("targetCatId") or "") == profile.profile_id
+        ):
+            raise HTTPException(status_code=400, detail="这只猫正在和放置道具互动，结束后再带它换房。")
         profile.current_scene_key = state.current_scene_key
         db.add(profile)
         cat_world_record_manual_scene_move(
@@ -5929,6 +5992,8 @@ async def vue_cat_world_select_cat_api(request: Request, db: Session = Depends(g
             state.current_scene_key,
         )
         moved_scene = True
+    state.selected_cat_profile = profile.profile_id
+    state.selected_cat = profile.breed_id
     db.add(state)
     db.commit()
     db.refresh(state)
@@ -16273,6 +16338,18 @@ def cat_world_scene_catalog_payload(db: Session, state: CatWorldState) -> list[d
     for profile in profiles:
         location = str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
         cat_counts[location] = cat_counts.get(location, 0) + 1
+    active_food = cat_world_active_food(db, state)
+    active_care = cat_world_active_care_payload(db, state)
+    active_food_scene_id = (
+        str(active_food.get("sceneId") or "")
+        if int(active_food.get("remainingSeconds") or 0) > 0
+        else ""
+    )
+    active_care_scene_id = (
+        str(active_care.get("sceneId") or "")
+        if int(active_care.get("remainingSeconds") or 0) > 0
+        else ""
+    )
     user_rows = {
         row.scene_key: row
         for row in db.scalars(select(CatWorldUserScene).where(CatWorldUserScene.phone == state.phone)).all()
@@ -16289,6 +16366,8 @@ def cat_world_scene_catalog_payload(db: Session, state: CatWorldState) -> list[d
                 "available": bool(row.is_enabled and unlocked),
                 "itemCount": item_counts.get(row.scene_key, 0),
                 "catCount": cat_counts.get(row.scene_key, 0),
+                "hasActiveFood": row.scene_key == active_food_scene_id,
+                "hasActiveCare": row.scene_key == active_care_scene_id,
             }
         )
     return payload
@@ -19908,15 +19987,26 @@ def cat_world_active_care_payload(
         state.active_care_at = None
         return {"active": False, "changed": True, "itemId": "", "remainingSeconds": 0}
     target_cat = cat_world_cat_for_reference(db, state, str(state.active_care_cat_id or ""))
+    target_scene_id = str((target_cat or {}).get("currentSceneId") or CAT_WORLD_DEFAULT_SCENE_KEY)
+    target_scene_label = str(
+        (target_cat or {}).get("currentSceneLabel")
+        or CAT_WORLD_SCENE_SEED_BY_KEY.get(target_scene_id, {}).get("label")
+        or target_scene_id
+    )
+    in_current_scene = target_scene_id == str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
     expires_at = state.active_care_at + timedelta(seconds=duration_seconds)
     return {
-        "active": True,
+        "active": in_current_scene,
+        "activeElsewhere": not in_current_scene,
         "changed": False,
         "itemId": item_id,
         "label": item.get("label") or item_id,
         "englishName": item.get("englishName") or "",
         "targetCatId": (target_cat.get("profileId") or target_cat.get("id")) if target_cat else "",
         "targetCatLabel": (target_cat.get("displayLabel") or target_cat.get("label")) if target_cat else "",
+        "sceneId": target_scene_id,
+        "sceneLabel": target_scene_label,
+        "inCurrentScene": in_current_scene,
         "remainingSeconds": remaining_seconds,
         "durationSeconds": duration_seconds,
         "startedAt": state.active_care_at.replace(microsecond=0).isoformat() + "Z",
@@ -19986,13 +20076,17 @@ def cat_world_apply_active_food_progress(
         changed = True
     cat = cat or cat_world_cat_payload(CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     breed_id = str(cat.get("breedId") or cat.get("id"))
+    target_scene_id = str(cat.get("currentSceneId") or CAT_WORLD_DEFAULT_SCENE_KEY)
+    target_environment = cat_world_scene_environment(db, state, inventory, target_scene_id)
+    target_inventory = target_environment["inventory"]
+    target_room_layout = target_environment["layout"]
     traits = cat_world_cat_traits(cat)
-    favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, inventory, room_layout)
+    favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, target_inventory, target_room_layout)
     log = get_or_create_cat_world_daily_log(db, state.phone, target_cat_id, date.today(), now, cat)
     changed = apply_cat_world_hourly_decay(
         log,
         traits,
-        inventory,
+        target_inventory,
         len(favorite_active_ids),
         now,
         cat_world_cat_litter_count(state, cat),
@@ -20087,6 +20181,7 @@ def cat_world_apply_active_food_progress(
         "remainingSeconds": remaining_seconds,
         "finished": bool(complete),
         "favoriteMatch": favorite_match,
+        "sceneId": target_environment["sceneId"],
     }
 
 
@@ -20126,13 +20221,17 @@ def cat_world_apply_active_food_nibble(
         return {"recorded": False, **time_progress}
 
     cat = target_cat
+    target_scene_id = str(cat.get("currentSceneId") or CAT_WORLD_DEFAULT_SCENE_KEY)
+    target_environment = cat_world_scene_environment(db, state, inventory, target_scene_id)
+    target_inventory = target_environment["inventory"]
+    target_room_layout = target_environment["layout"]
     traits = cat_world_cat_traits(cat)
-    favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, inventory, room_layout)
+    favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, target_inventory, target_room_layout)
     log = get_or_create_cat_world_daily_log(db, state.phone, target_cat_id, date.today(), now, cat)
     apply_cat_world_hourly_decay(
         log,
         traits,
-        inventory,
+        target_inventory,
         len(favorite_active_ids),
         now,
         cat_world_cat_litter_count(state, cat),
@@ -20621,6 +20720,13 @@ def cat_world_active_food(db: Session, state: CatWorldState) -> dict[str, Any]:
     traits = cat_world_cat_traits(target_cat or CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
     target_cat_id = str(target_cat.get("profileId") or target_cat.get("id")) if target_cat else ""
     target_breed_id = str(target_cat.get("breedId") or target_cat.get("id")) if target_cat else ""
+    target_scene_id = str((target_cat or {}).get("currentSceneId") or CAT_WORLD_DEFAULT_SCENE_KEY)
+    target_scene_label = str(
+        (target_cat or {}).get("currentSceneLabel")
+        or CAT_WORLD_SCENE_SEED_BY_KEY.get(target_scene_id, {}).get("label")
+        or target_scene_id
+    )
+    in_current_scene = target_scene_id == str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
     favorite_multiplier = cat_world_food_favorite_multiplier(item, target_breed_id)
     total_energy = round(int(item.get("catEnergy") or 0) * float(traits["foodEnergyGain"]) * favorite_multiplier)
     total_mood = round(int(item.get("mood") or 0) * float(traits["foodEnergyGain"]) * favorite_multiplier)
@@ -20634,7 +20740,11 @@ def cat_world_active_food(db: Session, state: CatWorldState) -> dict[str, Any]:
         "label": item["label"],
         "englishName": item.get("englishName") or "",
         "targetCatId": target_cat["id"] if target_cat else "",
-        "targetCatLabel": target_cat["label"] if target_cat else "",
+        "targetCatLabel": (target_cat.get("displayLabel") or target_cat.get("label")) if target_cat else "",
+        "sceneId": target_scene_id,
+        "sceneLabel": target_scene_label,
+        "inCurrentScene": in_current_scene,
+        "activeElsewhere": not in_current_scene,
         "mood": total_mood,
         "catEnergy": total_energy,
         "remainingEnergy": remaining_energy,
@@ -20693,6 +20803,8 @@ def cat_world_mood(
     selected_breed_id = str(selected_cat.get("breedId") or selected_cat.get("id"))
     traits = cat_world_cat_traits(selected_cat)
     active_food = cat_world_active_food(db, state)
+    if active_food.get("active") and not active_food.get("inCurrentScene", True):
+        active_food = {**active_food, "active": False, "activeElsewhere": True}
     daily_logs = daily_logs or {}
     if active_food.get("active"):
         target_cat_id = str(active_food.get("targetCatId") or state.active_food_cat_id or "")

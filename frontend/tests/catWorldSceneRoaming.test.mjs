@@ -32,3 +32,17 @@ test("scene map controls the whole room workspace and scrolls on narrow screens"
     /\.cat-world-scene-dock \.cat-world-scene-tabs button:not\(:disabled\):hover,[\s\S]*?color: #fff;/,
   );
 });
+
+test("timed food and care stay visible only in their own scene", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
+
+  assert.match(page, /rawActiveFood\.value\?\.inCurrentScene !== false/);
+  assert.match(page, /rawActiveCare\.value\?\.inCurrentScene !== false/);
+  assert.match(page, /scene\?\.hasActiveFood \? "进食中"/);
+  assert.match(page, /scene\?\.hasActiveCare \? "猫草中"/);
+  assert.match(page, /'has-live-activity': scene\.hasActiveFood \|\| scene\.hasActiveCare/);
+  assert.match(styles, /button\.has-live-activity \{[\s\S]*?border-color: #9a6317;/);
+});

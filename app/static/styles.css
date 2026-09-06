@@ -16020,6 +16020,16 @@ select {
   font-size: 11px;
 }
 
+.cat-world-scene-dock .cat-world-scene-tabs button.has-live-activity {
+  border-color: #9a6317;
+  box-shadow: 3px 3px 0 #2c2f3a, inset 0 0 0 2px #ffd75a;
+}
+
+.cat-world-scene-dock .cat-world-scene-tabs button.has-live-activity small {
+  color: #704719;
+  background: #fff1a8;
+}
+
 .cat-world-scene-dock .cat-world-scene-tabs button:not(:disabled):hover,
 .cat-world-scene-dock .cat-world-scene-tabs button:not(:disabled):focus-visible {
   color: #fff;
