@@ -16263,6 +16263,102 @@ select {
   line-height: 1.45;
 }
 
+.cat-world-context-cat-live {
+  overflow: hidden;
+  border: 3px solid #2c2f3a;
+  border-radius: 4px;
+  color: #d6fff0;
+  background:
+    linear-gradient(90deg, rgba(127, 255, 210, 0.1) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(127, 255, 210, 0.1) 1px, transparent 1px),
+    #182431;
+  background-size: 12px 12px, 12px 12px, auto;
+  box-shadow: 3px 3px 0 #2c2f3a;
+  font-family: Consolas, "Courier New", monospace;
+}
+
+.cat-world-context-cat-live-toggle {
+  appearance: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  padding: 7px 9px;
+  color: #d6fff0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cat-world-context-cat-live-toggle > span {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.cat-world-context-cat-live-toggle small,
+.cat-world-context-cat-live-toggle strong,
+.cat-world-context-cat-live-toggle em {
+  color: inherit;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.cat-world-context-cat-live-toggle small {
+  color: #65ffc8;
+  font-size: 9px;
+}
+
+.cat-world-context-cat-live-toggle strong {
+  color: #fff3a4;
+  font-size: 12px;
+}
+
+.cat-world-context-cat-live-toggle em {
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.cat-world-context-cat-live-toggle svg {
+  transition: transform 160ms ease;
+}
+
+.cat-world-context-cat-live.expanded .cat-world-context-cat-live-toggle svg {
+  transform: rotate(180deg);
+}
+
+.cat-world-context-cat-live-toggle:hover,
+.cat-world-context-cat-live-toggle:focus-visible {
+  color: #fff;
+  background: #1d7f5b;
+}
+
+.cat-world-context-cat-live-toggle:hover :where(small, strong, em),
+.cat-world-context-cat-live-toggle:focus-visible :where(small, strong, em) {
+  color: #fff;
+}
+
+.cat-world-context-cat-live-details {
+  display: grid;
+  gap: 7px;
+  max-height: 210px;
+  overflow-y: auto;
+  border-top: 2px solid rgba(157, 232, 255, 0.28);
+  padding: 8px 9px 10px;
+}
+
+.cat-world-context-cat-live-details > small {
+  color: #9de8ff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
 .cat-world-context-view.cat .cat-world-profile-dock {
   flex: 1 1 auto;
   min-height: 0;

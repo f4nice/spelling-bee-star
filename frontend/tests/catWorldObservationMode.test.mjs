@@ -46,11 +46,20 @@ test("daily learning route stays outside the locked play area", async () => {
   assert.match(game, /container\.setData\("walkTween", walkTween\)/);
 });
 
-test("CAT-OS details are collapsed until requested", async () => {
+test("CAT-OS lives in the room assistant and stays collapsed until requested", async () => {
   const page = await readFile(pageUrl, "utf8");
+  const roomPanelIndex = page.indexOf('class="cat-world-room-panel panel"');
+  const roomStageIndex = page.indexOf("'cat-world-room'", roomPanelIndex);
+  const roomAssistantIndex = page.indexOf("'cat-world-owned-panel'");
+  const catOsIndex = page.indexOf("'cat-world-context-cat-live'", roomAssistantIndex);
 
   assert.match(page, /const catOsExpanded = ref\(false\);/);
-  assert.match(page, /v-if="catOsExpanded" class="cat-world-ai-panel-details"/);
+  assert.doesNotMatch(page, /class="cat-world-ai-panel"/);
+  assert.ok(roomPanelIndex >= 0);
+  assert.ok(roomStageIndex > roomPanelIndex);
+  assert.ok(roomAssistantIndex > roomStageIndex);
+  assert.ok(catOsIndex > roomAssistantIndex);
+  assert.match(page, /v-if="catOsExpanded"[\s\S]*?class="cat-world-context-cat-live-details"/);
   assert.match(page, /:aria-expanded="catOsExpanded"/);
 });
 

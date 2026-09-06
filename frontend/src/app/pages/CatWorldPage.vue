@@ -2624,37 +2624,6 @@ async function selectCat(catOrId, options = {}) {
           </div>
         </div>
 
-        <div class="cat-world-ai-panel" :class="{ expanded: catOsExpanded }" aria-live="polite">
-          <header class="cat-world-ai-panel-head">
-            <div>
-              <span>CAT-OS</span>
-              <strong>{{ focusedCat.displayLabel || focusedCat.label || "暂无猫咪" }} · {{ focusedCat.personality || "等待重新领养" }}</strong>
-            </div>
-            <button
-              type="button"
-              :aria-expanded="catOsExpanded"
-              :aria-label="catOsExpanded ? '收起猫咪详细状态' : '展开猫咪详细状态'"
-              @click="catOsExpanded = !catOsExpanded"
-            >
-              <ChevronDown :size="18" :stroke-width="2.8" aria-hidden="true" />
-            </button>
-          </header>
-          <p>{{ focusedCatThought }}</p>
-          <div v-if="catOsExpanded" class="cat-world-ai-panel-details">
-            <div v-if="focusedAgentProfileTags.length" class="cat-world-agent-profile-tags">
-              <span v-for="tag in focusedAgentProfileTags" :key="tag">{{ tag }}</span>
-            </div>
-            <small>{{ focusedCatDailyNote }}</small>
-            <ul v-if="focusedAgentEvents.length" class="cat-world-agent-events">
-              <li v-for="event in focusedAgentEvents" :key="`${event.time}-${event.kind}-${event.message}`">
-                <b>{{ event.time }}</b>
-                <span>{{ event.label }}</span>
-                <em>{{ event.message }}</em>
-              </li>
-            </ul>
-          </div>
-        </div>
-
         <div
           :class="[
             'cat-world-room',
@@ -2873,6 +2842,40 @@ async function selectCat(catOrId, options = {}) {
               </div>
             </div>
             <p class="cat-world-context-thought">{{ focusedCatThought }}</p>
+
+            <section :class="['cat-world-context-cat-live', { expanded: catOsExpanded }]" aria-live="polite">
+              <button
+                class="cat-world-context-cat-live-toggle"
+                type="button"
+                :aria-expanded="catOsExpanded"
+                aria-controls="cat-world-context-cat-live-details"
+                @click="catOsExpanded = !catOsExpanded"
+              >
+                <span>
+                  <small>CAT-OS</small>
+                  <strong>今日动态</strong>
+                </span>
+                <em>{{ focusedAgentEvents.length ? `${focusedAgentEvents.length} 条记录` : "状态稳定" }}</em>
+                <ChevronDown :size="18" :stroke-width="2.8" aria-hidden="true" />
+              </button>
+              <div
+                v-if="catOsExpanded"
+                id="cat-world-context-cat-live-details"
+                class="cat-world-context-cat-live-details"
+              >
+                <div v-if="focusedAgentProfileTags.length" class="cat-world-agent-profile-tags">
+                  <span v-for="tag in focusedAgentProfileTags" :key="tag">{{ tag }}</span>
+                </div>
+                <small>{{ focusedCatDailyNote }}</small>
+                <ul v-if="focusedAgentEvents.length" class="cat-world-agent-events">
+                  <li v-for="event in focusedAgentEvents" :key="`${event.time}-${event.kind}-${event.message}`">
+                    <b>{{ event.time }}</b>
+                    <span>{{ event.label }}</span>
+                    <em>{{ event.message }}</em>
+                  </li>
+                </ul>
+              </div>
+            </section>
 
             <section class="cat-world-profile-dock" aria-labelledby="cat-world-profile-dock-title">
               <div class="cat-world-profile-dock-head">
