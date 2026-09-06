@@ -1,3 +1,5 @@
+import { normalizeCatWorldLearningMemory } from "./catWorldLearningMemory.js";
+
 const MINIMUM_SPELLING_TARGET = 20;
 const STARTER_SPELLING_TARGET = 5;
 const WEEKLY_TOUCHPOINT_TARGET = 5;
@@ -391,6 +393,7 @@ export function buildCatWorldRoomLearningSignal(habit = {}, cat = {}, companion 
   };
   const garden = buildCatWorldHabitGarden(habit);
   const pace = buildCatWorldLearningPace(habit);
+  const learningMemory = normalizeCatWorldLearningMemory(cat.learningMemory || companion.memory || {});
   const baseRitual = buildCatWorldLearningRitual(
     cat.learningStyle || {},
     loopComplete ? "loop" : steps[activeIndex]?.key,
@@ -423,6 +426,7 @@ export function buildCatWorldRoomLearningSignal(habit = {}, cat = {}, companion 
     celebrationMessage: String(companion.message || fallbackMessages[stageKey] || "").trim(),
     garden,
     pace,
+    learningMemory,
     ritual,
     steps: steps.map((step, index) => ({ ...step, active: index === activeIndex })),
   };

@@ -14636,7 +14636,8 @@ select {
 
 .cat-world-cat-individual-habit,
 .cat-world-cat-individual-preference,
-.cat-world-cat-learning-style {
+.cat-world-cat-learning-style,
+.cat-world-cat-learning-memory {
   display: flex !important;
   align-items: center;
   justify-content: space-between;
@@ -14652,19 +14653,25 @@ select {
   background: #d9f6ff;
 }
 
+.cat-world-cat-learning-memory {
+  background: #ffe6c7;
+}
+
 .cat-world-cat-individual-preference {
   background: #e7f8dd;
 }
 
 .cat-world-cat-individual-habit b,
 .cat-world-cat-individual-preference b,
-.cat-world-cat-learning-style b {
+.cat-world-cat-learning-style b,
+.cat-world-cat-learning-memory b {
   flex: 0 0 auto;
 }
 
 .cat-world-cat-individual-habit em,
 .cat-world-cat-individual-preference em,
-.cat-world-cat-learning-style em {
+.cat-world-cat-learning-style em,
+.cat-world-cat-learning-memory em {
   text-align: right;
 }
 
@@ -14673,7 +14680,9 @@ select {
 .cat-world-cat-chip.active .cat-world-cat-individual-preference,
 .cat-world-cat-chip:not(:disabled):hover .cat-world-cat-individual-preference,
 .cat-world-cat-chip.active .cat-world-cat-learning-style,
-.cat-world-cat-chip:not(:disabled):hover .cat-world-cat-learning-style {
+.cat-world-cat-chip:not(:disabled):hover .cat-world-cat-learning-style,
+.cat-world-cat-chip.active .cat-world-cat-learning-memory,
+.cat-world-cat-chip:not(:disabled):hover .cat-world-cat-learning-memory {
   border-color: rgba(255, 255, 255, 0.72);
   color: #fff;
   background: rgba(255, 255, 255, 0.16);
@@ -17024,6 +17033,21 @@ select {
 
 .cat-world-learning-companion-status span {
   white-space: nowrap;
+}
+
+.cat-world-learning-companion-status .cat-world-learning-memory-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid rgba(154, 90, 46, 0.5);
+  border-radius: 3px;
+  padding: 2px 5px;
+  color: #75401f;
+  background: #ffe6c7;
+}
+
+.cat-world-learning-memory-badge svg {
+  color: inherit;
 }
 
 .cat-world-learning-pace {

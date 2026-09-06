@@ -38,6 +38,11 @@ import {
   catWorldWeekMemory,
 } from "../catWorldLearningRoute.js";
 import {
+  catWorldLearningMemoryLine,
+  catWorldLearningMemoryNextLine,
+  normalizeCatWorldLearningMemory,
+} from "../catWorldLearningMemory.js";
+import {
   formatCatWorldPlayTime,
   formatCatWorldPlayTimeProgress,
   formatCatWorldPlayTimeTiers,
@@ -464,6 +469,9 @@ const focusedCat = computed(
 );
 const learningCompanion = computed(() => payload.value.learningCompanion || {});
 const learningGuideCat = computed(() => catForId(learningCompanion.value.catId) || focusedCat.value);
+const learningGuideMemory = computed(() => normalizeCatWorldLearningMemory(
+  learningGuideCat.value.learningMemory || learningCompanion.value.memory || {},
+));
 const learningRoute = computed(() => {
   const route = buildCatWorldLearningRoute(energy.value.habit || {}, learningGuideCat.value);
   return {
@@ -738,6 +746,7 @@ const catAgentCards = computed(() =>
       restThreshold: cat.traits?.restThreshold,
     });
     const spotMemory = catSpotMemorySummary(cat.scenePosition, shopById.value);
+    const learningMemory = normalizeCatWorldLearningMemory(cat.learningMemory);
     return {
       ...cat,
       portrait: catPortraitModel(cat),
@@ -752,6 +761,7 @@ const catAgentCards = computed(() =>
       energyScore,
       gait,
       spotMemory,
+      learningMemory,
       bondScore: clampCatScore(bond.score ?? 18),
       bondLabel: bond.levelLabel || "刚开始熟悉",
       bondDetailLabel: bond.detailLabel || "还没有照顾记录",
@@ -2631,6 +2641,14 @@ async function selectCat(catOrId, options = {}) {
             <MessageCircleIcon :size="13" :stroke-width="2.8" aria-hidden="true" />
             <strong>{{ learningCompanion.statusLabel || "等待一起热身" }}</strong>
             <span>{{ learningCompanionGrowthLabel }}</span>
+            <span
+              v-if="learningGuideMemory.hasMemory"
+              class="cat-world-learning-memory-badge"
+              :title="catWorldLearningMemoryNextLine(learningGuideMemory)"
+            >
+              <AwardIcon :size="12" :stroke-width="2.8" aria-hidden="true" />
+              {{ learningGuideMemory.levelLabel }} · {{ learningGuideMemory.companionDays }} 天
+            </span>
           </p>
         </div>
         <div class="cat-world-learning-route-actions">
@@ -3575,6 +3593,7 @@ async function selectCat(catOrId, options = {}) {
           <div><dt>个人小习惯</dt><dd>{{ activeCatDiary.individualHabit?.label || "还在慢慢观察" }}</dd></div>
           <div><dt>今日步态</dt><dd>{{ activeCatDiary.gait?.label || "自在散步" }} · 会留下短暂的像素爪印</dd></div>
           <div><dt>陪学专长</dt><dd>{{ activeCatDiary.learningStyle?.label || "平衡陪学搭档" }} · {{ activeCatDiary.learningStyle?.focusLabel || "少量输入再表达" }}</dd></div>
+          <div><dt>陪学记忆</dt><dd>{{ catWorldLearningMemoryLine(activeCatDiary.learningMemory) }} · {{ catWorldLearningMemoryNextLine(activeCatDiary.learningMemory) }}</dd></div>
           <div><dt>作息</dt><dd>{{ activeCatDiary.sleepLabel }}</dd></div>
           <div><dt>消耗</dt><dd>{{ activeCatDiary.decayLabel }}</dd></div>
           <div><dt>亲密</dt><dd>{{ activeCatDiary.bondLabel }} · {{ activeCatDiary.bondDetailLabel }}</dd></div>
@@ -3941,6 +3960,14 @@ async function selectCat(catOrId, options = {}) {
             <p v-if="cat.learningStyle?.label" class="cat-world-cat-learning-style">
               <b>陪学专长</b>
               <em>{{ cat.learningStyle.label }}</em>
+            </p>
+            <p
+              v-if="cat.learningMemory.hasMemory"
+              class="cat-world-cat-learning-memory"
+              :title="catWorldLearningMemoryNextLine(cat.learningMemory)"
+            >
+              <b>陪学记忆</b>
+              <em>{{ cat.learningMemory.levelLabel }} · {{ cat.learningMemory.companionDays }} 天 / {{ cat.learningMemory.loopDays }} 闭环</em>
             </p>
             <p class="cat-world-cat-card-location">
               <b><MapPinIcon :size="14" :stroke-width="2.6" aria-hidden="true" />{{ cat.currentSceneLabel }}</b>

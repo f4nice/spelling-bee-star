@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-019"
-DEFAULT_PAGE_VERSION = "v20260907.19"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-020"
+DEFAULT_PAGE_VERSION = "v20260907.20"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -17519,6 +17519,22 @@ CAT_WORLD_LEARNING_COMPANION_MILESTONES = (
     {"key": "output", "label": "英语输出", "moodGain": 2, "bondGain": 1},
     {"key": "loop", "label": "今日学习闭环", "moodGain": 3, "bondGain": 1},
 )
+CAT_WORLD_LEARNING_MEMORY_STAGES = (
+    {"key": "waiting", "label": "等待初次陪学", "threshold": 0},
+    {"key": "starter", "label": "起步搭子", "threshold": 1},
+    {"key": "familiar", "label": "熟悉节奏", "threshold": 4},
+    {"key": "steady", "label": "稳定陪学", "threshold": 10},
+    {"key": "guardian", "label": "英语守护猫", "threshold": 24},
+)
+CAT_WORLD_LEARNING_MEMORY_KEYS = frozenset(
+    str(milestone["key"]) for milestone in CAT_WORLD_LEARNING_COMPANION_MILESTONES
+)
+CAT_WORLD_LEARNING_MEMORY_STATUS_KEYS = {
+    "started": frozenset({"started"}),
+    "warmup": frozenset({"started", "warmup"}),
+    "output": frozenset({"output"}),
+    "loop": frozenset({"started", "warmup", "output", "loop"}),
+}
 
 
 def cat_world_learning_companion_profile_id(
@@ -17724,6 +17740,123 @@ def cat_world_apply_learning_companion_rewards(
         "newBondGain": new_bond_gain,
         "newMilestones": new_milestones,
         "changed": bool(new_milestones) or assigned_now,
+    }
+
+
+def cat_world_learning_memory_milestones(agent_state: dict[str, Any] | None) -> set[str]:
+    source = agent_state if isinstance(agent_state, dict) else {}
+    claimed = source.get("learningCompanionMilestones")
+    milestones = (
+        {str(key) for key in claimed if str(key) in CAT_WORLD_LEARNING_MEMORY_KEYS}
+        if isinstance(claimed, list)
+        else set()
+    )
+    if milestones:
+        return milestones
+    return set(
+        CAT_WORLD_LEARNING_MEMORY_STATUS_KEYS.get(
+            str(source.get("learningCompanionStatusKey") or ""),
+            frozenset(),
+        )
+    )
+
+
+def cat_world_learning_memory_payload(logs: list[CatWorldDailyLog] | tuple[CatWorldDailyLog, ...]) -> dict[str, Any]:
+    dates_by_milestone: dict[str, set[date]] = {
+        key: set() for key in CAT_WORLD_LEARNING_MEMORY_KEYS
+    }
+    companion_dates: set[date] = set()
+    for log in logs:
+        if not isinstance(log, CatWorldDailyLog) or not log.log_date:
+            continue
+        milestones = cat_world_learning_memory_milestones(
+            parse_cat_world_agent_state(log.agent_state)
+        )
+        if not milestones:
+            continue
+        companion_dates.add(log.log_date)
+        for key in milestones:
+            dates_by_milestone[key].add(log.log_date)
+
+    companion_days = len(companion_dates)
+    loop_days = len(dates_by_milestone["loop"])
+    memory_points = companion_days + loop_days
+    stage_index = 0
+    for index, stage in enumerate(CAT_WORLD_LEARNING_MEMORY_STAGES):
+        if memory_points >= int(stage["threshold"]):
+            stage_index = index
+    stage = CAT_WORLD_LEARNING_MEMORY_STAGES[stage_index]
+    next_stage = (
+        CAT_WORLD_LEARNING_MEMORY_STAGES[stage_index + 1]
+        if stage_index + 1 < len(CAT_WORLD_LEARNING_MEMORY_STAGES)
+        else None
+    )
+    stage_threshold = int(stage["threshold"])
+    next_threshold = int(next_stage["threshold"]) if next_stage else memory_points
+    progress_percent = (
+        min(
+            max(
+                round(
+                    (memory_points - stage_threshold)
+                    / max(next_threshold - stage_threshold, 1)
+                    * 100
+                ),
+                0,
+            ),
+            100,
+        )
+        if next_stage
+        else 100
+    )
+    ordered_dates = sorted(companion_dates)
+    return {
+        "hasMemory": companion_days > 0,
+        "companionDays": companion_days,
+        "startedDays": len(dates_by_milestone["started"]),
+        "warmupDays": len(dates_by_milestone["warmup"]),
+        "outputDays": len(dates_by_milestone["output"]),
+        "loopDays": loop_days,
+        "memoryPoints": memory_points,
+        "levelKey": str(stage["key"]),
+        "levelLabel": str(stage["label"]),
+        "levelIndex": stage_index,
+        "levelCount": len(CAT_WORLD_LEARNING_MEMORY_STAGES),
+        "progressPercent": progress_percent,
+        "nextLevelLabel": str(next_stage["label"]) if next_stage else "",
+        "nextLevelPoints": next_threshold if next_stage else memory_points,
+        "nextRemaining": max(next_threshold - memory_points, 0) if next_stage else 0,
+        "firstDate": ordered_dates[0].isoformat() if ordered_dates else "",
+        "latestDate": ordered_dates[-1].isoformat() if ordered_dates else "",
+    }
+
+
+def cat_world_learning_memory_payloads(
+    db: Session,
+    phone: str,
+    profile_ids: list[str] | set[str] | tuple[str, ...],
+) -> dict[str, dict[str, Any]]:
+    clean_profile_ids = sorted({str(profile_id).strip() for profile_id in profile_ids if str(profile_id).strip()})
+    if not clean_profile_ids:
+        return {}
+    logs = list(
+        db.scalars(
+            select(CatWorldDailyLog)
+            .where(
+                CatWorldDailyLog.phone == normalize_login_phone(phone),
+                CatWorldDailyLog.cat_id.in_(clean_profile_ids),
+            )
+            .order_by(CatWorldDailyLog.log_date.asc(), CatWorldDailyLog.id.asc())
+        ).all()
+    )
+    logs_by_profile_id: dict[str, list[CatWorldDailyLog]] = {
+        profile_id: [] for profile_id in clean_profile_ids
+    }
+    for log in logs:
+        if log.cat_id in logs_by_profile_id:
+            logs_by_profile_id[log.cat_id].append(log)
+    return {
+        profile_id: cat_world_learning_memory_payload(profile_logs)
+        for profile_id, profile_logs in logs_by_profile_id.items()
     }
 
 
@@ -22088,7 +22221,27 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         for profile in cat_profiles
         if str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) == active_scene["id"]
     ]
-    profile_payloads = [cat_world_cat_profile_payload(profile) for profile in cat_profiles]
+    learning_memories = cat_world_learning_memory_payloads(
+        db,
+        state.phone,
+        active_profile_ids,
+    )
+    profile_payloads = []
+    for profile in cat_profiles:
+        profile_payload = cat_world_cat_profile_payload(profile)
+        profile_payload["learningMemory"] = learning_memories.get(
+            profile.profile_id,
+            cat_world_learning_memory_payload([]),
+        )
+        profile_payloads.append(profile_payload)
+    if learning_companion:
+        learning_companion = {
+            **learning_companion,
+            "memory": learning_memories.get(
+                str(learning_companion.get("catId") or ""),
+                cat_world_learning_memory_payload([]),
+            ),
+        }
     cat_social = cat_world_social_circle_payload(profile_payloads, daily_logs)
     return {
         "playTime": play_time,

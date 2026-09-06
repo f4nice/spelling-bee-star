@@ -36,6 +36,7 @@ import { catWorldGaitProfile } from "./catWorldGait.js";
 import { catWorldIdleAnimationPlan } from "./catWorldIdleAnimation.js";
 import { catWorldCarryReactionPlan } from "./catWorldCarryReaction.js";
 import { catWorldPlacementReactionPlan } from "./catWorldPlacementReaction.js";
+import { catWorldLearningMemoryRoomCue } from "./catWorldLearningMemory.js";
 import {
   catSpotMemoryPriority,
   nextCatSpotMemory,
@@ -4935,12 +4936,13 @@ class CatWorldScene extends Phaser.Scene {
     const gardenPoint = this.learningGardenFocusPoint(index);
     if (Number(signal.completedCount || 0) >= 3) {
       const attention = Number(behavior.attention || 50);
+      const memoryCue = catWorldLearningMemoryRoomCue(signal.learningMemory, true);
       return {
         kind: "learning-companion",
         itemId: "learning-garden",
         itemKind: gardenPoint.itemKind,
         label: gardenPoint.label,
-        message: `${ritual.cue || "今天的学习闭环完成了。"} 单词芽已经长到${signal.garden?.stageLabel || "种子"}，我去照看一下。`,
+        message: `${memoryCue} ${ritual.cue || "今天的学习闭环完成了。"} 单词芽已经长到${signal.garden?.stageLabel || "种子"}，我去照看一下。`,
         animation: ritual.animation || "blink",
         priority: clamp(40 + Math.round(attention / 9), 42, 54),
         x: gardenPoint.x,
@@ -4967,16 +4969,17 @@ class CatWorldScene extends Phaser.Scene {
     const selected = studyPoints[0] || { itemId: "learning-garden", point: gardenPoint };
     const attention = Number(behavior.attention || 50);
     const methodCue = String(ritual.cue || "").trim();
+    const memoryCue = catWorldLearningMemoryRoomCue(signal.learningMemory);
     return {
       kind: "learning-companion",
       itemId: selected.itemId,
       itemKind: selected.point.itemKind,
       label: selected.point.label || "学习角",
       message: methodCue
-        ? `${methodCue} 我去${selected.point.label || "学习角"}陪你。`
+        ? `${memoryCue} ${methodCue} 我去${selected.point.label || "学习角"}陪你。`
         : activeStep.key === "warmup" && !signal.starterComplete
-          ? `先做 5 词点亮起步爪印，我在${selected.point.label || "学习角"}旁边陪你开始。`
-          : `${activeStep.label}还没完成，我先在${selected.point.label || "学习角"}旁边等你。`,
+          ? `${memoryCue} 先做 5 词点亮起步爪印，我在${selected.point.label || "学习角"}旁边陪你开始。`
+          : `${memoryCue} ${activeStep.label}还没完成，我先在${selected.point.label || "学习角"}旁边等你。`,
       animation: ritual.animation || "book",
       learningStyleKey: ritual.styleKey || "balanced",
       priority: clamp(64 + Math.round(attention / 6), 62, 84),
