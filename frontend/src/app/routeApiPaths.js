@@ -18,6 +18,7 @@ export const routeApiPaths = {
   catWorldCatPosition: () => "/api/vue/cat-world/cat/position",
   catWorldSelectCat: () => "/api/vue/cat-world/select-cat",
   catWorldRenameCat: () => "/api/vue/cat-world/cat/rename",
+  catWorldLearningMemoryReview: () => "/api/vue/cat-world/learning-memory/review",
   catWorldPet: () => "/api/vue/cat-world/pet",
   admin: () => "/api/vue/admin",
   adminCatWorldPricing: () => "/api/vue/admin/cat-world/pricing",

@@ -183,6 +183,11 @@ export function normalizeCatWorldLearningMemory(memory = {}) {
     nextRemaining: safeCount(memory.nextRemaining),
     firstDate: String(memory.firstDate || ""),
     latestDate: String(memory.latestDate || ""),
+    reviewCount: safeCount(memory.reviewCount),
+    reviewedToday: Boolean(memory.reviewedToday),
+    todayReviewSourceDate: String(memory.todayReviewSourceDate || ""),
+    lastReviewDate: String(memory.lastReviewDate || ""),
+    lastReviewSourceDate: String(memory.lastReviewSourceDate || ""),
     stages,
     recentDays,
   };

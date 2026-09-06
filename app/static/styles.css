@@ -15324,6 +15324,141 @@ select {
   border-top: 1px dashed rgba(44, 47, 58, 0.36);
 }
 
+.cat-world-memory-review {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) auto;
+  gap: 6px 8px;
+  border-top: 2px solid rgba(44, 47, 58, 0.26);
+  padding-top: 7px;
+}
+
+.cat-world-memory-review > header,
+.cat-world-memory-review > p,
+.cat-world-memory-review-error {
+  grid-column: 1 / -1;
+}
+
+.cat-world-memory-review > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cat-world-memory-review > header > span,
+.cat-world-memory-review > header > span > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cat-world-memory-review > header > span > span {
+  display: grid;
+  gap: 1px;
+}
+
+.cat-world-memory-review > header small,
+.cat-world-memory-review > header strong,
+.cat-world-memory-review > header em,
+.cat-world-memory-review > p,
+.cat-world-memory-review-error {
+  margin: 0;
+  color: #40516b;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.cat-world-memory-review > header small {
+  color: #007f67;
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.cat-world-memory-review > header strong {
+  color: #263047;
+  font-size: 10px;
+}
+
+.cat-world-memory-review > header em {
+  flex: 0 0 auto;
+  border: 1px solid #2c2f3a;
+  padding: 2px 5px;
+  color: #263047;
+  background: #ffe77a;
+}
+
+.cat-world-memory-review > p {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.cat-world-memory-review > i {
+  align-self: center;
+  height: 9px;
+  overflow: hidden;
+  border: 2px solid #2c2f3a;
+  background: #fff8df;
+}
+
+.cat-world-memory-review > i > i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: #ef7589;
+  transition: width 180ms steps(3, end);
+}
+
+.cat-world-memory-review > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 28px;
+  border: 2px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 4px 8px;
+  color: #263047;
+  background: #fff8df;
+  box-shadow: 2px 2px 0 #2c2f3a;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cat-world-memory-review > button:not(:disabled):hover,
+.cat-world-memory-review > button:not(:disabled):focus-visible,
+.cat-world-memory-review > button:not(:disabled):active,
+.cat-world-memory-review.complete > button {
+  color: #fff;
+  background: #1d7f5b;
+}
+
+.cat-world-memory-review.active > button {
+  color: #fff;
+  background: #16354a;
+}
+
+.cat-world-memory-review.complete > header em {
+  color: #fff;
+  background: #1d7f5b;
+}
+
+.cat-world-memory-review.complete > i > i {
+  background: #1d7f5b;
+}
+
+.cat-world-memory-review > button:disabled {
+  cursor: default;
+}
+
+.cat-world-memory-review-error {
+  color: #b62f3a;
+}
+
 .cat-world-learning-memory-actions {
   display: inline-flex;
   flex: 0 0 auto;
@@ -18311,6 +18446,15 @@ select {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
+  }
+
+  .cat-world-memory-review {
+    grid-template-columns: 1fr;
+  }
+
+  .cat-world-memory-review > i,
+  .cat-world-memory-review > button {
+    grid-column: 1;
   }
 
   .cat-world-hero-status {

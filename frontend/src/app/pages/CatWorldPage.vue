@@ -41,6 +41,7 @@ import {
   catWorldLearningMemoryLine,
   catWorldLearningMemoryNextLine,
   catWorldLearningMemoryReflection,
+  formatCatWorldLearningMemoryDate,
   normalizeCatWorldLearningMemory,
 } from "../catWorldLearningMemory.js";
 import {
@@ -115,6 +116,13 @@ const learningRouteExpanded = ref(false);
 const learningWeekExpanded = ref(false);
 const selectedLearningWeekDate = ref("");
 const selectedCatMemoryDate = ref("");
+const catMemoryReview = ref({
+  catId: "",
+  sourceDate: "",
+  remainingSeconds: 0,
+  busy: false,
+  error: "",
+});
 const busySceneId = ref("");
 const busyLocationItemId = ref("");
 const ambientEventCooldowns = new Map();
@@ -128,12 +136,14 @@ const catReactionTexts = [
   "尾巴雷达晃了晃，发现新单词",
   "想法缓存刷新，准备继续陪你学",
 ];
+const CAT_MEMORY_REVIEW_SECONDS = 30;
 let catReactionTimer = 0;
 let learningCompanionReactionTimer = 0;
 let sceneMoveNoticeTimer = 0;
 let storedItemUndoTimer = 0;
 let activeFoodClockTimer = 0;
 let playTimeHeartbeatTimer = 0;
+let catMemoryReviewTimer = 0;
 let playTimeSyncBusy = false;
 let gameMountActive = false;
 
@@ -154,6 +164,7 @@ onBeforeUnmount(() => {
   window.clearTimeout(storedItemUndoTimer);
   window.clearInterval(activeFoodClockTimer);
   window.clearInterval(playTimeHeartbeatTimer);
+  window.clearInterval(catMemoryReviewTimer);
   window.removeEventListener("keydown", handleGlobalKeydown);
   window.removeEventListener("pagehide", endPlayTimeSession);
   document.removeEventListener("visibilitychange", handlePlayTimeVisibilityChange);
@@ -353,6 +364,7 @@ watch(playTimeLocked, (locked) => {
   selectedDecorId.value = "";
   layoutDirty.value = false;
   activeHandbook.value = "";
+  resetCatMemoryReview();
   openCatDiaryId.value = "";
   scenePurchaseTarget.value = null;
   openedBlindBox.value = null;
@@ -939,6 +951,30 @@ const selectedCatMemoryDay = computed(() => {
 const selectedCatMemoryReflection = computed(() =>
   catWorldLearningMemoryReflection(selectedCatMemoryDay.value, activeCatDiary.value || {}),
 );
+const selectedCatMemoryReviewState = computed(() => {
+  const cat = activeCatDiary.value || {};
+  const memory = cat.learningMemory || {};
+  const review = catMemoryReview.value;
+  const active = review.catId === cat.id && review.sourceDate === selectedCatMemoryDay.value.date;
+  const reviewedSourceDate = String(memory.todayReviewSourceDate || "");
+  const reviewedToday = Boolean(memory.reviewedToday);
+  const remainingSeconds = active ? Math.max(Number(review.remainingSeconds || 0), 0) : 0;
+  const progressPercent = reviewedToday
+    ? 100
+    : active
+      ? Math.round((CAT_MEMORY_REVIEW_SECONDS - remainingSeconds) / CAT_MEMORY_REVIEW_SECONDS * 100)
+      : 0;
+  return {
+    active,
+    busy: active && review.busy,
+    error: active ? review.error : "",
+    remainingSeconds,
+    progressPercent,
+    reviewedToday,
+    reviewedThisPage: reviewedToday && reviewedSourceDate === selectedCatMemoryDay.value.date,
+    reviewedSourceLabel: formatCatWorldLearningMemoryDate(reviewedSourceDate),
+  };
+});
 const gameDailyLogs = computed(() =>
   Object.fromEntries(
     roomCats.value.map((cat) => [
@@ -1230,6 +1266,7 @@ function selectCollectionCat(cat) {
 
 function toggleCatDiary(cat) {
   if (!cat?.id) return;
+  resetCatMemoryReview();
   activeRoomPanel.value = "cat";
   openCatDiaryId.value = cat.id;
   focusedCatId.value = cat.id;
@@ -1247,13 +1284,81 @@ function focusRoomItem(itemId) {
 }
 
 function closeCatDiary() {
+  resetCatMemoryReview();
   openCatDiaryId.value = "";
   selectedCatMemoryDate.value = "";
 }
 
 function selectCatMemoryDay(day = {}) {
   if (!day.date) return;
+  if (day.date !== selectedCatMemoryDate.value) resetCatMemoryReview();
   selectedCatMemoryDate.value = day.date;
+}
+
+function resetCatMemoryReview() {
+  window.clearInterval(catMemoryReviewTimer);
+  catMemoryReviewTimer = 0;
+  catMemoryReview.value = {
+    catId: "",
+    sourceDate: "",
+    remainingSeconds: 0,
+    busy: false,
+    error: "",
+  };
+}
+
+async function saveCatMemoryReview(catId, sourceDate) {
+  const reviewToken = `${catId}:${sourceDate}`;
+  catMemoryReview.value = {
+    ...catMemoryReview.value,
+    remainingSeconds: 0,
+    busy: true,
+    error: "",
+  };
+  try {
+    const result = await fetchJson(routeApiPaths.catWorldLearningMemoryReview(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ catId, sourceDate }),
+    });
+    replacePayload(result);
+    notice.value = result.effect?.message || "这次主动回想已经留进共同学习手册。";
+    if (`${catMemoryReview.value.catId}:${catMemoryReview.value.sourceDate}` === reviewToken) {
+      resetCatMemoryReview();
+    }
+  } catch (error) {
+    if (`${catMemoryReview.value.catId}:${catMemoryReview.value.sourceDate}` !== reviewToken) return;
+    catMemoryReview.value = {
+      ...catMemoryReview.value,
+      busy: false,
+      error: error.message || "回想记录保存失败，请稍后再试。",
+    };
+  }
+}
+
+function startCatMemoryReview() {
+  const cat = activeCatDiary.value;
+  const sourceDate = selectedCatMemoryDay.value.date;
+  if (!cat?.id || !sourceDate || selectedCatMemoryReviewState.value.reviewedToday) return;
+  resetCatMemoryReview();
+  catMemoryReview.value = {
+    catId: cat.id,
+    sourceDate,
+    remainingSeconds: CAT_MEMORY_REVIEW_SECONDS,
+    busy: false,
+    error: "",
+  };
+  catMemoryReviewTimer = window.setInterval(() => {
+    const nextRemaining = Math.max(Number(catMemoryReview.value.remainingSeconds || 0) - 1, 0);
+    catMemoryReview.value = {
+      ...catMemoryReview.value,
+      remainingSeconds: nextRemaining,
+    };
+    if (nextRemaining > 0) return;
+    window.clearInterval(catMemoryReviewTimer);
+    catMemoryReviewTimer = 0;
+    void saveCatMemoryReview(cat.id, sourceDate);
+  }, 1000);
 }
 
 async function focusSelectedCatMemory() {
@@ -3644,11 +3749,65 @@ async function selectCat(catOrId, options = {}) {
               <strong>{{ selectedCatMemoryReflection.achievement }}</strong>
             </div>
             <p><b>{{ selectedCatMemoryReflection.catName }}：</b>{{ selectedCatMemoryReflection.catMessage }}</p>
+            <section
+              :class="[
+                'cat-world-memory-review',
+                {
+                  active: selectedCatMemoryReviewState.active,
+                  complete: selectedCatMemoryReviewState.reviewedToday,
+                },
+              ]"
+              aria-label="30 秒主动回想"
+            >
+              <header>
+                <span>
+                  <ClockIcon :size="15" :stroke-width="2.8" aria-hidden="true" />
+                  <span><small>Active Recall</small><strong>30 秒主动回想</strong></span>
+                </span>
+                <em v-if="selectedCatMemoryReviewState.reviewedToday">今日已完成</em>
+                <em v-else-if="selectedCatMemoryReviewState.busy">正在保存</em>
+                <em v-else-if="selectedCatMemoryReviewState.active">剩余 {{ selectedCatMemoryReviewState.remainingSeconds }} 秒</em>
+                <em v-else>今天一次就好</em>
+              </header>
+              <p v-if="selectedCatMemoryReviewState.reviewedToday">
+                <template v-if="selectedCatMemoryReviewState.reviewedThisPage">
+                  这枚回想爪印已经留在今天：你重新找回了这一页的 1 个词和 1 句话。
+                </template>
+                <template v-else>
+                  今天已经回想过 {{ selectedCatMemoryReviewState.reviewedSourceLabel || "另一页" }}，明天再翻新的一页。
+                </template>
+              </p>
+              <p v-else>先不看答案，在心里找回这一天的 1 个词和 1 句话；想不完整也没关系。</p>
+              <i
+                role="progressbar"
+                :aria-valuenow="selectedCatMemoryReviewState.progressPercent"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                :aria-label="selectedCatMemoryReviewState.reviewedToday ? '今日主动回想已完成' : `主动回想已完成 ${selectedCatMemoryReviewState.progressPercent}%`"
+              >
+                <i :style="{ width: `${selectedCatMemoryReviewState.progressPercent}%` }"></i>
+              </i>
+              <button
+                type="button"
+                :disabled="selectedCatMemoryReviewState.reviewedToday || selectedCatMemoryReviewState.active"
+                @click="startCatMemoryReview"
+              >
+                <CheckIcon v-if="selectedCatMemoryReviewState.reviewedToday" :size="13" :stroke-width="3" aria-hidden="true" />
+                <ClockIcon v-else :size="13" :stroke-width="2.8" aria-hidden="true" />
+                <template v-if="selectedCatMemoryReviewState.reviewedToday">今日回想已完成</template>
+                <template v-else-if="selectedCatMemoryReviewState.busy">正在保存回想</template>
+                <template v-else-if="selectedCatMemoryReviewState.active">安静回想中</template>
+                <template v-else>开始 30 秒回想</template>
+              </button>
+              <small v-if="selectedCatMemoryReviewState.error" class="cat-world-memory-review-error">
+                {{ selectedCatMemoryReviewState.error }}
+              </small>
+            </section>
             <footer>
               <span>{{ selectedCatMemoryReflection.reviewPrompt }}</span>
               <span class="cat-world-learning-memory-actions">
                 <button type="button" @click="focusSelectedCatMemory">
-                  <MessageCircleIcon :size="13" :stroke-width="2.8" aria-hidden="true" />让猫回想
+                  <MessageCircleIcon :size="13" :stroke-width="2.8" aria-hidden="true" />回房找猫
                 </button>
                 <a :href="selectedCatMemoryReflection.href">
                   {{ selectedCatMemoryReflection.actionLabel }}<MoveRightIcon :size="13" :stroke-width="2.8" aria-hidden="true" />

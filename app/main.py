@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-023"
-DEFAULT_PAGE_VERSION = "v20260907.23"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-024"
+DEFAULT_PAGE_VERSION = "v20260907.24"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -6158,6 +6158,71 @@ async def vue_cat_world_purchase_scene_api(request: Request, db: Session = Depen
     return {
         "ok": True,
         "scenePurchase": {"sceneId": scene.scene_key, "label": scene.label, "cost": cost},
+        **serialize_cat_world_payload(db, state),
+    }
+
+
+@app.post("/api/vue/cat-world/learning-memory/review")
+async def vue_cat_world_learning_memory_review_api(request: Request, db: Session = Depends(get_db)):
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="回想记录不是有效 JSON。") from exc
+    cat_id = str((payload or {}).get("catId") or "").strip()
+    raw_source_date = str((payload or {}).get("sourceDate") or "").strip()
+    try:
+        source_date = date.fromisoformat(raw_source_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="请选择一页真实的学习足迹。") from exc
+    today = date.today()
+    if source_date > today:
+        raise HTTPException(status_code=400, detail="还不能回想未来的学习足迹。")
+
+    state = get_or_create_cat_world_state(db, phone)
+    db.refresh(state, with_for_update=True)
+    profile = cat_world_profile_for_reference(db, state, cat_id)
+    if not profile:
+        raise HTTPException(status_code=400, detail="还没有解锁这只猫。")
+    cat = cat_world_cat_profile_payload(profile)
+    profile_logs = list(
+        db.scalars(
+            select(CatWorldDailyLog)
+            .where(
+                CatWorldDailyLog.phone == state.phone,
+                CatWorldDailyLog.cat_id == profile.profile_id,
+            )
+            .order_by(CatWorldDailyLog.log_date.asc(), CatWorldDailyLog.id.asc())
+        ).all()
+    )
+    memory = cat_world_learning_memory_payload(profile_logs, today=today)
+    memory_dates = {str(day.get("date") or "") for day in memory.get("recentDays", [])}
+    if source_date.isoformat() not in memory_dates:
+        raise HTTPException(status_code=400, detail="这页学习足迹还不存在，不能生成回想记录。")
+
+    now = datetime.utcnow()
+    log = get_or_create_cat_world_daily_log(
+        db,
+        state.phone,
+        profile.profile_id,
+        today,
+        now,
+        cat,
+    )
+    effect = cat_world_apply_learning_memory_review(
+        log,
+        cat,
+        cat_world_cat_traits(cat),
+        source_date,
+        now,
+    )
+    db.add(log)
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return {
+        "ok": True,
+        "effect": effect,
         **serialize_cat_world_payload(db, state),
     }
 
@@ -17420,6 +17485,7 @@ CAT_WORLD_AGENT_STATE_CARRY_KEYS = {
     "favoriteDecorRewarded",
     "hourlyHistory",
     "lastPetAt",
+    "learningMemoryReview",
     "mischiefAttemptedAt",
     "mischiefAttemptMood",
     "mischiefAttemptReason",
@@ -17761,18 +17827,102 @@ def cat_world_learning_memory_milestones(agent_state: dict[str, Any] | None) -> 
     )
 
 
-def cat_world_learning_memory_payload(logs: list[CatWorldDailyLog] | tuple[CatWorldDailyLog, ...]) -> dict[str, Any]:
+def cat_world_learning_memory_review_record(agent_state: dict[str, Any] | None) -> dict[str, str]:
+    source = agent_state if isinstance(agent_state, dict) else {}
+    raw_review = source.get("learningMemoryReview")
+    if not isinstance(raw_review, dict):
+        return {}
+    source_date = str(raw_review.get("sourceDate") or "").strip()
+    try:
+        date.fromisoformat(source_date)
+    except ValueError:
+        return {}
+    reviewed_at = str(raw_review.get("reviewedAt") or "").strip()
+    return {
+        "sourceDate": source_date,
+        "reviewedAt": reviewed_at,
+    }
+
+
+def cat_world_apply_learning_memory_review(
+    log: CatWorldDailyLog,
+    cat: dict[str, Any],
+    traits: dict[str, Any],
+    source_date: date,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    now = now or datetime.utcnow()
+    agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
+    existing = cat_world_learning_memory_review_record(agent_state)
+    cat_label = str(cat.get("displayLabel") or cat.get("label") or "猫咪")
+    if existing:
+        existing_date = date.fromisoformat(existing["sourceDate"])
+        existing_label = f"{existing_date.month}月{existing_date.day}日"
+        return {
+            "recorded": False,
+            "catId": str(cat.get("profileId") or cat.get("id") or log.cat_id),
+            "catLabel": cat_label,
+            "sourceDate": existing["sourceDate"],
+            "message": f"今天已经和{cat_label}回想过 {existing_label} 的学习足迹，明天再翻新的一页。",
+        }
+
+    source_label = f"{source_date.month}月{source_date.day}日"
+    temperament = str(traits.get("temperament") or "balanced")
+    memory_lines = {
+        "calm": "我把那天的词和句子安静地找回来了。",
+        "clingy": "我贴着你，把那天的词和句子一起想起来了。",
+        "guardian": "那天的词和句子已经重新守进记忆里了。",
+        "chatty": "我又听见那天的英语在脑袋里响起来了。",
+        "gentle": "我们慢慢把那天的词和句子想起来了。",
+        "adventurous": "我们沿着旧脚印又找到了一次那天的英语。",
+        "balanced": "我们把那天的词和句子重新想起来了。",
+    }
+    message = memory_lines.get(temperament, memory_lines["balanced"])
+    agent_state = append_cat_world_agent_event(
+        log,
+        cat,
+        traits,
+        "learning-review",
+        "30 秒主动回想",
+        f"回想了 {source_label} 的学习足迹。{message}",
+        now,
+    )
+    review = {
+        "sourceDate": source_date.isoformat(),
+        "reviewedAt": now.replace(microsecond=0).isoformat() + "Z",
+    }
+    agent_state["learningMemoryReview"] = review
+    log.agent_state = encode_cat_world_agent_state(agent_state)
+    return {
+        "recorded": True,
+        "catId": str(cat.get("profileId") or cat.get("id") or log.cat_id),
+        "catLabel": cat_label,
+        "sourceDate": source_date.isoformat(),
+        "message": message,
+    }
+
+
+def cat_world_learning_memory_payload(
+    logs: list[CatWorldDailyLog] | tuple[CatWorldDailyLog, ...],
+    today: date | None = None,
+) -> dict[str, Any]:
     dates_by_milestone: dict[str, set[date]] = {
         key: set() for key in CAT_WORLD_LEARNING_MEMORY_KEYS
     }
     milestones_by_date: dict[date, set[str]] = {}
     companion_dates: set[date] = set()
+    review_rows: list[dict[str, str]] = []
     for log in logs:
         if not isinstance(log, CatWorldDailyLog) or not log.log_date:
             continue
-        milestones = cat_world_learning_memory_milestones(
-            parse_cat_world_agent_state(log.agent_state)
-        )
+        agent_state = parse_cat_world_agent_state(log.agent_state)
+        review = cat_world_learning_memory_review_record(agent_state)
+        if review:
+            review_rows.append({
+                **review,
+                "reviewDate": log.log_date.isoformat(),
+            })
+        milestones = cat_world_learning_memory_milestones(agent_state)
         if not milestones:
             continue
         companion_dates.add(log.log_date)
@@ -17811,6 +17961,13 @@ def cat_world_learning_memory_payload(logs: list[CatWorldDailyLog] | tuple[CatWo
         else 100
     )
     ordered_dates = sorted(companion_dates)
+    source_date = today or date.today()
+    ordered_reviews = sorted(review_rows, key=lambda row: (row["reviewDate"], row["reviewedAt"]))
+    today_review = next(
+        (row for row in reversed(ordered_reviews) if row["reviewDate"] == source_date.isoformat()),
+        {},
+    )
+    last_review = ordered_reviews[-1] if ordered_reviews else {}
     recent_days = []
     for memory_date in reversed(ordered_dates[-6:]):
         milestones = milestones_by_date.get(memory_date, set())
@@ -17867,6 +18024,11 @@ def cat_world_learning_memory_payload(logs: list[CatWorldDailyLog] | tuple[CatWo
         "nextRemaining": max(next_threshold - memory_points, 0) if next_stage else 0,
         "firstDate": ordered_dates[0].isoformat() if ordered_dates else "",
         "latestDate": ordered_dates[-1].isoformat() if ordered_dates else "",
+        "reviewCount": len(ordered_reviews),
+        "reviewedToday": bool(today_review),
+        "todayReviewSourceDate": str(today_review.get("sourceDate") or ""),
+        "lastReviewDate": str(last_review.get("reviewDate") or ""),
+        "lastReviewSourceDate": str(last_review.get("sourceDate") or ""),
         "stages": stage_rows,
         "recentDays": recent_days,
     }

@@ -1,7 +1,7 @@
 import json
 import os
 import unittest
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -11,9 +11,15 @@ os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
 
 from app.database import Base
 from app.main import (
+    CAT_WORLD_CAT_BY_ID,
+    CAT_WORLD_DEFAULT_CAT_ID,
+    cat_world_apply_learning_memory_review,
+    cat_world_cat_payload,
+    cat_world_cat_traits,
     cat_world_learning_memory_milestones,
     cat_world_learning_memory_payload,
     cat_world_learning_memory_payloads,
+    parse_cat_world_agent_state,
 )
 from app.models import CatWorldDailyLog
 
@@ -121,6 +127,69 @@ class CatWorldLearningMemoryTest(unittest.TestCase):
         self.assertFalse(payloads["cat-empty"]["hasMemory"])
         self.assertEqual(payloads["cat-empty"]["recentDays"], [])
         self.assertFalse(any(stage["unlocked"] for stage in payloads["cat-empty"]["stages"]))
+
+    def test_review_is_tracked_without_inflating_memory_points(self):
+        first_day = learning_log("cat-a", date(2026, 9, 6), ["started", "warmup"])
+        review_day = learning_log("cat-a", date(2026, 9, 7), [])
+        review_day.agent_state = json.dumps(
+            {
+                "learningMemoryReview": {
+                    "sourceDate": "2026-09-06",
+                    "reviewedAt": "2026-09-07T08:00:00Z",
+                }
+            },
+            ensure_ascii=False,
+        )
+
+        payload = cat_world_learning_memory_payload(
+            [first_day, review_day],
+            today=date(2026, 9, 7),
+        )
+
+        self.assertEqual(payload["companionDays"], 1)
+        self.assertEqual(payload["memoryPoints"], 1)
+        self.assertEqual(payload["reviewCount"], 1)
+        self.assertTrue(payload["reviewedToday"])
+        self.assertEqual(payload["todayReviewSourceDate"], "2026-09-06")
+        self.assertEqual(payload["lastReviewDate"], "2026-09-07")
+
+    def test_daily_review_is_idempotent_and_does_not_change_cat_scores(self):
+        cat = cat_world_cat_payload(CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
+        traits = cat_world_cat_traits(cat)
+        log = CatWorldDailyLog(
+            phone="13900000000",
+            log_date=date(2026, 9, 7),
+            cat_id=cat["id"],
+            mood_score=63,
+            energy_score=57,
+        )
+        now = datetime(2026, 9, 7, 8, 30)
+
+        first = cat_world_apply_learning_memory_review(
+            log,
+            cat,
+            traits,
+            date(2026, 9, 6),
+            now,
+        )
+        repeated = cat_world_apply_learning_memory_review(
+            log,
+            cat,
+            traits,
+            date(2026, 9, 5),
+            now,
+        )
+        agent_state = parse_cat_world_agent_state(log.agent_state)
+
+        self.assertTrue(first["recorded"])
+        self.assertFalse(repeated["recorded"])
+        self.assertEqual(repeated["sourceDate"], "2026-09-06")
+        self.assertEqual(log.mood_score, 63)
+        self.assertEqual(log.energy_score, 57)
+        self.assertEqual(
+            len([event for event in agent_state["events"] if event["kind"] == "learning-review"]),
+            1,
+        )
 
 
 if __name__ == "__main__":
