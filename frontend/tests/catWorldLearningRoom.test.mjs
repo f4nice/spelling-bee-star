@@ -95,3 +95,18 @@ test("the expanded route explains the companion's method without adding another 
   assert.match(styles, /\.cat-world-learning-ritual\s*\{/);
   assert.match(styles, /grid-template-columns:\s*auto auto minmax\(180px, 1fr\) auto/);
 });
+
+test("the compact route shows a humane daily pace without adding another task card", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
+
+  assert.match(page, /class=\"\['cat-world-learning-pace', `tone-\$\{learningRoute\.pace\.key\}`\]\"/);
+  assert.match(page, /learningRoute\.pace\.detail/);
+  assert.match(page, /learningRoute\.pace\.timeLabel/);
+  assert.match(styles, /\.cat-world-learning-pace\s*\{/);
+  assert.match(styles, /border-left:\s*4px solid var\(--learning-pace-color\)/);
+  assert.match(styles, /\.cat-world-learning-pace\.tone-complete\s*\{[^}]*background:\s*#e4f7e4/s);
+  assert.match(styles, /@media \(max-width: 560px\)[\s\S]*?\.cat-world-learning-pace\s*\{\s*grid-template-columns:\s*auto minmax\(0, 1fr\) auto/);
+});

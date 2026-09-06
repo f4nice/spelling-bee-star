@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildCatWorldHabitGarden,
+  buildCatWorldLearningPace,
   buildCatWorldLearningRitual,
   buildCatWorldLearningRoute,
   buildCatWorldRoomLearningSignal,
@@ -11,6 +12,62 @@ import {
   catWorldLearningCompanionToken,
   catWorldWeekMemory,
 } from "../src/app/catWorldLearningRoute.js";
+
+test("the daily pace makes returning gentle and gives completed days a stopping point", () => {
+  const returning = buildCatWorldLearningPace({
+    todaySpellingCount: 0,
+    recentDays: [
+      { date: "2026-09-04", statusKey: "loop", active: true },
+      { date: "2026-09-05", statusKey: "rest", active: false },
+      { date: "2026-09-06", statusKey: "rest", active: false, today: true },
+    ],
+  });
+  const complete = buildCatWorldLearningPace({
+    todaySpellingCount: 20,
+    todayHasDebate: true,
+  });
+
+  assert.equal(returning.key, "returning");
+  assert.equal(returning.label, "轻量回归");
+  assert.match(returning.detail, /不用补昨天/);
+  assert.match(returning.roomCue, /休息了也没关系/);
+  assert.equal(
+    buildCatWorldLearningPace({
+      recentDays: [
+        { statusKey: "loop", active: true },
+        { statusKey: "rest", active: false },
+      ],
+    }).key,
+    "returning",
+  );
+  assert.equal(complete.key, "complete");
+  assert.equal(complete.timeLabel, "今日已完成");
+  assert.match(complete.detail, /不必.*继续刷量/);
+  assert.match(
+    buildCatWorldLearningRoute({ todaySpellingCount: 20, todayHasDebate: true }).ritual.cue,
+    /放心休息和陪猫/,
+  );
+});
+
+test("the daily pace only asks for the missing half of the learning loop", () => {
+  const vocabulary = buildCatWorldLearningPace({
+    todaySpellingCount: 8,
+    todayHasEssay: true,
+  });
+  const output = buildCatWorldLearningPace({ todaySpellingCount: 20 });
+  const steady = buildCatWorldLearningPace({ todaySpellingCount: 7 });
+  const starter = buildCatWorldLearningPace({ todaySpellingCount: 0 });
+
+  assert.equal(vocabulary.key, "vocabulary");
+  assert.equal(vocabulary.timeLabel, "还差 12 词");
+  assert.match(vocabulary.detail, /表达已经完成/);
+  assert.equal(output.key, "output");
+  assert.match(output.detail, /词汇热身已经够了/);
+  assert.equal(steady.key, "steady");
+  assert.equal(steady.timeLabel, "还差 13 词");
+  assert.equal(starter.key, "starter");
+  assert.match(starter.detail, /做完再决定/);
+});
 
 test("each individual learning style produces its own visible study ritual", () => {
   const expectedTargets = {

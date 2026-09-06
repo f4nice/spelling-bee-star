@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Flame as FlameIcon, Hammer as HammerIcon, Heart as HeartIcon, House as HouseIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, ShoppingBag as ShoppingBagIcon, Shovel as ShovelIcon, Sprout as SproutIcon, X as XIcon } from "lucide-vue-next";
+import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Clock as ClockIcon, Flame as FlameIcon, Hammer as HammerIcon, Heart as HeartIcon, House as HouseIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, ShoppingBag as ShoppingBagIcon, Shovel as ShovelIcon, Sprout as SproutIcon, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -2430,6 +2430,19 @@ async function selectCat(catOrId, options = {}) {
               </i>
               <strong>{{ learningRoute.starterCount }}/{{ learningRoute.starterTarget }}</strong>
             </div>
+          </div>
+          <div
+            :class="['cat-world-learning-pace', `tone-${learningRoute.pace.key}`]"
+            role="note"
+            :aria-label="`今日节奏：${learningRoute.pace.label}，${learningRoute.pace.detail}`"
+          >
+            <ClockIcon :size="14" :stroke-width="2.8" aria-hidden="true" />
+            <span>
+              <small>今日节奏</small>
+              <strong>{{ learningRoute.pace.label }}</strong>
+            </span>
+            <p>{{ learningRoute.pace.detail }}</p>
+            <em>{{ learningRoute.pace.timeLabel }}</em>
           </div>
           <p
             class="cat-world-learning-style"

@@ -119,6 +119,82 @@ function safeCount(value) {
   return Math.max(Number(value || 0), 0);
 }
 
+export function buildCatWorldLearningPace(habit = {}) {
+  const spellingCount = safeCount(habit.todaySpellingCount);
+  const hasOutput = Boolean(habit.todayHasEssay || habit.todayHasDebate);
+  const loopComplete = Boolean(habit.todayBalanceComplete) || (spellingCount >= MINIMUM_SPELLING_TARGET && hasOutput);
+  const recentDays = Array.isArray(habit.recentDays)
+    ? habit.recentDays.filter((day) => day?.statusKey !== "unavailable")
+    : [];
+  const todayIndex = recentDays.findIndex((day) => day?.today);
+  const priorDays = todayIndex >= 0 ? recentDays.slice(0, todayIndex) : recentDays;
+  const yesterday = priorDays.at(-1) || {};
+  const returning = spellingCount === 0
+    && !hasOutput
+    && priorDays.some((day) => day?.active)
+    && yesterday.statusKey === "rest";
+  const coreGoalLabel = `${MINIMUM_SPELLING_TARGET} 词 + 1 次输出`;
+
+  if (loopComplete) {
+    return {
+      key: "complete",
+      label: "安心收工",
+      timeLabel: "今日已完成",
+      coreGoalLabel,
+      detail: "今天的习惯目标已经完成，不必为了连续记录继续刷量。",
+      roomCue: "今天已经完整收好啦，接下来放心休息和陪猫就好。",
+    };
+  }
+  if (returning) {
+    return {
+      key: "returning",
+      label: "轻量回归",
+      timeLabel: "约 2 分钟",
+      coreGoalLabel,
+      detail: "不用补昨天，先用 5 个词把今天重新接上；状态不错再继续。",
+      roomCue: "昨天休息了也没关系，我先陪你做 5 个词，把今天轻轻接上。",
+    };
+  }
+  if (hasOutput && spellingCount < MINIMUM_SPELLING_TARGET) {
+    return {
+      key: "vocabulary",
+      label: "词汇收尾",
+      timeLabel: `还差 ${MINIMUM_SPELLING_TARGET - spellingCount} 词`,
+      coreGoalLabel,
+      detail: `表达已经完成，今天只需把词汇热身补到 ${MINIMUM_SPELLING_TARGET} 词。`,
+      roomCue: `表达已经完成，我陪你再练 ${MINIMUM_SPELLING_TARGET - spellingCount} 个词就收工。`,
+    };
+  }
+  if (spellingCount >= MINIMUM_SPELLING_TARGET) {
+    return {
+      key: "output",
+      label: "表达收尾",
+      timeLabel: "约 5-10 分钟",
+      coreGoalLabel,
+      detail: "词汇热身已经够了，完成一小段英语输出就可以收工。",
+      roomCue: "今天的词已经练够了，我陪你把其中几个用进一句自己的英语。",
+    };
+  }
+  if (spellingCount > 0) {
+    return {
+      key: "steady",
+      label: "稳步推进",
+      timeLabel: `还差 ${MINIMUM_SPELLING_TARGET - spellingCount} 词`,
+      coreGoalLabel,
+      detail: `已经开始，今天稳定走到 ${MINIMUM_SPELLING_TARGET} 词就好，不需要追求堆量。`,
+      roomCue: `已经开始就很好，我陪你再走 ${MINIMUM_SPELLING_TARGET - spellingCount} 个词。`,
+    };
+  }
+  return {
+    key: "starter",
+    label: "轻量启动",
+    timeLabel: "约 2 分钟",
+    coreGoalLabel,
+    detail: "先完成 5 个词，让开始足够轻；做完再决定要不要继续。",
+    roomCue: "我们先做 5 个词，今天只需要一个很轻的开始。",
+  };
+}
+
 export function buildCatWorldLearningRitual(learningStyle = {}, stepKey = "warmup") {
   const requestedStyleKey = String(learningStyle?.key || "balanced");
   const styleKey = LEARNING_RITUALS[requestedStyleKey] ? requestedStyleKey : "balanced";
@@ -188,6 +264,7 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
     ? { action: debateAction, href: "/debate", alternateAction: essayAction, alternateHref: "/essays" }
     : { action: essayAction, href: "/essays", alternateAction: debateAction, alternateHref: "/debate" };
   const garden = buildCatWorldHabitGarden(habit);
+  const pace = buildCatWorldLearningPace(habit);
 
   const steps = [
     {
@@ -234,7 +311,10 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
   ];
   const firstIncompleteIndex = steps.findIndex((step) => !step.completed);
   const activeIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : steps.length - 1;
-  const ritual = buildCatWorldLearningRitual(learningStyle, steps[activeIndex]?.key);
+  const baseRitual = buildCatWorldLearningRitual(learningStyle, steps[activeIndex]?.key);
+  const ritual = ["returning", "complete"].includes(pace.key)
+    ? { ...baseRitual, cue: pace.roomCue }
+    : baseRitual;
 
   return {
     guideName,
@@ -244,6 +324,7 @@ export function buildCatWorldLearningRoute(habit = {}, cat = {}) {
     learningFocusLabel: learningStyle.focusLabel || "少量输入，再完成一次表达",
     learningStyleDescription: learningStyle.description || "陪你用适合自己的节奏完成今天的英语学习。",
     preferredOutput,
+    pace,
     ritual,
     streak,
     garden,
@@ -295,7 +376,14 @@ export function buildCatWorldRoomLearningSignal(habit = {}, cat = {}, companion 
     loop: `${guideName}看到三格都亮了，今天的英语闭环完成啦。`,
   };
   const garden = buildCatWorldHabitGarden(habit);
-  const ritual = buildCatWorldLearningRitual(cat.learningStyle || {}, loopComplete ? "loop" : steps[activeIndex]?.key);
+  const pace = buildCatWorldLearningPace(habit);
+  const baseRitual = buildCatWorldLearningRitual(
+    cat.learningStyle || {},
+    loopComplete ? "loop" : steps[activeIndex]?.key,
+  );
+  const ritual = ["returning", "complete"].includes(pace.key)
+    ? { ...baseRitual, cue: pace.roomCue }
+    : baseRitual;
 
   return {
     token: `${currentDay || "today"}:${guideCatId || "cat"}:${starterComplete ? 1 : 0}:${stageKey}:${completedCount}`,
@@ -320,6 +408,7 @@ export function buildCatWorldRoomLearningSignal(habit = {}, cat = {}, companion 
             : `再 ${Math.max(STARTER_SPELLING_TARGET - spellingCount, 0)} 词点亮起步爪印`,
     celebrationMessage: String(companion.message || fallbackMessages[stageKey] || "").trim(),
     garden,
+    pace,
     ritual,
     steps: steps.map((step, index) => ({ ...step, active: index === activeIndex })),
   };
