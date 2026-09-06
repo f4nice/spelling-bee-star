@@ -2892,6 +2892,15 @@ class CatWorldScene extends Phaser.Scene {
 
   drawCatMoodCue(graphics, behavior, energyScore, moodScore) {
     if (behavior.sleeping) return;
+    if (behavior.key === "waking") {
+      graphics.fillStyle(0xfff07d, 0.95);
+      graphics.fillRect(82, 2, 9, 9);
+      graphics.fillRect(79, 5, 15, 3);
+      graphics.fillRect(85, -1, 3, 15);
+      graphics.fillStyle(0xfff8df, 1);
+      graphics.fillRect(85, 5, 3, 3);
+      return;
+    }
     if (energyScore < Number(behavior.restThreshold || 34)) {
       graphics.fillStyle(0x87d9ff, 0.95);
       graphics.fillRect(82, 10, 8, 8);
@@ -2934,6 +2943,9 @@ class CatWorldScene extends Phaser.Scene {
     }
     if (behavior.sleeping || goal.key === "sleep") {
       return { text: "睡觉", color: "#263047", background: "#fff8df" };
+    }
+    if (behavior.key === "waking" || goal.key === "wake-recovery" || careNeed.key === "wake-recovery") {
+      return { text: "刚睡醒", color: "#263047", background: "#fff07d" };
     }
     if (behavior.key === "resting" || goal.key === "rest") {
       return { text: "休息", color: "#263047", background: "#d9f6ff" };
@@ -3219,7 +3231,17 @@ class CatWorldScene extends Phaser.Scene {
     else if (nightOwl && (hour >= 22 || hour < 5)) key = "night-watch";
     const moodFactor = mood < 38 ? 0.72 : mood < 56 ? 0.84 : 1;
     const energyFactor = energy < restThreshold + 8 ? 0.58 : energy < 58 ? 0.78 : 1;
-    const behaviorFactor = key === "slow" ? 0.72 : key === "exploring" ? 1.04 : key === "night-watch" ? 0.94 : key === "seeking-touch" ? 0.86 : 1;
+    const behaviorFactor = key === "waking"
+      ? 0.68
+      : key === "slow"
+        ? 0.72
+        : key === "exploring"
+          ? 1.04
+          : key === "night-watch"
+            ? 0.94
+            : key === "seeking-touch"
+              ? 0.86
+              : 1;
     const agentPace = clamp(0.86 + (activityBias - 50) / 180 + (stamina - 50) / 280, 0.72, 1.08);
     const movementSpeed = snapshotMovementSpeed(this.owner.snapshot);
     const walkSpeed = clamp(catTraitNumber(cat, "movement", 1) * movementSpeed * moodFactor * energyFactor * behaviorFactor * agentPace, 0.2, 1.65);
@@ -3227,6 +3249,8 @@ class CatWorldScene extends Phaser.Scene {
       ? 100
       : key === "resting"
         ? 92
+        : key === "waking"
+          ? 68
         : energy < restThreshold + 8
           ? 72
           : mood < 38
@@ -3465,6 +3489,7 @@ class CatWorldScene extends Phaser.Scene {
 
   catMicroAnimationKind(cat = {}, behavior = {}) {
     if (behavior.sleeping) return Phaser.Math.RND.pick(["breathe", "dream", "ear"]);
+    if (behavior.key === "waking") return Phaser.Math.RND.pick(["stretch", "blink", "groom"]);
     const habitAnimation = String(cat.individualHabit?.animation || "");
     if (habitAnimation && Phaser.Math.Between(1, 100) <= 38) return habitAnimation;
     const temperament = String(behavior.temperament || cat.traits?.temperament || "balanced");
@@ -3650,6 +3675,7 @@ class CatWorldScene extends Phaser.Scene {
 
   catIdleMessage(cat = {}, behavior = {}) {
     const goal = this.dailyGoalForCat(cat);
+    if (behavior.key === "waking") return "刚睡醒，先伸个懒腰。";
     if (behavior.energy < Number(behavior.restThreshold || 34) + 8) return "体力有点低，先坐一会儿。";
     if (behavior.mood < 38) return "今天心情不太好，想安静一下。";
     if (behavior.key === "seeking-touch") return "今天想让你多陪一会儿。";
@@ -4388,6 +4414,9 @@ class CatWorldScene extends Phaser.Scene {
     }
     if (behavior.mood < 38) {
       lines.unshift("今天心情不太好，陪我玩一下会好很多。");
+    }
+    if (behavior.key === "waking") {
+      lines.unshift("我刚睡醒，先伸个懒腰，再慢慢想今天去哪里。");
     }
     if (TEMPERAMENT_THOUGHTS[temperament]) lines.push(TEMPERAMENT_THOUGHTS[temperament]);
     if (behavior.curiosity >= 76) lines.push("我今天想试一条新的散步路线。");

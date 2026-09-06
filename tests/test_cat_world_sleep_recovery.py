@@ -9,11 +9,14 @@ from app.main import (
     CAT_WORLD_CAT_BY_ID,
     CAT_WORLD_DEFAULT_CAT_ID,
     apply_cat_world_hourly_decay,
+    cat_world_agent_payload,
+    cat_world_behavior_allows_mischief,
     cat_world_behavior_hourly_change,
     cat_world_cat_payload,
     cat_world_cat_traits,
     cat_world_current_behavior,
     cat_world_default_agent_state,
+    cat_world_wake_recovery_minutes,
     encode_cat_world_agent_state,
 )
 from app.models import CatWorldDailyLog
@@ -114,6 +117,58 @@ class CatWorldSleepRecoveryTest(unittest.TestCase):
         )
         self.assertGreaterEqual(adjusted_mood, 38)
         self.assertNotEqual(behavior["key"], "sulking")
+
+    def test_wake_recovery_lasts_two_hours_then_returns_to_normal_behavior(self):
+        first_hour = datetime(2026, 7, 27, 23, 30)
+        second_hour = datetime(2026, 7, 28, 0, 30)
+        after_recovery = datetime(2026, 7, 28, 1, 0)
+
+        self.assertEqual(cat_world_wake_recovery_minutes(first_hour, self.traits), 90)
+        self.assertEqual(cat_world_wake_recovery_minutes(second_hour, self.traits), 30)
+        self.assertEqual(cat_world_wake_recovery_minutes(after_recovery, self.traits), 0)
+
+        change = cat_world_behavior_hourly_change(
+            self.log,
+            self.traits,
+            {},
+            0,
+            second_hour,
+            litter_count=4,
+            bath_mood_penalty=3,
+            cat=self.cat,
+        )
+        self.assertEqual(change["behavior"]["key"], "waking")
+        self.assertEqual(change["label"], "睡醒缓冲")
+        self.assertGreaterEqual(change["moodDelta"], 1)
+
+        behavior = cat_world_current_behavior(
+            {"dailyMoodKey": "grumpy", "activityBias": 50, "socialNeed": 50},
+            self.traits,
+            24,
+            80,
+            after_recovery,
+        )
+        self.assertEqual(behavior["key"], "sulking")
+
+    def test_waking_payload_is_calm_and_defers_mischief(self):
+        wake_at = datetime(2026, 7, 27, 23, 30)
+        self.log.energy_score = 70
+        payload = cat_world_agent_payload(
+            self.log,
+            self.cat,
+            self.traits,
+            inventory={"reading-lamp": 1},
+            room_layout={"reading-lamp": {"x": 30, "y": 30}},
+            now=wake_at,
+        )
+
+        self.assertEqual(payload["currentBehavior"]["key"], "waking")
+        self.assertEqual(payload["dailyGoal"]["key"], "wake-recovery")
+        self.assertEqual(payload["dailyGoal"]["damageRisk"], 0.0)
+        self.assertEqual(payload["careNeed"]["key"], "wake-recovery")
+        self.assertEqual(payload["careNeed"]["status"], "calm")
+        self.assertIn("不会立刻闹情绪或捣蛋", payload["careTip"])
+        self.assertFalse(cat_world_behavior_allows_mischief(payload["currentBehavior"]))
 
 
 if __name__ == "__main__":

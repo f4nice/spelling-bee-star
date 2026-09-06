@@ -376,6 +376,42 @@ class CatWorldSceneRoamingTest(unittest.TestCase):
             self.assertFalse(changed)
             self.assertEqual(damaged, {})
 
+    def test_sleep_recovery_defers_room_damage_until_the_cat_is_active(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+
+        with Session(engine) as db:
+            m.seed_cat_world_scenes(db)
+            inventory = {"reading-lamp": 1}
+            state = self.make_state(
+                db,
+                inventory=inventory,
+                layout={"reading-lamp": {"x": 30, "y": 25}},
+                locations={"reading-lamp": "main-room"},
+            )
+            profile = m.create_cat_world_cat_profile(db, state, "siamese", "test")
+            profile.current_scene_key = "main-room"
+            db.flush()
+
+            with (
+                patch.object(m, "cat_world_behavior_allows_mischief", return_value=False) as allows_mischief,
+                patch.object(m, "cat_world_damage_attempt_ready", return_value=(True, "心情很差")),
+                patch.object(m, "cat_world_damage_probability", return_value=1.0),
+                patch.object(m, "cat_world_stable_ratio", return_value=0.0),
+            ):
+                damaged, changed = m.cat_world_apply_agent_damage_events(
+                    db,
+                    state,
+                    inventory,
+                    ["siamese"],
+                    {},
+                    m.CAT_WORLD_SHOP_BY_ID,
+                )
+
+            self.assertTrue(allows_mischief.called)
+            self.assertFalse(changed)
+            self.assertEqual(damaged, {})
+
     def test_room_interactions_target_a_cat_in_the_same_scene(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(engine)

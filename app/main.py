@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-020"
-DEFAULT_PAGE_VERSION = "v20260906.20"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-021"
+DEFAULT_PAGE_VERSION = "v20260906.21"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -303,6 +303,7 @@ CAT_WORLD_HUNGER_ESCAPE_HOURS = 72
 CAT_WORLD_LOW_MOOD_WARNING_SCORE = 10
 CAT_WORLD_LOW_MOOD_CRITICAL_HOURS = 48
 CAT_WORLD_LOW_MOOD_ESCAPE_HOURS = 120
+CAT_WORLD_WAKE_RECOVERY_HOURS = 2
 CAT_WORLD_CAT_PATTERNS = [
     {"key": "classic", "label": "经典原生纹"},
     {"key": "bold-stripes", "label": "深色条纹"},
@@ -16776,16 +16777,27 @@ def cat_world_is_sleep_hour(hour: int, sleep_start: int, sleep_end: int) -> bool
     return hour >= sleep_start or hour < sleep_end
 
 
-def cat_world_is_wake_transition(now: datetime, traits: dict[str, Any]) -> bool:
+def cat_world_wake_recovery_minutes(now: datetime, traits: dict[str, Any]) -> int:
     if bool(traits.get("nightOwl")):
-        return False
-    sleep_start = int(traits.get("sleepStart") or 23)
-    sleep_end = int(traits.get("sleepEnd") or 7)
+        return 0
+    sleep_start = int(traits.get("sleepStart") or 23) % 24
+    sleep_end = int(traits.get("sleepEnd") or 7) % 24
+    if sleep_start == sleep_end:
+        return 0
     local_now = cat_world_local_now(now)
-    return (
-        cat_world_is_sleep_hour((local_now - timedelta(hours=1)).hour, sleep_start, sleep_end)
-        and not cat_world_is_sleep_hour(local_now.hour, sleep_start, sleep_end)
-    )
+    if cat_world_is_sleep_hour(local_now.hour, sleep_start, sleep_end):
+        return 0
+    wake_minute = sleep_end * 60
+    current_minute = local_now.hour * 60 + local_now.minute
+    elapsed_minutes = (current_minute - wake_minute) % (24 * 60)
+    recovery_minutes = CAT_WORLD_WAKE_RECOVERY_HOURS * 60
+    if elapsed_minutes >= recovery_minutes:
+        return 0
+    return recovery_minutes - elapsed_minutes
+
+
+def cat_world_is_wake_transition(now: datetime, traits: dict[str, Any]) -> bool:
+    return cat_world_wake_recovery_minutes(now, traits) > (CAT_WORLD_WAKE_RECOVERY_HOURS - 1) * 60
 
 
 def cat_world_stable_ratio(seed: str) -> float:
@@ -17476,7 +17488,8 @@ def cat_world_current_behavior(
     energy_score: int,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    local_now = cat_world_local_now(now)
+    base_now = now or datetime.utcnow()
+    local_now = cat_world_local_now(base_now)
     hour = local_now.hour
     activity_bias = min(max(int(agent_state.get("activityBias") or 50), 0), 100)
     social_need = min(max(int(agent_state.get("socialNeed") or 50), 0), 100)
@@ -17484,9 +17497,14 @@ def cat_world_current_behavior(
         cat_world_is_sleep_hour(hour, int(traits.get("sleepStart") or 23), int(traits.get("sleepEnd") or 7))
         and not bool(traits.get("nightOwl"))
     )
+    wake_recovery_minutes = cat_world_wake_recovery_minutes(base_now, traits)
+    waking = not sleeping and wake_recovery_minutes > 0
     if sleeping:
         key = "sleeping"
         label = "晚上睡觉中"
+    elif waking:
+        key = "waking"
+        label = "刚睡醒，慢慢舒展"
     elif energy_score < int(traits.get("restThreshold") or 34):
         key = "resting"
         label = "体力低，原地休息"
@@ -17513,6 +17531,9 @@ def cat_world_current_behavior(
         "label": label,
         "hour": hour,
         "sleeping": sleeping,
+        "waking": waking,
+        "recovering": sleeping or waking,
+        "wakeRecoveryMinutes": wake_recovery_minutes,
         "nightOwl": bool(traits.get("nightOwl")),
     }
 
@@ -17558,7 +17579,8 @@ def cat_world_behavior_hourly_change(
     behavior = cat_world_current_behavior(agent_state, traits, mood_score, energy_score, now)
     mood_key = str(agent_state.get("dailyMoodKey") or "")
     sleeping = behavior["key"] == "sleeping"
-    waking = cat_world_is_wake_transition(now, traits)
+    waking = behavior["key"] == "waking"
+    wake_transition = waking and cat_world_is_wake_transition(now, traits)
     recovering = sleeping or waking
 
     mood_delta = -mood_decay
@@ -17581,10 +17603,15 @@ def cat_world_behavior_hourly_change(
         label = "睡觉恢复"
         reason = "按自己的作息睡觉"
     elif waking:
-        energy_delta = max(1, round(2 / max(float(traits["energyDrain"]), 0.5)))
-        mood_delta = 6
-        label = "睡醒舒展"
-        reason = "睡足后醒来，坏情绪得到缓解"
+        recovery_energy = 2 if wake_transition else 1
+        energy_delta = max(1, round(recovery_energy / max(float(traits["energyDrain"]), 0.5)))
+        mood_delta = 6 if wake_transition else 2
+        label = "睡醒舒展" if wake_transition else "睡醒缓冲"
+        reason = (
+            "睡足后醒来，坏情绪得到缓解"
+            if wake_transition
+            else "刚睡醒，按自己的节奏慢慢进入活动状态"
+        )
     elif behavior["key"] == "resting":
         energy_delta = -max(1, round(energy_decay * 0.35))
         mood_delta = -max(1, round(mood_decay * 0.45))
@@ -17639,7 +17666,7 @@ def cat_world_behavior_hourly_change(
     if sleeping:
         mood_delta = max(mood_delta, 2)
     elif waking:
-        mood_delta = max(mood_delta, 4)
+        mood_delta = max(mood_delta, 4 if wake_transition else 1)
 
     if daily_notes:
         reason = f"{reason}，{'、'.join(daily_notes)}"
@@ -17719,6 +17746,13 @@ def cat_world_damage_attempt_ready(agent_state: dict[str, Any], traits: dict[str
     return False, "心情稳定，今天先不破坏道具"
 
 
+def cat_world_behavior_allows_mischief(behavior: dict[str, Any]) -> bool:
+    return not bool(behavior.get("sleeping")) and str(behavior.get("key") or "") not in {
+        "sleeping",
+        "waking",
+    }
+
+
 def cat_world_agent_daily_goal(
     log: CatWorldDailyLog,
     cat: dict[str, Any],
@@ -17748,10 +17782,18 @@ def cat_world_agent_daily_goal(
     active_favorites = [item_id for item_id in favorite_active_ids if item_id in owned_decor]
     favorite_owned_toys = [item_id for item_id in owned_toys if cat_world_cat_likes_item(cat, item_id, "toy")]
     damage_candidates = sorted(set(owned_toys + owned_decor))
+    allows_mischief = cat_world_behavior_allows_mischief(behavior)
     damage_ready, damage_ready_reason = cat_world_damage_attempt_ready(agent_state, traits, mood_score)
-    damage_probability = cat_world_damage_probability(agent_state, traits, mood_score)
+    damage_ready = damage_ready and allows_mischief
+    damage_probability = (
+        cat_world_damage_probability(agent_state, traits, mood_score) if allows_mischief else 0.0
+    )
     risk_label = cat_world_damage_risk_label(damage_probability)
-    risk_reason = cat_world_damage_risk_reason(agent_state, traits, mood_score)
+    risk_reason = (
+        cat_world_damage_risk_reason(agent_state, traits, mood_score)
+        if allows_mischief
+        else "睡觉和刚睡醒时不会捣蛋"
+    )
 
     def goal(
         key: str,
@@ -17792,6 +17834,15 @@ def cat_world_agent_daily_goal(
             "rest",
             "",
             12,
+        )
+    if behavior.get("key") == "waking":
+        return goal(
+            "wake-recovery",
+            "睡醒缓冲",
+            f"{cat['label']}刚睡醒，正在伸懒腰，缓一会儿再决定今天去哪里。",
+            "rest",
+            "",
+            10,
         )
 
     if damage_ready and damage_candidates:
@@ -17886,6 +17937,8 @@ def cat_world_agent_care_tip(
         return f"{cat_label}现在按作息睡觉，醒来后再喂食或陪玩更有效。"
     if energy_score < rest_threshold:
         return f"{cat_label}体力不足，优先摆放食物；吃完前会尽量原地休息。"
+    if behavior.get("key") == "waking":
+        return f"{cat_label}刚睡醒，正在伸懒腰；让它缓一会儿，不会立刻闹情绪或捣蛋。"
     if daily_goal.get("key") == "mischief-watch":
         return f"{cat_label}有捣蛋风险，先用食物、摸摸或喜欢的玩具安抚，能降低破坏概率。"
     if mood_score < 42:
@@ -17965,7 +18018,6 @@ def cat_world_agent_care_need(
             18,
             "rest",
         )
-
     if damaged_item_id:
         damaged_label = CAT_WORLD_SHOP_BY_ID.get(damaged_item_id, {}).get("label") or damaged_item_id
         return need(
@@ -17995,6 +18047,16 @@ def cat_world_agent_care_need(
             90,
             "food",
             target_item_id,
+        )
+
+    if behavior.get("key") == "waking":
+        return need(
+            "wake-recovery",
+            "刚睡醒",
+            "让它缓一缓",
+            f"{cat_label}刚睡醒，正在慢慢舒展，不需要立刻安抚。",
+            24,
+            "rest",
         )
 
     if daily_goal.get("key") == "mischief-watch":
@@ -19001,6 +19063,21 @@ def cat_world_apply_agent_damage_events(
                 changed = True
             continue
         adjusted_mood_score = clamp_cat_world_score(int(log.mood_score or 0) + int(agent_state.get("moodOffset") or 0))
+        adjusted_energy_score = clamp_cat_world_score(
+            int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0)
+        )
+        behavior = cat_world_current_behavior(
+            agent_state,
+            traits,
+            adjusted_mood_score,
+            adjusted_energy_score,
+            now,
+        )
+        if not cat_world_behavior_allows_mischief(behavior):
+            if agent_changed:
+                db.add(log)
+                changed = True
+            continue
         ready, ready_reason = cat_world_damage_attempt_ready(agent_state, traits, adjusted_mood_score)
         if not ready:
             if agent_changed:
@@ -19155,6 +19232,13 @@ def cat_world_routine_effect_message(
             f"{cat_label}{period_label}按自己的作息睡了一会儿，体力慢慢回来了。",
             1 if mood_key not in {"grumpy", "quiet"} else 0,
             2,
+        )
+    if behavior_key == "waking":
+        return (
+            "睡醒舒展",
+            f"{cat_label}刚睡醒，伸了个懒腰，慢慢进入今天的活动节奏。",
+            2,
+            1,
         )
     if behavior_key == "resting":
         return (
