@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Flame as FlameIcon, Hammer as HammerIcon, House as HouseIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, ShoppingBag as ShoppingBagIcon, Shovel as ShovelIcon, X as XIcon } from "lucide-vue-next";
+import { Archive as ArchiveIcon, Award as AwardIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Flame as FlameIcon, Hammer as HammerIcon, Heart as HeartIcon, House as HouseIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, ShoppingBag as ShoppingBagIcon, Shovel as ShovelIcon, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -298,9 +298,11 @@ watch(playTimeLocked, (locked) => {
 });
 const state = computed(() => payload.value.state || {});
 const scenes = computed(() => payload.value.scenes || []);
-const currentScene = computed(
-  () => state.value.currentScene || scenes.value.find((scene) => scene.id === state.value.currentSceneId) || {},
-);
+const currentScene = computed(() => {
+  const configured = state.value.currentScene || {};
+  const catalog = scenes.value.find((scene) => scene.id === (state.value.currentSceneId || configured.id)) || {};
+  return { ...configured, ...catalog };
+});
 function sceneStatusLabel(scene) {
   const activity = [
     scene?.hasActiveFood ? "进食中" : "",
@@ -308,6 +310,28 @@ function sceneStatusLabel(scene) {
   ].filter(Boolean);
   return `${scene?.catCount || 0}只 · ${scene?.itemCount || 0}件${activity.length ? ` · ${activity.join(" · ")}` : ""}`;
 }
+function sceneAttractionRows(scene) {
+  return Array.isArray(scene?.catAttractions) ? scene.catAttractions.filter((row) => row?.catLabel) : [];
+}
+function sceneAttractionSummary(scene, limit = 2) {
+  const rows = sceneAttractionRows(scene);
+  const visible = rows.slice(0, limit).map((row) => {
+    const itemLabel = Array.isArray(row.itemLabels) ? row.itemLabels[0] : "";
+    return `${row.catLabel}${itemLabel ? `喜欢${itemLabel}` : "觉得这里很舒服"}`;
+  });
+  const hiddenCount = Math.max(rows.length - visible.length, 0);
+  return `${visible.join(" · ")}${hiddenCount ? ` · 另有 ${hiddenCount} 只` : ""}`;
+}
+function sceneActionTitle(scene) {
+  const base = scene.available
+    ? `进入${scene.label}`
+    : scene.enabled
+      ? `购买${scene.label}`
+      : `${scene.label}尚未开放`;
+  const attraction = sceneAttractionSummary(scene, 4);
+  return attraction ? `${base}。${attraction}` : base;
+}
+const currentSceneAttractionText = computed(() => sceneAttractionSummary(currentScene.value, 3));
 const inventory = computed(() => state.value.inventory || {});
 const usableInventory = computed(() => state.value.usableInventory || inventory.value);
 const sceneInventory = computed(() => state.value.sceneInventory || inventory.value);
@@ -2545,13 +2569,17 @@ async function selectCat(catOrId, options = {}) {
               'has-live-activity': scene.hasActiveFood || scene.hasActiveCare,
             }"
             :disabled="!scene.enabled || Boolean(busySceneId)"
-            :title="scene.available ? `进入${scene.label}` : scene.enabled ? `购买${scene.label}` : `${scene.label}尚未开放`"
+            :title="sceneActionTitle(scene)"
             @click="handleSceneAction(scene)"
           >
             <span>{{ scene.label }}</span>
             <small v-if="scene.enabled && !scene.unlocked">{{ Number(scene.purchaseCost || 0).toLocaleString() }} 能量</small>
             <small v-else-if="!scene.enabled">规划中</small>
             <small v-else>{{ sceneStatusLabel(scene) }}</small>
+            <em v-if="scene.available && scene.attractedCatCount" class="cat-world-scene-attraction">
+              <HeartIcon :size="11" :stroke-width="3" aria-hidden="true" />
+              {{ scene.attractedCatCount }}猫喜欢
+            </em>
           </button>
         </div>
       </nav>
@@ -2561,6 +2589,11 @@ async function selectCat(catOrId, options = {}) {
           <div>
             <p class="section-kicker">{{ currentScene.englishName || "Room" }}</p>
             <h2>{{ currentScene.label || "像素猫活动室" }}</h2>
+            <p v-if="currentSceneAttractionText" class="cat-world-room-attraction" :title="sceneAttractionSummary(currentScene, 8)">
+              <HeartIcon :size="14" :stroke-width="3" aria-hidden="true" />
+              <strong>房间吸引力</strong>
+              <span>{{ currentSceneAttractionText }}</span>
+            </p>
           </div>
           <div class="cat-world-room-actions">
             <button

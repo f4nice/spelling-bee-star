@@ -16029,6 +16029,55 @@ select {
   font-size: 11px;
 }
 
+.cat-world-scene-attraction {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 2px solid #2c2f3a;
+  border-radius: 3px;
+  padding: 2px 4px;
+  color: #7d3157;
+  background: #ffd7e7;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.cat-world-scene-dock .cat-world-scene-tabs button.active .cat-world-scene-attraction,
+.cat-world-scene-dock .cat-world-scene-tabs button:not(:disabled):hover .cat-world-scene-attraction,
+.cat-world-scene-dock .cat-world-scene-tabs button:not(:disabled):focus-visible .cat-world-scene-attraction {
+  border-color: rgba(255, 255, 255, 0.78);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.cat-world-room-attraction {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(720px, 72vw);
+  margin: 5px 0 0;
+  color: #526178;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.cat-world-room-attraction svg,
+.cat-world-room-attraction strong {
+  flex: 0 0 auto;
+  color: #c34e79;
+}
+
+.cat-world-room-attraction span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .cat-world-scene-dock .cat-world-scene-tabs button.has-live-activity {
   border-color: #9a6317;
   box-shadow: 3px 3px 0 #2c2f3a, inset 0 0 0 2px #ffd75a;

@@ -61,3 +61,22 @@ test("cat cards expose individual preferences with white text on green interacti
     /\.cat-world-cat-chip\.active \.cat-world-cat-individual-preference,[\s\S]*?color: #fff;/,
   );
 });
+
+test("scene map explains room attraction without weakening active-state contrast", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
+
+  assert.match(page, /return \{ \.\.\.configured, \.\.\.catalog \};/);
+  assert.match(page, /function sceneAttractionSummary\(scene, limit = 2\)/);
+  assert.match(page, /:title="sceneActionTitle\(scene\)"/);
+  assert.match(page, /class="cat-world-scene-attraction"/);
+  assert.match(page, /\{\{ scene\.attractedCatCount \}\}猫喜欢/);
+  assert.match(page, /class="cat-world-room-attraction"/);
+  assert.match(page, /<strong>房间吸引力<\/strong>/);
+  assert.match(
+    styles,
+    /button\.active \.cat-world-scene-attraction,[\s\S]*?color: #fff;/,
+  );
+});

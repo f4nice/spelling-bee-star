@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-019"
-DEFAULT_PAGE_VERSION = "v20260906.19"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-020"
+DEFAULT_PAGE_VERSION = "v20260906.20"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -16291,6 +16291,63 @@ def cat_world_scene_environment(
     }
 
 
+def cat_world_scene_preference_matches(
+    cat: dict[str, Any],
+    environment: dict[str, Any],
+) -> list[str]:
+    inventory = environment.get("inventory") if isinstance(environment.get("inventory"), dict) else {}
+    layout = environment.get("layout") if isinstance(environment.get("layout"), dict) else {}
+    preferred_ids = [
+        *cat_world_cat_preference_ids(cat, {"toy"}),
+        *cat_world_cat_preference_ids(cat, {"decor"}),
+    ]
+    matches: list[str] = []
+    for item_id in dict.fromkeys(preferred_ids):
+        item = CAT_WORLD_SHOP_BY_ID.get(item_id, {})
+        category = str(item.get("category") or "")
+        if inventory.get(item_id, 0) <= 0:
+            continue
+        if category == "decor" and item_id not in layout:
+            continue
+        if category in {"decor", "toy"}:
+            matches.append(item_id)
+    return matches
+
+
+def cat_world_scene_attraction_payload(
+    db: Session,
+    state: CatWorldState,
+    scene_key: str,
+    cats: list[dict[str, Any]],
+    usable_inventory: dict[str, int],
+) -> dict[str, Any]:
+    environment = cat_world_scene_environment(db, state, usable_inventory, scene_key)
+    attractions: list[dict[str, Any]] = []
+    matched_item_ids: list[str] = []
+    for cat in cats:
+        item_ids = cat_world_scene_preference_matches(cat, environment)
+        if not item_ids:
+            continue
+        matched_item_ids.extend(item_ids)
+        attractions.append(
+            {
+                "catId": str(cat.get("profileId") or cat.get("id") or ""),
+                "catLabel": str(cat.get("displayLabel") or cat.get("label") or "猫咪"),
+                "resident": str(cat.get("currentSceneId") or CAT_WORLD_DEFAULT_SCENE_KEY) == scene_key,
+                "itemIds": item_ids,
+                "itemLabels": [
+                    str(CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("label") or item_id)
+                    for item_id in item_ids
+                ],
+            }
+        )
+    return {
+        "attractedCatCount": len(attractions),
+        "attractionItemCount": len(set(matched_item_ids)),
+        "catAttractions": attractions,
+    }
+
+
 def cat_world_active_scene_styles(
     db: Session,
     state: CatWorldState,
@@ -16327,8 +16384,13 @@ def save_cat_world_active_scene_styles(
 def cat_world_scene_catalog_payload(db: Session, state: CatWorldState) -> list[dict[str, Any]]:
     rows = db.scalars(select(CatWorldScene).order_by(CatWorldScene.sort_order, CatWorldScene.id)).all()
     inventory = parse_cat_world_inventory(state.inventory)
+    usable_inventory = cat_world_usable_inventory(
+        inventory,
+        parse_cat_world_damaged_items(state.damaged_items),
+    )
     item_locations = parse_cat_world_item_locations(state.item_locations, inventory)
     profiles = cat_world_active_cat_profiles(db, state.phone)
+    cats = [cat_world_cat_profile_payload(profile) for profile in profiles]
     item_counts: dict[str, int] = {}
     for item_id, location in item_locations.items():
         if inventory.get(item_id, 0) > 0:
@@ -16356,11 +16418,28 @@ def cat_world_scene_catalog_payload(db: Session, state: CatWorldState) -> list[d
     payload: list[dict[str, Any]] = []
     for row in rows:
         config = cat_world_scene_config(row)
+        features = config.get("features") if isinstance(config.get("features"), dict) else {}
         user_row = user_rows.get(row.scene_key)
         unlocked = bool(user_row.is_unlocked) if user_row else bool(config.get("unlockByDefault"))
+        attraction = (
+            cat_world_scene_attraction_payload(
+                db,
+                state,
+                row.scene_key,
+                cats,
+                usable_inventory,
+            )
+            if row.is_enabled and unlocked and features.get("cats") is not False
+            else {
+                "attractedCatCount": 0,
+                "attractionItemCount": 0,
+                "catAttractions": [],
+            }
+        )
         payload.append(
             {
                 **config,
+                **attraction,
                 "unlocked": unlocked,
                 "available": bool(row.is_enabled and unlocked),
                 "itemCount": item_counts.get(row.scene_key, 0),
@@ -19711,29 +19790,6 @@ def cat_world_record_manual_scene_move(
     agent_state["sceneRoamReason"] = "被你带到这里"
     log.agent_state = encode_cat_world_agent_state(agent_state)
     db.add(log)
-
-
-def cat_world_scene_preference_matches(
-    cat: dict[str, Any],
-    environment: dict[str, Any],
-) -> list[str]:
-    inventory = environment.get("inventory") if isinstance(environment.get("inventory"), dict) else {}
-    layout = environment.get("layout") if isinstance(environment.get("layout"), dict) else {}
-    preferred_ids = [
-        *cat_world_cat_preference_ids(cat, {"toy"}),
-        *cat_world_cat_preference_ids(cat, {"decor"}),
-    ]
-    matches: list[str] = []
-    for item_id in dict.fromkeys(preferred_ids):
-        item = CAT_WORLD_SHOP_BY_ID.get(item_id, {})
-        category = str(item.get("category") or "")
-        if inventory.get(item_id, 0) <= 0:
-            continue
-        if category == "decor" and item_id not in layout:
-            continue
-        if category in {"decor", "toy"}:
-            matches.append(item_id)
-    return matches
 
 
 def cat_world_apply_autonomous_scene_roaming(

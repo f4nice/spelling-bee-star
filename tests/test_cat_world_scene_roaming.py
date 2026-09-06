@@ -168,6 +168,53 @@ class CatWorldSceneRoamingTest(unittest.TestCase):
             self.assertIn("喜欢的", moves[0]["reason"])
             self.assertIn(m.CAT_WORLD_SHOP_BY_ID[favorite_toy_id]["label"], moves[0]["message"])
 
+    def test_scene_catalog_explains_which_individual_cats_like_each_room(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+
+        with Session(engine) as db:
+            m.seed_cat_world_scenes(db)
+            state = self.make_state(db)
+            self.unlock_scene(db, state, "yard")
+            first = m.create_cat_world_cat_profile(db, state, "siamese", "test")
+            second = m.create_cat_world_cat_profile(db, state, "siamese", "test")
+            first.profile_id = "siamese-profile-alpha"
+            second.profile_id = "siamese-profile-beta"
+            first.current_scene_key = "main-room"
+            second.current_scene_key = "main-room"
+            first_cat = m.cat_world_cat_profile_payload(first)
+            second_cat = m.cat_world_cat_profile_payload(second)
+            first_toy = first_cat["favoriteToyIds"][0]
+            second_toy = second_cat["favoriteToyIds"][0]
+            self.assertNotEqual(first_toy, second_toy)
+            state.inventory = m.encode_cat_world_inventory({first_toy: 1, second_toy: 1})
+            state.item_locations = m.encode_cat_world_item_locations(
+                {first_toy: "yard", second_toy: "yard"}
+            )
+            db.flush()
+
+            catalog = m.cat_world_scene_catalog_payload(db, state)
+            yard = next(scene for scene in catalog if scene["id"] == "yard")
+            main_room = next(scene for scene in catalog if scene["id"] == "main-room")
+
+            self.assertEqual(yard["attractedCatCount"], 2)
+            self.assertEqual(yard["attractionItemCount"], 2)
+            self.assertEqual(
+                {row["catId"] for row in yard["catAttractions"]},
+                {first.profile_id, second.profile_id},
+            )
+            self.assertTrue(all(not row["resident"] for row in yard["catAttractions"]))
+            self.assertEqual(main_room["attractedCatCount"], 0)
+
+            state.damaged_items = m.encode_cat_world_damaged_items(
+                {first_toy: {"reason": "test damage"}}
+            )
+            damaged_catalog = m.cat_world_scene_catalog_payload(db, state)
+            damaged_yard = next(scene for scene in damaged_catalog if scene["id"] == "yard")
+
+            self.assertEqual(damaged_yard["attractedCatCount"], 1)
+            self.assertEqual(damaged_yard["catAttractions"][0]["catId"], second.profile_id)
+
     def test_favorite_decor_rewards_only_cats_in_the_active_scene(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(engine)
