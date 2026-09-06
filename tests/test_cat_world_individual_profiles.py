@@ -17,6 +17,7 @@ from app.main import (
     cat_world_apply_learning_companion_rewards,
     cat_world_apply_pet_effect,
     cat_world_cat_profile_payload,
+    cat_world_profile_favorite_item_ids,
     cat_world_consume_rename_card,
     cat_world_learning_companion_profile_id,
     cat_world_learning_companion_message,
@@ -261,6 +262,8 @@ class CatWorldIndividualProfileTest(unittest.TestCase):
 
             first = create_cat_world_cat_profile(db, state, "siamese", "test")
             second = create_cat_world_cat_profile(db, state, "siamese", "test")
+            first.profile_id = "siamese-profile-alpha"
+            second.profile_id = "siamese-profile-beta"
             db.flush()
 
             first_cat = cat_world_cat_profile_payload(first)
@@ -270,6 +273,13 @@ class CatWorldIndividualProfileTest(unittest.TestCase):
             self.assertEqual(first_cat["traits"]["personalityModel"], 2)
             self.assertEqual(second_cat["traits"]["personalityModel"], 2)
             self.assertNotEqual(first_cat["traits"], second_cat["traits"])
+            self.assertEqual(first_cat["preferenceModel"], 1)
+            self.assertEqual(second_cat["preferenceModel"], 1)
+            self.assertEqual(first_cat["favoriteItemIds"], cat_world_profile_favorite_item_ids(first))
+            self.assertEqual(second_cat["favoriteItemIds"], cat_world_profile_favorite_item_ids(second))
+            self.assertNotEqual(first_cat["favoriteFoodIds"], second_cat["favoriteFoodIds"])
+            self.assertNotEqual(first_cat["favoriteToyIds"], second_cat["favoriteToyIds"])
+            self.assertNotEqual(first_cat["favoriteDecorIds"], second_cat["favoriteDecorIds"])
             self.assertNotEqual(
                 first_cat["individualHabit"]["id"],
                 second_cat["individualHabit"]["id"],

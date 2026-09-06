@@ -14635,6 +14635,7 @@ select {
 }
 
 .cat-world-cat-individual-habit,
+.cat-world-cat-individual-preference,
 .cat-world-cat-learning-style {
   display: flex !important;
   align-items: center;
@@ -14651,18 +14652,26 @@ select {
   background: #d9f6ff;
 }
 
+.cat-world-cat-individual-preference {
+  background: #e7f8dd;
+}
+
 .cat-world-cat-individual-habit b,
+.cat-world-cat-individual-preference b,
 .cat-world-cat-learning-style b {
   flex: 0 0 auto;
 }
 
 .cat-world-cat-individual-habit em,
+.cat-world-cat-individual-preference em,
 .cat-world-cat-learning-style em {
   text-align: right;
 }
 
 .cat-world-cat-chip.active .cat-world-cat-individual-habit,
 .cat-world-cat-chip:not(:disabled):hover .cat-world-cat-individual-habit,
+.cat-world-cat-chip.active .cat-world-cat-individual-preference,
+.cat-world-cat-chip:not(:disabled):hover .cat-world-cat-individual-preference,
 .cat-world-cat-chip.active .cat-world-cat-learning-style,
 .cat-world-cat-chip:not(:disabled):hover .cat-world-cat-learning-style {
   border-color: rgba(255, 255, 255, 0.72);

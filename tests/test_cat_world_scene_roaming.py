@@ -132,22 +132,59 @@ class CatWorldSceneRoamingTest(unittest.TestCase):
             self.assertEqual(held_moves, [])
             self.assertEqual(profile.current_scene_key, "main-room")
 
+    def test_cat_prefers_a_room_containing_its_individual_favorite_item(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+
+        with Session(engine) as db:
+            m.seed_cat_world_scenes(db)
+            state = self.make_state(db)
+            self.unlock_scene(db, state, "yard")
+            companion = m.create_cat_world_cat_profile(db, state, "siamese", "test")
+            profile = m.create_cat_world_cat_profile(db, state, "siamese", "test")
+            profile.profile_id = "siamese-profile-alpha"
+            profile.favorite_scene_key = "main-room"
+            profile.current_scene_key = "main-room"
+            companion.current_scene_key = "main-room"
+            state.selected_cat_profile = companion.profile_id
+            favorite_toy_id = m.cat_world_cat_profile_payload(profile)["favoriteToyIds"][0]
+            state.inventory = m.encode_cat_world_inventory({favorite_toy_id: 1})
+            state.item_locations = m.encode_cat_world_item_locations({favorite_toy_id: "yard"})
+            db.flush()
+
+            with patch.object(m, "cat_world_stable_ratio", return_value=0.0):
+                moves, changed = m.cat_world_apply_autonomous_scene_roaming(
+                    db,
+                    state,
+                    [companion, profile],
+                    datetime(2026, 9, 7, 6, 0),
+                )
+
+            self.assertTrue(changed)
+            self.assertEqual(profile.current_scene_key, "yard")
+            self.assertEqual(len(moves), 1)
+            self.assertEqual(moves[0]["targetItemId"], favorite_toy_id)
+            self.assertEqual(moves[0]["targetItemLabel"], m.CAT_WORLD_SHOP_BY_ID[favorite_toy_id]["label"])
+            self.assertIn("喜欢的", moves[0]["reason"])
+            self.assertIn(m.CAT_WORLD_SHOP_BY_ID[favorite_toy_id]["label"], moves[0]["message"])
+
     def test_favorite_decor_rewards_only_cats_in_the_active_scene(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(engine)
 
         with Session(engine) as db:
             m.seed_cat_world_scenes(db)
-            inventory = {"moon-window": 1}
-            layout = {"moon-window": {"x": 40, "y": 20}}
-            state = self.make_state(
-                db,
-                inventory=inventory,
-                layout=layout,
-                locations={"moon-window": "main-room"},
-            )
+            state = self.make_state(db)
             room_cat = m.create_cat_world_cat_profile(db, state, "siamese", "test")
             away_cat = m.create_cat_world_cat_profile(db, state, "siamese", "test")
+            favorite_decor_id = m.cat_world_cat_profile_payload(room_cat)["favoriteDecorIds"][0]
+            inventory = {favorite_decor_id: 1}
+            layout = {favorite_decor_id: {"x": 40, "y": 20}}
+            state.inventory = m.encode_cat_world_inventory(inventory)
+            state.item_locations = m.encode_cat_world_item_locations({favorite_decor_id: "main-room"})
+            main_scene = m.cat_world_scene_row(db, "main-room")
+            main_user_scene, _ = m.get_or_create_cat_world_user_scene(db, state, main_scene)
+            main_user_scene.layout = m.encode_cat_world_room_layout(layout)
             room_cat.current_scene_key = "main-room"
             away_cat.current_scene_key = "yard"
             db.flush()
@@ -225,17 +262,18 @@ class CatWorldSceneRoamingTest(unittest.TestCase):
 
         with Session(engine) as db:
             m.seed_cat_world_scenes(db)
-            inventory = {"moon-window": 1}
-            layout = {"moon-window": {"x": 40, "y": 20}}
-            state = self.make_state(
-                db,
-                inventory=inventory,
-                layout=layout,
-                locations={"moon-window": "main-room"},
-            )
+            state = self.make_state(db)
             self.unlock_scene(db, state, "yard")
             room_cat = m.create_cat_world_cat_profile(db, state, "siamese", "test")
             away_cat = m.create_cat_world_cat_profile(db, state, "siamese", "test")
+            favorite_decor_id = m.cat_world_cat_profile_payload(room_cat)["favoriteDecorIds"][0]
+            inventory = {favorite_decor_id: 1}
+            layout = {favorite_decor_id: {"x": 40, "y": 20}}
+            state.inventory = m.encode_cat_world_inventory(inventory)
+            state.item_locations = m.encode_cat_world_item_locations({favorite_decor_id: "main-room"})
+            main_scene = m.cat_world_scene_row(db, "main-room")
+            main_user_scene, _ = m.get_or_create_cat_world_user_scene(db, state, main_scene)
+            main_user_scene.layout = m.encode_cat_world_room_layout(layout)
             room_cat.current_scene_key = "main-room"
             away_cat.current_scene_key = "yard"
             db.flush()
@@ -254,7 +292,7 @@ class CatWorldSceneRoamingTest(unittest.TestCase):
                 environments,
             )
 
-            self.assertEqual(daily_logs[room_cat.profile_id]["favoriteActiveDecorIds"], ["moon-window"])
+            self.assertEqual(daily_logs[room_cat.profile_id]["favoriteActiveDecorIds"], [favorite_decor_id])
             self.assertEqual(daily_logs[away_cat.profile_id]["favoriteActiveDecorIds"], [])
 
     def test_cat_in_another_scene_cannot_damage_active_room_furniture(self):

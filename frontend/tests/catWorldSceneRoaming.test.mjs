@@ -46,3 +46,18 @@ test("timed food and care stay visible only in their own scene", async () => {
   assert.match(page, /'has-live-activity': scene\.hasActiveFood \|\| scene\.hasActiveCare/);
   assert.match(styles, /button\.has-live-activity \{[\s\S]*?border-color: #9a6317;/);
 });
+
+test("cat cards expose individual preferences with white text on green interaction states", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
+
+  assert.match(page, /class="cat-world-cat-individual-preference"/);
+  assert.match(page, /cat\.favoriteItemLabels\.slice\(0, 3\)\.join\("、"\)/);
+  assert.match(page, /<dt>个体偏好<\/dt>/);
+  assert.match(
+    styles,
+    /\.cat-world-cat-chip\.active \.cat-world-cat-individual-preference,[\s\S]*?color: #fff;/,
+  );
+});

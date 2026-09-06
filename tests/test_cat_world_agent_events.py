@@ -46,12 +46,15 @@ class CatWorldAgentEventTest(unittest.TestCase):
             db.flush()
             profile = m.create_cat_world_cat_profile(db, state, "siamese", "test")
             state.selected_cat_profile = profile.profile_id
+            favorite_toy_id = m.cat_world_cat_profile_payload(profile)["favoriteToyIds"][0]
+            state.inventory = m.encode_cat_world_inventory({favorite_toy_id: 1})
+            state.item_locations = m.encode_cat_world_item_locations({favorite_toy_id: "main-room"})
             db.flush()
 
             request = JsonRequest(
                 {
                     "catId": profile.profile_id,
-                    "itemId": "rolling-ball",
+                    "itemId": favorite_toy_id,
                     "kind": "favorite-toy",
                 }
             )
@@ -79,7 +82,7 @@ class CatWorldAgentEventTest(unittest.TestCase):
             self.assertIsNotNone(log)
             agent_state = m.parse_cat_world_agent_state(log.agent_state)
             self.assertEqual(agent_state["ambientEffectCount"], 1)
-            self.assertIn("favorite-toy:rolling-ball", agent_state["ambientEventAt"])
+            self.assertIn(f"favorite-toy:{favorite_toy_id}", agent_state["ambientEventAt"])
             self.assertEqual(agent_state["events"][-1]["kind"], "favorite-toy")
 
 

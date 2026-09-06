@@ -3111,7 +3111,7 @@ async function selectCat(catOrId, options = {}) {
           <div><dt>离家风险</dt><dd>{{ activeCatDiary.neglectCountdownLabel }}</dd></div>
           <div><dt>当前需求</dt><dd>{{ activeCatDiary.needLabel }} · {{ activeCatDiary.needActionLabel }}</dd></div>
           <div><dt>减耗</dt><dd>{{ activeCatDiary.comfortLabel }}</dd></div>
-          <div><dt>偏好</dt><dd>{{ activeCatDiary.favoriteItemLabel }}</dd></div>
+          <div><dt>个体偏好</dt><dd>{{ activeCatDiary.favoriteItemLabel }}</dd></div>
           <div><dt>家具加成</dt><dd>{{ activeCatDiary.activeFavoriteLabel }}</dd></div>
           <div><dt>互动</dt><dd>{{ activeCatDiary.countsLabel }}</dd></div>
           <div><dt>破坏风险</dt><dd>{{ activeCatDiary.damageRiskLabel }}</dd></div>
@@ -3449,6 +3449,10 @@ async function selectCat(catOrId, options = {}) {
             <p v-if="cat.individualHabit?.label" class="cat-world-cat-individual-habit">
               <b>个人小习惯</b>
               <em>{{ cat.individualHabit.label }}</em>
+            </p>
+            <p v-if="cat.favoriteItemLabels?.length" class="cat-world-cat-individual-preference">
+              <b>个体偏好</b>
+              <em>{{ cat.favoriteItemLabels.slice(0, 3).join("、") }}</em>
             </p>
             <p v-if="cat.learningStyle?.label" class="cat-world-cat-learning-style">
               <b>陪学专长</b>

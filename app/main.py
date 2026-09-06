@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-018"
-DEFAULT_PAGE_VERSION = "v20260906.18"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260906-019"
+DEFAULT_PAGE_VERSION = "v20260906.19"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -5318,7 +5318,7 @@ async def vue_cat_world_use_consumable_api(request: Request, db: Session = Depen
             continue
         breed_id = str(cat.get("breedId") or cat.get("id"))
         traits = cat_world_cat_traits(cat)
-        favorite_ids = cat_world_active_favorite_decor_ids(breed_id, usable_scene_inventory, room_layout)
+        favorite_ids = cat_world_active_favorite_decor_ids_for_cat(cat, usable_scene_inventory, room_layout)
         log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now, cat)
         apply_cat_world_hourly_decay(
             log,
@@ -5429,9 +5429,9 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
         if inventory.get(item_id, 0) <= 0 or item_id in damaged_items:
             return {"ok": True, "recorded": False}
         if event_kind == "favorite-toy":
-            favorite_match = cat_world_item_favorite_cat_id(item_id) == breed_id
+            favorite_match = cat_world_cat_likes_item(cat, item_id, "toy")
         else:
-            favorite_match = item_id in cat_world_cat_favorite_decor_ids(breed_id) and item_id in room_layout
+            favorite_match = cat_world_cat_likes_item(cat, item_id, "decor") and item_id in room_layout
         if not favorite_match:
             return {"ok": True, "recorded": False}
     else:
@@ -5447,14 +5447,13 @@ async def vue_cat_world_agent_event_api(request: Request, db: Session = Depends(
         favorite_match = bool(
             item_id
             and (
-                cat_world_item_favorite_cat_id(item_id) == breed_id
-                or item_id in cat_world_cat_favorite_decor_ids(breed_id)
+                cat_world_cat_likes_item(cat, item_id)
             )
         )
     traits = cat_world_cat_traits(cat)
     now = datetime.utcnow()
     log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now, cat)
-    favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, usable_inventory, room_layout)
+    favorite_active_ids = cat_world_active_favorite_decor_ids_for_cat(cat, usable_inventory, room_layout)
     apply_cat_world_hourly_decay(
         log,
         traits,
@@ -17668,8 +17667,7 @@ def cat_world_agent_daily_goal(
         if count > 0 and item_id in room_layout and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") == "decor"
     )
     active_favorites = [item_id for item_id in favorite_active_ids if item_id in owned_decor]
-    breed_id = str(cat.get("breedId") or cat.get("id") or CAT_WORLD_DEFAULT_CAT_ID)
-    favorite_owned_toys = [item_id for item_id in owned_toys if cat_world_item_favorite_cat_id(item_id) == breed_id]
+    favorite_owned_toys = [item_id for item_id in owned_toys if cat_world_cat_likes_item(cat, item_id, "toy")]
     damage_candidates = sorted(set(owned_toys + owned_decor))
     damage_ready, damage_ready_reason = cat_world_damage_attempt_ready(agent_state, traits, mood_score)
     damage_probability = cat_world_damage_probability(agent_state, traits, mood_score)
@@ -17844,7 +17842,6 @@ def cat_world_agent_care_need(
     damaged_item_id: str = "",
 ) -> dict[str, Any]:
     cat_id = str(cat.get("id") or CAT_WORLD_DEFAULT_CAT_ID)
-    breed_id = str(cat.get("breedId") or cat_id)
     cat_label = str(cat.get("label") or "猫咪")
     rest_threshold = int(traits.get("restThreshold") or 34)
     social_need = min(max(int(agent_state.get("socialNeed") or 50), 0), 100)
@@ -17907,7 +17904,7 @@ def cat_world_agent_care_need(
         for item_id, count in inventory.items()
         if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") == "food"
     ]
-    favorite_food_ids = [item_id for item_id in owned_food_ids if cat_world_item_favorite_cat_id(item_id) == breed_id]
+    favorite_food_ids = [item_id for item_id in owned_food_ids if cat_world_cat_likes_item(cat, item_id, "food")]
     if energy_score < rest_threshold:
         target_item_id = favorite_food_ids[0] if favorite_food_ids else (owned_food_ids[0] if owned_food_ids else "")
         action_label = "摆放食物" if target_item_id else "购买猫粮"
@@ -17937,7 +17934,7 @@ def cat_world_agent_care_need(
         for item_id, count in inventory.items()
         if count > 0 and CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("category") == "toy"
     ]
-    favorite_toy_ids = [item_id for item_id in owned_toys if cat_world_item_favorite_cat_id(item_id) == breed_id]
+    favorite_toy_ids = [item_id for item_id in owned_toys if cat_world_cat_likes_item(cat, item_id, "toy")]
     if mood_score < 42:
         target_item_id = favorite_toy_ids[0] if favorite_toy_ids else (owned_toys[0] if owned_toys else "")
         action_label = "玩喜欢的玩具" if target_item_id else "摸摸安抚"
@@ -17961,7 +17958,7 @@ def cat_world_agent_care_need(
             "touch",
         )
 
-    favorite_decor_ids = cat_world_cat_favorite_decor_ids(breed_id)
+    favorite_decor_ids = cat_world_cat_preference_ids(cat, {"decor"})
     owned_favorite_decor = [
         decor_id
         for decor_id in favorite_decor_ids
@@ -18140,7 +18137,7 @@ def get_or_create_cat_world_daily_log(
         phone=normalized,
         log_date=log_date,
         cat_id=cat_id,
-        favorite_decor_ids=",".join(cat_world_cat_favorite_decor_ids(breed_id)),
+        favorite_decor_ids=",".join(cat_world_cat_preference_ids(cat, {"decor"})),
         mood_score=(
             int(legacy_log.mood_score or 0)
             if legacy_log
@@ -18177,8 +18174,7 @@ def apply_cat_world_hourly_decay(
         log, traits, inventory, favorite_count, now, litter_count, bath_mood_penalty, cat
     )
     cat = cat or CAT_WORLD_CAT_BY_ID.get(log.cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
-    breed_id = str(cat.get("breedId") or cat.get("id") or CAT_WORLD_DEFAULT_CAT_ID)
-    log.favorite_decor_ids = ",".join(cat_world_cat_favorite_decor_ids(breed_id))
+    log.favorite_decor_ids = ",".join(cat_world_cat_preference_ids(cat, {"decor"}))
     favorite_bonus = favorite_count * 8
     relief_bonus = int(hourly_change["relief"])
     log.decor_bonus = max(favorite_bonus, relief_bonus)
@@ -18265,13 +18261,12 @@ def cat_world_daily_log_payload(
     cat: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     cat = cat or CAT_WORLD_CAT_BY_ID.get(log.cat_id, CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID])
-    breed_id = str(cat.get("breedId") or cat.get("id") or CAT_WORLD_DEFAULT_CAT_ID)
     traits = cat_world_cat_traits(cat)
     agent_state = cat_world_agent_payload(log, cat, traits, inventory, room_layout, favorite_active_ids)
     return {
         "date": log.log_date.isoformat(),
         "catId": log.cat_id,
-        "favoriteDecorIds": cat_world_cat_favorite_decor_ids(breed_id),
+        "favoriteDecorIds": cat_world_cat_preference_ids(cat, {"decor"}),
         "favoriteActiveDecorIds": favorite_active_ids,
         "moodScore": int(agent_state.get("adjustedMoodScore") or log.mood_score or 0),
         "baseMoodScore": int(log.mood_score or 0),
@@ -18448,6 +18443,93 @@ def cat_world_profile_individual_habit(profile: CatWorldCatProfile) -> dict[str,
     }
 
 
+def cat_world_profile_favorite_item_ids(
+    profile: CatWorldCatProfile,
+    categories: set[str] | None = None,
+) -> list[str]:
+    _, digest = cat_world_profile_identity_digest(profile)
+    habit = cat_world_profile_individual_habit(profile)
+    habit_targets = [
+        item_id
+        for item_id in habit.get("targetItemIds") or []
+        if item_id in CAT_WORLD_SHOP_BY_ID
+    ]
+    selected: list[str] = []
+    category_order = ("food", "toy", "decor")
+    for category_index, category in enumerate(category_order):
+        if categories and category not in categories:
+            continue
+        pool = sorted(
+            item_id
+            for item_id, item in CAT_WORLD_SHOP_BY_ID.items()
+            if item.get("category") == category
+        )
+        if not pool:
+            continue
+        habit_pool = [
+            item_id
+            for item_id in habit_targets
+            if CAT_WORLD_SHOP_BY_ID[item_id].get("category") == category
+        ]
+        first_pool = habit_pool or pool
+        first_index = digest[3 + category_index] % len(first_pool)
+        selected.append(first_pool[first_index])
+        if category != "decor":
+            continue
+        remaining = [item_id for item_id in pool if item_id not in selected]
+        if remaining:
+            second_index = digest[7 + category_index] % len(remaining)
+            selected.append(remaining[second_index])
+    return list(dict.fromkeys(selected))
+
+
+def cat_world_cat_preference_ids(
+    cat: dict[str, Any] | None,
+    categories: set[str] | None = None,
+) -> list[str]:
+    cat = cat if isinstance(cat, dict) else {}
+    category_keys = {
+        "food": "favoriteFoodIds",
+        "toy": "favoriteToyIds",
+        "decor": "favoriteDecorIds",
+    }
+    if categories and len(categories) == 1:
+        category = next(iter(categories))
+        values = cat.get(category_keys.get(category, ""))
+    else:
+        values = cat.get("favoriteItemIds")
+    if isinstance(values, list):
+        return [str(item_id) for item_id in values if str(item_id) in CAT_WORLD_SHOP_BY_ID]
+    breed_id = str(cat.get("breedId") or cat.get("id") or "")
+    return cat_world_cat_favorite_item_ids(breed_id, categories)
+
+
+def cat_world_cat_likes_item(
+    cat: dict[str, Any] | None,
+    item_id: str,
+    category: str | None = None,
+) -> bool:
+    clean_item_id = str(item_id or "")
+    if not clean_item_id:
+        return False
+    item = CAT_WORLD_SHOP_BY_ID.get(clean_item_id, {})
+    item_category = str(category or item.get("category") or "")
+    categories = {item_category} if item_category else None
+    return clean_item_id in cat_world_cat_preference_ids(cat, categories)
+
+
+def cat_world_active_favorite_decor_ids_for_cat(
+    cat: dict[str, Any] | None,
+    inventory: dict[str, int],
+    room_layout: dict[str, dict[str, float]],
+) -> list[str]:
+    return [
+        decor_id
+        for decor_id in cat_world_cat_preference_ids(cat, {"decor"})
+        if inventory.get(decor_id, 0) > 0 and decor_id in room_layout
+    ]
+
+
 def cat_world_profile_learning_style(profile: CatWorldCatProfile) -> dict[str, Any]:
     profile_id, digest = cat_world_profile_identity_digest(profile)
     style = CAT_WORLD_CAT_LEARNING_STYLES[digest[2] % len(CAT_WORLD_CAT_LEARNING_STYLES)]
@@ -18533,6 +18615,10 @@ def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]
     personality_thoughts = personality.get("thoughts") if isinstance(personality.get("thoughts"), list) else []
     individual_habit = cat_world_profile_individual_habit(profile)
     learning_style = cat_world_profile_learning_style(profile)
+    favorite_decor_ids = cat_world_profile_favorite_item_ids(profile, {"decor"})
+    favorite_food_ids = cat_world_profile_favorite_item_ids(profile, {"food"})
+    favorite_toy_ids = cat_world_profile_favorite_item_ids(profile, {"toy"})
+    favorite_item_ids = [*favorite_food_ids, *favorite_toy_ids, *favorite_decor_ids]
     profile_code = str(profile.profile_id).rsplit("-", 1)[-1][:4].upper()
     nickname = str(profile.nickname or "").strip()
     favorite_scene_key = str(profile.favorite_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
@@ -18560,6 +18646,19 @@ def cat_world_cat_profile_payload(profile: CatWorldCatProfile) -> dict[str, Any]
         "traits": cat_world_profile_traits(profile, breed),
         "thoughts": [*personality_thoughts, individual_habit["thought"]],
         "individualHabit": individual_habit,
+        "favoriteDecorIds": favorite_decor_ids,
+        "favoriteDecorLabels": [
+            CAT_WORLD_DECOR_LABELS.get(decor_id, decor_id)
+            for decor_id in favorite_decor_ids
+        ],
+        "favoriteFoodIds": favorite_food_ids,
+        "favoriteToyIds": favorite_toy_ids,
+        "favoriteItemIds": favorite_item_ids,
+        "favoriteItemLabels": [
+            CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("label", item_id)
+            for item_id in favorite_item_ids
+        ],
+        "preferenceModel": 1,
         "learningStyle": learning_style,
         "favoriteSceneId": favorite_scene_key,
         "favoriteSceneLabel": str(favorite_scene.get("label") or "一楼活动室"),
@@ -18798,11 +18897,10 @@ def cat_world_apply_agent_damage_events(
     for profile in profiles:
         cat = cat_world_cat_profile_payload(profile)
         cat_id = profile.profile_id
-        breed_id = profile.breed_id
         traits = cat_world_cat_traits(cat)
         usable_inventory = cat_world_usable_inventory(inventory, damaged_items)
-        favorite_active_ids = cat_world_active_favorite_decor_ids(
-            breed_id,
+        favorite_active_ids = cat_world_active_favorite_decor_ids_for_cat(
+            cat,
             usable_inventory,
             active_layout,
         )
@@ -18906,8 +19004,7 @@ def cat_world_apply_favorite_decor_rewards(
     for profile in profiles:
         cat = cat_world_cat_profile_payload(profile)
         cat_id = profile.profile_id
-        breed_id = profile.breed_id
-        favorite_decor_ids = cat_world_active_favorite_decor_ids(breed_id, inventory, room_layout)
+        favorite_decor_ids = cat_world_active_favorite_decor_ids_for_cat(cat, inventory, room_layout)
         if not favorite_decor_ids:
             continue
         traits = cat_world_cat_traits(cat)
@@ -19616,6 +19713,29 @@ def cat_world_record_manual_scene_move(
     db.add(log)
 
 
+def cat_world_scene_preference_matches(
+    cat: dict[str, Any],
+    environment: dict[str, Any],
+) -> list[str]:
+    inventory = environment.get("inventory") if isinstance(environment.get("inventory"), dict) else {}
+    layout = environment.get("layout") if isinstance(environment.get("layout"), dict) else {}
+    preferred_ids = [
+        *cat_world_cat_preference_ids(cat, {"toy"}),
+        *cat_world_cat_preference_ids(cat, {"decor"}),
+    ]
+    matches: list[str] = []
+    for item_id in dict.fromkeys(preferred_ids):
+        item = CAT_WORLD_SHOP_BY_ID.get(item_id, {})
+        category = str(item.get("category") or "")
+        if inventory.get(item_id, 0) <= 0:
+            continue
+        if category == "decor" and item_id not in layout:
+            continue
+        if category in {"decor", "toy"}:
+            matches.append(item_id)
+    return matches
+
+
 def cat_world_apply_autonomous_scene_roaming(
     db: Session,
     state: CatWorldState,
@@ -19628,6 +19748,14 @@ def cat_world_apply_autonomous_scene_roaming(
         return [], False
     choices_by_id = {choice["id"]: choice for choice in choices}
     available_ids = list(choices_by_id)
+    usable_inventory = cat_world_usable_inventory(
+        parse_cat_world_inventory(state.inventory),
+        parse_cat_world_damaged_items(state.damaged_items),
+    )
+    scene_environments = {
+        scene_id: cat_world_scene_environment(db, state, usable_inventory, scene_id)
+        for scene_id in available_ids
+    }
     period_key, period_label = cat_world_routine_period(now)
     period_token = cat_world_scene_roam_period_token(now)
     roam_date = cat_world_local_now(now).date()
@@ -19719,6 +19847,17 @@ def cat_world_apply_autonomous_scene_roaming(
         candidates = [scene_id for scene_id in available_ids if scene_id != current_scene_id]
         if not candidates:
             continue
+        current_matches = cat_world_scene_preference_matches(
+            cat,
+            scene_environments.get(current_scene_id, {}),
+        )
+        candidate_matches = {
+            scene_id: cat_world_scene_preference_matches(
+                cat,
+                scene_environments.get(scene_id, {}),
+            )
+            for scene_id in candidates
+        }
         favorite_scene_id = str(profile.favorite_scene_key or "")
         favorite_available = favorite_scene_id in candidates
         activity_bias = min(max(int(agent_state.get("activityBias") or 50), 0), 100)
@@ -19742,11 +19881,33 @@ def cat_world_apply_autonomous_scene_roaming(
 
         temperament = str(traits.get("temperament") or "balanced")
         target_scene_id = ""
+        target_item_id = ""
         reason = "换个地方活动"
         if temperament == "clingy" and active_scene_id in candidates:
             target_scene_id = active_scene_id
             reason = "听见你在这里，自己找了过来"
-        elif favorite_available:
+        if not target_scene_id:
+            best_match_count = max((len(matches) for matches in candidate_matches.values()), default=0)
+            preferred_destinations = [
+                scene_id
+                for scene_id, matches in candidate_matches.items()
+                if len(matches) == best_match_count
+            ]
+            if best_match_count > len(current_matches) and preferred_destinations:
+                target_index = min(
+                    int(cat_world_stable_ratio(f"{seed}:preference-scene") * len(preferred_destinations)),
+                    len(preferred_destinations) - 1,
+                )
+                target_scene_id = preferred_destinations[target_index]
+                matches = candidate_matches[target_scene_id]
+                item_index = min(
+                    int(cat_world_stable_ratio(f"{seed}:preference-item") * len(matches)),
+                    len(matches) - 1,
+                )
+                target_item_id = matches[item_index]
+                target_label = CAT_WORLD_SHOP_BY_ID.get(target_item_id, {}).get("label") or target_item_id
+                reason = f"发现喜欢的{target_label}在那里，想过去待一会儿"
+        if not target_scene_id and favorite_available:
             favorite_bias = 0.58 if mood_key == "curious" else 0.82
             if mood_key in {"lazy", "quiet", "grumpy"}:
                 favorite_bias = 0.94
@@ -19792,6 +19953,11 @@ def cat_world_apply_autonomous_scene_roaming(
                 "toSceneId": target_scene_id,
                 "toSceneLabel": to_scene["label"],
                 "period": period_key,
+                "reason": reason,
+                "targetItemId": target_item_id,
+                "targetItemLabel": (
+                    CAT_WORLD_SHOP_BY_ID.get(target_item_id, {}).get("label") or ""
+                ),
                 "message": message,
             }
         )
@@ -19845,8 +20011,8 @@ def cat_world_apply_daily_decay(
             if isinstance(environment.get("layout"), dict)
             else room_layout
         )
-        favorite_active_ids = cat_world_active_favorite_decor_ids(
-            breed_id,
+        favorite_active_ids = cat_world_active_favorite_decor_ids_for_cat(
+            cat,
             cat_inventory,
             cat_room_layout,
         )
@@ -20081,7 +20247,7 @@ def cat_world_apply_active_food_progress(
     target_inventory = target_environment["inventory"]
     target_room_layout = target_environment["layout"]
     traits = cat_world_cat_traits(cat)
-    favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, target_inventory, target_room_layout)
+    favorite_active_ids = cat_world_active_favorite_decor_ids_for_cat(cat, target_inventory, target_room_layout)
     log = get_or_create_cat_world_daily_log(db, state.phone, target_cat_id, date.today(), now, cat)
     changed = apply_cat_world_hourly_decay(
         log,
@@ -20104,7 +20270,8 @@ def cat_world_apply_active_food_progress(
         agent_state["activeFoodManualBites"] = 0
         agent_state["activeFoodNibbleAt"] = ""
         changed = True
-    favorite_match = cat_world_item_favorite_cat_id(item_id) == breed_id
+    specialty_match = cat_world_item_favorite_cat_id(item_id) == breed_id
+    favorite_match = specialty_match or cat_world_cat_likes_item(cat, item_id, "food")
     progress = cat_world_food_progress_targets(item, traits, state.active_food_at, now, breed_id, force_initial=force_initial)
     previous_energy = max(int(agent_state.get("activeFoodConsumedEnergy") or 0), 0)
     previous_mood = max(int(agent_state.get("activeFoodConsumedMood") or 0), 0)
@@ -20226,7 +20393,7 @@ def cat_world_apply_active_food_nibble(
     target_inventory = target_environment["inventory"]
     target_room_layout = target_environment["layout"]
     traits = cat_world_cat_traits(cat)
-    favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, target_inventory, target_room_layout)
+    favorite_active_ids = cat_world_active_favorite_decor_ids_for_cat(cat, target_inventory, target_room_layout)
     log = get_or_create_cat_world_daily_log(db, state.phone, target_cat_id, date.today(), now, cat)
     apply_cat_world_hourly_decay(
         log,
@@ -20314,7 +20481,7 @@ def cat_world_apply_active_food_nibble(
     agent_state["activeFoodRemainingSeconds"] = int(time_progress.get("remainingSeconds") or 0)
     agent_state["activeFoodManualBites"] = manual_bites + 1
     agent_state["activeFoodNibbleAt"] = now.replace(microsecond=0).isoformat() + "Z"
-    bond_gain = 2 if cat_world_item_favorite_cat_id(item_id) == breed_id else 1
+    bond_gain = 2 if cat_world_cat_likes_item(cat, item_id, "food") or cat_world_item_favorite_cat_id(item_id) == breed_id else 1
     bond = cat_world_apply_cat_bond(state, target_cat_id, bond_gain, "food-nibble", item.get("label") or item_id, now)
     finished = next_remaining_energy <= 0
     if finished:
@@ -20371,10 +20538,9 @@ def cat_world_apply_daily_effect(
     cat = cat_world_cat_for_reference(db, state, cat_id) or cat_world_cat_payload(
         CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID]
     )
-    breed_id = str(cat.get("breedId") or cat.get("id"))
     traits = cat_world_cat_traits(cat)
     now = datetime.utcnow()
-    favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, inventory, room_layout)
+    favorite_active_ids = cat_world_active_favorite_decor_ids_for_cat(cat, inventory, room_layout)
     log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now, cat)
     apply_cat_world_hourly_decay(
         log,
@@ -20405,7 +20571,7 @@ def cat_world_apply_daily_effect(
         cat_world_apply_cat_bond(
             state,
             cat["id"],
-            4 if cat_world_item_favorite_cat_id(item["id"]) == breed_id else 3,
+            4 if cat_world_cat_likes_item(cat, item["id"], "food") or cat_world_item_favorite_cat_id(item["id"]) == str(cat.get("breedId") or cat.get("id")) else 3,
             "food",
             item.get("label") or item["id"],
             now,
@@ -20421,7 +20587,7 @@ def cat_world_apply_daily_effect(
             now=now,
             force_initial=True,
         )
-    favorite_match = cat_world_item_favorite_cat_id(item["id"]) == breed_id
+    favorite_match = cat_world_cat_likes_item(cat, item["id"], "toy")
     mood_gain = round(int(item.get("mood") or 0) * float(traits["playMoodGain"])) + (4 if favorite_match else 0)
     energy_gain = -max(1, round(4 * float(traits["energyDrain"])))
     log.toy_count = int(log.toy_count or 0) + 1
@@ -20467,10 +20633,9 @@ def cat_world_apply_pet_effect(
         CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID]
     )
     cat_id = str(cat.get("profileId") or cat.get("id"))
-    breed_id = str(cat.get("breedId") or cat.get("id"))
     traits = cat_world_cat_traits(cat)
     now = datetime.utcnow()
-    favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, inventory, room_layout)
+    favorite_active_ids = cat_world_active_favorite_decor_ids_for_cat(cat, inventory, room_layout)
     log = db.scalar(
         select(CatWorldDailyLog)
         .where(
@@ -20604,10 +20769,9 @@ def cat_world_effect_target_cat_id(
     target_rows: list[tuple[int, int, int, str]] = []
     for profile in profiles:
         cat_id = profile.profile_id
-        breed_id = profile.breed_id
         cat = cat_world_cat_profile_payload(profile)
         traits = cat_world_cat_traits(cat)
-        favorite_active_ids = cat_world_active_favorite_decor_ids(breed_id, inventory, room_layout)
+        favorite_active_ids = cat_world_active_favorite_decor_ids_for_cat(cat, inventory, room_layout)
         log = get_or_create_cat_world_daily_log(db, state.phone, cat_id, date.today(), now, cat)
         apply_cat_world_hourly_decay(
             log,
@@ -20622,7 +20786,15 @@ def cat_world_effect_target_cat_id(
         agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
         db.add(log)
         energy_score = clamp_cat_world_score(int(log.energy_score or 0) + int(agent_state.get("energyOffset") or 0))
-        favorite_rank = 0 if item_id and cat_world_item_favorite_cat_id(item_id) == breed_id else 1
+        favorite_rank = (
+            0
+            if item_id
+            and (
+                cat_world_cat_likes_item(cat, item_id, "food")
+                or cat_world_item_favorite_cat_id(item_id) == profile.breed_id
+            )
+            else 1
+        )
         target_rows.append((energy_score, favorite_rank, len(target_rows), cat_id))
     if not target_rows:
         return selected_cat_id
@@ -20842,8 +21014,8 @@ def cat_world_mood(
                         "remainingSeconds": min(int(active_food.get("remainingSeconds") or remaining_seconds), remaining_seconds),
                     }
     daily_log = daily_logs.get(selected_cat_id) or daily_logs.get(selected_breed_id) or {}
-    favorite_active_ids = daily_log.get("favoriteActiveDecorIds") or cat_world_active_favorite_decor_ids(
-        selected_breed_id,
+    favorite_active_ids = daily_log.get("favoriteActiveDecorIds") or cat_world_active_favorite_decor_ids_for_cat(
+        selected_cat,
         inventory,
         room_layout or {},
     )
@@ -20917,7 +21089,7 @@ def cat_world_mood(
         "canWalk": cat_energy >= traits["restThreshold"],
         "activeFood": active_food,
         "dailyLog": daily_log,
-        "favoriteDecorIds": cat_world_cat_favorite_decor_ids(selected_breed_id),
+        "favoriteDecorIds": cat_world_cat_preference_ids(selected_cat, {"decor"}),
         "favoriteActiveDecorIds": favorite_active_ids,
         "favoriteDecorBonus": favorite_bonus,
         "recentPlay": recent_play,

@@ -244,16 +244,20 @@ class CatWorldActiveItemLocationTest(unittest.TestCase):
         Base.metadata.create_all(engine)
 
         with Session(engine) as db:
-            inventory = {"daily-kibble": 1, "moon-window": 1}
+            inventory = {"daily-kibble": 1}
             state, _, away_cat = self.make_world(
                 db,
                 inventory,
-                {"moon-window": "second-floor"},
+                {},
             )
+            favorite_decor_id = m.cat_world_cat_profile_payload(away_cat)["favoriteDecorIds"][0]
+            inventory[favorite_decor_id] = 1
+            state.inventory = m.encode_cat_world_inventory(inventory)
+            state.item_locations = m.encode_cat_world_item_locations({favorite_decor_id: "second-floor"})
             reading_room = m.cat_world_scene_row(db, "second-floor")
             reading_scene, _ = m.get_or_create_cat_world_user_scene(db, state, reading_room)
             reading_scene.is_unlocked = True
-            reading_scene.layout = m.encode_cat_world_room_layout({"moon-window": {"x": 45, "y": 25}})
+            reading_scene.layout = m.encode_cat_world_room_layout({favorite_decor_id: {"x": 45, "y": 25}})
             away_cat.current_scene_key = "second-floor"
             state.active_food_item = "daily-kibble"
             state.active_food_cat_id = away_cat.profile_id
@@ -272,7 +276,7 @@ class CatWorldActiveItemLocationTest(unittest.TestCase):
             decay_inventory = decay.call_args.args[2]
             favorite_count = decay.call_args.args[3]
             self.assertEqual(effect["sceneId"], "second-floor")
-            self.assertIn("moon-window", decay_inventory)
+            self.assertIn(favorite_decor_id, decay_inventory)
             self.assertEqual(favorite_count, 1)
 
 
