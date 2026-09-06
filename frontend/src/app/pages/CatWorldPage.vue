@@ -238,6 +238,7 @@ onMounted(async () => {
     },
     onCatIntent: updateLiveCatIntent,
     onLearningBoardClick: openRoomLearningProgress,
+    onLearningTreasureClick: openRoomRecallTreasure,
     onCatAmbient: recordCatAmbientEvent,
     onFoodVisit: recordCatFoodNibble,
     onCameraPanState: (active) => {
@@ -1178,6 +1179,24 @@ function openRoomLearningProgress(signal = learningRoomSignal.value) {
   const garden = signal?.garden || learningRoute.value.garden || {};
   notice.value = `今日学习灯牌已亮 ${completed}/3 格。单词芽现为${garden.stageLabel || "种子"}，累计 ${garden.growthPoints || 0} 成长点。`;
   energyModalOpen.value = true;
+}
+
+function openRoomRecallTreasure(treasure = {}, signal = learningRoomSignal.value) {
+  const treasureKey = String(treasure?.key || "");
+  const guideCatId = String(signal?.guideCatId || "");
+  const cat = catAgentDiaries.value.find((entry) => entry.id === guideCatId);
+  if (!treasureKey || !cat) {
+    openRoomLearningProgress(signal);
+    return;
+  }
+  toggleCatDiary(cat);
+  const sourceDate = String(treasure.sourceDate || "");
+  if (sourceDate && cat.learningMemory.recentDays.some((day) => day.date === sourceDate)) {
+    selectedCatMemoryDate.value = sourceDate;
+  }
+  selectedCatRecallTreasureKey.value = treasureKey;
+  notice.value = `${cat.displayLabel || cat.label}替你翻开了珍藏词 ${treasure.word}。`;
+  nextTick(() => catRecallTreasureDetailRef.value?.scrollIntoView({ block: "nearest" }));
 }
 
 function syncCatPosition(cat, position, options = {}) {

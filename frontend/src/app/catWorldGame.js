@@ -40,6 +40,7 @@ import { catWorldPlacementReactionPlan } from "./catWorldPlacementReaction.js";
 import {
   catWorldLearningMemoryRoomCue,
   catWorldLearningMemoryVisitPlan,
+  normalizeCatWorldLearningMemory,
 } from "./catWorldLearningMemory.js";
 import {
   catSpotMemoryPriority,
@@ -294,6 +295,7 @@ function normalizeLearningSignal(signal = {}) {
     statusLabel: String(signal.statusLabel || "等待今日开始"),
     celebrationMessage: String(signal.celebrationMessage || ""),
     garden: normalizeLearningGarden(signal.garden),
+    learningMemory: normalizeCatWorldLearningMemory(signal.learningMemory),
     ritual: normalizeLearningRitual(signal.ritual),
     steps,
   };
@@ -1368,7 +1370,7 @@ class CatWorldScene extends Phaser.Scene {
   learningGardenFixturePosition() {
     return {
       x: clamp(Math.round(VIEW_WIDTH * 0.2), 224, GAME_WIDTH - 124),
-      y: 92,
+      y: VIEW_WIDTH < 900 ? 146 : 92,
     };
   }
 
@@ -1386,6 +1388,10 @@ class CatWorldScene extends Phaser.Scene {
     const signal = snapshot.learningSignal || {};
     if (!Array.isArray(signal.steps) || signal.steps.length !== 3) return;
     const garden = signal.garden || {};
+    const learningMemory = signal.learningMemory || {};
+    const treasures = Array.isArray(learningMemory.recallTreasures)
+      ? learningMemory.recallTreasures.slice(0, 3)
+      : [];
     const stageIndex = clamp(Number(garden.stageIndex || 0), 0, 4);
     const position = this.learningGardenFixturePosition();
     const container = this.add
@@ -1441,7 +1447,85 @@ class CatWorldScene extends Phaser.Scene {
       .setOrigin(0.5, 0);
     container.add(title);
 
+    if (treasures.length) {
+      const plaqueX = 74;
+      const plaqueWidth = 124;
+      const plaqueHeight = 30;
+      const plaqueGap = 5;
+      const plaqueColors = [0xffef82, 0xbcecf5, 0xffc9dc];
+      const heading = this.add.text(plaqueX, -27, `WORD TREASURES · ${learningMemory.recallTreasureCount || treasures.length}`, {
+        color: "#176f58",
+        fontFamily: "Consolas, monospace",
+        fontSize: "9px",
+        fontStyle: "bold",
+      });
+      container.add(heading);
+      treasures.forEach((treasure, index) => {
+        const plaqueY = -10 + index * (plaqueHeight + plaqueGap);
+        drawPixelRect(
+          graphics,
+          plaqueX,
+          plaqueY,
+          plaqueWidth,
+          plaqueHeight,
+          plaqueColors[index % plaqueColors.length],
+          INK,
+          3,
+        );
+        graphics.fillStyle(0x176f58, 1);
+        graphics.fillRect(plaqueX + 8, plaqueY + 11, 7, 7);
+        const word = this.add.text(plaqueX + 21, plaqueY + 7, shortCatText(treasure.word, 12), {
+          color: "#263047",
+          fontFamily: "Consolas, monospace",
+          fontSize: "11px",
+          fontStyle: "bold",
+        });
+        container.add(word);
+        if (Number(treasure.reviewCount || 0) > 1) {
+          const repeat = this.add
+            .text(plaqueX + plaqueWidth - 8, plaqueY + 7, `x${treasure.reviewCount}`, {
+              color: "#a34f47",
+              fontFamily: "Consolas, monospace",
+              fontSize: "9px",
+              fontStyle: "bold",
+            })
+            .setOrigin(1, 0);
+          container.add(repeat);
+        }
+      });
+      if (Number(learningMemory.recallTreasureCount || 0) > treasures.length) {
+        const overflow = this.add
+          .text(plaqueX + plaqueWidth, 97, `+${learningMemory.recallTreasureCount - treasures.length}`, {
+            color: "#176f58",
+            backgroundColor: "#fff8df",
+            fontFamily: "Consolas, monospace",
+            fontSize: "9px",
+            fontStyle: "bold",
+            padding: { x: 4, y: 2 },
+          })
+          .setOrigin(1, 0);
+        container.add(overflow);
+      }
+    }
+
     if (snapshot.editMode || snapshot.toolMode) return;
+    treasures.forEach((treasure, index) => {
+      const plaqueX = position.x + 74;
+      const plaqueY = position.y - 10 + index * 35;
+      const treasureHitZone = this.add.zone(plaqueX - 5, plaqueY - 4, 134, 38)
+        .setOrigin(0, 0)
+        .setDepth(CAT_INTERACTION_DEPTH - 52)
+        .setInteractive({ cursor: "pointer" });
+      treasureHitZone.on("pointerdown", (_pointer, _localX, _localY, event) => {
+        this.stopPointerEvent(event);
+      });
+      treasureHitZone.on("pointerup", (_pointer, _localX, _localY, event) => {
+        this.stopPointerEvent(event);
+        if (!this.shouldSuppressRoomClick()) {
+          this.owner.handlers.onLearningTreasureClick?.(treasure, signal);
+        }
+      });
+    });
     const hitZone = this.add.zone(position.x, position.y + 48, 132, 132)
       .setDepth(CAT_INTERACTION_DEPTH - 54)
       .setInteractive({ cursor: "pointer" });

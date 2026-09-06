@@ -48,12 +48,31 @@ test("the room keeps starter progress and gives the growing word garden a friend
   assert.match(game, /starterComplete:\s*Boolean\(signal\.starterComplete\)/);
   assert.match(game, /garden:\s*normalizeLearningGarden\(signal\.garden\)/);
   assert.match(game, /learningGardenFixturePosition\(\)/);
+  assert.match(game, /y:\s*VIEW_WIDTH < 900 \? 146 : 92/);
   assert.match(game, /`单词芽 · \$\{garden\.stageLabel \|\| "种子"\}`/);
   assert.match(game, /this\.add\.zone\(position\.x, position\.y \+ 48, 132, 132\)/);
   assert.match(game, /itemId:\s*"learning-garden"/);
   assert.match(game, /单词芽已经长到/);
   assert.match(styles, /\.cat-world-energy-modal \.cat-world-modal-summary\s*\{\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(styles, /\.cat-world-energy-modal \.cat-world-energy-list\s*\{\s*grid-template-columns:\s*1fr/);
+});
+
+test("recalled words become personal clickable pixel plaques beside the word garden", async () => {
+  const [page, game] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(gameUrl, "utf8"),
+  ]);
+
+  assert.match(game, /learningMemory:\s*normalizeCatWorldLearningMemory\(signal\.learningMemory\)/);
+  assert.match(game, /learningMemory\.recallTreasures\.slice\(0, 3\)/);
+  assert.match(game, /WORD TREASURES/);
+  assert.match(game, /const treasureHitZone = this\.add\.zone/);
+  assert.match(game, /onLearningTreasureClick\?\.\(treasure, signal\)/);
+  assert.match(page, /onLearningTreasureClick:\s*openRoomRecallTreasure/);
+  assert.match(page, /function openRoomRecallTreasure\(treasure = \{\}, signal = learningRoomSignal\.value\)/);
+  assert.match(page, /toggleCatDiary\(cat\)/);
+  assert.match(page, /selectedCatRecallTreasureKey\.value = treasureKey/);
+  assert.match(page, /catRecallTreasureDetailRef\.value\?\.scrollIntoView\(\{ block: "nearest" \}\)/);
 });
 
 test("the daily companion plans a visible visit to the study corner", async () => {
