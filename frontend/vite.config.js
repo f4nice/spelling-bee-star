@@ -13,6 +13,11 @@ export default defineConfig({
         app: 'src/app/main.js',
       },
       output: {
+        manualChunks(id) {
+          if (id.includes('/node_modules/phaser/')) {
+            return 'phaser-vendor';
+          }
+        },
         entryFileNames: (chunk) => (chunk.name === 'app' ? 'speakeasy-app.js' : 'challenge-app.js'),
         chunkFileNames: '[name]-[hash].js',
         assetFileNames: '[name][extname]',
