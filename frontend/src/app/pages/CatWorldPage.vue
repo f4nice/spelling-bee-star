@@ -2490,6 +2490,7 @@ async function selectCat(catOrId, options = {}) {
       </section>
 
       <aside class="cat-world-owned-panel panel">
+        <div class="cat-world-owned-overview">
         <div class="cat-world-owned-head">
           <div>
             <p class="section-kicker">Bag</p>
@@ -2531,7 +2532,9 @@ async function selectCat(catOrId, options = {}) {
           <strong>{{ activeCare.label }}</strong>
           <small>{{ activeCare.targetCatLabel || "猫咪" }}会慢慢靠近 · {{ formatSeconds(activeCare.remainingSeconds) }} 后消失</small>
         </div>
+        </div>
 
+        <div class="cat-world-owned-tools">
         <div class="cat-world-tool-tabs" role="tablist" aria-label="已拥有道具分类">
           <button
             v-for="category in toolCategories"
@@ -2614,6 +2617,7 @@ async function selectCat(catOrId, options = {}) {
             </div>
           </article>
           <p v-if="!activeToolItems.length" class="cat-world-owned-empty">这个分类还没有道具，可以在下方商店购买。</p>
+        </div>
         </div>
 
         <section class="cat-world-profile-dock" aria-labelledby="cat-world-profile-dock-title">

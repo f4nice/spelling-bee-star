@@ -53,3 +53,16 @@ test("CAT-OS details are collapsed until requested", async () => {
   assert.match(page, /v-if="catOsExpanded" class="cat-world-ai-panel-details"/);
   assert.match(page, /:aria-expanded="catOsExpanded"/);
 });
+
+test("medium screens keep the bag compact beside its inventory", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
+
+  assert.match(page, /class="cat-world-owned-overview"/);
+  assert.match(page, /class="cat-world-owned-tools"/);
+  assert.match(styles, /@media \(min-width: 761px\) and \(max-width: 1180px\)/);
+  assert.match(styles, /grid-template-areas:\s*"overview tools"\s*"profiles profiles"/);
+  assert.match(styles, /\.cat-world-owned-list\s*\{\s*max-height:\s*360px;/);
+});

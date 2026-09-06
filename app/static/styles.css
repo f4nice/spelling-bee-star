@@ -15876,6 +15876,19 @@ select {
   box-shadow: 6px 6px 0 #2c2f3a;
 }
 
+.cat-world-owned-overview,
+.cat-world-owned-tools {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cat-world-owned-tools {
+  grid-template-rows: auto minmax(120px, 1fr);
+  flex: 1 1 240px;
+  min-height: 0;
+}
+
 .cat-world-learning-guide {
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr);
@@ -16933,6 +16946,40 @@ select {
   .admin-energy-grant-panel,
   .admin-reset-panel {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1180px) {
+  .cat-world-owned-panel {
+    position: static;
+    display: grid;
+    grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+    grid-template-areas:
+      "overview tools"
+      "profiles profiles";
+    align-items: start;
+    height: auto;
+  }
+
+  .cat-world-owned-overview {
+    grid-area: overview;
+  }
+
+  .cat-world-owned-tools {
+    grid-area: tools;
+    align-self: stretch;
+  }
+
+  .cat-world-owned-list {
+    max-height: 360px;
+  }
+
+  .cat-world-profile-dock {
+    grid-area: profiles;
+  }
+
+  .cat-world-profile-icons {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   }
 }
 
