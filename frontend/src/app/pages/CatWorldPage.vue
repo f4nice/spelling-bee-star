@@ -22,6 +22,7 @@ import { CAT_BUBBLE_TOTAL_MS } from "../catWorldBubbleState.js";
 import { catWorldGaitProfile } from "../catWorldGait.js";
 import { catPortraitModel } from "../catWorldPortrait.js";
 import { catRarityBadge } from "../catWorldRarity.js";
+import { catWorldSocialKindLabel } from "../catWorldSocialMoment.js";
 import {
   buildCatWorldLearningRoute,
   buildCatWorldRoomLearningSignal,
@@ -790,9 +791,15 @@ const catAgentDiaries = computed(() =>
       const hygieneInfo = log.hygiene || agent.hygiene || {};
       const neglect = log.neglect || agent.neglect || {};
       const social = catSocial.value[cat.id] || {};
+      const latestSocialPartner = Object.values(social.partners || {})
+        .filter((partner) => Number(partner?.todayCount || 0) > 0)
+        .sort((left, right) => Date.parse(String(right?.lastAt || "")) - Date.parse(String(left?.lastAt || "")))[0];
       const socialCompanionLabel = social.favoritePartnerId
         ? `${social.favoritePartnerLabel} · ${social.favoritePartnerLevelLabel} ${social.favoritePartnerScore}`
         : "还没有猫咪伙伴";
+      const socialRecentLabel = latestSocialPartner
+        ? `${latestSocialPartner.catLabel} · ${catWorldSocialKindLabel(latestSocialPartner.lastKind)} · 今日 ${latestSocialPartner.todayCount} 次`
+        : "今天还在各自探索";
       return {
         ...cat,
         attention: clampCatScore(agent.attention ?? 0),
@@ -821,6 +828,7 @@ const catAgentDiaries = computed(() =>
         playStyleLabel: agent.playStyleLabel || "玩耍节奏稳定",
         socialStyleLabel: agent.socialStyleLabel || "陪伴需求稳定",
         socialCompanionLabel,
+        socialRecentLabel,
         carePreferenceLabel: traits.label || agent.carePreferenceLabel || "",
         sleepLabel: traits.nightOwl ? `夜猫子 · ${sleepStart}-${sleepEnd}` : `${sleepStart}-${sleepEnd}`,
         routineLabel: traits.routine || agent.routine || "观察房间里的学习节奏",
@@ -3354,6 +3362,7 @@ async function selectCat(catOrId, options = {}) {
           <div><dt>今日愿望</dt><dd>{{ activeCatDiary.dailyWish || "想安静陪你学习" }}</dd></div>
           <div><dt>相处方式</dt><dd>{{ activeCatDiary.socialStyleLabel }}</dd></div>
           <div><dt>猫咪伙伴</dt><dd>{{ activeCatDiary.socialCompanionLabel }}</dd></div>
+          <div><dt>今日相处</dt><dd>{{ activeCatDiary.socialRecentLabel }}</dd></div>
           <div><dt>玩耍倾向</dt><dd>{{ activeCatDiary.playStyleLabel }}</dd></div>
           <div><dt>照顾偏好</dt><dd>{{ activeCatDiary.carePreferenceLabel || "保持房间稳定整洁" }}</dd></div>
           <div><dt>卫生性格</dt><dd>{{ activeCatDiary.cleanlinessLabel }} · {{ activeCatDiary.cleanliness }}/100</dd></div>

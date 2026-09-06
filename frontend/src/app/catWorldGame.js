@@ -33,6 +33,7 @@ import {
 } from "./catWorldBehaviorPlanner.js";
 import { catWorldGaitProfile } from "./catWorldGait.js";
 import { catWorldIdleAnimationPlan } from "./catWorldIdleAnimation.js";
+import { catWorldSocialMomentPlan } from "./catWorldSocialMoment.js";
 
 let VIEW_WIDTH = 1280;
 let VIEW_HEIGHT = 560;
@@ -3605,6 +3606,7 @@ class CatWorldScene extends Phaser.Scene {
     if (body?.active) {
       this.tweens.killTweensOf(body);
       body.setPosition(0, 0);
+      body.setAngle(0);
     }
     container?.setData?.("gaitStepIndex", -1);
   }
@@ -4289,33 +4291,40 @@ class CatWorldScene extends Phaser.Scene {
     const partner = this.roomCatEntries().find((candidate) => candidate.cat.id === target.partnerCatId);
     if (!entry?.container?.active || !partner?.container?.active || partner.container.getData("interactionActive")) return false;
     const pairKey = `social:${[entry.cat.id, partner.cat.id].sort().join(":")}`;
-    const combinedActivity = Number(entry.behavior.activityBias || 50) + Number(partner.behavior.activityBias || 50);
-    const combinedSocial = Number(entry.behavior.socialNeed || 50) + Number(partner.behavior.socialNeed || 50);
-    const styleSeed = Math.abs(hashText(`${entry.cat.id}:${partner.cat.id}:${new Date().getHours()}`)) % 3;
-    const preferredKind = ["greet", "nuzzle", "chase"].includes(target.preferredKind) ? target.preferredKind : "";
-    const kind = preferredKind
-      || (combinedActivity >= 145 || styleSeed === 2 ? "chase" : combinedSocial >= 132 || styleSeed === 1 ? "nuzzle" : "greet");
-    const messages = {
-      chase: ["来追我呀！", "看谁先绕过地毯！"],
-      nuzzle: ["轻轻蹭一下，今天一起待着。", "靠近一点就很安心。"],
-      greet: ["闻闻你，今天也见面啦。", "碰个鼻子，再各自散步。"],
-    };
-    const replies = {
-      chase: "等等我，我也来！",
-      nuzzle: "好呀，一起安静待会儿。",
-      greet: "你好呀，巡逻顺利。",
-    };
+    const momentTime = new Date();
+    const moment = catWorldSocialMomentPlan(entry.cat, partner.cat, target, {
+      sourceBehavior: entry.behavior,
+      partnerBehavior: partner.behavior,
+      periodKey: `${momentTime.getFullYear()}-${momentTime.getMonth() + 1}-${momentTime.getDate()}:${momentTime.getHours()}`,
+    });
+    const kind = moment.key;
     this.interruptCatAutonomy(entry, pairKey);
     this.interruptCatAutonomy(partner, pairKey);
     this.turnCat(entry.container, partner.container.x);
     this.turnCat(partner.container, entry.container.x);
-    this.spawnCatBubble(entry.container, entry.cat, Phaser.Math.RND.pick(messages[kind]));
-    this.spawnCatBubble(partner.container, partner.cat, replies[kind]);
-    this.spawnCatSocialCue(entry.container, partner.container, kind);
-    const motion = kind === "chase" ? 13 : 5;
-    this.tweens.add({ targets: entry.container, x: entry.container.x + motion, yoyo: true, repeat: kind === "chase" ? 2 : 0, duration: 310, ease: "Sine.easeInOut" });
-    this.tweens.add({ targets: partner.container, x: partner.container.x - motion, yoyo: true, repeat: kind === "chase" ? 2 : 0, duration: 310, ease: "Sine.easeInOut" });
-    const holdMs = kind === "chase" ? 4200 : 3400;
+    this.spawnCatBubble(entry.container, entry.cat, moment.sourceLine, null, { offsetY: -116 });
+    this.spawnCatBubble(partner.container, partner.cat, moment.partnerLine, null, { offsetY: -72 });
+    this.spawnCatSocialCue(entry.container, partner.container, kind, moment.cueTone);
+    this.playCatSocialChoreography(entry, partner, moment);
+    const holdMs = moment.holdMs;
+    this.reportLiveCatIntent(entry.cat, {
+      kind: "cat-social",
+      phase: "arrived",
+      statusLabel: `正在${moment.label}`,
+      targetLabel: partner.cat.displayLabel || partner.cat.label || "猫咪伙伴",
+      message: moment.sourceLine,
+      tone: "social",
+      expiresAt: Date.now() + holdMs,
+    });
+    this.reportLiveCatIntent(partner.cat, {
+      kind: "cat-social",
+      phase: "arrived",
+      statusLabel: `正在${moment.label}`,
+      targetLabel: entry.cat.displayLabel || entry.cat.label || "猫咪伙伴",
+      message: moment.partnerLine,
+      tone: "social",
+      expiresAt: Date.now() + holdMs,
+    });
     this.time.delayedCall(Math.max(holdMs - 240, 1000), () => {
       if (!entry.container.active || !partner.container.active) return;
       if (
@@ -4335,12 +4344,95 @@ class CatWorldScene extends Phaser.Scene {
     return true;
   }
 
-  spawnCatSocialCue(left, right, kind) {
+  playCatSocialChoreography(entry, partner, moment = {}) {
+    const source = entry.container;
+    const companion = partner.container;
+    const sourceBody = source.getData("catBody");
+    const partnerBody = companion.getData("catBody");
+    const direction = source.x <= companion.x ? 1 : -1;
+    const resetBodies = () => {
+      if (source.active) this.resetCatGait(source);
+      if (companion.active) this.resetCatGait(companion);
+    };
+    const bobBody = (body, amount, angle = 0) => {
+      if (!body?.active) return;
+      this.tweens.add({
+        targets: body,
+        y: -Math.max(Number(amount || 2), 2),
+        angle,
+        yoyo: true,
+        repeat: Math.max(Number(moment.repeats || 1) - 1, 0),
+        duration: Math.max(Number(moment.motionMs || 500) / 2, 180),
+        ease: "Sine.easeInOut",
+      });
+    };
+
+    if (moment.key === "chase") {
+      const minX = 38;
+      const maxX = GAME_WIDTH - 132;
+      const rightSpace = maxX - Math.max(source.x, companion.x);
+      const leftSpace = Math.min(source.x, companion.x) - minX;
+      const chaseDirection = rightSpace >= leftSpace ? 1 : -1;
+      const companionTargetX = clamp(companion.x + chaseDirection * Number(moment.travelPx || 112), minX, maxX);
+      const sourceTargetX = clamp(
+        companionTargetX - chaseDirection * Number(moment.gapPx || 118),
+        minX,
+        maxX,
+      );
+      const sourceDistance = Phaser.Math.Distance.Between(source.x, source.y, sourceTargetX, source.y);
+      const partnerDistance = Phaser.Math.Distance.Between(companion.x, companion.y, companionTargetX, companion.y);
+      this.turnCat(source, sourceTargetX);
+      this.turnCat(companion, companionTargetX);
+      this.resetCatGait(source);
+      this.resetCatGait(companion);
+      const addChaseTween = (container, targetX, distance, gait, yOffset) => this.tweens.add({
+        targets: container,
+        x: targetX,
+        y: clamp(container.y + yOffset, FLOOR_TOP + 52, FLOOR_BOTTOM - 70),
+        yoyo: true,
+        repeat: Math.max(Number(moment.repeats || 1) - 1, 0),
+        duration: Number(moment.motionMs || 760),
+        ease: gait?.ease || "Sine.easeInOut",
+        onUpdate: (tween) => this.updateCatGait(container, gait, distance, Number(tween?.progress || 0)),
+        onComplete: resetBodies,
+      });
+      addChaseTween(source, sourceTargetX, sourceDistance, entry.behavior.gait, -Number(moment.liftPx || 8));
+      addChaseTween(companion, companionTargetX, partnerDistance, partner.behavior.gait, Number(moment.liftPx || 8));
+      return;
+    }
+
+    const approach = Number(moment.travelPx || 14);
+    const sourceX = clamp(source.x + direction * approach, 38, GAME_WIDTH - 132);
+    const partnerX = clamp(companion.x - direction * approach, 38, GAME_WIDTH - 132);
+    this.tweens.add({
+      targets: source,
+      x: sourceX,
+      yoyo: true,
+      repeat: Math.max(Number(moment.repeats || 1) - 1, 0),
+      duration: Number(moment.motionMs || 460),
+      ease: "Sine.easeInOut",
+      onComplete: resetBodies,
+    });
+    this.tweens.add({
+      targets: companion,
+      x: partnerX,
+      yoyo: true,
+      repeat: Math.max(Number(moment.repeats || 1) - 1, 0),
+      duration: Number(moment.motionMs || 460),
+      ease: "Sine.easeInOut",
+      onComplete: resetBodies,
+    });
+    bobBody(sourceBody, moment.sourceBobPx, moment.key === "nuzzle" ? direction * 4 : 0);
+    bobBody(partnerBody, moment.partnerBobPx, moment.key === "nuzzle" ? -direction * 4 : 0);
+  }
+
+  spawnCatSocialCue(left, right, kind, cueTone = "") {
     const x = (left.x + right.x) / 2 + 44;
     const y = Math.min(left.y, right.y) - 12;
     const cue = this.add.graphics();
     cue.setDepth(CAT_INTERACTION_DEPTH + 150);
-    const color = kind === "chase" ? 0xfff07d : kind === "nuzzle" ? 0xff6f9f : 0x87d9ff;
+    const colors = { sun: 0xfff07d, rose: 0xff6f9f, sky: 0x87d9ff };
+    const color = colors[cueTone] || (kind === "chase" ? colors.sun : kind === "nuzzle" ? colors.rose : colors.sky);
     cue.fillStyle(color, 1);
     [[0, 0], [8, -8], [17, 1]].forEach(([offsetX, offsetY], index) => {
       const size = index === 1 ? 7 : 5;
@@ -4942,15 +5034,19 @@ class CatWorldScene extends Phaser.Scene {
     }
   }
 
-  spawnCatBubble(container, cat, requestedMessage = "", existingReaction = null) {
+  spawnCatBubble(container, cat, requestedMessage = "", existingReaction = null, options = {}) {
     if (!container?.active || !cat?.id) return "";
     const behavior = container.getData("behavior") || this.catBehavior(cat);
     const lines = this.catThoughtLines(cat, behavior);
     const message = requestedMessage || existingReaction?.message || lines[Math.floor(Math.random() * lines.length)];
     const now = Date.now();
+    const requestedOffsetY = Number.isFinite(Number(options.offsetY)) ? Number(options.offsetY) : null;
     const reaction = existingReaction?.expiresAt > now
       ? existingReaction
-      : createCatBubbleReaction(message, now);
+      : {
+        ...createCatBubbleReaction(message, now),
+        ...(requestedOffsetY == null ? {} : { offsetY: requestedOffsetY }),
+      };
     const timing = resolveCatBubbleTiming(reaction, now);
     if (!timing.active) {
       this.owner.catReactions.delete(cat.id);
@@ -4960,7 +5056,9 @@ class CatWorldScene extends Phaser.Scene {
     if (previousBubble?.active) previousBubble.destroy();
 
     const bubbleWorldX = clamp(container.x + 42, 150, GAME_WIDTH - 150);
-    const bubble = this.add.container(bubbleWorldX - container.x, -78);
+    const offsetY = requestedOffsetY
+      ?? (Number.isFinite(Number(reaction.offsetY)) ? Number(reaction.offsetY) : -78);
+    const bubble = this.add.container(bubbleWorldX - container.x, offsetY);
     const messageText = this.add
       .text(0, 0, message, {
         color: "#263047",

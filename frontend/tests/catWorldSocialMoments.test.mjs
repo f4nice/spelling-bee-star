@@ -12,11 +12,35 @@ test("cat social moments are persisted for both participants near the end of the
   ]);
 
   assert.match(game, /delayedCall\(Math\.max\(holdMs - 240, 1000\)/);
+  assert.match(game, /catWorldSocialMomentPlan\(entry\.cat, partner\.cat, target/);
   assert.match(game, /kind:\s*"cat-social"[\s\S]*?partnerCatId:\s*partner\.cat\.id[\s\S]*?socialKind:\s*kind/);
   assert.match(page, /const targetId = event\?\.itemId \|\| event\?\.partnerCatId;/);
   assert.match(page, /partnerCatId:\s*event\.partnerCatId \|\| ""/);
   assert.match(page, /socialKind:\s*event\.socialKind \|\| ""/);
   assert.match(page, /event\.kind === "cat-social"[\s\S]*?notice\.value = nextPayload\.event\.message/);
+});
+
+test("each social kind has distinct choreography and live room status", async () => {
+  const game = await readFile(gameUrl, "utf8");
+  const choreography = game.slice(
+    game.indexOf("  playCatSocialChoreography(entry, partner, moment = {})"),
+    game.indexOf("  spawnCatSocialCue(left, right, kind, cueTone = \"\")"),
+  );
+
+  assert.match(game, /import \{ catWorldSocialMomentPlan \} from "\.\/catWorldSocialMoment\.js"/);
+  assert.match(choreography, /moment\.key === "chase"/);
+  assert.match(choreography, /companionTargetX/);
+  assert.match(choreography, /sourceTargetX/);
+  assert.match(choreography, /moment\.gapPx \|\| 118/);
+  assert.match(choreography, /this\.updateCatGait\(container, gait, distance/);
+  assert.match(choreography, /moment\.key === "nuzzle" \? direction \* 4 : 0/);
+  assert.match(game, /statusLabel: `正在\$\{moment\.label\}`/);
+  assert.match(game, /message: moment\.sourceLine/);
+  assert.match(game, /message: moment\.partnerLine/);
+  assert.match(game, /moment\.sourceLine, null, \{ offsetY: -116 \}/);
+  assert.match(game, /moment\.partnerLine, null, \{ offsetY: -72 \}/);
+  assert.match(game, /\{ offsetY: requestedOffsetY \}/);
+  assert.match(game, /Number\.isFinite\(Number\(reaction\.offsetY\)\)/);
 });
 
 test("resting, waking, and low-energy cats are not selected for social moments", async () => {
@@ -49,5 +73,7 @@ test("cat social choices use individual chemistry and expose the favorite compan
   assert.match(page, /socialCircle:\s*catSocial\.value/);
   assert.match(page, /social\.favoritePartnerLevelLabel/);
   assert.match(page, /<dt>猫咪伙伴<\/dt>/);
+  assert.match(page, /<dt>今日相处<\/dt>/);
+  assert.match(page, /catWorldSocialKindLabel\(latestSocialPartner\.lastKind\)/);
   assert.match(page, /同伴 \$\{social\.todayEventCount \|\| 0\}/);
 });
