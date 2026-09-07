@@ -240,6 +240,7 @@ onMounted(async () => {
     onCatIntent: updateLiveCatIntent,
     onLearningBoardClick: openRoomLearningProgress,
     onLearningTreasureClick: openRoomRecallTreasure,
+    onLearningMemoryOpen: openRoomLearningMemory,
     onCatAmbient: recordCatAmbientEvent,
     onFoodVisit: recordCatFoodNibble,
     onCameraPanState: (active) => {
@@ -854,6 +855,11 @@ const roomLiveActivity = computed(() => {
         statusLabel: live?.statusLabel || cat.behaviorLabel || "自由活动",
         targetLabel: live?.targetLabel || "",
         message: live?.message || cat.agent?.voiceLine || cat.agent?.routine || "正在按自己的节奏观察房间。",
+        kind: live?.kind || "",
+        sourceDate: live?.sourceDate || "",
+        reviewDue: Boolean(live?.reviewDue),
+        reviewStageLabel: live?.reviewStageLabel || "",
+        treasure: live?.treasure || null,
         phase: live?.phase || "settled",
         tone: live?.tone || "steady",
         live: Boolean(live),
@@ -1203,6 +1209,28 @@ function openRoomRecallTreasure(treasure = {}, signal = learningRoomSignal.value
   selectedCatRecallTreasureKey.value = treasureKey;
   notice.value = `${cat.displayLabel || cat.label}替你翻开了珍藏词 ${treasure.word}。`;
   nextTick(() => catRecallTreasureDetailRef.value?.scrollIntoView({ block: "nearest" }));
+}
+
+function openRoomLearningMemory(cat = {}, target = {}) {
+  const diaryCat = catAgentDiaries.value.find((entry) => entry.id === cat.id);
+  if (!diaryCat) {
+    openRoomLearningProgress();
+    return;
+  }
+  if (target.treasure?.key && !target.reviewDue) {
+    openRoomRecallTreasure(target.treasure, {
+      ...learningRoomSignal.value,
+      guideCatId: diaryCat.id,
+    });
+    return;
+  }
+  toggleCatDiary(diaryCat);
+  const sourceDate = String(target.sourceDate || "");
+  if (sourceDate && diaryCat.learningMemory.recentDays.some((day) => day.date === sourceDate)) {
+    selectedCatMemoryDate.value = sourceDate;
+  }
+  const stageLabel = String(target.reviewStageLabel || "共同学习手册");
+  notice.value = `${diaryCat.displayLabel || diaryCat.label}替你翻开了${stageLabel}这一页。`;
 }
 
 function syncCatPosition(cat, position, options = {}) {
@@ -2733,6 +2761,7 @@ function focusLiveCat(entry = {}) {
   activeRoomPanel.value = "cat";
   focusedCatId.value = cat.id;
   catWorldGame.value?.focusCat?.(cat.id);
+  if (entry.kind === "learning-memory") openRoomLearningMemory(cat, entry);
 }
 
 async function selectCat(catOrId, options = {}) {
@@ -3338,7 +3367,9 @@ async function selectCat(catOrId, options = {}) {
                   'is-moving': entry.phase === 'moving',
                 },
               ]"
-              :aria-label="`锁定${entry.catLabel}：${entry.statusLabel}${entry.targetLabel ? `，目标${entry.targetLabel}` : ''}`"
+              :aria-label="entry.kind === 'learning-memory'
+                ? `打开${entry.catLabel}正在看的共同学习手册`
+                : `锁定${entry.catLabel}：${entry.statusLabel}${entry.targetLabel ? `，目标${entry.targetLabel}` : ''}`"
               :title="entry.message"
               @click="focusLiveCat(entry)"
             >

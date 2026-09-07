@@ -4617,9 +4617,11 @@ class CatWorldScene extends Phaser.Scene {
       const nextX = visitPlan?.target.x ?? Phaser.Math.Between(38, GAME_WIDTH - 132);
       const nextY = visitPlan?.target.y ?? Phaser.Math.Between(FLOOR_TOP + 52, FLOOR_BOTTOM - 70);
       const guidedLearningMove = visitPlan?.kind === "learning" && learningRitualPending;
+      const guidedMemoryMove = visitPlan?.kind === "memory" && memoryReviewPending;
+      const guidedStudyMove = guidedLearningMove || guidedMemoryMove;
       const gait = latestBehavior.gait || catWorldGaitProfile(cat, latestBehavior);
       const distance = Phaser.Math.Distance.Between(container.x, container.y, nextX, nextY);
-      const duration = guidedLearningMove
+      const duration = guidedStudyMove
         ? interactionMoveDuration(
           container,
           { x: nextX, y: nextY },
@@ -5183,9 +5185,13 @@ class CatWorldScene extends Phaser.Scene {
       message: target.message || "正在翻看共同学习手册。",
       tone: "memory",
       expiresAt: Date.now() + holdMs,
+      sourceDate: target.sourceDate || "",
+      reviewDue: Boolean(target.reviewDue),
+      reviewStageLabel: target.reviewStageLabel || "",
+      treasure: target.treasure || null,
     });
     this.spawnLearningMemoryBubble(entry.container, entry.cat, target);
-    this.spawnLearningMemoryPageCue(entry.container, target);
+    this.spawnLearningMemoryPageCue(entry.container, entry.cat, target);
     if (target.itemKind === "learning-treasure") {
       this.spawnLearningSparkles(target.plaqueX, target.plaqueY);
     }
@@ -5199,13 +5205,14 @@ class CatWorldScene extends Phaser.Scene {
     return true;
   }
 
-  spawnLearningMemoryPageCue(container, target = {}) {
-    if (!container?.active || VIEW_WIDTH < 900) return;
+  spawnLearningMemoryPageCue(container, cat = {}, target = {}) {
+    if (!container?.active) return;
     const palette = LEARNING_MEMORY_RITUAL_PALETTES[target.styleKey]
       || LEARNING_MEMORY_RITUAL_PALETTES.balanced;
+    const compactCue = VIEW_WIDTH < 900;
     const cue = this.add.container(
-      clamp(container.x + 84, 48, GAME_WIDTH - 72),
-      clamp(container.y - 96, 42, FLOOR_BOTTOM - 120),
+      clamp(container.x + (compactCue ? 64 : 84), 48, GAME_WIDTH - 72),
+      clamp(container.y - (compactCue ? 82 : 96), 42, FLOOR_BOTTOM - 120),
     ).setDepth(CAT_INTERACTION_DEPTH + 142);
     const paper = makeLocalGraphics(this, cue);
     paper.fillStyle(0x2c2f3a, 1);
@@ -5222,14 +5229,37 @@ class CatWorldScene extends Phaser.Scene {
       fontStyle: "bold",
     }).setOrigin(0.5);
     cue.add(ritualMark);
+    const hitZone = this.add.zone(cue.x - 12, cue.y - 12, 72, 60)
+      .setOrigin(0, 0)
+      .setDepth(CAT_INTERACTION_DEPTH + 143)
+      .setInteractive({ cursor: "pointer" });
+    hitZone.setData("kind", "learning-memory-cue");
+    hitZone.on("pointerdown", (_pointer, _localX, _localY, event) => {
+      this.stopPointerEvent(event);
+    });
+    hitZone.on("pointerup", (_pointer, _localX, _localY, event) => {
+      this.stopPointerEvent(event);
+      if (!this.shouldSuppressRoomClick()) {
+        this.owner.handlers.onLearningMemoryOpen?.(cat, target);
+      }
+    });
+    hitZone.on("pointerover", () => {
+      if (cue.active) cue.setScale(1.08);
+    });
+    hitZone.on("pointerout", () => {
+      if (cue.active) cue.setScale(1);
+    });
     this.tweens.add({
-      targets: cue,
+      targets: [cue, hitZone],
       y: cue.y - 12,
       alpha: 0,
       delay: Math.max(Number(target.holdMs || 6400) - 1500, 1800),
       duration: 1200,
       ease: "Cubic.easeOut",
-      onComplete: () => cue.destroy(),
+      onComplete: () => {
+        cue.destroy();
+        hitZone.destroy();
+      },
     });
   }
 

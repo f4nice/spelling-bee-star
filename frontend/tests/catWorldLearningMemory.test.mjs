@@ -251,6 +251,7 @@ test("a cat opens the due page and names its gentle two-step review rhythm", () 
   assert.equal(plan.dayLabel, "9/6");
   assert.equal(plan.reviewDue, true);
   assert.equal(plan.reviewStageLabel, "三日巩固");
+  assert.equal(plan.sourceDate, "2026-09-06");
   assert.equal(plan.treasure, null);
   assert.equal(plan.statusLabel, "正在等你三日巩固");
   assert.equal(plan.targetLabel, "共同学习手册 · 三日巩固");

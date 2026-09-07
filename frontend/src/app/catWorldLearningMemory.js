@@ -544,6 +544,7 @@ export function catWorldLearningMemoryVisitPlan(cat = {}, behavior = {}, context
     selectionLabel,
     levelKey: memory.levelKey,
     levelLabel: memory.levelLabel,
+    sourceDate: visitDay.date || memory.suggestedReviewDate || memory.latestDate,
     dayLabel: visitDay.dayLabel || formatCatWorldLearningMemoryDate(visitDay.date || memory.latestDate),
     treasure,
     statusLabel: reviewDue

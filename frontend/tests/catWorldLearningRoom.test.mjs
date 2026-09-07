@@ -98,6 +98,8 @@ test("the guide cat performs each visible study ritual once before ordinary choi
   assert.match(game, /cat\.learningMemory\?\.reviewDueToday && !cat\.learningMemory\?\.reviewedToday/);
   assert.match(game, /const memoryReviewPending = Boolean\(learningMemoryTarget\?\.reviewDue\)/);
   assert.match(game, /requiredKind: memoryReviewPending \? "memory" : learningRitualPending \? "learning" : ""/);
+  assert.match(game, /const guidedMemoryMove = visitPlan\?\.kind === "memory" && memoryReviewPending/);
+  assert.match(game, /const guidedStudyMove = guidedLearningMove \|\| guidedMemoryMove/);
   assert.match(game, /this\.owner\.learningRitualVisits\.add\(learningVisitKey\)/);
   assert.match(game, /this\.learningRitualVisits = new Set\(\)/);
   assert.match(game, /const delayRange = ritualDue \? \[1800, 3400\]/);
@@ -115,13 +117,13 @@ test("each eligible cat can quietly revisit its own learning memory in the room"
   assert.match(game, /\{ kind: "memory", target: learningMemoryTarget \}/);
   assert.match(game, /this\.owner\.learningMemoryVisits\.add\(visitPlan\.target\.visitKey\)/);
   assert.match(game, /startLearningMemoryMoment/);
-  assert.match(game, /spawnLearningMemoryPageCue/);
+  assert.match(game, /spawnLearningMemoryPageCue\(entry\.container, entry\.cat, target\)/);
   assert.match(game, /learningTreasureFocusPoint\(cat = \{\}, treasure = \{\}, index = 0\)/);
   assert.match(game, /itemKind:\s*"learning-treasure"/);
   assert.match(game, /target\.statusLabel \|\| "正在回看学习脚印"/);
   assert.match(game, /this\.spawnLearningSparkles\(target\.plaqueX, target\.plaqueY\)/);
   assert.match(game, /LEARNING_MEMORY_RITUAL_PALETTES/);
-  assert.match(game, /if \(!container\?\.active \|\| VIEW_WIDTH < 900\) return/);
+  assert.match(game, /if \(!container\?\.active\) return/);
   assert.match(game, /"gentle-starter": Object\.freeze\(\{ paper: 0xe9fff7, accent: 0x55bfa6, mark: "短" \}\)/);
   assert.match(game, /const ritualMark = this\.add\.text\(22, 17, palette\.mark/);
   assert.match(game, /cue\.add\(ritualMark\)/);
@@ -133,6 +135,23 @@ test("each eligible cat can quietly revisit its own learning memory in the room"
   assert.match(game, /duration: 1600/);
   assert.match(game, /this\.learningMemoryVisits = new Set\(\)/);
   assert.match(styles, /\.cat-world-context-intent\.tone-memory\s*\{/);
+});
+
+test("the cat's pixel memory page opens the exact scrapbook date on desktop and mobile", async () => {
+  const [page, game] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(gameUrl, "utf8"),
+  ]);
+
+  assert.match(game, /spawnLearningMemoryPageCue\(container, cat = \{\}, target = \{\}\)/);
+  assert.doesNotMatch(game, /spawnLearningMemoryPageCue\([\s\S]*?if \(!container\?\.active \|\| VIEW_WIDTH < 900\) return/);
+  assert.match(game, /this\.add\.zone\(cue\.x - 12, cue\.y - 12, 72, 60\)/);
+  assert.match(game, /setInteractive\(\{ cursor: "pointer" \}\)/);
+  assert.match(game, /this\.owner\.handlers\.onLearningMemoryOpen\?\.\(cat, target\)/);
+  assert.match(page, /onLearningMemoryOpen:\s*openRoomLearningMemory/);
+  assert.match(page, /function openRoomLearningMemory\(cat = \{\}, target = \{\}\)/);
+  assert.match(page, /selectedCatMemoryDate\.value = sourceDate/);
+  assert.match(page, /entry\.kind === "learning-memory"/);
 });
 
 test("the room keeps a readable mobile camera instead of squeezing the whole world", async () => {
