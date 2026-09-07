@@ -1817,6 +1817,17 @@ function openShopCategory(category) {
   setWorldView("shop", { scroll: true });
 }
 
+function openBathSupplies() {
+  if (!setWorldView("shop")) return;
+  closeCatDiary();
+  activeCategory.value = "consumable";
+  nextTick(() => {
+    const card = document.getElementById("cat-world-shop-cat-bath-kit");
+    card?.scrollIntoView({ behavior: "smooth", block: "center" });
+    card?.focus({ preventScroll: true });
+  });
+}
+
 function setRepairMode(enabled) {
   const nextEnabled = Boolean(enabled);
   if (nextEnabled && itemCount(REPAIR_HAMMER_ITEM_ID) <= 0) {
@@ -2244,8 +2255,13 @@ function isOneTimeOwned(item) {
   return ["toy", "decor", "color", "handbook"].includes(item?.category) && itemCount(item.id) > 0;
 }
 
+function isOwnedBathtub(item) {
+  return item?.id === "bubble-bathtub" && itemCount(item.id) > 0;
+}
+
 function canPurchase(item) {
   if (!item?.id) return false;
+  if (item.category === "consumable") return canAfford(item);
   if (item.category === "blind-box") return !item.drawn && Number(item.remainingStock || 0) > 0 && canAfford(item);
   if (item.limited) {
     return !isOneTimeOwned(item) && item.isActive !== false && Number(item.remainingStock || 0) > 0 && canAfford(item);
@@ -2259,6 +2275,10 @@ function canPurchase(item) {
 
 function purchaseHint(item) {
   if (!item?.id) return "";
+  if (isOwnedBathtub(item)) {
+    const tubState = isDamagedItem(item) ? "浴缸坏了，先到背包维修。" : "浴缸可以一直用。";
+    return `${tubState}每次洗澡用 1 份泡泡浴套装，背包还有 ${itemCount("cat-bath-kit")} 份。`;
+  }
   if (item.category === "handbook" && isOneTimeOwned(item)) {
     return "已永久拥有，点击打开手册";
   }
@@ -2322,6 +2342,11 @@ function purchaseHint(item) {
 
 function purchaseButtonText(item) {
   if (busyItemId.value === item.id) return "处理中...";
+  if (isOwnedBathtub(item)) return "补充洗澡用品";
+  if (item.category === "consumable") {
+    if (!canAfford(item)) return `还差 ${Number(item.cost || 0) - Number(energy.value.available || 0)} 能量`;
+    return `${itemCount(item.id) > 0 ? "再买" : "买"} 1 份 · ${item.cost} 能量`;
+  }
   if (item.category === "handbook" && isOneTimeOwned(item)) return "打开手册";
   if (item.limited && isOneTimeOwned(item)) return "已拥有 1 件";
   if (item.limited && item.isActive === false) return "暂停领取";
@@ -2358,10 +2383,15 @@ function openHandbook(type) {
 }
 
 function shopItemActionAvailable(item) {
+  if (isOwnedBathtub(item)) return true;
   return item?.category === "handbook" && isOneTimeOwned(item) ? true : canPurchase(item);
 }
 
 function handleShopItemAction(item) {
+  if (isOwnedBathtub(item)) {
+    openBathSupplies();
+    return;
+  }
   if (item?.category === "handbook" && isOneTimeOwned(item)) {
     openHandbook(handbookType(item));
     return;
@@ -2490,6 +2520,10 @@ async function purchase(item) {
       body: JSON.stringify({ itemId: item.id }),
     });
     replacePayload(nextPayload);
+    if (item.category === "consumable" || item.category === "food") {
+      notice.value = `买好了！${item.label} +1，背包现在有 ${itemCount(item.id)} 份。`;
+      return;
+    }
     if (nextPayload.blindBoxResult?.cat) {
       openedBlindBox.value = nextPayload.blindBoxResult;
       const profile = nextPayload.blindBoxResult.profile || nextPayload.adoptedCatProfile || {};
@@ -4156,7 +4190,7 @@ async function selectCat(catOrId, options = {}) {
             {{ busyItemId === 'cat-bath-kit' ? "洗澡中..." : `使用泡泡浴套装 (${activeCatDiary.bathKitCount})` }}
           </button>
           <small v-else-if="activeCatDiary.bathKitCount">先把它带到{{ currentScene.label }}，再使用泡泡浴套装。</small>
-          <small v-else>背包里没有泡泡浴套装，请到消耗品商店购买。</small>
+          <button v-else type="button" @click="openBathSupplies">购买洗澡用品</button>
         </div>
         <dl class="cat-world-agent-facts">
           <div><dt>个体档案</dt><dd>{{ activeCatDiary.genderLabel }} · {{ activeCatDiary.patternLabel }} · {{ activeCatDiary.featureLabel }}</dd></div>
@@ -4225,7 +4259,7 @@ async function selectCat(catOrId, options = {}) {
       </div>
 
       <div class="cat-world-shop-grid">
-        <article v-for="item in selectedItems" :key="item.id" class="cat-world-shop-card">
+        <article v-for="item in selectedItems" :id="`cat-world-shop-${item.id}`" :key="item.id" class="cat-world-shop-card" tabindex="-1">
           <div>
             <div class="cat-world-shop-title">
               <CatWorldProductIcon :item="item" />
@@ -4242,7 +4276,7 @@ async function selectCat(catOrId, options = {}) {
               <span>基础体力 +{{ item.catEnergy }}</span>
             </div>
             <div v-else-if="item.category === 'consumable'" class="cat-world-food-tags cat-world-consumable-tags">
-              <span>一次性</span>
+              <span>每次用 1 份</span>
               <span v-if="item.useType === 'litter-prevent'">点击放置</span>
               <span v-else-if="item.useType === 'litter-clean'">点击猫屎使用</span>
               <span v-else-if="item.useType === 'cat-rename'">选择猫咪改名</span>
