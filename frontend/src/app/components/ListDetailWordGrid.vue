@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 
 import WordCard from "./WordCard.vue";
+import { countWordResources, wordMatchesResourceFilter } from "../wordResourceFilters.js";
 
 const props = defineProps({
   data: {
@@ -42,24 +43,11 @@ const indexedWords = computed(() =>
   }))
 );
 
-function hasPlayableAudio(word) {
-  return Boolean(word?.has_playable_audio || word?.has_audio);
-}
-
-const resourceCounts = computed(() => {
-  const words = props.data.words || [];
-  return {
-    all: words.length,
-    missingImage: words.filter((word) => !word.image_url).length,
-    missingAudio: words.filter((word) => !hasPlayableAudio(word)).length,
-    imageIssue: words.filter((word) => word.image_issue).length,
-    audioIssue: words.filter((word) => word.audio_issue).length,
-    missingAny: words.filter((word) => !word.image_url || !hasPlayableAudio(word) || word.image_issue || word.audio_issue).length,
-  };
-});
+const resourceCounts = computed(() => countWordResources(props.data.words || []));
 
 const filterOptions = computed(() => [
   { key: "all", label: "全部", count: resourceCounts.value.all },
+  { key: "incomplete", label: "未补全", count: resourceCounts.value.incomplete, title: "缺少音标、词性、中英文释义或英文例句；图片和音频单独筛选" },
   { key: "missingImage", label: "无图片", count: resourceCounts.value.missingImage },
   { key: "missingAudio", label: "无音频", count: resourceCounts.value.missingAudio },
   { key: "imageIssue", label: "图片待修", count: resourceCounts.value.imageIssue },
@@ -67,24 +55,9 @@ const filterOptions = computed(() => [
   { key: "missingAny", label: "缺资源", count: resourceCounts.value.missingAny },
 ]);
 
-const filteredWords = computed(() => {
-  if (activeFilter.value === "missingImage") {
-    return indexedWords.value.filter(({ word }) => !word.image_url);
-  }
-  if (activeFilter.value === "missingAudio") {
-    return indexedWords.value.filter(({ word }) => !hasPlayableAudio(word));
-  }
-  if (activeFilter.value === "imageIssue") {
-    return indexedWords.value.filter(({ word }) => word.image_issue);
-  }
-  if (activeFilter.value === "audioIssue") {
-    return indexedWords.value.filter(({ word }) => word.audio_issue);
-  }
-  if (activeFilter.value === "missingAny") {
-    return indexedWords.value.filter(({ word }) => !word.image_url || !hasPlayableAudio(word) || word.image_issue || word.audio_issue);
-  }
-  return indexedWords.value;
-});
+const filteredWords = computed(() =>
+  indexedWords.value.filter(({ word }) => wordMatchesResourceFilter(word, activeFilter.value))
+);
 
 const aiImageJob = computed(() => props.aiImageJob || null);
 const aiImageQuota = computed(() => aiImageJob.value?.quota || props.data.ai_image_quota || null);
@@ -170,6 +143,8 @@ async function confirmPaidBatch() {
           :key="option.key"
           class="word-resource-filter-button"
           :class="{ active: activeFilter === option.key }"
+          :aria-pressed="activeFilter === option.key"
+          :title="option.title"
           type="button"
           @click="activeFilter = option.key"
         >
@@ -225,3 +200,15 @@ async function confirmPaidBatch() {
   </section>
   <p v-else class="empty-state word-resource-filter-empty">没有符合条件的单词。</p>
 </template>
+
+<style scoped>
+@media (max-width: 1100px) {
+  .word-resource-filter-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .word-resource-filter-actions {
+    justify-content: flex-start;
+  }
+}
+</style>
