@@ -14,5 +14,6 @@ export function buildListToolsContext(listTools) {
     createWordInList: listTools.createWordInList,
     findWordCandidates: listTools.findWordCandidates,
     generateListAiImages: listTools.generateListAiImages,
+    refreshListDetail: listTools.refreshCurrentListDetail,
   };
 }

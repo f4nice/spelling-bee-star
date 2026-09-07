@@ -1,5 +1,6 @@
 import asyncio
 from calendar import monthrange
+from contextlib import nullcontext
 from datetime import date, datetime, timedelta
 import hmac
 import html
@@ -69,6 +70,10 @@ from app.services.ai_image_generation import generate_dashscope_prompt_image, ge
 from app.services.ai_tts import generate_word_ai_audio
 from app.services.chinadaily import get_chinadaily_article, load_chinadaily_articles
 from app.services.newspaper_cache import NewspaperCache
+from app.services.list_completion_jobs import (
+    ListCompletionJobs, PreserveWordValues, missing_text_fields,
+    protected_word_values, restore_word_values,
+)
 from app.services.debate import (
     DEBATE_ARGUMENT_MAX_CHARS,
     DEBATE_CHALLENGE_ROUNDS,
@@ -123,8 +128,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-039"
-DEFAULT_PAGE_VERSION = "v20260907.39"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-040"
+DEFAULT_PAGE_VERSION = "v20260907.40"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -8987,29 +8992,84 @@ async def vue_refresh_word(
     return {"ok": True, "word": serialize_word(word)}
 
 
-async def complete_word_from_sources(db: Session, word: Word, *, list_id: int | None = None) -> None:
+async def complete_word_from_sources(
+    db: Session, word: Word, *, list_id: int | None = None, only_missing: bool = False,
+) -> None:
     """Current-word completion always prefers SPB; the web only fills gaps."""
-    word.enrichment_status = "pending"
-    word.enrichment_error = None
-    db.add(word)
-    db.commit()
-    apply_word_resource(db, word, commit=False, include_image=False)
-    try:
-        await apply_spb_details_to_word(db, word, list_id=list_id, search_all_groups=True)
-    except (httpx.HTTPError, OSError, ValueError, RuntimeError):
-        # A temporarily unavailable upstream must not prevent online fallback.
-        # Do not include exception text here: requests can contain auth details.
-        logging.getLogger("speakeasy.enrichment").warning("SPB lookup unavailable for word id %s; using missing-field fallback", word.id)
-    db.add(word)
-    db.commit()
-    db.refresh(word)
-    if missing_dictionary_fields(word):
-        await enrich_word(db, word, include_images=False, only_missing=True)
-    else:
-        word.enrichment_status = "done"
+    with PreserveWordValues(db, word) if only_missing else nullcontext() as protection:
+        word.enrichment_status = "pending"
         word.enrichment_error = None
+        db.add(word)
         db.commit()
-    remember_word_resource(db, word, commit=True)
+        apply_word_resource(db, word, commit=False, include_image=False)
+        if protection:
+            protection.restore()
+        try:
+            await apply_spb_details_to_word(db, word, list_id=list_id, search_all_groups=True, only_missing=only_missing)
+        except (httpx.HTTPError, OSError, ValueError, RuntimeError):
+            # A temporarily unavailable upstream must not prevent online fallback.
+            # Do not include exception text here: requests can contain auth details.
+            logging.getLogger("speakeasy.enrichment").warning("SPB lookup unavailable for word id %s; using missing-field fallback", word.id)
+        if protection:
+            protection.restore()
+        db.add(word)
+        db.commit()
+        db.refresh(word)
+        if missing_dictionary_fields(word):
+            await enrich_word(db, word, include_images=False, only_missing=True)
+        else:
+            word.enrichment_status = "done"
+            word.enrichment_error = None
+            db.commit()
+        if protection:
+            protection.restore()
+        remember_word_resource(db, word, commit=True)
+
+
+async def complete_list_word_missing_fields(db: Session, word: Word, *, list_id: int) -> None:
+    try:
+        await complete_word_from_sources(db, word, list_id=list_id, only_missing=True)
+    finally:
+        # Background commits do not go through the POST cache-invalidation
+        # middleware. Clear even on timeout because earlier stages can commit.
+        word_detail_cache.clear()
+        public_stats_cache.clear()
+
+
+LIST_COMPLETION_JOBS = ListCompletionJobs(SessionLocal, complete_list_word_missing_fields)
+
+
+@app.get("/api/vue/lists/{word_list_id}/completion")
+def vue_list_completion_status(word_list_id: int, db: Session = Depends(get_db)):
+    if not db.get(WordList, word_list_id):
+        raise HTTPException(status_code=404, detail="Word list not found")
+    return LIST_COMPLETION_JOBS.current(word_list_id)
+
+
+@app.post("/api/vue/lists/{word_list_id}/completion/start")
+def vue_start_list_completion(
+    word_list_id: int, edit_token: str = Form(default=""), db: Session = Depends(get_db),
+):
+    require_word_write_access(edit_token)
+    if not db.get(WordList, word_list_id):
+        raise HTTPException(status_code=404, detail="Word list not found")
+    words = db.scalars(select(Word).join(WordListItem, WordListItem.word_id == Word.id).where(
+        WordListItem.word_list_id == word_list_id,
+    ).order_by(WordListItem.id)).all()
+    return LIST_COMPLETION_JOBS.start(word_list_id, [word.id for word in words if missing_text_fields(word)])
+
+
+@app.post("/api/vue/lists/{word_list_id}/completion/{job_id}/stop")
+def vue_stop_list_completion(
+    word_list_id: int, job_id: str, edit_token: str = Form(default=""), db: Session = Depends(get_db),
+):
+    require_word_write_access(edit_token)
+    if not db.get(WordList, word_list_id):
+        raise HTTPException(status_code=404, detail="Word list not found")
+    job = LIST_COMPLETION_JOBS.stop(word_list_id, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Completion job not found")
+    return job
 
 
 @app.get("/api/vue/newspaper")
@@ -11826,8 +11886,10 @@ async def apply_spb_details_to_word(
     preferred_group: dict[str, Any] | None = None,
     force_audio_download: bool = False,
     search_all_groups: bool = False,
+    only_missing: bool = False,
 ) -> bool:
     changed = False
+    preserved = protected_word_values(word) if only_missing else {}
     candidate_groups: list[dict[str, Any]] = []
     if preferred_group:
         candidate_groups.append(preferred_group)
@@ -11869,13 +11931,20 @@ async def apply_spb_details_to_word(
             force_audio_download=force_audio_download,
         )
         prepared = prepared_rows[0] if prepared_rows else prepared
+        if only_missing:
+            # The interactive refresh intentionally prefers current SPB text;
+            # a batch must only fill gaps and respect all existing field locks.
+            for field in preserved:
+                prepared.pop(field, None)
         if apply_spb_text_fields_to_word(word, prepared):
             changed = True
         if apply_imported_local_audio(word, prepared):
             changed = True
         if int(prepared.get("_spb_force_downloaded_audio_count") or 0):
             changed = True
-        if clear_misclassified_spb_audio_from_resource(db, word, prepared):
+        if only_missing:
+            restore_word_values(word, preserved)
+        if not only_missing and clear_misclassified_spb_audio_from_resource(db, word, prepared):
             changed = True
         if changed:
             remember_word_resource(
@@ -11885,8 +11954,8 @@ async def apply_spb_details_to_word(
                 british_audio_source=prepared.get("british_audio_url_source"),
                 english_definition_audio_source=prepared.get("english_definition_audio_url_source"),
                 english_example_audio_source=prepared.get("english_example_audio_url_source"),
-                override_text=bool(prepared.get("spb_text_source")),
-                override_media=bool(
+                override_text=not only_missing and bool(prepared.get("spb_text_source")),
+                override_media=not only_missing and bool(
                     prepared.get("american_audio_url_source")
                     or prepared.get("british_audio_url_source")
                     or prepared.get("english_definition_audio_url_source")
@@ -11894,6 +11963,8 @@ async def apply_spb_details_to_word(
                 ),
                 commit=False,
             )
+            if only_missing:
+                restore_word_values(word, preserved)
         # Keep the first matching group's sense, even if it was already up to
         # date. A second group can use a different definition/example.
         return changed

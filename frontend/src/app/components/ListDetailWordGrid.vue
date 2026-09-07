@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 
 import WordCard from "./WordCard.vue";
+import ListCompletionToolbar from "./ListCompletionToolbar.vue";
 import { countWordResources, wordMatchesResourceFilter } from "../wordResourceFilters.js";
 
 const props = defineProps({
@@ -26,6 +27,10 @@ const props = defineProps({
     default: null,
   },
   generateListAiImages: {
+    type: Function,
+    required: true,
+  },
+  refreshListDetail: {
     type: Function,
     required: true,
   },
@@ -153,6 +158,11 @@ async function confirmPaidBatch() {
         </button>
       </div>
     </div>
+    <ListCompletionToolbar
+      :word-list-id="Number(data.word_list.id)"
+      :incomplete-count="resourceCounts.incomplete"
+      :refresh-list-detail="refreshListDetail"
+    />
     <div class="list-ai-image-toolbar" :class="aiImageJobClass">
       <div class="list-ai-image-summary">
         <strong>批量 AI 图片</strong>
@@ -202,6 +212,7 @@ async function confirmPaidBatch() {
 </template>
 
 <style scoped>
+.list-ai-image-toolbar { margin-top: 12px; }
 @media (max-width: 1100px) {
   .word-resource-filter-top {
     flex-direction: column;

@@ -72,6 +72,12 @@ export function clearApiCache(predicate = () => true) {
 }
 
 export function invalidateApiCacheForMutation(url, context = {}) {
+  if (/^\/api\/vue\/lists\/\d+\/completion(?:\/|$)/.test(url)) {
+    // Batch completion updates shared words as well as this list. Status reads
+    // use skipCache, so returning to a word never shows pre-completion text.
+    clearApiCache((key) => key.startsWith("/api/vue/words/") || key.startsWith("/api/vue/lists") || key === "/api/vue/home");
+    return;
+  }
   if (url.startsWith("/api/vue/newspaper")) {
     clearApiCache((key) => key.startsWith("/api/vue/newspaper"));
     return;

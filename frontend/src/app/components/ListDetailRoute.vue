@@ -26,6 +26,7 @@ defineProps({
     :create-word-in-list="ctx.createWordInList"
     :find-word-candidates="ctx.findWordCandidates"
     :generate-list-ai-images="ctx.generateListAiImages"
+    :refresh-list-detail="ctx.refreshListDetail"
     :word-detail-url="ctx.wordDetailUrl"
     :image-for-word="ctx.imageForWord"
     :fallback-letter="ctx.fallbackLetter"

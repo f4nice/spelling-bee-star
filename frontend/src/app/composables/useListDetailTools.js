@@ -23,12 +23,14 @@ export function useListDetailTools({ data, go, loadRoute }) {
     await syncListImagesForDetail({ data, loadRoute });
   }
 
-  async function refreshCurrentListDetail() {
-    const wordListId = data.value?.word_list?.id;
+  async function refreshCurrentListDetail(expectedListId = null) {
+    // Image jobs pass their progress payload; completion jobs pass a list ID.
+    const wordListId = typeof expectedListId === "number" ? expectedListId : data.value?.word_list?.id;
     if (!wordListId) return;
-    data.value = await fetchJson(routeApiPaths.listDetail({ params: { id: wordListId } }), {
+    const next = await fetchJson(routeApiPaths.listDetail({ params: { id: wordListId } }), {
       skipCache: true,
     });
+    if (Number(data.value?.word_list?.id) === Number(wordListId)) data.value = next;
   }
 
   async function moveListToGroup(groupId) {
@@ -87,5 +89,6 @@ export function useListDetailTools({ data, go, loadRoute }) {
     createWordInList,
     findWordCandidates,
     generateListAiImages,
+    refreshCurrentListDetail,
   };
 }

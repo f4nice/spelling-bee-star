@@ -19,6 +19,7 @@ const props = defineProps([
   "createWordInList",
   "findWordCandidates",
   "generateListAiImages",
+  "refreshListDetail",
   "wordDetailUrl",
   "imageForWord",
   "fallbackLetter",
@@ -258,6 +259,7 @@ function openImportModal() {
     :data="data"
     :ai-image-job="aiImageJob"
     :generate-list-ai-images="generateListAiImages"
+    :refresh-list-detail="refreshListDetail"
     :word-detail-url="wordDetailUrl"
     :image-for-word="imageForWord"
     :fallback-letter="fallbackLetter"
