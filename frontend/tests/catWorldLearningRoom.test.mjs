@@ -173,3 +173,19 @@ test("the compact route shows a humane daily pace without adding another task ca
   assert.match(styles, /\.cat-world-learning-pace\.tone-complete\s*\{[^}]*background:\s*#e4f7e4/s);
   assert.match(styles, /@media \(max-width: 560px\)[\s\S]*?\.cat-world-learning-pace\s*\{\s*grid-template-columns:\s*auto minmax\(0, 1fr\) auto/);
 });
+
+test("the compact route exposes a clickable, responsive next-visit promise", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
+
+  assert.match(page, /const learningReturnPromise = computed\(\(\) => buildCatWorldReturnPromise/);
+  assert.match(page, /class="\['cat-world-return-promise', `tone-\$\{learningReturnPromise\.key\}`\]"/);
+  assert.match(page, /@click="handleLearningReturnPromise"/);
+  assert.match(page, /promise\.actionKind === "review"/);
+  assert.match(page, /selectedCatMemoryDate\.value = promise\.sourceDate/);
+  assert.match(styles, /\.cat-world-return-promise\s*\{[^}]*grid-template-columns:\s*auto auto minmax\(180px, 1fr\) auto/s);
+  assert.match(styles, /\.cat-world-return-promise:hover,[\s\S]*?color:\s*#fff;\s*background:\s*#1d7f5b;/);
+  assert.match(styles, /@media \(max-width: 560px\)[\s\S]*?\.cat-world-return-promise\s*\{\s*grid-template-columns:\s*auto minmax\(0, 1fr\) auto/);
+});

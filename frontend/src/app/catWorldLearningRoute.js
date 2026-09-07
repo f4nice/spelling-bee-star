@@ -1,4 +1,7 @@
-import { normalizeCatWorldLearningMemory } from "./catWorldLearningMemory.js";
+import {
+  formatCatWorldLearningMemoryDate,
+  normalizeCatWorldLearningMemory,
+} from "./catWorldLearningMemory.js";
 
 const MINIMUM_SPELLING_TARGET = 20;
 const STARTER_SPELLING_TARGET = 5;
@@ -129,8 +132,50 @@ const WEEKLY_RHYTHM_TONES = {
   balanced: "最近七天学五天、休两天，会比硬撑每天更容易坚持。",
 };
 
+const RETURN_PROMISE_RHYTHMS = Object.freeze({
+  "observe-then-decide": "我会先翻开旧脚印，等你想起一点再看答案。",
+  "study-signal-first": "学习灯一亮，我会先来提醒我们这次回想。",
+  "companion-seeker": "我会先来找你，再一起把这页慢慢想起来。",
+  "familiar-corner-first": "我会在熟悉的学习角等你，再慢慢翻回这一页。",
+  "new-route-scout": "我会替旧词找一条新路线，再听你把它用出来。",
+  "play-before-rest": "先陪我活动一小会儿，再安静完成这次回想。",
+  balanced: "我会替你收好这一页，下次回来再一起想起来。",
+});
+
+const RETURN_PROMISE_RECALL_CUES = Object.freeze({
+  "gentle-starter": "只找回 1 个熟词，再写最短的 1 句自己的英语。",
+  "story-builder": "找回 1 个词，再把它接回自己的 1 句话。",
+  "idea-sparring": "找回 1 个词，再用它说清 1 个小观点。",
+  "loop-keeper": "先遮住答案，找回 1 个词和 1 句话。",
+  "streak-keeper": "只留下一枚回想爪印，不追加新的任务。",
+  "review-organizer": "翻开共同手册，整理 1 个词和 1 句话。",
+  balanced: "先不看答案，找回 1 个词和 1 句话。",
+});
+
 function safeCount(value) {
   return Math.max(Number(value || 0), 0);
+}
+
+function habitTodayDate(habit = {}) {
+  const today = Array.isArray(habit.recentDays)
+    ? habit.recentDays.find((day) => day?.today)?.date
+    : "";
+  return String(today || habit.date || "").trim();
+}
+
+function shiftIsoDate(value, days) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  const shifted = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days));
+  return shifted.toISOString().slice(0, 10);
+}
+
+function returnPromiseDateLabel(targetDate, todayDate) {
+  if (!targetDate) return "下次有空时";
+  const formatted = formatCatWorldLearningMemoryDate(targetDate);
+  if (targetDate === todayDate) return "今天";
+  if (targetDate === shiftIsoDate(todayDate, 1)) return `明天 · ${formatted}`;
+  return formatted || targetDate;
 }
 
 export function buildCatWorldLearningPace(habit = {}) {
@@ -206,6 +251,96 @@ export function buildCatWorldLearningPace(habit = {}) {
     coreGoalLabel,
     detail: "先完成 5 个词，让开始足够轻；做完再决定要不要继续。",
     roomCue: "我们先做 5 个词，今天只需要一个很轻的开始。",
+  };
+}
+
+export function buildCatWorldReturnPromise(habit = {}, cat = {}, memory = {}) {
+  const normalizedMemory = normalizeCatWorldLearningMemory(memory);
+  const pace = buildCatWorldLearningPace(habit);
+  const todayDate = habitTodayDate(habit);
+  const rhythmKey = String(cat.actionRhythm?.key || "balanced");
+  const rhythmLine = RETURN_PROMISE_RHYTHMS[rhythmKey] || RETURN_PROMISE_RHYTHMS.balanced;
+  const styleKey = String(cat.learningStyle?.key || "balanced");
+  const recallCue = RETURN_PROMISE_RECALL_CUES[styleKey] || RETURN_PROMISE_RECALL_CUES.balanced;
+  const catName = String(cat.nickname || cat.displayLabel || cat.label || cat.breedLabel || "今日陪学猫");
+  const base = {
+    visible: normalizedMemory.hasMemory || pace.key === "complete",
+    catName,
+    rhythmLabel: String(cat.actionRhythm?.label || "按自己的节奏"),
+    message: "",
+    sourceDate: "",
+    targetDate: "",
+  };
+
+  if (normalizedMemory.reviewDueToday) {
+    const stageLabel = normalizedMemory.suggestedReviewStageLabel || "主动回想";
+    const detail = `${recallCue} 做完今天就可以安心停下。`;
+    return {
+      ...base,
+      key: "review-due",
+      eyebrow: "今日约定",
+      dateLabel: "现在",
+      title: `${stageLabel} · 30 秒`,
+      detail,
+      actionKind: "review",
+      actionLabel: "打开共同手册",
+      sourceDate: normalizedMemory.suggestedReviewDate,
+      targetDate: todayDate,
+      message: `${rhythmLine}${recallCue}`,
+    };
+  }
+
+  if (normalizedMemory.nextReviewDate) {
+    const reviewDay = normalizedMemory.recentDays.find(
+      (day) => day.nextReviewDate === normalizedMemory.nextReviewDate,
+    ) || {};
+    const stageLabel = reviewDay.reviewStageLabel || "主动回想";
+    const dateLabel = returnPromiseDateLabel(normalizedMemory.nextReviewDate, todayDate);
+    const detail = pace.key === "complete"
+      ? `今天已经收好。${recallCue}`
+      : `${recallCue} 下次只完成这一小步，再决定要不要继续。`;
+    return {
+      ...base,
+      key: "scheduled",
+      eyebrow: "下次见面",
+      dateLabel,
+      title: `${stageLabel} · 30 秒`,
+      detail,
+      actionKind: "listen",
+      actionLabel: `听听${catName}的约定`,
+      sourceDate: String(reviewDay.date || ""),
+      targetDate: normalizedMemory.nextReviewDate,
+      message: `${dateLabel}，${rhythmLine}${recallCue}`,
+    };
+  }
+
+  const tomorrowDate = shiftIsoDate(todayDate, 1);
+  if (pace.key === "complete") {
+    const dateLabel = returnPromiseDateLabel(tomorrowDate, todayDate);
+    return {
+      ...base,
+      key: "rest",
+      eyebrow: "明日约定",
+      dateLabel,
+      title: "轻量回归 · 5 词",
+      detail: "今天已经完整收好；明天只从 5 个词重新开始，不需要追加刷量。",
+      actionKind: "listen",
+      actionLabel: `听听${catName}的约定`,
+      targetDate: tomorrowDate,
+      message: `${dateLabel}，${rhythmLine}我们先用 5 个词轻轻接上。`,
+    };
+  }
+
+  return {
+    ...base,
+    key: "continue",
+    eyebrow: "下次接上",
+    dateLabel: "有空时",
+    title: pace.label,
+    detail: `${pace.detail} 离开后不用补进度，回来从这里继续。`,
+    actionKind: "listen",
+    actionLabel: `听听${catName}怎么说`,
+    message: `${rhythmLine}${pace.roomCue}`,
   };
 }
 

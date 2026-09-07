@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Archive as ArchiveIcon, Award as AwardIcon, BookMarked as BookMarkedIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Clock as ClockIcon, Hammer as HammerIcon, Heart as HeartIcon, House as HouseIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, ShoppingBag as ShoppingBagIcon, Shovel as ShovelIcon, Sprout as SproutIcon, Undo2 as UndoIcon, X as XIcon } from "lucide-vue-next";
+import { Archive as ArchiveIcon, Award as AwardIcon, BookMarked as BookMarkedIcon, CalendarDays as CalendarDaysIcon, Cat as CatIcon, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, Clock as ClockIcon, Hammer as HammerIcon, Heart as HeartIcon, House as HouseIcon, LockKeyhole as LockIcon, MapPin as MapPinIcon, MessageCircle as MessageCircleIcon, MoveRight as MoveRightIcon, PawPrint as PawPrintIcon, ShoppingBag as ShoppingBagIcon, Shovel as ShovelIcon, Sprout as SproutIcon, Undo2 as UndoIcon, X as XIcon } from "lucide-vue-next";
 import {
   foodEnergyGainForCat,
   foodFavoriteBonusPercent,
@@ -30,6 +30,7 @@ import {
 } from "../catWorldSceneTransitions.js";
 import {
   buildCatWorldLearningRoute,
+  buildCatWorldReturnPromise,
   buildCatWorldRoomLearningSignal,
   buildCatWorldWeekTrail,
   buildCatWorldWeeklyRhythm,
@@ -501,6 +502,11 @@ const learningRoute = computed(() => {
     coachLine: learningCompanion.value.message || route.coachLine,
   };
 });
+const learningReturnPromise = computed(() => buildCatWorldReturnPromise(
+  energy.value.habit || {},
+  learningGuideCat.value,
+  learningGuideMemory.value,
+));
 const activeLearningStep = computed(() =>
   learningRoute.value.steps.find((step) => step.active)
   || learningRoute.value.steps.at(-1)
@@ -2380,10 +2386,27 @@ async function showLearningCompanionReaction(options = {}) {
     cat = catForId(companion.catId) || cat;
   }
   catWorldGame.value?.focusCat(cat.id);
-  showCatReaction(cat, companion.message || learningRoute.value.coachLine);
+  showCatReaction(cat, options.message || companion.message || learningRoute.value.coachLine);
   if (options.scroll !== false) {
     nextTick(() => gameMountRef.value?.scrollIntoView({ behavior: "smooth", block: "center" }));
   }
+}
+
+async function handleLearningReturnPromise() {
+  const promise = learningReturnPromise.value;
+  const cat = learningGuideCat.value;
+  if (!promise.visible || !cat?.id) return;
+  if (promise.actionKind === "review") {
+    toggleCatDiary(cat);
+    if (
+      promise.sourceDate
+      && cat.learningMemory?.recentDays?.some((day) => day.date === promise.sourceDate)
+    ) {
+      selectedCatMemoryDate.value = promise.sourceDate;
+    }
+    return;
+  }
+  await showLearningCompanionReaction({ message: promise.message });
 }
 
 function announceLearningCompanionOnEntry() {
@@ -2872,6 +2895,27 @@ async function selectCat(catOrId, options = {}) {
             <p>{{ learningRoute.pace.detail }}</p>
             <em>{{ learningRoute.pace.timeLabel }}</em>
           </div>
+          <button
+            v-if="learningReturnPromise.visible"
+            :class="['cat-world-return-promise', `tone-${learningReturnPromise.key}`]"
+            type="button"
+            :aria-label="`${learningReturnPromise.eyebrow}：${learningReturnPromise.dateLabel}，${learningReturnPromise.title}。${learningReturnPromise.actionLabel}`"
+            @click="handleLearningReturnPromise"
+          >
+            <CalendarDaysIcon :size="16" :stroke-width="2.8" aria-hidden="true" />
+            <span class="cat-world-return-promise-date">
+              <small>{{ learningReturnPromise.eyebrow }}</small>
+              <strong>{{ learningReturnPromise.dateLabel }}</strong>
+            </span>
+            <span class="cat-world-return-promise-copy">
+              <strong>{{ learningReturnPromise.title }}</strong>
+              <small>{{ learningReturnPromise.detail }}</small>
+            </span>
+            <em>
+              {{ learningReturnPromise.actionLabel }}
+              <MoveRightIcon :size="13" :stroke-width="3" aria-hidden="true" />
+            </em>
+          </button>
           <p
             class="cat-world-learning-style"
             :title="learningRoute.learningStyleDescription"

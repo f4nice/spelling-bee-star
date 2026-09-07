@@ -6,6 +6,7 @@ import {
   buildCatWorldLearningPace,
   buildCatWorldLearningRitual,
   buildCatWorldLearningRoute,
+  buildCatWorldReturnPromise,
   buildCatWorldRoomLearningSignal,
   buildCatWorldWeekTrail,
   buildCatWorldWeeklyRhythm,
@@ -13,6 +14,76 @@ import {
   catWorldLearningCompanionToken,
   catWorldWeekMemory,
 } from "../src/app/catWorldLearningRoute.js";
+
+test("the next visit promise uses the real review date and each cat's own rhythm", () => {
+  const habit = {
+    todaySpellingCount: 20,
+    todayHasEssay: true,
+    recentDays: [{ date: "2026-09-07", today: true, statusKey: "loop", active: true }],
+  };
+  const memory = {
+    hasMemory: true,
+    companionDays: 1,
+    nextReviewDate: "2026-09-08",
+    recentDays: [{
+      date: "2026-09-07",
+      statusKey: "loop",
+      reviewStageLabel: "隔日回想",
+      nextReviewDate: "2026-09-08",
+    }],
+  };
+  const observer = buildCatWorldReturnPromise(habit, {
+    id: "same-breed-observer",
+    nickname: "看看",
+    actionRhythm: { key: "observe-then-decide", label: "先观察再回想" },
+    learningStyle: { key: "story-builder" },
+  }, memory);
+  const scout = buildCatWorldReturnPromise(habit, {
+    id: "same-breed-scout",
+    nickname: "跑跑",
+    actionRhythm: { key: "new-route-scout", label: "新路线优先" },
+    learningStyle: { key: "idea-sparring" },
+  }, memory);
+
+  assert.equal(observer.visible, true);
+  assert.equal(observer.dateLabel, "明天 · 9月8日");
+  assert.equal(observer.title, "隔日回想 · 30 秒");
+  assert.match(observer.detail, /接回自己的 1 句话/);
+  assert.match(observer.message, /先翻开旧脚印/);
+  assert.match(scout.detail, /说清 1 个小观点/);
+  assert.match(scout.message, /新路线/);
+  assert.notEqual(observer.message, scout.message);
+});
+
+test("a due review opens the exact scrapbook page and a completed day falls back to a gentle tomorrow", () => {
+  const due = buildCatWorldReturnPromise(
+    { recentDays: [{ date: "2026-09-07", today: true }] },
+    { nickname: "咪咪", learningStyle: { key: "review-organizer" } },
+    {
+      hasMemory: true,
+      companionDays: 3,
+      reviewDueToday: true,
+      suggestedReviewDate: "2026-09-06",
+      suggestedReviewStageLabel: "隔日回想",
+    },
+  );
+  const complete = buildCatWorldReturnPromise(
+    {
+      todaySpellingCount: 20,
+      todayHasDebate: true,
+      recentDays: [{ date: "2026-09-07", today: true, statusKey: "loop", active: true }],
+    },
+    { nickname: "稳稳" },
+  );
+
+  assert.equal(due.key, "review-due");
+  assert.equal(due.actionKind, "review");
+  assert.equal(due.sourceDate, "2026-09-06");
+  assert.match(due.detail, /安心停下/);
+  assert.equal(complete.key, "rest");
+  assert.equal(complete.dateLabel, "明天 · 9月8日");
+  assert.match(complete.detail, /不需要追加刷量/);
+});
 
 test("the daily pace makes returning gentle and gives completed days a stopping point", () => {
   const returning = buildCatWorldLearningPace({

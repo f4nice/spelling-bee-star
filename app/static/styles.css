@@ -17935,6 +17935,117 @@ select {
   background: #e4f7e4;
 }
 
+.cat-world-return-promise {
+  appearance: none;
+  display: grid;
+  grid-template-columns: auto auto minmax(180px, 1fr) auto;
+  align-items: center;
+  gap: 5px 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  margin-top: 6px;
+  border: 2px solid #2c2f3a;
+  border-radius: 4px;
+  padding: 4px 7px;
+  color: #263047;
+  background: #fff8df;
+  box-shadow: 2px 2px 0 #2c2f3a;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cat-world-return-promise > svg {
+  color: #176f58;
+}
+
+.cat-world-return-promise-date,
+.cat-world-return-promise-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.cat-world-return-promise-date {
+  min-width: 78px;
+  border-right: 2px solid rgba(44, 47, 58, 0.22);
+  padding-right: 8px;
+}
+
+.cat-world-return-promise small,
+.cat-world-return-promise strong,
+.cat-world-return-promise em {
+  color: inherit;
+  font-style: normal;
+  line-height: 1.2;
+}
+
+.cat-world-return-promise-date small {
+  color: #617086;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.cat-world-return-promise-date strong,
+.cat-world-return-promise-copy > strong {
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.cat-world-return-promise-copy > small {
+  overflow: hidden;
+  color: #526178;
+  font-size: 9px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cat-world-return-promise > em {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #176f58;
+  font-size: 9px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.cat-world-return-promise.tone-review-due {
+  background: #fff0f5;
+}
+
+.cat-world-return-promise.tone-scheduled {
+  background: #eaf7ff;
+}
+
+.cat-world-return-promise.tone-rest {
+  background: #e4f7e4;
+}
+
+.cat-world-return-promise:hover,
+.cat-world-return-promise:focus-visible {
+  color: #fff;
+  background: #1d7f5b;
+  outline: none;
+}
+
+.cat-world-return-promise:hover > svg,
+.cat-world-return-promise:hover .cat-world-return-promise-date small,
+.cat-world-return-promise:hover .cat-world-return-promise-copy > small,
+.cat-world-return-promise:hover > em,
+.cat-world-return-promise:focus-visible > svg,
+.cat-world-return-promise:focus-visible .cat-world-return-promise-date small,
+.cat-world-return-promise:focus-visible .cat-world-return-promise-copy > small,
+.cat-world-return-promise:focus-visible > em {
+  color: #fff;
+}
+
+.cat-world-return-promise:focus-visible {
+  box-shadow: 0 0 0 3px #fff3ad, 3px 3px 0 #2c2f3a;
+}
+
 .cat-world-learning-rhythm-badge {
   display: inline-flex;
   align-items: center;
@@ -18876,6 +18987,29 @@ select {
 
   .cat-world-learning-pace > p {
     grid-column: 1 / -1;
+  }
+
+  .cat-world-return-promise {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .cat-world-return-promise-date {
+    min-width: 0;
+    border-right: 0;
+    padding-right: 0;
+  }
+
+  .cat-world-return-promise-copy {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    border-top: 1px solid rgba(44, 47, 58, 0.2);
+    padding-top: 4px;
+  }
+
+  .cat-world-return-promise-copy > small {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
   }
 
   .cat-world-learning-route-actions {
