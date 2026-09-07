@@ -36,6 +36,19 @@ def fixture():
 
 
 class YoudaoDictionaryTest(unittest.TestCase):
+    def setUp(self):
+        # Partial provider success must not make these unit tests contact the
+        # newly added fallback services or a developer's configured AI account.
+        for target, method, result in (
+            (e.MerriamWebsterWebClient, "lookup", AsyncMock(side_effect=RuntimeError("not found"))),
+            (e.CambridgeDictionaryClient, "lookup", AsyncMock(side_effect=RuntimeError("not found"))),
+            (e.WordnikDictionaryClient, "lookup", AsyncMock(side_effect=RuntimeError("not found"))),
+            (e.TeachingExampleClient, "generate", AsyncMock(return_value=None)),
+        ):
+            patcher = patch.object(target, method, new=result)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
     def test_public_fields_and_exact_example(self):
         entry = parse_youdao_entry(fixture(), "Fomentation")
         self.assertEqual(entry.phonetic, "/ˌfoʊmenˈteɪʃn/")
@@ -53,6 +66,87 @@ class YoudaoDictionaryTest(unittest.TestCase):
         payload["ec"]["word"]["trs"][0]["tr"][0]["l"]["i"] = "n. 热敷；煽动"
         payload["ee"]["word"] = [payload["ee"]["word"]]
         self.assertEqual(parse_youdao_entry(payload, "  fomentation  ").chinese_definition, "热敷；煽动")
+
+    def test_launder_wordnet_verbs_keep_bilingual_transitive_and_intransitive(self):
+        # Public jsonapi shapes: WordNet uses v.; the bilingual entry uses vt./vi.
+        payload = {
+            "ec": {"word": [{
+                "return-phrase": {"l": {"i": "launder"}},
+                "trs": [
+                    {"tr": [{"l": {"i": ["vt. 洗涤；洗黑钱"]}}]},
+                    {"tr": [{"l": {"i": ["vi. 洗涤；耐洗"]}}]},
+                    {"tr": [{"l": {"i": ["n. （矿业）流水槽"]}}]},
+                ],
+            }]},
+            "ee": {"source": {"name": "WordNet"}, "word": {
+                "return-phrase": {"l": {"i": "launder"}},
+                "trs": [{"pos": "v.", "tr": [
+                    {"l": {"i": "cleanse with a cleaning agent, such as soap, and water"}},
+                ]}],
+            }},
+        }
+        entry = parse_youdao_entry(payload, "launder")
+        self.assertEqual(entry.part_of_speech, "v.")
+        self.assertEqual(entry.chinese_definition, "洗涤；洗黑钱；洗涤；耐洗")
+        self.assertNotIn("流水槽", entry.chinese_definition)
+
+    def test_wordnet_and_bilingual_pos_aliases_match_without_crossing_categories(self):
+        for english_pos, chinese_pos, canonical in (
+            ("verb", "vt.", "v."), ("v.", "vi.", "v."),
+            ("noun", "n.", "n."), ("N.", "noun", "n."),
+            ("adjective", "a.", "adj."), ("adverb", "adv.", "adv."),
+        ):
+            with self.subTest(english_pos=english_pos, chinese_pos=chinese_pos):
+                payload = fixture()
+                payload["ee"]["word"]["trs"][0]["pos"] = english_pos
+                payload["ec"]["word"][0]["trs"][0]["tr"][0]["l"]["i"] = chinese_pos + " 正确释义"
+                entry = parse_youdao_entry(payload, "fomentation")
+                self.assertEqual(entry.part_of_speech, canonical)
+                self.assertEqual(entry.chinese_definition, "正确释义")
+
+    def test_bilingual_only_launderer_still_supplies_available_fields(self):
+        payload = {"ec": {"word": [{
+            "return-phrase": {"l": {"i": "launderer"}},
+            "usphone": "ˈlɔːndərər",
+            "trs": [{"tr": [{"l": {"i": ["n. 洗衣工；洗黑钱的人"]}}]}],
+        }]}}
+        entry = parse_youdao_entry(payload, "launderer")
+        self.assertEqual(entry.part_of_speech, "n.")
+        self.assertEqual(entry.chinese_definition, "洗衣工；洗黑钱的人")
+        self.assertIsNone(entry.english_definition)
+
+    def test_lemniscate_encyclopedia_album_is_not_a_word_definition(self):
+        payload = {
+            "ec": {"word": [{
+                "return-phrase": {"l": {"i": "lemniscate"}},
+                "usphone": "lemˈnɪskɪt",
+                "trs": [{"tr": [{"l": {"i": ["n. 双纽线"]}}]}],
+            }]},
+            "ee": {"source": {"name": "Wikipedia", "url": "https://en.wikipedia.org/wiki/Lemniscate"}, "word": {
+                "return-phrase": {"l": {"i": "Lemniscate"}},
+                "trs": [{"pos": "abstract:", "tr": [{"l": {"i": "Lemniscate is the debut album from a band."}}]}],
+            }},
+        }
+        for pos in ("abstract:", "n."):
+            with self.subTest(encyclopedia_pos=pos):
+                payload["ee"]["word"]["trs"][0]["pos"] = pos
+                entry = parse_youdao_entry(payload, "lemniscate")
+                self.assertEqual(entry.part_of_speech, "n.")
+                self.assertEqual(entry.chinese_definition, "双纽线")
+                self.assertIsNone(entry.english_definition)
+
+    def test_abstract_without_source_is_rejected_and_not_used_as_pos(self):
+        payload = fixture()
+        payload["ee"]["word"]["trs"].insert(0, {
+            "pos": "abstract:", "tr": [{"l": {"i": "An unrelated encyclopedia biography."}}],
+        })
+        entry = parse_youdao_entry(payload, "fomentation")
+        self.assertEqual(entry.part_of_speech, "n.")
+        self.assertNotIn("biography", entry.english_definition)
+        del payload["ec"]
+        payload["ee"]["word"]["trs"] = payload["ee"]["word"]["trs"][:1]
+        with self.assertRaisesRegex(RuntimeError, "公开释义"):
+            parse_youdao_entry(payload, "fomentation")
 
     def test_does_not_mix_different_headwords_or_parts_of_speech(self):
         payload = fixture()
@@ -131,12 +225,13 @@ class YoudaoDictionaryTest(unittest.TestCase):
                  patch.object(e.YoudaoDictionaryClient, "lookup", new=AsyncMock(return_value=parse_youdao_entry(fixture(), word.word))), \
                  patch.object(e, "_store_dictionary_audio", new=AsyncMock(return_value="/media/audio/test.mp3")):
                 asyncio.run(e.enrich_word(db, word, include_images=False, only_missing=True))
-            self.assertEqual(word.enrichment_status, "done")
+            self.assertEqual(word.enrichment_status, "partial")
             self.assertEqual(word.english_definition, "SPB definition")
             self.assertEqual(word.chinese_definition, "手动释义")
             self.assertEqual(word.english_example, "SPB example.")
             self.assertIsNone(word.british_audio_url)
             self.assertIsNotNone(word.phonetic)
+            self.assertIsNone(word.part_of_speech)  # Different meaning's POS cannot be inferred.
         engine.dispose()
 
 

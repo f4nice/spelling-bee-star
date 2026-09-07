@@ -21,6 +21,30 @@ MEDIA_FIELDS = (
 )
 
 
+def incomplete_reason(word, fields):
+    """User-facing reasons, never raw upstream errors or credential-bearing URLs."""
+    labels = dict(zip(TEXT_FIELDS, ("音标", "词性", "英文释义", "中文释义", "英文例句")))
+    locked = [field for field in fields if getattr(word, field + "_locked", False)]
+    reasons = []
+    if locked:
+        reasons.append("手动锁定：" + "、".join(labels[field] for field in locked))
+    missing = set(fields) - set(locked)
+    error = word.enrichment_error or ""
+    if "历史释义疑似百科内容" in error:
+        return "历史释义疑似百科内容，请先核对词性和英文释义，再补全缺项。已获取的内容已保存。"
+    if "phonetic" in missing:
+        reasons.append("词典未返回完整音标")
+    if "part_of_speech" in missing:
+        reasons.append("词典未返回词性")
+    if "english_definition" in missing:
+        reasons.append("词典未返回匹配的英文释义")
+    if "chinese_definition" in missing:
+        reasons.append("中文翻译服务暂不可用或限流" if "翻译" in error else "未取得匹配当前词义的中文释义")
+    if "english_example" in missing:
+        reasons.append("未查到同义项例句，自编服务暂未补上" if word.english_definition else "缺少可信英文释义，未自编例句")
+    return "；".join(reasons) + "。已获取的内容已保存。"
+
+
 def has_text(value):
     return isinstance(value, str) and bool(value.strip())
 
@@ -81,6 +105,21 @@ class PreserveWordValues:
         fresh = session.connection().execute(self.current_row.with_for_update()).mappings().first()
         if fresh is None:
             raise RuntimeError("Word no longer exists")
+        # Dependent text generated during an await belongs to the old sense.
+        # If the user changes that sense meanwhile, keep only their fresh values.
+        dependencies = set()
+        if fresh["english_definition"] != self.baseline["english_definition"]:
+            dependencies.update(("chinese_definition", "english_example"))
+        if fresh["part_of_speech"] != self.baseline["part_of_speech"]:
+            dependencies.update(("english_definition", "chinese_definition", "english_example"))
+        for field in dependencies:
+            if not has_text(self.baseline[field]):
+                self.values[field] = fresh[field]
+                if field in ("english_definition", "english_example"):
+                    self.values[field + "_audio_url"] = fresh[field + "_audio_url"]
+                lock_field = field + "_locked"
+                if lock_field in self.baseline:
+                    self.values[lock_field] = fresh[lock_field]
         for field in TEXT_FIELDS + MEDIA_FIELDS:
             lock_field = field.removesuffix("_url") + "_locked"
             changed = fresh[field] != self.baseline[field]
@@ -249,7 +288,7 @@ class ListCompletionJobs:
                 "failed" if word.enrichment_status == "failed" and len(remaining) >= len(missing) else "partial"
             )
             result.update(status=status, missing_fields=remaining,
-                          message="文字内容已补全。" if not remaining else "已保留获取到的内容，部分字段暂无来源或已锁定。")
+                          message="文字内容已补全。" if not remaining else incomplete_reason(word, remaining))
         except asyncio.TimeoutError:
             interrupted = True
             self._rollback(db)

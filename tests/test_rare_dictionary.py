@@ -23,6 +23,18 @@ HTML = '''<h1 id="headword">rareword</h1><div id="define">
 
 
 class RareDictionaryTest(unittest.TestCase):
+    def setUp(self):
+        for target, method, result in (
+            (e.MerriamWebsterWebClient, "lookup", AsyncMock(side_effect=RuntimeError("not found"))),
+            (e.CambridgeDictionaryClient, "lookup", AsyncMock(side_effect=RuntimeError("not found"))),
+            (e.TeachingExampleClient, "generate", AsyncMock(return_value=None)),
+            (e, "get_settings", None),
+        ):
+            patcher = (patch.object(target, method, new=result) if result is not None else
+                       patch.object(target, method, return_value=Settings(_env_file=None, merriam_webster_api_key="", dashscope_api_key="")))
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
     def test_wordnik_exact_headword_and_first_sense(self):
         entry = parse_wordnik_entry(HTML, "Rareword", "test-source")
         self.assertEqual(entry.part_of_speech, "noun")
@@ -58,11 +70,11 @@ class RareDictionaryTest(unittest.TestCase):
         engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(engine)
         with Session(engine) as db:
-            word = Word(word="Novanglian", english_definition="Retained SPB definition",
+            word = Word(word="Novanglian", part_of_speech="adjective", english_definition="Retained SPB definition",
                         chinese_definition="原释义", english_example="Manual example.", english_example_locked=True)
             db.add(word); db.commit()
-            with patch.object(e.FreeDictionaryClient, "lookup", new=AsyncMock()) as free, \
-                 patch.object(e.YoudaoDictionaryClient, "lookup", new=AsyncMock()) as youdao, \
+            with patch.object(e.FreeDictionaryClient, "lookup", new=AsyncMock(side_effect=RuntimeError("not found"))) as free, \
+                 patch.object(e.YoudaoDictionaryClient, "lookup", new=AsyncMock(side_effect=RuntimeError("not found"))) as youdao, \
                  patch.object(e, "_store_dictionary_audio", new=AsyncMock(return_value=None)) as store:
                 asyncio.run(e.enrich_word(db, word, include_images=False, only_missing=True))
                 free.assert_not_awaited(); youdao.assert_not_awaited()
@@ -93,6 +105,8 @@ class RareDictionaryTest(unittest.TestCase):
             self.assertEqual(word.chinese_definition, "测试释义")
             self.assertIsNone(word.english_example)
             self.assertIsNone(word.phonetic)
+            self.assertEqual(word.enrichment_status, "partial")
+            self.assertIn("仍缺音标、英文例句", word.enrichment_error)
         engine.dispose()
 
     def test_audio_does_not_repeat_known_failed_dictionary_lookup(self):

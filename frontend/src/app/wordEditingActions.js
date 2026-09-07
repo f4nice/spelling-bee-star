@@ -16,6 +16,19 @@ export function normalizePhonetic(value) {
   return String(value || "").trim().replace(/^\/+|\/+$/g, "").trim();
 }
 
+export function isWebsterRespelling(value) {
+  return /^韦氏标音\s*[:：]/u.test(normalizePhonetic(value));
+}
+
+export function formatPhonetic(value) {
+  const text = normalizePhonetic(value);
+  return text && !isWebsterRespelling(text) ? `/${text}/` : text;
+}
+
+export function canUsePhoneticForAi(value) {
+  return Boolean(normalizePhonetic(value)) && !isWebsterRespelling(value);
+}
+
 export async function saveWordEditField({ wordId, field, value, setSaving, applySavedValue }) {
   setSaving(field);
   const form = createWordFieldForm({ field, value });

@@ -13,6 +13,15 @@ from app.services.web_dictionary import parse_cambridge_entry
 
 
 class WebDictionaryTest(unittest.TestCase):
+    def setUp(self):
+        for target, method, result in (
+            (e.MerriamWebsterWebClient, "lookup", AsyncMock(side_effect=RuntimeError("not found"))),
+            (e.TeachingExampleClient, "generate", AsyncMock(return_value=None)),
+        ):
+            patcher = patch.object(target, method, new=result)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
     def test_exact_headword_and_same_sense(self):
         html = '''<div class="entry-body__el"><span class="hw">spondylitis</span>
         <span class="pos">noun</span><span class="us"><span class="ipa">spɒn</span><audio><source type="audio/mpeg" src="/media/english/us_pron/test.mp3"/></audio></span>

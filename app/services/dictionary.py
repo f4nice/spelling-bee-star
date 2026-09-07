@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from html import unescape
 import re
+from urllib.parse import quote
 
 import httpx
 
@@ -28,21 +29,33 @@ class MerriamWebsterClient:
             raise RuntimeError("MERRIAM_WEBSTER_API_KEY is not configured")
 
         reference = self.settings.merriam_webster_reference
-        url = f"https://www.dictionaryapi.com/api/v3/references/{reference}/json/{word}"
+        url = f"https://www.dictionaryapi.com/api/v3/references/{reference}/json/{quote(word.strip(), safe='')}"
         params = {"key": self.settings.merriam_webster_api_key}
-        async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            payload = response.json()
+        try:
+            async with httpx.AsyncClient(timeout=8) as client:
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+                payload = response.json()
+        except httpx.HTTPStatusError as exc:
+            # httpx's normal message contains the full URL, including the key.
+            raise RuntimeError(f"韦氏词典接口返回 HTTP {exc.response.status_code}。") from None
+        except httpx.HTTPError:
+            raise RuntimeError("韦氏词典接口连接失败，请稍后重试。") from None
+        except ValueError:
+            raise RuntimeError("韦氏词典接口返回的内容无法解析。") from None
 
-        entry = next((item for item in payload if isinstance(item, dict)), None)
+        # Suggestions and related words are not definitions of the requested word.
+        entry = next((item for item in payload if isinstance(item, dict) and
+                      _merriam_entry_matches(item, word)), None) if isinstance(payload, list) else None
         if not entry:
-            suggestions = ", ".join(str(item) for item in payload[:5]) if isinstance(payload, list) else ""
-            raise RuntimeError(f"No dictionary entry found. Suggestions: {suggestions}")
+            raise RuntimeError("韦氏词典未返回完全匹配的词条。")
 
         hwi = entry.get("hwi") or {}
         prs = hwi.get("prs") or []
-        pronunciation = next((item for item in prs if item.get("mw")), None)
+        phonetic = next((str(item["ipa"]).strip() for item in prs if item.get("ipa")), None)
+        if not phonetic:
+            phonetic = next((formatted for item in prs
+                             if (formatted := _merriam_phonetic(item.get("mw")))), None)
         sound = next((item.get("sound", {}) for item in prs if item.get("sound", {}).get("audio")), {})
         audio = _audio_url(sound.get("audio")) if sound else None
 
@@ -50,13 +63,13 @@ class MerriamWebsterClient:
         example = _first_example(entry)
 
         return DictionaryEntry(
-            phonetic=pronunciation.get("mw") if pronunciation else None,
+            phonetic=phonetic,
             part_of_speech=_optional_clean(entry.get("fl")),
             american_audio_url=audio,
             british_audio_url=None,
             english_definition=definition,
             english_example=example,
-            source="Merriam-Webster Collegiate Dictionary",
+            source="https://www.merriam-webster.com/dictionary/" + quote(word.strip(), safe=""),
         )
 
 
@@ -112,20 +125,16 @@ def _first_free_phonetic(entry: dict) -> str | None:
 
 
 def _first_free_meaning_fields(entry: dict) -> tuple[str | None, str | None, str | None]:
-    part_of_speech = None
-    definition = None
-    example = None
     for meaning in entry.get("meanings", []):
-        if not part_of_speech and meaning.get("partOfSpeech"):
-            part_of_speech = _optional_clean(meaning.get("partOfSpeech"))
         for definition_item in meaning.get("definitions", []):
-            if not definition and definition_item.get("definition"):
-                definition = str(definition_item.get("definition")).strip()
-            if not example and definition_item.get("example"):
-                example = _optional_clean(definition_item.get("example"))
-            if part_of_speech and definition and example:
-                return part_of_speech, definition, example
-    return part_of_speech, definition, example
+            definition = _optional_clean(definition_item.get("definition"))
+            if definition:
+                # A later sense's example must not be attached to this meaning.
+                return (
+                    _optional_clean(meaning.get("partOfSpeech")), definition,
+                    _optional_clean(definition_item.get("example")),
+                )
+    return None, None, None
 
 
 def _free_audio_urls(payload: list[dict]) -> tuple[str | None, str | None]:
@@ -166,25 +175,44 @@ def _audio_url(audio: str | None) -> str | None:
 
 
 def _first_definition(entry: dict) -> str | None:
+    sense = _first_defined_sense(entry)
+    if sense:
+        return _clean(_walk_for_text(sense.get("dt"), "text"))
     shortdefs = entry.get("shortdef") or []
     if shortdefs:
         return _clean(shortdefs[0])
-
-    for definition_block in entry.get("def", []):
-        for sense_sequence in definition_block.get("sseq", []):
-            text = _walk_for_text(sense_sequence, "dt")
-            if text:
-                return _clean(text)
     return None
 
 
 def _first_example(entry: dict) -> str | None:
+    # Keep the example in the same sense as the returned definition. An example
+    # in a later sense, run-on or synonym paragraph can teach a different meaning.
+    sense = _first_defined_sense(entry)
+    return _clean(_walk_for_text(sense.get("dt"), "vis")) if sense else None
+
+
+def _first_defined_sense(entry: dict) -> dict | None:
     for definition_block in entry.get("def", []):
-        for sense_sequence in definition_block.get("sseq", []):
-            example = _walk_for_text(sense_sequence, "vis")
-            if example:
-                return _clean(example)
+        for sense in _walk_senses(definition_block.get("sseq", [])):
+            if _clean(_walk_for_text(sense.get("dt"), "text")):
+                return sense
     return None
+
+
+def _walk_senses(value):
+    if isinstance(value, list):
+        if len(value) == 2 and value[0] == "sense" and isinstance(value[1], dict):
+            yield value[1]
+        else:
+            for item in value:
+                yield from _walk_senses(item)
+    elif isinstance(value, dict):
+        # Binding substitutes use {"sense": {...}} rather than a tagged pair.
+        if isinstance(value.get("sense"), dict):
+            yield value["sense"]
+        else:
+            for item in value.values():
+                yield from _walk_senses(item)
 
 
 def _walk_for_text(value, target_key: str) -> str | None:
@@ -196,6 +224,10 @@ def _walk_for_text(value, target_key: str) -> str | None:
             if found:
                 return found
     elif isinstance(value, list):
+        # The official API represents dt elements as tagged arrays, e.g.
+        # ["vis", [{"t": "An example."}]], not as {"vis": ...} objects.
+        if len(value) == 2 and value[0] == target_key:
+            return _extract_text(value[1])
         for item in value:
             found = _walk_for_text(item, target_key)
             if found:
@@ -222,8 +254,33 @@ def _extract_text(value) -> str | None:
 def _clean(text: str | None) -> str | None:
     if not text:
         return None
-    text = re.sub(r"\{/?[a-z|:0-9 ]+\}", "", text)
+    # Cross-reference tokens contain visible words; do not discard their text.
+    text = re.sub(r"\{(?:a_link|d_link|dxt|et_link|i_link|mat|sx)\|([^{}|]*)(?:\|[^{}]*)?\}", r"\1", text)
+    text = re.sub(r"\{[^{}]*\}", "", text)
     return unescape(" ".join(text.split()))
+
+
+def _normalize_merriam_headword(value: str) -> str:
+    value = re.sub(r":\d+$", "", str(value).strip())
+    return " ".join(value.replace("*", "").replace("·", "").replace("\u200b", "")
+                    .replace("’", "'").casefold().split())
+
+
+def _merriam_entry_matches(entry: dict, word: str) -> bool:
+    expected = _normalize_merriam_headword(word)
+    if not expected:
+        return False
+    candidates = [(entry.get("hwi") or {}).get("hw"), (entry.get("meta") or {}).get("id")]
+    return any(value and _normalize_merriam_headword(value) == expected for value in candidates)
+
+
+def _merriam_phonetic(value: str | None) -> str | None:
+    text = _optional_clean(value)
+    # MW uses its own respelling system, not IPA. A cutback pronunciation such
+    # as "-dərə(r)" is only a suffix and must not masquerade as a full word.
+    if not text or text.startswith(("-", "–", "—")) or text.endswith(("-", "–", "—")):
+        return None
+    return "韦氏标音：" + text
 
 
 def _optional_clean(text: str | None) -> str | None:

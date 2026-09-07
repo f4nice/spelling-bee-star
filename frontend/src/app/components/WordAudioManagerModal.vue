@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { inferAudioSourceMeta, sourceText } from "../mediaSourceLabels.js";
+import { canUsePhoneticForAi, formatPhonetic, isWebsterRespelling, normalizePhonetic } from "../wordEditingActions.js";
 import VersionStamp from "./VersionStamp.vue";
 
 const props = defineProps({
@@ -68,7 +69,7 @@ const word = computed(() => props.data.word || {});
 const audioSources = computed(() => props.data.audio_sources || {});
 const mediaSources = computed(() => props.data.media_sources || {});
 const audioMediaSources = computed(() => mediaSources.value.audio || {});
-const phoneticText = computed(() => String(word.value.phonetic || "").trim().replace(/^\/+|\/+$/g, "").trim());
+const phoneticText = computed(() => normalizePhonetic(word.value.phonetic));
 const hasPhoneticText = computed(() => Boolean(phoneticText.value));
 
 function isLocalAudioUrl(url) {
@@ -175,11 +176,12 @@ function aiButtonText(textMode, voiceGender) {
 }
 
 function canGenerateAi(textMode) {
-  return !generatingKey.value && canUseWordAi.value && (textMode !== "phonetic" || hasPhoneticText.value);
+  return !generatingKey.value && canUseWordAi.value && (textMode !== "phonetic" || canUsePhoneticForAi(phoneticText.value));
 }
 
 const phoneticRowHint = computed(() => {
-  if (hasPhoneticText.value) return `当前音标 /${phoneticText.value}/`;
+  if (isWebsterRespelling(phoneticText.value)) return `${formatPhonetic(phoneticText.value)}（非 IPA）；请使用“AI朗读单词”，或补充 IPA 后生成音标朗读。`;
+  if (hasPhoneticText.value) return `当前音标 ${formatPhonetic(phoneticText.value)}`;
   return "还没有音标，先双击单词下方音标补充后再生成。";
 });
 
@@ -322,7 +324,7 @@ async function saveCurrentAudio() {
 
 async function generateAiSource(textMode, voiceGender) {
   if (!canGenerateAi(textMode)) {
-    if (textMode === "phonetic") notice.value = "还没有音标，先补充音标后再生成。";
+    if (textMode === "phonetic") notice.value = phoneticRowHint.value;
     return;
   }
   generatingKey.value = `${textMode}:${voiceGender}`;

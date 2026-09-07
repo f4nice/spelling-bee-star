@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, ref } from "vue";
-import { normalizePhonetic } from "../wordEditingActions.js";
+import { formatPhonetic, normalizePhonetic } from "../wordEditingActions.js";
 
 const props = defineProps({
   data: {
@@ -139,7 +139,7 @@ function cancelPhoneticEdit() {
       :title="data.can_edit ? '双击编辑音标' : null"
       @dblclick.stop="startPhoneticEdit"
     >
-      {{ hasPhoneticText ? `/${phoneticText}/` : "双击添加音标" }}
+      {{ hasPhoneticText ? formatPhonetic(phoneticText) : "双击添加音标" }}
     </p>
     <div class="word-audio-quick-controls" aria-label="单词音频">
       <label

@@ -128,8 +128,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-040"
-DEFAULT_PAGE_VERSION = "v20260907.40"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-041"
+DEFAULT_PAGE_VERSION = "v20260907.41"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -9005,7 +9005,9 @@ async def complete_word_from_sources(
         if protection:
             protection.restore()
         try:
-            await apply_spb_details_to_word(db, word, list_id=list_id, search_all_groups=True, only_missing=only_missing)
+            await asyncio.wait_for(apply_spb_details_to_word(
+                db, word, list_id=list_id, search_all_groups=True, only_missing=only_missing,
+            ), timeout=20)
         except (httpx.HTTPError, OSError, ValueError, RuntimeError):
             # A temporarily unavailable upstream must not prevent online fallback.
             # Do not include exception text here: requests can contain auth details.
@@ -13269,6 +13271,8 @@ async def word_ai_audio(
         display_phonetic = re.sub(r"^/+|/+$", "", (word.phonetic or "").strip()).strip()
         if not display_phonetic:
             raise HTTPException(status_code=400, detail="还没有音标，先补充音标后再生成。")
+        if re.match(r"^韦氏标音\s*[:：]", display_phonetic):
+            raise HTTPException(status_code=400, detail="韦氏标音不是 IPA，请使用 AI 朗读单词。")
     preferred_user = preferred_admin_user_ai(db, request)
     selected_audio_provider = preferred_user.audio_ai_provider if preferred_user else settings.ai_tts_provider
 
@@ -13510,6 +13514,8 @@ async def word_example_audio(
         }
 
     example_text = re.sub(r"\s+", " ", (word.english_example or "").strip())
+    # Keep attribution visible in the UI, but do not speak the Chinese label.
+    example_text = re.sub(r"^【自编教学例句】\s*|\s*[（(]自编教学例句[）)]$", "", example_text).strip()
     if not example_text:
         raise HTTPException(status_code=400, detail="还没有英文例句，先从 SPB 补全或手动补充例句。")
     preferred_user = preferred_admin_user_ai(db, request)

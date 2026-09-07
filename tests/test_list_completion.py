@@ -15,7 +15,7 @@ from sqlalchemy.pool import StaticPool
 from app import main as m
 from app.database import Base
 from app.models import Word, WordList, WordListItem
-from app.services.list_completion_jobs import ListCompletionJobs, TEXT_FIELDS, missing_text_fields
+from app.services.list_completion_jobs import ListCompletionJobs, TEXT_FIELDS, incomplete_reason, missing_text_fields
 
 
 COMPLETE = dict(phonetic="/word/", part_of_speech="n.", english_definition="A meaning.",
@@ -67,6 +67,41 @@ class ListCompletionTest(unittest.TestCase):
                     values = dict(COMPLETE, **{field: empty, field + "_locked": True})
                     self.assertEqual(missing_text_fields(SimpleNamespace(**values)), [field])
         self.assertEqual(missing_text_fields(SimpleNamespace(**COMPLETE, enrichment_status="failed")), [])
+
+    def test_incomplete_reason_distinguishes_actual_locks_and_translation_limits(self):
+        word = self.word("explanation", english_definition="A reliable meaning.",
+                         english_example_locked=True,
+                         enrichment_error="中文翻译 HTTP 429 https://secret:password@upstream.invalid")
+        message = incomplete_reason(word, ["phonetic", "chinese_definition", "english_example"])
+        self.assertIn("手动锁定：英文例句", message)
+        self.assertIn("词典未返回完整音标", message)
+        self.assertIn("中文翻译服务暂不可用或限流", message)
+        self.assertNotIn("password", message)
+        self.assertNotIn("自编服务", message)
+
+    def test_incomplete_reason_does_not_imply_unlocked_fields_are_locked(self):
+        word = self.word("unlocked", chinese_definition="已有中文")
+        message = incomplete_reason(word, ["english_definition", "english_example"])
+        self.assertIn("词典未返回匹配的英文释义", message)
+        self.assertIn("缺少可信英文释义，未自编例句", message)
+        self.assertNotIn("锁定", message)
+
+    def test_partial_result_exposes_specific_gap_reason_and_preserves_saved_content(self):
+        word = self.word("translated", **dict(COMPLETE, chinese_definition=None))
+
+        async def complete(db, candidate, **kwargs):
+            candidate.enrichment_status = "partial"
+            candidate.enrichment_error = "翻译服务暂不可用"
+            db.commit()
+
+        manager = self.jobs(complete)
+        manager.start(self.list.id, [word.id])
+        manager._work()
+        result = manager.current(self.list.id)["results"][0]
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["missing_fields"], ["chinese_definition"])
+        self.assertIn("中文翻译服务暂不可用或限流", result["message"])
+        self.assertNotIn("锁定", result["message"])
 
     def test_start_selects_only_incomplete_words_in_requested_list(self):
         complete = self.word("complete", **COMPLETE)
@@ -416,6 +451,43 @@ class ListCompletionTest(unittest.TestCase):
                     self.assertTrue(saved.english_example_locked)
                     self.assertEqual(saved.american_audio_url, "/media/audio/manual-recording.mp3")
                     self.assertTrue(saved.american_audio_locked)
+
+    def test_batch_discards_new_derived_fields_after_concurrent_sense_change(self):
+        for sense_field, new_value in (("english_definition", "A newly corrected meaning."),
+                                       ("part_of_speech", "verb")):
+            for manual_chinese in (None, "刚刚按新词义填写的中文"):
+                with self.subTest(sense_field=sense_field, manual_chinese=manual_chinese):
+                    word = self.word(f"sense-{sense_field}-{bool(manual_chinese)}",
+                                     **dict(COMPLETE, chinese_definition=None, english_example=None))
+
+                    async def online(db, candidate, **kwargs):
+                        old_definition = candidate.english_definition
+                        # Represents an editor saving while generation based on
+                        # old_definition is awaited by the background job.
+                        with self.factory() as editor:
+                            edited = editor.get(Word, candidate.id)
+                            setattr(edited, sense_field, new_value)
+                            if manual_chinese:
+                                edited.chinese_definition = manual_chinese
+                            editor.commit()
+                        await asyncio.sleep(0)
+                        self.assertEqual(old_definition, COMPLETE["english_definition"])
+                        candidate.chinese_definition = "按旧词义生成的中文"
+                        candidate.english_example = "【自编教学例句】An example of the old meaning."
+                        candidate.english_example_audio_url = "/media/audio/old-example.mp3"
+                        db.commit()
+
+                    with patch.object(m, "apply_word_resource"), \
+                         patch.object(m, "apply_spb_details_to_word", new=AsyncMock(return_value=False)), \
+                         patch.object(m, "enrich_word", side_effect=online), \
+                         patch.object(m, "remember_word_resource"):
+                        asyncio.run(m.complete_word_from_sources(self.db, word, list_id=self.list.id, only_missing=True))
+                    with self.factory() as verifier:
+                        saved = verifier.get(Word, word.id)
+                        self.assertEqual(getattr(saved, sense_field), new_value)
+                        self.assertEqual(saved.chinese_definition, manual_chinese)
+                        self.assertIsNone(saved.english_example)
+                        self.assertIsNone(saved.english_example_audio_url)
 
     def test_real_spb_application_filters_existing_and_locked_fields_before_resource_remember(self):
         word = self.word("spb", **dict(COMPLETE, chinese_definition=None, english_example=None), english_example_locked=True)

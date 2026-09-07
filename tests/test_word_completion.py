@@ -10,6 +10,7 @@ os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from fastapi import HTTPException
 
 from app import main as m
 from app.config import Settings
@@ -36,15 +37,38 @@ class WordCompletionTest(unittest.TestCase):
             patcher = patch.object(m, name)
             patcher.start()
             self.addCleanup(patcher.stop)
+        # The fallback chain now continues after partial success. Keep every
+        # unselected provider offline, even when a developer has API keys set.
+        for client in (e.YoudaoDictionaryClient, e.MerriamWebsterWebClient,
+                       e.CambridgeDictionaryClient, e.WordnikDictionaryClient):
+            patcher = patch.object(client, "lookup", new=AsyncMock(side_effect=RuntimeError("not found")))
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        patcher = patch.object(e.TeachingExampleClient, "generate", new=AsyncMock(return_value=None))
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         self.db.close()
         self.engine.dispose()
 
     def test_detail_payload_exposes_completion_state_for_recovery_reads(self):
-        for status in ("pending", "done", "failed"):
+        for status in ("pending", "done", "partial", "failed"):
             self.word.enrichment_status = status
             self.assertEqual(m.serialize_word(self.word)["enrichment_status"], status)
+
+    def test_webster_respelling_is_not_sent_as_ipa_for_audio_generation(self):
+        self.word.phonetic = "韦氏标音：ˈtest"
+        with patch.object(m, "require_word_write_access"), \
+             patch.object(m, "generate_ai_audio_with_settings", new=AsyncMock()) as generate:
+            with self.assertRaises(HTTPException) as caught:
+                asyncio.run(m.word_ai_audio(
+                    self.word.id, request=None, accent="us", voice_gender="female",
+                    text_mode="phonetic", commit="1", edit_token="1", db=self.db,
+                ))
+            self.assertEqual(caught.exception.status_code, 400)
+            self.assertIn("不是 IPA", caught.exception.detail)
+            generate.assert_not_awaited()
 
     def test_complete_spb_skips_online_lookup_and_clears_old_failure(self):
         self.word.enrichment_status = "failed"

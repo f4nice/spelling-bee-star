@@ -8,6 +8,41 @@ from app.services.dictionary import DictionaryEntry
 from app.services.web_dictionary import _Tree
 
 
+_POS_ALIASES = {
+    "n": "n.", "noun": "n.",
+    "v": "v.", "vi": "v.", "vt": "v.", "verb": "v.",
+    "transitive verb": "v.", "intransitive verb": "v.",
+    "adj": "adj.", "a": "adj.", "adjective": "adj.",
+    "adv": "adv.", "ad": "adv.", "adverb": "adv.",
+    "prep": "prep.", "preposition": "prep.",
+    "pron": "pron.", "pronoun": "pron.",
+    "conj": "conj.", "conjunction": "conj.",
+    "interj": "interj.", "int": "interj.", "interjection": "interj.",
+    "num": "num.", "numeral": "num.",
+    "aux": "aux.", "auxiliary": "aux.", "auxiliary verb": "aux.",
+    "det": "det.", "determiner": "det.",
+    "art": "art.", "article": "art.",
+}
+_POS_PREFIX = re.compile(
+    r"^(" + "|".join(re.escape(pos) for pos in sorted(_POS_ALIASES, key=len, reverse=True))
+    + r")(?:\.\s*|\s+)", re.IGNORECASE,
+)
+
+
+def _normalized_pos(value):
+    # WordNet's v./n. and bilingual vt./vi./noun name the same POS category.
+    # Unknown labels (notably Wikipedia's `abstract:`) are not lexical POS.
+    return _POS_ALIASES.get(_text(value).casefold().rstrip("."))
+
+
+def _is_encyclopedia_section(section):
+    source = section.get("source") if isinstance(section, dict) else None
+    if not isinstance(source, dict):
+        return False
+    label = " ".join(_text(source.get(key)).casefold() for key in ("name", "url"))
+    return any(marker in label for marker in ("wikipedia", "encyclop", "百科"))
+
+
 def _items(value):
     return value if isinstance(value, list) else [value] if value else []
 
@@ -47,6 +82,8 @@ def parse_youdao_entry(payload, word):
     english = _exact_entry(payload, "ee", word)
     if not bilingual and not english:
         raise RuntimeError("有道词典未收录这个词，或返回的词条不匹配。")
+    if _is_encyclopedia_section(payload.get("ee")):
+        english = {}
 
     definitions = []
     examples = []
@@ -54,13 +91,13 @@ def parse_youdao_entry(payload, word):
     for group in _items(english.get("trs")):
         if not isinstance(group, dict):
             continue
-        pos = _text(group.get("pos"))
-        if part_of_speech and pos != part_of_speech:
+        pos = _normalized_pos(group.get("pos"))
+        if not pos or (part_of_speech and pos != part_of_speech):
             continue
-        part_of_speech = part_of_speech or pos
         for sense in _items(group.get("tr")):
             definition = _label(sense)
             if definition and definition not in definitions:
+                part_of_speech = part_of_speech or pos
                 definitions.append(definition)
             if isinstance(sense, dict):
                 examples.extend(_text(item) for item in _items(sense.get("examples")))
@@ -71,9 +108,9 @@ def parse_youdao_entry(payload, word):
             continue
         for sense in _items(group.get("tr")):
             translation = _label(sense)
-            pos_match = re.match(r"^(adj|adv|n|v|vi|vt|prep|pron|conj|interj|num|aux)\.\s*", translation)
+            pos_match = _POS_PREFIX.match(translation)
             if pos_match:
-                pos = pos_match[1] + "."
+                pos = _normalized_pos(pos_match[1])
                 if part_of_speech and pos != part_of_speech:
                     continue
                 part_of_speech = part_of_speech or pos

@@ -1,4 +1,5 @@
 import asyncio
+import re
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -14,6 +15,8 @@ from app.services.web_dictionary import CambridgeDictionaryClient
 from app.services.youdao_dictionary import YoudaoDictionaryClient
 from app.services.wordnik_dictionary import WordnikDictionaryClient
 from app.services.reviewed_dictionary import lookup_reviewed_entry
+from app.services.merriam_webster_web import MerriamWebsterWebClient
+from app.services.teaching_example import TeachingExampleClient
 
 
 UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads"
@@ -49,12 +52,105 @@ def missing_dictionary_fields(word: Word) -> list[str]:
     ]
 
 
+TEXT_FIELD_LABELS = {
+    "phonetic": "音标", "part_of_speech": "词性", "english_definition": "英文释义",
+    "chinese_definition": "中文释义", "english_example": "英文例句",
+}
+
+
+def _normalized_definition(value):
+    return " ".join(re.findall(r"[\w]+", (value or "").casefold()))
+
+
+def _pos_family(value):
+    text = (value or "").strip().lower().rstrip(".")
+    for family, labels in {
+        "verb": ("v", "vt", "vi", "verb", "transitive verb", "intransitive verb"),
+        "noun": ("n", "noun"), "adjective": ("adj", "adjective"),
+        "adverb": ("adv", "adverb"),
+    }.items():
+        if text in labels:
+            return family
+    return text
+
+
+def _merge_dictionary_entry(word, entry):
+    """Fill independent gaps, but never attach a different sense's example."""
+    changed = []
+    missing = set(missing_dictionary_fields(word))
+    compatible_pos = not word.part_of_speech or not entry.part_of_speech or _pos_family(word.part_of_speech) == _pos_family(entry.part_of_speech)
+    retained_definition = str(word.english_definition or "").strip()
+    matches_retained_sense = bool(entry.english_definition) and _normalized_definition(retained_definition) == _normalized_definition(entry.english_definition)
+    for field in ("phonetic", "american_audio_url", "british_audio_url"):
+        value = getattr(entry, field, None)
+        if field in missing and value:
+            setattr(word, field, value)
+            changed.append(field)
+    if "part_of_speech" in missing and entry.part_of_speech and (not retained_definition or matches_retained_sense):
+        word.part_of_speech = entry.part_of_speech
+        changed.append("part_of_speech")
+    if "english_definition" in missing and entry.english_definition and compatible_pos:
+        word.english_definition = entry.english_definition
+        changed.append("english_definition")
+    same_sense = bool(entry.english_definition) and _normalized_definition(word.english_definition) == _normalized_definition(entry.english_definition)
+    for field in ("english_example", "chinese_definition"):
+        value = getattr(entry, field, None)
+        # Chinese-only exact bilingual entries are useful when no English sense
+        # exists yet; otherwise translate the retained sense instead of mixing.
+        safe = same_sense or (field == "chinese_definition" and not word.english_definition and compatible_pos)
+        if field in missing and value and safe:
+            setattr(word, field, value)
+            changed.append(field)
+    if changed and entry.source:
+        if not word.source:
+            word.source = entry.source[:255]
+        elif entry.source not in word.source:
+            combined = f"{word.source} | {entry.source}"
+            if len(combined) <= 255:
+                word.source = combined
+    return changed
+
+
+async def _complete_dictionary_text(word, settings):
+    """Keep querying after partial success; a missing field is not an exception."""
+    reviewed = lookup_reviewed_entry(word.word)
+    failures = []
+    free_failed = False
+    if reviewed:
+        _merge_dictionary_entry(word, reviewed)
+    providers = []
+    if settings.merriam_webster_api_key:
+        providers.append(("韦氏 API", MerriamWebsterClient(settings), 8))
+    providers.extend([
+        ("开放词典", FreeDictionaryClient(), 8),
+        ("有道词典", YoudaoDictionaryClient(), 8),
+        ("韦氏官网", MerriamWebsterWebClient(), 8),
+        ("剑桥词典", CambridgeDictionaryClient(), 10),
+        ("Wordnik", WordnikDictionaryClient(), 8),
+    ])
+    deadline = asyncio.get_running_loop().time() + 38
+    for name, provider, timeout in providers:
+        text_missing = set(missing_dictionary_fields(word)) & TEXT_FIELD_LABELS.keys()
+        if not text_missing:
+            break
+        budget = deadline - asyncio.get_running_loop().time()
+        if budget <= 0:
+            failures.append("词典查询已超时")
+            break
+        try:
+            entry = await asyncio.wait_for(provider.lookup(word.word), min(timeout, budget))
+            _merge_dictionary_entry(word, entry)
+        except Exception:
+            if name == "开放词典":
+                free_failed = True
+            failures.append(f"{name}未返回可用词条")
+    return free_failed, bool(reviewed), failures
+
+
 async def enrich_word(
     db: Session, word: Word, *, include_images: bool = True, only_missing: bool = False,
 ) -> Word:
     settings = get_settings()
-    merriam_webster = MerriamWebsterClient(settings)
-    free_dictionary = FreeDictionaryClient()
     audio_client = FreeDictionaryAudioClient()
     translator = TranslationClient(settings)
     images = ImageClient()
@@ -65,53 +161,42 @@ async def enrich_word(
                 setattr(word, field, None)
 
     try:
-        free_dictionary_failed = False
-        reviewed_entry = lookup_reviewed_entry(word.word)
-
-        async def lookup_free_dictionary():
-            nonlocal free_dictionary_failed
-            try:
-                return await asyncio.wait_for(free_dictionary.lookup(word.word), timeout=8)
-            except Exception:
-                free_dictionary_failed = True
-                raise
-
-        try:
-            if reviewed_entry:
-                entry = reviewed_entry
-            elif settings.merriam_webster_api_key:
-                try:
-                    entry = await merriam_webster.lookup(word.word)
-                except Exception:
-                    entry = await lookup_free_dictionary()
-            else:
-                entry = await lookup_free_dictionary()
-        except Exception:
-            try:
-                entry = await YoudaoDictionaryClient().lookup(word.word)
-            except Exception:
-                try:
-                    entry = await asyncio.wait_for(CambridgeDictionaryClient().lookup(word.word), timeout=12)
-                except Exception:
-                    entry = await WordnikDictionaryClient().lookup(word.word)
-
-        word.phonetic = word.phonetic or entry.phonetic
-        word.part_of_speech = word.part_of_speech or entry.part_of_speech
-        if not word.american_audio_locked:
-            word.american_audio_url = word.american_audio_url or entry.american_audio_url
-        if not word.british_audio_locked:
-            word.british_audio_url = word.british_audio_url or entry.british_audio_url
-        if entry.english_definition and not word.english_definition_locked:
-            word.english_definition = word.english_definition or entry.english_definition
-        if entry.english_example and not word.english_example_locked:
-            word.english_example = word.english_example or entry.english_example
-        word.source = word.source or entry.source
-
+        free_dictionary_failed, reviewed_entry, source_failures = await _complete_dictionary_text(word, settings)
         optional_errors: list[str] = []
+
+        # Older provider responses could contain encyclopedia abstracts instead
+        # of dictionary senses. Preserve them for review, never derive new text.
+        verified_context = _pos_family(word.part_of_speech) not in {"abstract:", "abstract", "unknown", "wikipedia"}
+        if not verified_context:
+            optional_errors.append("历史释义疑似百科内容，请先核对词性和英文释义")
+        if verified_context and "chinese_definition" in missing_dictionary_fields(word) and word.english_definition:
+            try:
+                translated = await asyncio.wait_for(translator.translate_definition(word.english_definition), timeout=22)
+                if translated:
+                    word.chinese_definition = naturalize_chinese_definition(word.word, word.english_definition, translated) or translated
+                else:
+                    optional_errors.append("中文释义：翻译服务未返回有效结果（可能限流或未配置）")
+            except Exception:
+                optional_errors.append("中文释义：翻译服务暂不可用或限流，请稍后重试")
+        if verified_context and "english_example" in missing_dictionary_fields(word) and word.english_definition:
+            try:
+                example = await asyncio.wait_for(TeachingExampleClient(settings).generate(
+                    word.word, word.english_definition, word.part_of_speech,
+                ), timeout=18)
+                if example:
+                    word.english_example = example
+                else:
+                    optional_errors.append("英文例句：未查到同义项例句，自编服务未返回可用结果")
+            except Exception:
+                optional_errors.append("英文例句：未查到同义项例句，自编服务暂不可用")
+
+        # Save useful text before optional audio work can time out.
+        db.add(word)
+        db.commit()
         american_audio, british_audio = None, None
         if not free_dictionary_failed and not reviewed_entry and ((not word.american_audio_url and not word.american_audio_locked) or (not word.british_audio_url and not word.british_audio_locked)):
             try:
-                american_audio, british_audio = await audio_client.lookup_audio(word.word)
+                american_audio, british_audio = await asyncio.wait_for(audio_client.lookup_audio(word.word), timeout=6)
             except Exception:
                 optional_errors.append("在线词典音频暂不可用，将尝试其他发音来源。")
         if not word.american_audio_locked:
@@ -119,46 +204,18 @@ async def enrich_word(
         if not word.british_audio_locked:
             word.british_audio_url = word.british_audio_url or british_audio
 
-        current_chinese_definition = word.chinese_definition
-        natural_definition = naturalize_chinese_definition(word.word, entry.english_definition, None)
-        may_update_chinese = not word.chinese_definition_locked and (
-            not only_missing or not (current_chinese_definition or "").strip()
-        )
-        if may_update_chinese and natural_definition and should_refresh_chinese_definition(
-            word.word,
-            current_chinese_definition,
-            entry.english_definition,
-        ):
-            word.chinese_definition = natural_definition
-        elif (
-            may_update_chinese
-            and should_refresh_chinese_definition(word.word, current_chinese_definition, entry.english_definition)
-        ):
-            try:
-                # A fallback dictionary may describe a different sense. Translate
-                # the retained (SPB) definition instead of mixing the two senses.
-                same_definition = (word.english_definition or "").strip() == (entry.english_definition or "").strip()
-                translated_definition = (entry.chinese_definition if same_definition else None) or await translator.translate_definition(word.english_definition)
-                word.chinese_definition = (
-                    naturalize_chinese_definition(word.word, word.english_definition, translated_definition)
-                    or translated_definition
-                    or word.chinese_definition
-                )
-            except Exception as exc:
-                optional_errors.append(f"中文翻译暂不可用: {exc}")
-
         if include_images and word.image_url and not word.image_locked and not is_local_media_url(word.image_url):
             try:
                 word.image_url = await store_word_image(word.word, word.image_url, IMAGE_DIR)
-            except Exception as exc:
-                optional_errors.append(f"图片本地化暂不可用: {exc}")
+            except Exception:
+                optional_errors.append("图片本地化暂不可用")
         if include_images and not word.image_url and not word.image_locked:
             try:
                 remote_image_url = await images.find_image(word.word)
                 if remote_image_url:
                     word.image_url = await store_word_image(word.word, remote_image_url, IMAGE_DIR)
-            except Exception as exc:
-                optional_errors.append(f"图片搜索暂不可用: {exc}")
+            except Exception:
+                optional_errors.append("图片搜索暂不可用")
 
         if not word.american_audio_locked and not is_local_audio_url(word.american_audio_url):
             try:
@@ -166,18 +223,24 @@ async def enrich_word(
                     word.word, "us", word.american_audio_url,
                     include_dictionary=not free_dictionary_failed and not reviewed_entry,
                 ), timeout=10) or word.american_audio_url
-            except Exception as exc:
-                optional_errors.append(f"美式音频本地化暂不可用: {exc}")
+            except Exception:
+                optional_errors.append("美式音频本地化暂不可用")
         if not word.british_audio_locked and not is_local_audio_url(word.british_audio_url):
             try:
                 word.british_audio_url = await asyncio.wait_for(_store_dictionary_audio(
                     word.word, "gb", word.british_audio_url,
                     include_dictionary=not free_dictionary_failed and not reviewed_entry,
                 ), timeout=10) or word.british_audio_url
-            except Exception as exc:
-                optional_errors.append(f"英式音频本地化暂不可用: {exc}")
+            except Exception:
+                optional_errors.append("英式音频本地化暂不可用")
 
-        word.enrichment_status = "done"
+        missing_text = [field for field in TEXT_FIELD_LABELS if field in missing_dictionary_fields(word)]
+        has_text = any(str(getattr(word, field, None) or "").strip() for field in TEXT_FIELD_LABELS)
+        word.enrichment_status = "partial" if missing_text and has_text else "failed" if missing_text else "done"
+        if missing_text:
+            detail = "、".join(TEXT_FIELD_LABELS[field] for field in missing_text)
+            optional_errors.insert(0, f"仍缺{detail}；已继续查询可用词典，保留已获取的内容")
+            optional_errors.extend(source_failures)
         if word.american_audio_url and word.british_audio_url:
             optional_errors = [error for error in optional_errors if error != "在线词典音频暂不可用，将尝试其他发音来源。"]
         word.enrichment_error = "\n".join(optional_errors) or None
@@ -208,7 +271,7 @@ def _friendly_enrichment_error(error: str) -> str:
         return "开放词典暂未收录这个词，可以手动编辑定义、例句和音频。"
     if "client error" in lower_error and "404" in lower_error:
         return "词典暂未收录这个词，可以手动编辑定义、例句和音频。"
-    return error
+    return "词典补全暂未完成，已保存的内容会保留，请稍后重试。"
 
 
 def naturalize_chinese_definition(
