@@ -53,7 +53,7 @@ test("a pending study ritual wins once without overriding urgent care", () => {
 
 test("a due recall ritual wins before ordinary choices without overriding urgent care", () => {
   const ordinary = chooseCatVisitPlan([
-    { kind: "memory", target: target(76, { label: "共同学习手册 · 三日巩固" }) },
+    { kind: "memory", target: target(76, { label: "共同学习手册 · 三天后再想" }) },
     { kind: "favorite", target: target(99, { label: "阳光窗台" }) },
   ], {
     catId: "cat-review",
@@ -62,7 +62,7 @@ test("a due recall ritual wins before ordinary choices without overriding urgent
     behavior: { attention: 62, activityBias: 58 },
   });
   const urgent = chooseCatVisitPlan([
-    { kind: "memory", target: target(84, { label: "共同学习手册 · 三日巩固" }) },
+    { kind: "memory", target: target(84, { label: "共同学习手册 · 三天后再想" }) },
     { kind: "rest", target: target(92, { label: "猫窝" }) },
   ], {
     catId: "cat-review",

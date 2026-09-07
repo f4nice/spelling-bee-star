@@ -123,8 +123,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-036"
-DEFAULT_PAGE_VERSION = "v20260907.36"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260907-037"
+DEFAULT_PAGE_VERSION = "v20260907.37"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -600,14 +600,14 @@ CAT_WORLD_CAT_INDIVIDUAL_HABITS = [
 CAT_WORLD_CAT_ACTION_RHYTHMS = [
     {
         "key": "observe-then-decide",
-        "label": "先观察再回想",
+        "label": "先看看再决定",
         "description": "通常先看一会儿，再从旧记忆和安静活动里挑一件事。",
         "thought": "我喜欢先看清房间，再决定今天从哪件事开始。",
         "focusKinds": ["memory", "learning", "habit"],
     },
     {
         "key": "study-signal-first",
-        "label": "学习信号优先",
+        "label": "看到学习就靠近",
         "description": "看见学习灯牌或共同手册有动静时，会更愿意先靠近。",
         "thought": "学习灯牌一亮，我就想先过去陪你一会儿。",
         "focusKinds": ["learning", "memory", "goal"],
@@ -648,13 +648,13 @@ CAT_WORLD_CAT_LEARNING_STYLES = [
         "focusKey": "warmup",
         "focusLabel": "先用 5 词起步",
         "preferredOutput": "essay",
-        "description": "擅长把任务拆小，先完成容易开始的词汇热身。",
+        "description": "会陪你先做最容易开始的 5 个词，再慢慢继续。",
         "messages": {
             "starting": "先做 5 个词点亮起步爪印，我陪你把今天轻轻启动。",
             "started": "起步爪印亮啦，再慢慢积累到 20 词就完成热身。",
             "warmup": "20 词热身完成啦，接下来把这些词写进一段英语。",
             "output": "表达已经完成，再补 20 词就能把今天收好。",
-            "loop": "今天从小步热身到表达都完成啦，节奏很稳。",
+            "loop": "今天从练词到表达都完成啦，做得很稳。",
         },
     },
     {
@@ -676,59 +676,59 @@ CAT_WORLD_CAT_LEARNING_STYLES = [
         "key": "idea-sparring",
         "label": "观点表达搭档",
         "focusKey": "debate",
-        "focusLabel": "用 AI Debate 说观点",
+        "focusLabel": "用 AI 英语辩论说观点",
         "preferredOutput": "debate",
         "description": "会鼓励你用英语整理观点，再大胆回应不同意见。",
         "messages": {
-            "starting": "先用 5 个词开场，点亮起步爪印后再准备 AI Debate。",
+            "starting": "先用 5 个词开场，点亮起步爪印后再准备 AI 英语辩论。",
             "started": "开场词已经准备好，再热身到 20 词，我们就去说观点。",
-            "warmup": "词汇已经热身好了，去 AI Debate 把观点讲清楚吧。",
-            "output": "观点表达完成，再补 20 词就能形成今天的闭环。",
-            "loop": "今天既有词汇输入，也把观点说出来了，很有力量。",
+            "warmup": "词汇已经热身好了，去 AI 英语辩论把观点讲清楚吧。",
+            "output": "观点已经说出来了，再练 20 个词，今天就全部完成。",
+            "loop": "今天既练了词，也把观点说出来了，很有力量。",
         },
     },
     {
         "key": "loop-keeper",
-        "label": "输入输出闭环搭档",
+        "label": "练词表达搭档",
         "focusKey": "loop",
-        "focusLabel": "当天输入当天使用",
+        "focusLabel": "当天练词当天使用",
         "preferredOutput": "essay",
-        "description": "会提醒你把词汇输入和英语表达放在同一天完成。",
+        "description": "会提醒你在同一天既练单词，也写一写或说一说英语。",
         "messages": {
-            "starting": "今天先输入 5 个词点亮起步爪印，再用英语表达一次。",
-            "started": "第一步已经亮了，再完成 20 词热身和一次表达，我帮你守住闭环。",
-            "warmup": "输入格已经亮了，再完成一次英语输出就能闭环。",
-            "output": "输出格已经亮了，再练 20 个词就能闭环。",
-            "loop": "三格都亮了，今天的输入和输出已经好好连在一起。",
+            "starting": "今天先练 5 个词点亮起步爪印，再用一次英语。",
+            "started": "第一步已经亮了，再练 20 个词并用一次英语，今天就完整啦。",
+            "warmup": "练词格已经亮了，再写一写或说一说英语就完成啦。",
+            "output": "表达格已经亮了，再练 20 个词就完成啦。",
+            "loop": "三格都亮了，今天练过的词也真正用出来啦。",
         },
     },
     {
         "key": "streak-keeper",
-        "label": "稳定节奏守护搭档",
+        "label": "每天陪学搭档",
         "focusKey": "streak",
         "focusLabel": "每天留下一点记录",
         "preferredOutput": "debate",
-        "description": "更在意每天都开始一点，让学习节奏能够持续。",
+        "description": "更在意每天都学一点，帮你慢慢养成学习习惯。",
         "messages": {
             "starting": "今天不用做很多，先留下 5 个词的起步记录吧。",
             "started": "今天已经留下第一笔记录，再慢慢走到 20 词就很好。",
             "warmup": "今天已经顺利开始，再表达一次会让这天更完整。",
             "output": "今天已经用过英语，再补 20 词就能守住完整记录。",
-            "loop": "今天的学习触点已经稳稳留下，休息后回来我还会等你。",
+            "loop": "今天的学习爪印已经稳稳留下，休息后回来我还会等你。",
         },
     },
     {
         "key": "review-organizer",
-        "label": "复习节奏搭档",
+        "label": "复习小帮手",
         "focusKey": "review",
-        "focusLabel": "少量复习再输出",
+        "focusLabel": "先复习一点，再说写一次",
         "preferredOutput": "essay",
         "description": "喜欢先整理一小组词，再通过表达加深记忆。",
         "messages": {
             "starting": "先挑 5 个词慢慢复习，点亮起步爪印后再继续。",
             "started": "前 5 个词已经复习过了，再整理到 20 词会记得更牢。",
             "warmup": "这一小组词复习好了，用一次英语会记得更牢。",
-            "output": "表达已经完成，再整理 20 个词就能巩固今天的记忆。",
+            "output": "表达已经完成，再整理 20 个词就能记得更牢。",
             "loop": "复习和表达都完成了，今天的记忆已经加固。",
         },
     },
@@ -1348,7 +1348,7 @@ CAT_WORLD_CATS = [
         },
         "thoughts": [
             "检测到你今天练过单词，想靠近一点听。",
-            "如果你读英文，我会把尾巴调成陪读模式。",
+            "如果你读英文，我会摇着尾巴来陪你。",
             "能量值很香，适合换一口小鱼干。",
         ],
     },
@@ -1432,7 +1432,7 @@ CAT_WORLD_CATS = [
         },
         "thoughts": [
             "今天适合慢慢读一段好句。",
-            "你的学习节奏很好，我想在旁边趴着。",
+            "你今天学得很好，我想在旁边趴着。",
             "如果累了，就摸摸我再继续。",
         ],
     },
@@ -1599,7 +1599,7 @@ CAT_WORLD_BLIND_BOX_SERIES = [
                     "rarity": "SSR",
                     "limited": True,
                     "region": "土耳其",
-                    "description": "轻盈的长毛猫，尾巴蓬松，喜欢在窗边和书架旁安静观察你的学习节奏。",
+                    "description": "轻盈的长毛猫，尾巴蓬松，喜欢在窗边和书架旁安静看你学习。",
                     "personality": "优雅的晨光观察员",
                     "traits": {
                         "activity": "gentle",
@@ -5839,7 +5839,7 @@ async def vue_cat_world_room_layout_api(request: Request, db: Session = Depends(
     state = get_or_create_cat_world_state(db, phone)
     requested_scene_key = str((payload or {}).get("sceneId") or state.current_scene_key).strip()
     if requested_scene_key != state.current_scene_key:
-        raise HTTPException(status_code=409, detail="场景已经切换，请重新打开编辑模式后保存。")
+        raise HTTPException(status_code=409, detail="房间已经切换，请重新点击“编辑物品”后保存。")
     inventory = parse_cat_world_inventory(state.inventory)
     active_scene, active_user_scene, active_scene_config = cat_world_active_scene_context(db, state)
     item_locations = parse_cat_world_item_locations(state.item_locations, inventory)
@@ -6212,7 +6212,7 @@ async def vue_cat_world_learning_memory_review_api(request: Request, db: Session
     try:
         payload = await request.json()
     except Exception as exc:
-        raise HTTPException(status_code=400, detail="回想记录不是有效 JSON。") from exc
+        raise HTTPException(status_code=400, detail="复习记录不是有效 JSON。") from exc
     cat_id = str((payload or {}).get("catId") or "").strip()
     raw_source_date = str((payload or {}).get("sourceDate") or "").strip()
     try:
@@ -6221,7 +6221,7 @@ async def vue_cat_world_learning_memory_review_api(request: Request, db: Session
         raise HTTPException(status_code=400, detail="请选择一页真实的学习足迹。") from exc
     today = date.today()
     if source_date > today:
-        raise HTTPException(status_code=400, detail="还不能回想未来的学习足迹。")
+        raise HTTPException(status_code=400, detail="还不能复习未来的学习记录。")
     recalled_word, recalled_sentence = cat_world_normalize_learning_memory_recall(
         (payload or {}).get("recalledWord"),
         (payload or {}).get("recalledSentence"),
@@ -6489,7 +6489,7 @@ async def vue_admin_cat_world_energy_grant_api(request: Request, db: Session = D
     try:
         payload = await request.json()
     except Exception as exc:
-        raise HTTPException(status_code=400, detail="运营能量数据不是有效 JSON。") from exc
+        raise HTTPException(status_code=400, detail="奖励能量数据不是有效 JSON。") from exc
     reason = re.sub(r"\s+", " ", str((payload or {}).get("reason") or "").strip())[:120]
     if len(reason) < 2:
         raise HTTPException(status_code=400, detail="请填写至少 2 个字的发放理由。")
@@ -6498,7 +6498,7 @@ async def vue_admin_cat_world_energy_grant_api(request: Request, db: Session = D
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="请输入有效的能量值。") from exc
     if amount < 1 or amount > 1000000:
-        raise HTTPException(status_code=400, detail="单次运营能量需要在 1 到 1000000 之间。")
+        raise HTTPException(status_code=400, detail="单次奖励能量需要在 1 到 1000000 之间。")
     password = normalize_login_password((payload or {}).get("password"))
     if not current.login_password_hash:
         raise HTTPException(status_code=400, detail="请先在用户中心给当前后台账号设置登录密码。")
@@ -14882,7 +14882,7 @@ def cat_world_debate_energy_source(
     latest_today = today_grants[0] if today_grants else None
     return {
         "key": "ai_debate",
-        "label": "AI Debate",
+        "label": "AI 英语辩论",
         "value": total_energy,
         "unit": "能量",
         "energyPerUnit": 1,
@@ -14891,7 +14891,7 @@ def cat_world_debate_energy_source(
         "todayValue": today_energy,
         "todayEnergy": today_energy,
         "todayGrantCount": len(today_grants),
-        "todayDetail": latest_today.reason if latest_today else "今天暂无 Debate 能量",
+        "todayDetail": latest_today.reason if latest_today else "今天还没有 AI 英语辩论能量",
     }
 
 
@@ -14914,7 +14914,7 @@ def cat_world_operating_energy_source(
     latest_today = today_grants[0] if today_grants else None
     return {
         "key": "operating_activity",
-        "label": "运营活动",
+        "label": "特别奖励",
         "value": total_energy,
         "unit": "能量",
         "energyPerUnit": 1,
@@ -14923,8 +14923,8 @@ def cat_world_operating_energy_source(
         "todayValue": today_energy,
         "todayEnergy": today_energy,
         "todayGrantCount": len(today_grants),
-        "todayDetail": f"今天：{latest_today.reason}" if latest_today else "今天暂无运营活动发放",
-        "detail": f"最近：{latest.reason}" if latest else "暂无运营活动发放",
+        "todayDetail": f"今天：{latest_today.reason}" if latest_today else "今天还没有特别奖励",
+        "detail": f"最近：{latest.reason}" if latest else "还没有特别奖励",
     }
 
 
@@ -14946,7 +14946,7 @@ def cat_world_learning_week_days(
         "started": "已开始",
         "input": "练词",
         "output": "表达",
-        "loop": "闭环",
+        "loop": "都完成",
     }
     days: list[dict[str, Any]] = []
     for offset in range(6, -1, -1):
@@ -14960,17 +14960,17 @@ def cat_world_learning_week_days(
         loop_complete = warmup_complete and has_output
         if not available:
             status_key = "unavailable"
-            detail = "学习习惯记录尚未启用"
+            detail = "那时还没有学习记录"
         elif loop_complete:
             status_key = "loop"
-            output_label = "作文和 Debate" if has_essay and has_debate else ("作文" if has_essay else "Debate")
-            detail = f"{spelling_count} 词 · {output_label} · 完成闭环"
+            output_label = "作文和 AI 辩论" if has_essay and has_debate else ("作文" if has_essay else "AI 辩论")
+            detail = f"{spelling_count} 词 · {output_label} · 两项都完成"
         elif warmup_complete:
             status_key = "input"
             detail = f"完成 {spelling_count} 词热身"
         elif has_output:
             status_key = "output"
-            output_label = "作文和 Debate" if has_essay and has_debate else ("作文" if has_essay else "Debate")
+            output_label = "作文和 AI 辩论" if has_essay and has_debate else ("作文" if has_essay else "AI 辩论")
             detail = f"完成英语{output_label}"
         elif spelling_count > 0:
             status_key = "started"
@@ -15022,7 +15022,7 @@ def cat_world_learning_habit_source(
             "totalLoopDays": 0,
             "bestStreak": 0,
             "recentDays": cat_world_learning_week_days(source_date, {}, set(), set()),
-            "todayDetail": "新学习节奏尚未开始",
+            "todayDetail": "今天还没有开始学习",
             "nextAction": "先完成 5 个拼写词点亮起步爪印，再慢慢到 20 词热身",
         }
 
@@ -15109,11 +15109,11 @@ def cat_world_learning_habit_source(
     if today_reward.get("hasEssay"):
         detail_parts.append(f"英文写作 +{CAT_WORLD_HABIT_OUTPUT_ENERGY}")
     if today_reward.get("hasDebate"):
-        detail_parts.append(f"AI Debate +{CAT_WORLD_HABIT_OUTPUT_ENERGY}")
+        detail_parts.append(f"AI 英语辩论 +{CAT_WORLD_HABIT_OUTPUT_ENERGY}")
     if int(today_reward.get("balanceEnergy") or 0) > 0:
-        detail_parts.append(f"输入输出组合 +{today_reward['balanceEnergy']}")
+        detail_parts.append(f"练词和表达都完成 +{today_reward['balanceEnergy']}")
     if int(today_reward.get("rhythmEnergy") or 0) > 0:
-        detail_parts.append(f"近 7 日节奏 {today_reward['rhythmDays']} 天 +{today_reward['rhythmEnergy']}")
+        detail_parts.append(f"最近 7 天学了 {today_reward['rhythmDays']} 天 +{today_reward['rhythmEnergy']}")
 
     next_tier = next(
         ((target, energy) for target, energy in CAT_WORLD_SPELLING_HABIT_ENERGY_TIERS if today_spelling < target),
@@ -15125,9 +15125,9 @@ def cat_world_learning_habit_source(
         target, energy = next_tier
         next_action = f"再完成 {target - today_spelling} 词，习惯奖励再 +{energy}"
     elif not (today_reward.get("hasEssay") or today_reward.get("hasDebate")):
-        next_action = "再完成一篇 80 词英文作文或 AI Debate，练习输出能力"
+        next_action = "再完成一篇 80 词英文作文或一次 AI 英语辩论，把英语用出来"
     else:
-        next_action = "今日学习闭环已完成；最近七天保持 5 天学习即可留出 2 天休息"
+        next_action = "今天的练词和表达都完成了；最近七天学五天，就可以安心休息两天"
     today_detail = " · ".join(detail_parts + [next_action])
     total_energy = sum(int(row["energy"]) for row in daily_rewards.values())
     total_loop_days = sum(1 for row in daily_rewards.values() if int(row.get("balanceEnergy") or 0) > 0)
@@ -15154,7 +15154,7 @@ def cat_world_learning_habit_source(
         "recentDays": recent_days,
         "todayDetail": today_detail,
         "nextAction": next_action,
-        "detail": "每天少量开始，组合拼写、写作和口语；最近七天保持稳定节奏即可获得额外奖励。",
+        "detail": "每天先学一点，再练拼写、写作或口语；最近七天学五天，就能得到额外奖励。",
     }
 
 
@@ -16967,7 +16967,7 @@ def cat_world_cat_traits(cat: dict[str, Any] | None) -> dict[str, Any]:
         "sleepStart": 23,
         "sleepEnd": 7,
         "nightOwl": False,
-        "routine": "观察房间里的学习节奏",
+        "routine": "看看你今天学了什么",
         "temperament": "balanced",
         "label": "均衡型猫咪，心情和体力消耗都比较稳定。",
     }
@@ -17334,7 +17334,7 @@ def cat_world_daily_persona_profile(
     }
     care_labels = {
         "calm": "喜欢安静角落和整齐书架",
-        "gentle": "喜欢柔软家具和慢节奏陪读",
+        "gentle": "喜欢柔软家具，也喜欢安静陪读",
         "chatty": "喜欢被回应，玩具越多越开心",
         "guardian": "喜欢巡视房间，坏掉的道具会让它在意",
         "clingy": "喜欢摸摸和靠近主人的布置",
@@ -17349,14 +17349,14 @@ def cat_world_daily_persona_profile(
         "grumpy": ["想被食物和玩具哄一哄", "今天有点烦，需要你温柔一点"],
     }
     voice_pool = list(cat.get("thoughts") or []) + [
-        f"我的今日模式是{persona_labels.get(temperament, '均衡陪伴型')}。",
-        f"我会按{traits.get('routine') or '自己的节奏'}行动。",
+        f"我今天是{persona_labels.get(temperament, '均衡陪伴型')}。",
+        f"我会按{traits.get('routine') or '自己的步子'}行动。",
         f"如果能量低了，我会先找地方休息。",
     ]
     play_style = cat_world_agent_level_label(
         max(curiosity, activity_bias),
         "今天更适合短互动",
-        "今天玩耍节奏稳定",
+        "今天会照平常的样子玩耍",
         "今天会主动找玩具",
     )
     social_style = cat_world_agent_level_label(
@@ -17504,7 +17504,7 @@ def cat_world_default_agent_state(
         "activityLabel": cat_world_agent_level_label(activity_bias, "今天慢悠悠", "活动量稳定", "今天很爱动"),
         "socialNeedLabel": cat_world_agent_level_label(social_need, "今天想独处", "陪伴需求稳定", "今天想黏人"),
         **persona_profile,
-        "routine": traits.get("routine") or "观察房间里的学习节奏",
+        "routine": traits.get("routine") or "看看你今天学了什么",
         "temperament": temperament,
         "mischiefChecked": False,
         "hourlyHistory": [],
@@ -17513,7 +17513,7 @@ def cat_world_default_agent_state(
                 "kind": "daily-mood",
                 "time": "今日",
                 "label": daily_mood["label"],
-                "message": f"{cat['label']} {daily_mood['label']}，{traits.get('routine') or '正在观察房间里的学习节奏'}。",
+                "message": f"{cat['label']} {daily_mood['label']}，{traits.get('routine') or '正在看看你今天学了什么'}。",
             }
         ],
     }
@@ -17632,13 +17632,13 @@ def append_cat_world_agent_event(
 CAT_WORLD_LEARNING_COMPANION_MILESTONES = (
     {"key": "started", "label": "5 词起步", "moodGain": 1, "bondGain": 1},
     {"key": "warmup", "label": "20 词热身", "moodGain": 2, "bondGain": 1},
-    {"key": "output", "label": "英语输出", "moodGain": 2, "bondGain": 1},
-    {"key": "loop", "label": "今日学习闭环", "moodGain": 3, "bondGain": 1},
+    {"key": "output", "label": "用一次英语", "moodGain": 2, "bondGain": 1},
+    {"key": "loop", "label": "今天全部完成", "moodGain": 3, "bondGain": 1},
 )
 CAT_WORLD_LEARNING_MEMORY_STAGES = (
     {"key": "waiting", "label": "等待初次陪学", "threshold": 0},
     {"key": "starter", "label": "起步搭子", "threshold": 1},
-    {"key": "familiar", "label": "熟悉节奏", "threshold": 4},
+    {"key": "familiar", "label": "常来学习", "threshold": 4},
     {"key": "steady", "label": "稳定陪学", "threshold": 10},
     {"key": "guardian", "label": "英语守护猫", "threshold": 24},
 )
@@ -17695,7 +17695,7 @@ def cat_world_learning_companion_message(
     learning_style: dict[str, Any] | None = None,
 ) -> str:
     temperament = str(traits.get("temperament") or "balanced")
-    action = str(next_action or "先完成 20 个拼写词，开启今天的学习节奏").strip().rstrip("。")
+    action = str(next_action or "今天先练 20 个拼写词").strip().rstrip("。")
     style_key = str((learning_style or {}).get("key") or "")
     style = CAT_WORLD_CAT_LEARNING_STYLE_BY_KEY.get(style_key, {})
     style_messages = style.get("messages") if isinstance(style.get("messages"), dict) else {}
@@ -17707,7 +17707,7 @@ def cat_world_learning_companion_message(
             "calm": f"{action}。我会在安静的位置陪着你。",
             "clingy": f"{action}。你开始以后，我就贴在旁边陪你。",
             "chatty": f"{action}。完成后念一个新词给我听吧。",
-            "guardian": f"{action}。今天的学习路线交给我守着。",
+            "guardian": f"{action}。今天的学习计划交给我守着。",
             "gentle": f"{action}。不用着急，我们慢慢开始。",
         },
         "started": {
@@ -17719,23 +17719,23 @@ def cat_world_learning_companion_message(
         },
         "warmup": {
             "calm": "20 词已经稳稳记下了，我陪你把英语再用出来。",
-            "clingy": "热身完成啦，我还想贴着你一起完成一次英语输出。",
+            "clingy": "热身完成啦，我还想贴着你一起写一写或说一说英语。",
             "chatty": "这 20 词我都听见了，再用英语说点什么给我听吧。",
-            "guardian": "热身目标已经守住，下一步去完成一次英语输出。",
-            "gentle": "今天已经轻轻启动了，再慢慢完成一次英语输出就好。",
+            "guardian": "热身目标已经守住，下一步去写一写或说一说英语。",
+            "gentle": "今天已经轻轻开始了，再慢慢用一次英语就好。",
         },
         "output": {
             "calm": "你已经把英语用出来了，再完成 20 词热身就能收好今天的成果。",
-            "clingy": "我陪你完成了英语输出，再练 20 个词就闭环啦。",
-            "chatty": "刚才的英语输出很有意思，再来 20 个词让我听听。",
-            "guardian": "英语输出已经完成，再守住 20 词热身就能闭环。",
+            "clingy": "我陪你用过英语啦，再练 20 个词，今天就完整了。",
+            "chatty": "刚才说写的英语很有意思，再来 20 个词让我听听。",
+            "guardian": "英语表达已经完成，再守住 20 词热身，今天就完整了。",
             "gentle": "表达已经完成了，再慢慢练 20 个词，今天就很完整。",
         },
         "loop": {
-            "calm": "今天的输入和输出都完成了，我会安静记住我们的七日节奏。",
-            "clingy": "今天的学习闭环完成啦，我越来越喜欢这样陪着你。",
+            "calm": "今天既练了单词，也用了英语，我会安静记住这一天。",
+            "clingy": "今天的学习全部完成啦，我越来越喜欢这样陪着你。",
             "chatty": "单词和表达都完成了，喵！明天再讲新的给我听。",
-            "guardian": "今日学习路线全部完成，我已经替你把成果守好了。",
+            "guardian": "今天的学习计划全部完成，我已经替你把成果守好了。",
             "gentle": "今天一步一步都完成了，休息一下，明天再继续。",
         },
     }
@@ -17778,7 +17778,7 @@ def cat_world_apply_learning_companion_rewards(
         "started": "已陪你迈出第一步",
         "warmup": "已陪你完成热身",
         "output": "已陪你完成表达",
-        "loop": "今日闭环搭档",
+        "loop": "今天全部完成",
     }
     agent_state, _ = ensure_cat_world_agent_state(log, cat, traits)
     assigned_now = not bool(agent_state.get("learningCompanionAssigned"))
@@ -17913,16 +17913,16 @@ def cat_world_normalize_learning_memory_recall(
     if not recalled_word:
         raise HTTPException(status_code=400, detail="请先凭记忆写下 1 个英文词。")
     if len(recalled_word) > CAT_WORLD_LEARNING_RECALL_WORD_MAX_LENGTH:
-        raise HTTPException(status_code=400, detail="回想词请控制在 48 个字符以内。")
+        raise HTTPException(status_code=400, detail="英文词请控制在 48 个字符以内。")
     if not re.fullmatch(r"[A-Za-z]+(?:['\u2019-][A-Za-z]+)*", recalled_word):
-        raise HTTPException(status_code=400, detail="回想词请填写一个英文单词，不要查看原答案。")
+        raise HTTPException(status_code=400, detail="请写一个英文单词，先不要看原答案。")
     if not recalled_sentence:
         raise HTTPException(status_code=400, detail="请再用自己的英语写下 1 句话。")
     if len(recalled_sentence) > CAT_WORLD_LEARNING_RECALL_SENTENCE_MAX_LENGTH:
-        raise HTTPException(status_code=400, detail="回想句请控制在 240 个字符以内。")
+        raise HTTPException(status_code=400, detail="英文句子请控制在 240 个字符以内。")
     sentence_words = re.findall(r"[A-Za-z]+(?:['\u2019-][A-Za-z]+)*", recalled_sentence)
     if len(sentence_words) < 3:
-        raise HTTPException(status_code=400, detail="回想句至少写 3 个英文词，短句也可以。")
+        raise HTTPException(status_code=400, detail="请写至少有 3 个英文词的句子，短句也可以。")
     return recalled_word, recalled_sentence
 
 
@@ -17965,7 +17965,7 @@ def cat_world_learning_memory_review_schedule(
     return {
         "reviewCount": review_count,
         "reviewStageKey": "first" if review_count == 0 else "strengthen",
-        "reviewStageLabel": "隔日回想" if review_count == 0 else "三日巩固",
+        "reviewStageLabel": "隔天想一想" if review_count == 0 else "三天后再想",
         "reviewProgressLabel": f"{review_count}/2",
         "reviewDue": next_review_date <= today,
         "reviewedToday": reviewed_today,
@@ -17987,9 +17987,9 @@ def cat_world_learning_memory_review_error(memory: dict[str, Any], source_date: 
         None,
     )
     if not source_memory_day:
-        return "这页学习足迹还不存在，不能生成回想记录。"
+        return "这页学习记录还不存在，暂时不能复习。"
     if source_memory_day.get("reviewStageKey") == "settled" and not memory.get("reviewedToday"):
-        return "这页已经完成隔日回想和三日巩固，可以去留下新的学习足迹。"
+        return "这页已经想过两次，记得更牢了，可以去学习新的内容。"
     return ""
 
 
@@ -18020,7 +18020,7 @@ def cat_world_apply_learning_memory_review(
             "sourceDate": existing["sourceDate"],
             "recalledWord": str(existing.get("recalledWord") or ""),
             "recalledSentence": str(existing.get("recalledSentence") or ""),
-            "message": f"今天已经和{cat_label}回想过 {existing_label} 的学习足迹，明天再翻新的一页。",
+            "message": f"今天已经和{cat_label}想过 {existing_label} 的学习内容，明天再翻新的一页。",
         }
 
     source_label = f"{source_date.month}月{source_date.day}日"
@@ -18041,8 +18041,8 @@ def cat_world_apply_learning_memory_review(
         cat,
         traits,
         "learning-review",
-        "30 秒主动回想",
-        f"回想了 {source_label} 的学习足迹，找回 {recalled_word} 并写下自己的英文句子。{message}",
+        "30 秒自己想一想",
+        f"想起了 {source_label} 学过的内容，找回 {recalled_word} 并写下自己的英文句子。{message}",
         now,
     )
     review = {
@@ -18163,7 +18163,7 @@ def cat_world_learning_memory_payload(
         milestones = milestones_by_date.get(memory_date, set())
         if "loop" in milestones:
             status_key = "loop"
-            status_label = "完成学习闭环"
+            status_label = "练词和表达都完成"
         elif "warmup" in milestones and "output" in milestones:
             status_key = "warmup-output"
             status_label = "完成热身与表达"
@@ -18440,7 +18440,7 @@ def cat_world_behavior_hourly_change(
         reason = (
             "睡足后醒来，坏情绪得到缓解"
             if wake_transition
-            else "刚睡醒，按自己的节奏慢慢进入活动状态"
+            else "刚睡醒，正慢慢打起精神"
         )
     elif behavior["key"] == "resting":
         energy_delta = -max(1, round(energy_decay * 0.35))
@@ -19333,9 +19333,9 @@ def cat_world_build_personality_traits(
             )
         ),
         "nightOwl": bool(personality.get("nightOwl", False)),
-        "routine": personality.get("routine") or "按自己的节奏观察房间",
+        "routine": personality.get("routine") or "按自己的步子逛房间",
         "temperament": personality.get("temperament") or "balanced",
-        "label": personality.get("traitLabel") or "有自己的生活节奏和互动偏好。",
+        "label": personality.get("traitLabel") or "有自己的生活习惯和喜欢的东西。",
         "personalityKey": personality.get("key") or "individual",
         "personalityModel": 2,
     }
@@ -20228,7 +20228,7 @@ def cat_world_routine_effect_message(
     if behavior_key == "waking":
         return (
             "睡醒舒展",
-            f"{cat_label}刚睡醒，伸了个懒腰，慢慢进入今天的活动节奏。",
+            f"{cat_label}刚睡醒，伸了个懒腰，正在慢慢打起精神。",
             2,
             1,
         )
@@ -20256,7 +20256,7 @@ def cat_world_routine_effect_message(
     if temperament == "chatty":
         return (
             f"{period_label}喵语广播",
-            f"{cat_label}{period_label}对着房间说了一串喵语，像在复盘刚学的英文。",
+            f"{cat_label}{period_label}对着房间说了一串喵语，像在想刚学过的英文。",
             3 if roll > 0.3 else 2,
             -1,
         )
@@ -20290,7 +20290,7 @@ def cat_world_routine_effect_message(
         )
     return (
         f"{period_label}日常",
-        f"{cat_label}{period_label}按自己的节奏在房间里待了一会儿。",
+        f"{cat_label}{period_label}按自己的步子在房间里待了一会儿。",
         1 + (1 if favorite_count and roll > 0.5 else 0),
         0,
     )

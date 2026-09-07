@@ -270,7 +270,7 @@ function normalizeLearningRitual(ritual = {}) {
     : [];
   return {
     styleKey: String(ritual.styleKey || "balanced"),
-    label: shortCatText(ritual.label || "输入输出交替", 10),
+    label: shortCatText(ritual.label || "练词表达交替", 10),
     cue: String(ritual.cue || "把刚练过的词用进一句自己的英文。").trim(),
     stepKey: String(ritual.stepKey || "warmup"),
     animation: String(ritual.animation || "book"),
@@ -4382,7 +4382,7 @@ class CatWorldScene extends Phaser.Scene {
       dailyMoodKey: agent.dailyMoodKey || "",
       temperament,
       activity: String(traits.activity || "balanced"),
-      routine: agent.routine || traits.routine || "观察房间里的学习节奏",
+      routine: agent.routine || traits.routine || "看看你今天学了什么",
       actionRhythmKey: String(cat.actionRhythm?.key || ""),
       canWalk: !sleeping && energy >= restThreshold,
       energy,
@@ -5085,7 +5085,7 @@ class CatWorldScene extends Phaser.Scene {
         itemId: "learning-garden",
         itemKind: gardenPoint.itemKind,
         label: gardenPoint.label,
-        message: `${memoryCue} ${ritual.cue || "今天的学习闭环完成了。"} 单词芽已经长到${signal.garden?.stageLabel || "种子"}，我去照看一下。`,
+        message: `${memoryCue} ${ritual.cue || "今天的学习全部完成了。"} 单词芽已经长到${signal.garden?.stageLabel || "种子"}，我去照看一下。`,
         animation: ritual.animation || "blink",
         priority: clamp(40 + Math.round(attention / 9), 42, 54),
         x: gardenPoint.x,
@@ -6229,7 +6229,7 @@ class CatWorldScene extends Phaser.Scene {
       lines.unshift(careNeed.actionLabel ? `${careNeed.label || "当前需求"}: ${careNeed.actionLabel}。${careNeed.message}` : careNeed.message);
     }
     if (agent.careTip) lines.unshift(agent.careTip);
-    if (agent.dailyMoodLabel) lines.unshift(`${agent.dailyMoodLabel}，${behavior.routine || "想按自己的节奏活动"}。`);
+    if (agent.dailyMoodLabel) lines.unshift(`${agent.dailyMoodLabel}，${behavior.routine || "想按自己的步子活动"}。`);
     if (goal.message) lines.unshift(goal.message);
     if (neglect.isCritical) lines.unshift(`${neglect.statusLabel || "需要紧急照护"}，${neglect.message || "请马上照顾我。"}`);
     else if (neglect.isWarning) lines.unshift(neglect.message || "我现在需要照顾。 ");
@@ -6255,7 +6255,7 @@ class CatWorldScene extends Phaser.Scene {
     if (behavior.curiosity >= 76) lines.push("我今天想试一条新的散步路线。");
     if (behavior.socialNeed >= 78) lines.push("你在旁边的时候，我会更安心。");
     if (behavior.activityBias <= 36) lines.push("今天慢慢走就很好。");
-    if (agent.hourlyReason) lines.push(`现在的节奏: ${agent.hourlyReason}。`);
+    if (agent.hourlyReason) lines.push(`这一小时: ${agent.hourlyReason}。`);
     return uniqueLines(lines).slice(0, 8);
   }
 

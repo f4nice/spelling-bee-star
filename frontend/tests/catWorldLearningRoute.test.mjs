@@ -28,14 +28,14 @@ test("the next visit promise uses the real review date and each cat's own rhythm
     recentDays: [{
       date: "2026-09-07",
       statusKey: "loop",
-      reviewStageLabel: "隔日回想",
+      reviewStageLabel: "隔天想一想",
       nextReviewDate: "2026-09-08",
     }],
   };
   const observer = buildCatWorldReturnPromise(habit, {
     id: "same-breed-observer",
     nickname: "看看",
-    actionRhythm: { key: "observe-then-decide", label: "先观察再回想" },
+    actionRhythm: { key: "observe-then-decide", label: "先看看再决定" },
     learningStyle: { key: "story-builder" },
   }, memory);
   const scout = buildCatWorldReturnPromise(habit, {
@@ -47,11 +47,11 @@ test("the next visit promise uses the real review date and each cat's own rhythm
 
   assert.equal(observer.visible, true);
   assert.equal(observer.dateLabel, "明天 · 9月8日");
-  assert.equal(observer.title, "隔日回想 · 30 秒");
+  assert.equal(observer.title, "隔天想一想 · 30 秒");
   assert.match(observer.detail, /接回自己的 1 句话/);
   assert.match(observer.message, /先翻开旧脚印/);
   assert.match(scout.detail, /说清 1 个小观点/);
-  assert.match(scout.message, /新路线/);
+  assert.match(scout.message, /新句子/);
   assert.notEqual(observer.message, scout.message);
 });
 
@@ -64,7 +64,7 @@ test("a due review opens the exact scrapbook page and a completed day falls back
       companionDays: 3,
       reviewDueToday: true,
       suggestedReviewDate: "2026-09-06",
-      suggestedReviewStageLabel: "隔日回想",
+      suggestedReviewStageLabel: "隔天想一想",
     },
   );
   const complete = buildCatWorldReturnPromise(
@@ -82,7 +82,7 @@ test("a due review opens the exact scrapbook page and a completed day falls back
   assert.match(due.detail, /安心停下/);
   assert.equal(complete.key, "rest");
   assert.equal(complete.dateLabel, "明天 · 9月8日");
-  assert.match(complete.detail, /不需要追加刷量/);
+  assert.match(complete.detail, /不用多做/);
 });
 
 test("the daily pace makes returning gentle and gives completed days a stopping point", () => {
@@ -100,7 +100,7 @@ test("the daily pace makes returning gentle and gives completed days a stopping 
   });
 
   assert.equal(returning.key, "returning");
-  assert.equal(returning.label, "轻量回归");
+  assert.equal(returning.label, "轻轻回来");
   assert.match(returning.detail, /不用补昨天/);
   assert.match(returning.roomCue, /休息了也没关系/);
   assert.equal(
@@ -114,7 +114,7 @@ test("the daily pace makes returning gentle and gives completed days a stopping 
   );
   assert.equal(complete.key, "complete");
   assert.equal(complete.timeLabel, "今日已完成");
-  assert.match(complete.detail, /不必.*继续刷量/);
+  assert.match(complete.detail, /不用为了数字一直练/);
   assert.match(
     buildCatWorldLearningRoute({ todaySpellingCount: 20, todayHasDebate: true }).ritual.cue,
     /放心休息和陪猫/,
@@ -134,7 +134,7 @@ test("the daily pace only asks for the missing half of the learning loop", () =>
   assert.equal(vocabulary.timeLabel, "还差 12 词");
   assert.match(vocabulary.detail, /表达已经完成/);
   assert.equal(output.key, "output");
-  assert.match(output.detail, /词汇热身已经够了/);
+  assert.match(output.detail, /今天的词已经练够了/);
   assert.equal(steady.key, "steady");
   assert.equal(steady.timeLabel, "还差 13 词");
   assert.equal(starter.key, "starter");
@@ -195,7 +195,7 @@ test("weekly trail distinguishes starts, input, output, and completed loops", ()
       { date: "2026-09-04", weekdayLabel: "周五", dayLabel: "9/4", statusKey: "input", statusLabel: "练词", active: true },
       { date: "2026-09-05", weekdayLabel: "周六", dayLabel: "9/5", statusKey: "output", statusLabel: "表达", active: true },
       { date: "2026-09-06", weekdayLabel: "周日", dayLabel: "9/6", statusKey: "rest", statusLabel: "休息" },
-      { date: "2026-09-07", weekdayLabel: "周一", dayLabel: "9/7", statusKey: "loop", statusLabel: "闭环", detail: "50 词 · 作文 · 完成闭环", spellingCount: 50, hasEssay: true, active: true, loopComplete: true, today: true },
+      { date: "2026-09-07", weekdayLabel: "周一", dayLabel: "9/7", statusKey: "loop", statusLabel: "都完成", detail: "50 词 · 作文 · 两项都完成", spellingCount: 50, hasEssay: true, active: true, loopComplete: true, today: true },
     ],
   });
 
@@ -204,7 +204,7 @@ test("weekly trail distinguishes starts, input, output, and completed loops", ()
   assert.equal(trail.loopDays, 1);
   assert.equal(trail.days.at(-1).spellingCount, 50);
   assert.equal(trail.days.at(-1).hasEssay, true);
-  assert.equal(trail.todayMessage, "今天闭环完成");
+  assert.equal(trail.todayMessage, "今天全部完成");
   assert.match(trail.summary, /4 天有学习/);
 });
 
@@ -230,7 +230,7 @@ test("weekly rhythm rewards five humane touchpoints while preserving two rest da
   assert.equal(rhythm.loopTarget, 3);
   assert.equal(rhythm.restAllowance, 2);
   assert.equal(rhythm.activePercent, 100);
-  assert.match(rhythm.detail, /安心收工/);
+  assert.match(rhythm.detail, /放心休息/);
   assert.match(rhythm.catLine, /小静/);
   assert.match(rhythm.catLine, /休息/);
 
@@ -245,7 +245,7 @@ test("weekly memories keep day detail and follow the individual cat temperament"
     weekdayLabel: "周一",
     dayLabel: "9/7",
     statusKey: "loop",
-    detail: "50 词 · 作文 · 完成闭环",
+    detail: "50 词 · 作文 · 两项都完成",
   };
   const calm = catWorldWeekMemory(day, {
     id: "cat-calm",
@@ -261,7 +261,7 @@ test("weekly memories keep day detail and follow the individual cat temperament"
   assert.equal(calm.dateLabel, "周一 9/7");
   assert.equal(calm.detail, day.detail);
   assert.equal(calm.catName, "小静");
-  assert.match(calm.catMessage, /输入和表达都完成/);
+  assert.match(calm.catMessage, /练了单词，也用过英语/);
   assert.notEqual(calm.catMessage, chatty.catMessage);
   assert.match(
     catWorldWeekMemory({ statusKey: "unavailable" }, calm).catMessage,
@@ -275,7 +275,7 @@ test("learning route starts with a gentle spelling target", () => {
     { label: "咪咪", displayLabel: "咪咪 · E36D" },
   );
 
-  assert.equal(route.title, "咪咪的今日陪学路线");
+  assert.equal(route.title, "咪咪的今日学习计划");
   assert.equal(route.completedCount, 0);
   assert.equal(route.starterComplete, true);
   assert.equal(route.starterCount, 5);
@@ -305,7 +305,7 @@ test("a cat learning style changes guidance order without changing the balanced 
       learningStyle: {
         key: "idea-sparring",
         label: "观点表达搭档",
-        focusLabel: "用 AI Debate 说观点",
+        focusLabel: "用 AI 英语辩论说观点",
         preferredOutput: "debate",
         description: "鼓励清楚表达观点。",
       },
@@ -313,13 +313,13 @@ test("a cat learning style changes guidance order without changing the balanced 
   );
 
   assert.equal(route.learningStyleLabel, "观点表达搭档");
-  assert.equal(route.learningFocusLabel, "用 AI Debate 说观点");
+  assert.equal(route.learningFocusLabel, "用 AI 英语辩论说观点");
   assert.equal(route.preferredOutput, "debate");
   assert.equal(route.ritual.label, "观点理由法");
   assert.equal(route.ritual.primaryTargetId, "reading-lamp");
   assert.equal(route.steps[1].href, "/debate");
   assert.equal(route.steps[1].alternateHref, "/essays");
-  assert.match(route.steps[1].detail, /先完成一次 AI Debate/);
+  assert.match(route.steps[1].detail, /先完成一次 AI 英语辩论/);
   assert.equal(route.steps[2].completed, false);
 });
 
@@ -329,12 +329,12 @@ test("learning route recognizes input, output, and a returning learner", () => {
     todayHasEssay: true,
     todayHasDebate: true,
     currentStreak: 4,
-    nextAction: "今日学习闭环已完成",
+    nextAction: "今天的学习全部完成",
   });
 
   assert.equal(route.completedCount, 3);
   assert.equal(route.steps.every((step) => step.completed), true);
-  assert.equal(route.steps[2].label, "完成今日闭环");
+  assert.equal(route.steps[2].label, "今天全部完成");
   assert.equal(route.steps[2].actionKind, "energy");
   assert.match(route.steps[2].detail, /最近七天已有/);
   assert.equal(route.weeklyRhythm.activeDays, 1);
@@ -370,13 +370,13 @@ test("room learning signal lights input, output, and the completed loop independ
   assert.equal(starting.token, "2026-09-07:cat-calm:1:started:0");
   assert.equal(starting.ritual.styleKey, "review-organizer");
   assert.equal(starting.ritual.primaryTargetId, "book-shelf");
-  assert.match(starting.ritual.cue, /主动回想/);
+  assert.match(starting.ritual.cue, /自己想一想/);
   assert.equal(outputFirst.completedCount, 1);
   assert.equal(outputFirst.stageKey, "output");
   assert.equal(outputFirst.steps[1].completed, true);
   assert.equal(complete.completedCount, 3);
   assert.equal(complete.steps.every((step) => step.completed), true);
-  assert.equal(complete.statusLabel, "今日闭环");
+  assert.equal(complete.statusLabel, "今天全部完成");
   assert.equal(complete.celebrationMessage, "三格都亮啦。");
 });
 

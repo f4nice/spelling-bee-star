@@ -17,7 +17,7 @@ test("cat social moments are persisted for both participants near the end of the
   assert.match(page, /const targetId = event\?\.itemId \|\| event\?\.partnerCatId;/);
   assert.match(page, /partnerCatId:\s*event\.partnerCatId \|\| ""/);
   assert.match(page, /socialKind:\s*event\.socialKind \|\| ""/);
-  assert.match(page, /event\.kind === "cat-social"[\s\S]*?notice\.value = nextPayload\.event\.message/);
+  assert.match(page, /event\.kind === "cat-social"[\s\S]*?notice\.value = friendlyCatWorldText\(nextPayload\.event\.message\)/);
 });
 
 test("each social kind has distinct choreography and live room status", async () => {

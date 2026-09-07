@@ -80,7 +80,7 @@ const TEMPERAMENT_DESTINATION_MESSAGES = Object.freeze({
   }),
   balanced: Object.freeze({
     floor: Object.freeze(["这里不错，我先看看四周。", "落稳啦，我会从这里慢慢熟悉房间。"]),
-    decor: Object.freeze(["我先试试{item}，看看这里舒不舒服。", "到{item}啦，我会按自己的节奏待一会儿。"]),
+    decor: Object.freeze(["我先试试{item}，看看这里舒不舒服。", "到{item}啦，我会按自己的步子待一会儿。"]),
     favorite: Object.freeze(["这是我喜欢的{item}，我想在这里多待一会儿。", "你选中了我喜欢的{item}，这里正合适。"]),
   }),
 });

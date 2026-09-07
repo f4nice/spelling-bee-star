@@ -24,6 +24,7 @@ import { catPortraitModel } from "../catWorldPortrait.js";
 import { catRarityBadge } from "../catWorldRarity.js";
 import { catWorldSocialKindLabel } from "../catWorldSocialMoment.js";
 import { catSpotMemorySummary } from "../catWorldSpotMemory.js";
+import { friendlyCatWorldData, friendlyCatWorldText } from "../catWorldChildCopy.js";
 import {
   catWorldSceneMoveForScene,
   normalizeCatWorldSceneMoves,
@@ -65,7 +66,7 @@ const props = defineProps({
   },
 });
 
-const payload = ref(props.data || {});
+const payload = ref(friendlyCatWorldData(props.data || {}));
 const activeCategory = ref("food");
 const activeWorldView = ref("room");
 const bagExpanded = ref(false);
@@ -139,10 +140,10 @@ const catPositionSyncs = new Map();
 const liveCatIntentTimers = new Map();
 
 const catReactionTexts = [
-  "收到摸摸指令，开心值上升",
-  "启动陪读模式，正在靠近你",
-  "尾巴雷达晃了晃，发现新单词",
-  "想法缓存刷新，准备继续陪你学",
+  "摸摸收到啦，我更开心了",
+  "我来陪你读英语啦",
+  "尾巴晃了晃，我发现了新单词",
+  "我准备好继续陪你学习啦",
 ];
 const CAT_MEMORY_REVIEW_SECONDS = 30;
 let catReactionTimer = 0;
@@ -158,7 +159,7 @@ let gameMountActive = false;
 watch(
   () => props.data,
   (nextData) => {
-    payload.value = nextData || {};
+    payload.value = friendlyCatWorldData(nextData || {});
     playTimeSyncedAt.value = Date.now();
   },
 );
@@ -210,10 +211,10 @@ onMounted(async () => {
     },
     onCatCarryStart: (_cat, interaction) => {
       activeRoomPanel.value = "cat";
-      if (interaction?.message) notice.value = interaction.message;
+      if (interaction?.message) notice.value = friendlyCatWorldText(interaction.message);
     },
     onCatDrop: (_cat, interaction) => {
-      if (interaction?.message) notice.value = interaction.message;
+      if (interaction?.message) notice.value = friendlyCatWorldText(interaction.message);
     },
     onCatPositionChange: syncCatPosition,
     onDecorClick: handleDecorClick,
@@ -224,12 +225,12 @@ onMounted(async () => {
     onToyClick: handleRoomToyClick,
     onToyDrop: handleRoomToyDrop,
     onCatWandJoin: (interaction) => {
-      if (interaction?.message) notice.value = interaction.message;
+      if (interaction?.message) notice.value = friendlyCatWorldText(interaction.message);
     },
     onLitterClick: cleanLitter,
     onBathtubBath: (bath) => useConsumable(shopById.value["cat-bath-kit"], { targetCatId: bath?.catId }),
     onItemInteractionEnd: (interaction) => {
-      if (interaction?.message) notice.value = interaction.message;
+      if (interaction?.message) notice.value = friendlyCatWorldText(interaction.message);
     },
     onCatThought: (cat, message) => {
       if (!roomEditMode.value) {
@@ -256,12 +257,12 @@ function updateLiveCatIntent(cat = {}, intent = {}) {
   const catId = String(cat.id || "");
   if (!catId || !intent.statusLabel) return;
   const updatedAt = Number(intent.updatedAt || Date.now());
-  const nextIntent = {
+  const nextIntent = friendlyCatWorldData({
     ...intent,
     catId,
     catLabel: cat.displayLabel || cat.label || "猫咪",
     updatedAt,
-  };
+  });
   liveCatIntents.value = {
     ...liveCatIntents.value,
     [catId]: nextIntent,
@@ -653,11 +654,11 @@ const focusedCatThought = computed(() => {
     ].filter(Boolean).join("。") + "。";
   }
   if (agent.dailyMoodLabel || behavior.label) {
-    return `${agent.dailyMoodLabel || "今天状态稳定"}，${behavior.label || "自由活动"}。${agent.routine || "正在观察房间里的学习节奏"}。`;
+    return `${agent.dailyMoodLabel || "今天心情平稳"}，${behavior.label || "自由活动"}。${agent.routine || "正在看看你今天学了什么"}。`;
   }
   const thoughts = focusedCat.value.thoughts || [];
   if (!thoughts.length) {
-    return "正在观察你的学习节奏。";
+    return "正在看看你今天学了什么。";
   }
   return thoughts[catPetSequence.value % thoughts.length];
 });
@@ -676,7 +677,7 @@ const focusedCatDailyNote = computed(() => {
   const comfort = agent.comfortLabel || "暂无道具减耗";
   const reason = agent.hourlyReason || "自由活动";
   const bondText = focusedBond.value.levelLabel ? ` · 信任 ${focusedBond.value.levelLabel} ${focusedBond.value.score || 18}` : "";
-  return `每小时 体力 ${signedHourlyValue(log.hourlyEnergyDecay)} / 心情 ${signedHourlyValue(log.hourlyMoodDecay)} · ${reason} · ${comfort} · 独立状态 ${agent.dailyMoodLabel || "稳定"} · 喜欢 ${favoriteDecorLabels.join("、") || "安静角落"}${bondText}${damaged}`;
+  return `每小时 体力 ${signedHourlyValue(log.hourlyEnergyDecay)} / 心情 ${signedHourlyValue(log.hourlyMoodDecay)} · ${reason} · ${comfort} · 今天心情 ${agent.dailyMoodLabel || "平稳"} · 喜欢 ${favoriteDecorLabels.join("、") || "安静角落"}${bondText}${damaged}`;
 });
 const focusedAgentEvents = computed(() => {
   const events = focusedAgentState.value.events;
@@ -745,7 +746,7 @@ function individualizeCatLog(cat, sourceLog = {}) {
     agentState: {
       ...sourceAgent,
       temperament: traits.temperament || sourceAgent.temperament || "balanced",
-      routine: traits.routine || sourceAgent.routine || "观察房间里的学习节奏",
+      routine: traits.routine || sourceAgent.routine || "看看你今天学了什么",
       personaLabel: cat?.personality || sourceAgent.personaLabel || "学习陪伴型",
       profileTags: profileTags.slice(0, 4),
     },
@@ -799,7 +800,7 @@ const catAgentCards = computed(() =>
       needMessage: careNeed.message || "",
       needStatus: careNeed.status || "calm",
       needPriority: clampCatScore(careNeed.priority ?? 0),
-      dailyMoodLabel: agent.dailyMoodLabel || (owned ? "今天状态稳定" : lostInfo ? "已经离家" : "等待解锁"),
+      dailyMoodLabel: agent.dailyMoodLabel || (owned ? "今天心情平稳" : lostInfo ? "已经离家" : "等待解锁"),
       latestEvent,
     };
   }),
@@ -854,7 +855,7 @@ const roomLiveActivity = computed(() => {
         catLabel: cat.displayLabel || cat.label || "猫咪",
         statusLabel: live?.statusLabel || cat.behaviorLabel || "自由活动",
         targetLabel: live?.targetLabel || "",
-        message: live?.message || cat.agent?.voiceLine || cat.agent?.routine || "正在按自己的节奏观察房间。",
+        message: live?.message || cat.agent?.voiceLine || cat.agent?.routine || "正在按自己的步子逛房间。",
         kind: live?.kind || "",
         sourceDate: live?.sourceDate || "",
         reviewDue: Boolean(live?.reviewDue),
@@ -925,17 +926,17 @@ const catAgentDiaries = computed(() =>
         personaLabel: cat.personality || agent.personaLabel || "学习陪伴型",
         dailyWish: agent.dailyWish || dailyGoal.message || "",
         voiceLine: agent.voiceLine || "",
-        playStyleLabel: agent.playStyleLabel || "玩耍节奏稳定",
+        playStyleLabel: agent.playStyleLabel || "玩耍习惯不变",
         socialStyleLabel: agent.socialStyleLabel || "陪伴需求稳定",
         socialCompanionLabel,
         socialRecentLabel,
         carePreferenceLabel: traits.label || agent.carePreferenceLabel || "",
         sleepLabel: traits.nightOwl ? `夜猫子 · ${sleepStart}-${sleepEnd}` : `${sleepStart}-${sleepEnd}`,
-        routineLabel: traits.routine || agent.routine || "观察房间里的学习节奏",
+        routineLabel: traits.routine || agent.routine || "看看你今天学了什么",
         goalLabel: dailyGoal.label || "自由散步",
         goalMessage: dailyGoal.message || "",
         careTip: agent.careTip || "",
-        needLabel: cat.needLabel || "状态稳定",
+        needLabel: cat.needLabel || "现在很舒服",
         needActionLabel: cat.needActionLabel || "自由活动",
         needMessage: cat.needMessage || "",
         needStatus: cat.needStatus || "calm",
@@ -1005,7 +1006,7 @@ const selectedCatMemoryReviewState = computed(() => {
     reviewedSourceLabel: formatCatWorldLearningMemoryDate(reviewedSourceDate),
     settled,
     reviewDue: Boolean(day.reviewDue),
-    reviewStageLabel: String(day.reviewStageLabel || "主动回想"),
+    reviewStageLabel: String(day.reviewStageLabel || "自己想一想"),
     nextReviewLabel: formatCatWorldLearningMemoryDate(day.nextReviewDate),
     recalledWord: String(day.latestRecallWord || ""),
     recalledSentence: String(day.latestRecallSentence || ""),
@@ -1090,9 +1091,10 @@ watch(
 
 function replacePayload(nextPayload) {
   if (nextPayload?.energy && nextPayload?.state) {
-    payload.value = nextPayload;
+    const friendlyPayload = friendlyCatWorldData(nextPayload);
+    payload.value = friendlyPayload;
     playTimeSyncedAt.value = Date.now();
-    announceSceneMoves(nextPayload);
+    announceSceneMoves(friendlyPayload);
   }
 }
 
@@ -1123,7 +1125,7 @@ function setPlayTime(nextPlayTime) {
   if (!nextPlayTime || typeof nextPlayTime !== "object") return;
   payload.value = {
     ...payload.value,
-    playTime: nextPlayTime,
+    playTime: friendlyCatWorldData(nextPlayTime),
   };
   playTimeSyncedAt.value = Date.now();
 }
@@ -1308,7 +1310,7 @@ async function handleRoomToyDrop(itemId, nextLayout, interaction = {}) {
   selectedDecorId.value = itemId;
   layoutDraft.value = normalizeLayoutDraft(nextLayout);
   savingRoomLayout.value = true;
-  notice.value = interaction.message || "玩具已放下，正在保存位置。";
+  notice.value = friendlyCatWorldText(interaction.message || "玩具已放下，正在保存位置。");
   try {
     const nextPayload = await fetchJson(routeApiPaths.catWorldRoomLayout(), {
       method: "POST",
@@ -1317,7 +1319,7 @@ async function handleRoomToyDrop(itemId, nextLayout, interaction = {}) {
     });
     replacePayload(nextPayload);
     layoutDirty.value = false;
-    notice.value = interaction.message || "玩具位置已保存。";
+    notice.value = friendlyCatWorldText(interaction.message || "玩具位置已保存。");
   } catch (error) {
     layoutDirty.value = true;
     notice.value = error.message || "玩具已经放下，但位置保存失败，请点击保存重试。";
@@ -1437,7 +1439,7 @@ async function saveCatMemoryReview(catId, sourceDate) {
       }),
     });
     replacePayload(result);
-    notice.value = result.effect?.message || "这次主动回想已经留进共同学习手册。";
+    notice.value = result.effect?.message || "这次自己想出的词和句子已经写进共同学习手册。";
     if (`${catMemoryReview.value.catId}:${catMemoryReview.value.sourceDate}` === reviewToken) {
       resetCatMemoryReview();
     }
@@ -1446,7 +1448,7 @@ async function saveCatMemoryReview(catId, sourceDate) {
     catMemoryReview.value = {
       ...catMemoryReview.value,
       busy: false,
-      error: error.message || "回想记录保存失败，请稍后再试。",
+      error: error.message || "这次记录没有保存好，请稍后再试。",
     };
   }
 }
@@ -1584,7 +1586,7 @@ function handleDecorClick(decorId, interaction = null) {
   }
   focusRoomItem(decorId);
   if (!roomEditMode.value && interaction?.handled) {
-    notice.value = interaction.message || `${item?.label || "道具"} 已互动。`;
+    notice.value = friendlyCatWorldText(interaction.message || `${item?.label || "道具"} 已互动。`);
     return;
   }
   if (!roomEditMode.value) {
@@ -1614,7 +1616,7 @@ function handleRoomToyClick(itemId, interaction = null) {
       return;
     }
     if (!roomEditMode.value && interaction?.handled) {
-      notice.value = interaction.message || `${item.label} 已互动。`;
+      notice.value = friendlyCatWorldText(interaction.message || `${item.label} 已互动。`);
       return;
     }
     if (item.category === "food" && activeFood.value.active && activeFood.value.itemId === item.id) {
@@ -1657,7 +1659,7 @@ function recordCatAmbientEvent(cat, event = {}) {
       showCatReaction(cat, nextPayload.event.message);
     }
     if (event.kind === "cat-social" && nextPayload?.recorded && nextPayload?.event?.message) {
-      notice.value = nextPayload.event.message;
+      notice.value = friendlyCatWorldText(nextPayload.event.message);
     }
   }).catch(() => {
     ambientEventCooldowns.delete(key);
@@ -1837,7 +1839,7 @@ function setRepairMode(enabled) {
   repairMode.value = nextEnabled;
   toolCursorVisible.value = false;
   selectedDecorId.value = "";
-  notice.value = nextEnabled ? "维修模式已开启。" : "已收起维修锤。";
+  notice.value = nextEnabled ? "已经拿好维修锤，请点击坏掉的家具。" : "已收起维修锤。";
 }
 
 function setScoopMode(enabled) {
@@ -1863,7 +1865,7 @@ function setScoopMode(enabled) {
   toolCursorVisible.value = false;
   selectedDecorId.value = "";
   notice.value = nextEnabled
-    ? "铲屎模式已开启，请点击房间里冒烟的猫屎。"
+    ? "已经拿好铲子，请点击房间里冒烟的猫屎。"
     : "已收起铲子。";
 }
 
@@ -1984,7 +1986,7 @@ async function moveOwnedItem(item, locationId) {
         window.clearTimeout(storedItemUndoTimer);
         lastStoredItem.value = null;
       }
-      notice.value = `${effect.label || item.label} 已放到${effect.locationLabel || currentScene.value.label}，${effect.restoredPosition ? "回到了上次摆放的位置。" : "进入编辑模式后可以继续调整位置。"}`;
+      notice.value = `${effect.label || item.label} 已放到${effect.locationLabel || currentScene.value.label}，${effect.restoredPosition ? "回到了上次摆放的位置。" : "点击“编辑物品”后可以继续调整位置。"}`;
     }
   } catch (error) {
     notice.value = error.message || "物品位置保存失败，请稍后再试。";
@@ -2051,7 +2053,7 @@ function handleOwnedToolClick(item) {
     selectedDecorId.value = item.id;
     notice.value = roomEditMode.value
       ? `${item.label} 可以在左侧房间拖动保存。`
-      : `${item.label} 正常模式下点击会和猫咪互动；点击“编辑物品”后可以拖动。`;
+      : `平时点击${item.label}可以和猫咪互动；点击“编辑物品”后可以拖动。`;
     return;
   }
   if (item.category === "food") {
@@ -2084,7 +2086,7 @@ async function saveRoomLayout() {
   if (!layoutDirty.value) {
     roomEditMode.value = false;
     selectedDecorId.value = "";
-    notice.value = "已退出编辑模式，猫咪回到活动室。";
+    notice.value = "物品编辑完成，猫咪回到活动室。";
     return true;
   }
   savingRoomLayout.value = true;
@@ -2201,7 +2203,7 @@ function startRoomEditMode() {
   catReaction.value = "";
   catReactionAnchored.value = false;
   window.clearTimeout(catReactionTimer);
-  notice.value = "已进入编辑模式，猫咪先躲到旁边；现在可以拖动家具和玩具，保存后猫咪会回来。";
+  notice.value = "猫咪先躲到旁边啦。现在可以拖动家具和玩具，保存后猫咪会回来。";
 }
 
 function handleRoomEditButton() {
@@ -2371,7 +2373,7 @@ function showCatReaction(cat = selectedCat.value, message = "", options = {}) {
   if (roomEditMode.value) return;
   const catLabel = cat?.displayLabel || cat?.nickname || cat?.label || "猫咪";
   const nextIndex = catPetSequence.value % catReactionTexts.length;
-  const reactionMessage = message || catReactionTexts[nextIndex];
+  const reactionMessage = friendlyCatWorldText(message || catReactionTexts[nextIndex]);
   activeRoomPanel.value = "cat";
   focusedCatId.value = cat?.id || "";
   catReaction.value = `${catLabel}: ${reactionMessage}`;
@@ -2828,7 +2830,7 @@ async function selectCat(catOrId, options = {}) {
     </span>
     <section class="cat-world-hero">
       <div class="cat-world-copy">
-        <p class="section-kicker">Cat World</p>
+        <p class="section-kicker">猫咪世界</p>
         <h1>猫咪能量世界</h1>
         <p>把今天练过的英文变成软绵绵的能量，给猫咪买小鱼干、玩具和漂亮家具，把她的房间一点点装可爱。</p>
       </div>
@@ -2885,7 +2887,7 @@ async function selectCat(catOrId, options = {}) {
           </figure>
         </button>
         <div>
-          <p class="section-kicker">Cat Quest</p>
+          <p class="section-kicker">今日小任务</p>
           <h2 id="cat-world-learning-route-title">{{ learningRoute.title }}</h2>
           <div class="cat-world-learning-coach-row">
             <p class="cat-world-learning-coach-line">{{ learningRoute.coachLine }}</p>
@@ -2914,11 +2916,11 @@ async function selectCat(catOrId, options = {}) {
           <div
             :class="['cat-world-learning-pace', `tone-${learningRoute.pace.key}`]"
             role="note"
-            :aria-label="`今日节奏：${learningRoute.pace.label}，${learningRoute.pace.detail}`"
+            :aria-label="`今天安排：${learningRoute.pace.label}，${learningRoute.pace.detail}`"
           >
             <ClockIcon :size="14" :stroke-width="2.8" aria-hidden="true" />
             <span>
-              <small>今日节奏</small>
+              <small>今天安排</small>
               <strong>{{ learningRoute.pace.label }}</strong>
             </span>
             <p>{{ learningRoute.pace.detail }}</p>
@@ -2991,13 +2993,13 @@ async function selectCat(catOrId, options = {}) {
             aria-controls="cat-world-learning-route-details"
             @click="learningRouteExpanded = !learningRouteExpanded"
           >
-            <span>{{ learningRouteExpanded ? "收起" : "展开路线" }}</span>
+            <span>{{ learningRouteExpanded ? "收起" : "展开计划" }}</span>
             <ChevronDown :size="17" :stroke-width="3" aria-hidden="true" />
           </button>
           <span
             class="cat-world-learning-rhythm-badge"
             :title="learningWeekRhythm.detail"
-            :aria-label="`最近七天学习节奏：${learningWeekRhythm.activeDays}/${learningWeekRhythm.activeTarget} 天有学习触点`"
+            :aria-label="`最近七天：${learningWeekRhythm.activeDays}/${learningWeekRhythm.activeTarget} 天有学习`"
           >
             <PawPrintIcon :size="15" :stroke-width="2.8" aria-hidden="true" />
             7日 {{ learningWeekRhythm.activeDays }}/{{ learningWeekRhythm.activeTarget }}
@@ -3018,7 +3020,7 @@ async function selectCat(catOrId, options = {}) {
         <p>{{ learningRoute.ritual.cue }}</p>
         <small>{{ learningRoute.guideName }}偏爱在{{ learningRoute.ritual.destinationLabel }}陪你</small>
       </aside>
-      <ol class="cat-world-learning-steps" aria-label="今日英语学习路线">
+      <ol class="cat-world-learning-steps" aria-label="今天的英语学习计划">
         <li
           v-for="(step, index) in learningRoute.steps"
           :key="step.key"
@@ -3029,7 +3031,7 @@ async function selectCat(catOrId, options = {}) {
             <PawPrintIcon v-else :size="17" :stroke-width="2.8" />
           </span>
           <div>
-            <small>STEP 0{{ index + 1 }}</small>
+            <small>第 {{ index + 1 }} 步</small>
             <strong>{{ step.label }}</strong>
             <p>{{ step.detail }}</p>
           </div>
@@ -3049,7 +3051,7 @@ async function selectCat(catOrId, options = {}) {
       >
         <header class="cat-world-learning-week-summary">
           <div>
-            <small>WEEKLY RHYTHM</small>
+            <small>最近七天</small>
             <strong id="cat-world-learning-week-title">最近七天陪学足迹</strong>
           </div>
           <button
@@ -3078,12 +3080,12 @@ async function selectCat(catOrId, options = {}) {
             :aria-label="`${learningWeekRhythm.statusLabel}：${learningWeekRhythm.detail}`"
           >
             <p>
-              <span><PawPrintIcon :size="12" :stroke-width="2.8" aria-hidden="true" />学习触点</span>
+              <span><PawPrintIcon :size="12" :stroke-width="2.8" aria-hidden="true" />有学习</span>
               <i aria-hidden="true"><i :style="{ width: `${learningWeekRhythm.activePercent}%` }"></i></i>
               <strong>{{ learningWeekRhythm.activeDays }}/{{ learningWeekRhythm.activeTarget }} 天</strong>
             </p>
             <p>
-              <span><CheckIcon :size="12" :stroke-width="3" aria-hidden="true" />完整闭环</span>
+              <span><CheckIcon :size="12" :stroke-width="3" aria-hidden="true" />两项都做</span>
               <i aria-hidden="true"><i :style="{ width: `${learningWeekRhythm.loopPercent}%` }"></i></i>
               <strong>{{ learningWeekRhythm.loopDays }}/{{ learningWeekRhythm.loopTarget }} 天</strong>
             </p>
@@ -3139,8 +3141,8 @@ async function selectCat(catOrId, options = {}) {
           </span>
           <div class="cat-world-play-lock-copy">
             <span>
-              <p class="section-kicker">Observation Mode</p>
-              <h2 id="cat-world-play-lock-title">观察模式</h2>
+              <p class="section-kicker">看猫模式</p>
+              <h2 id="cat-world-play-lock-title">今天先看看猫咪</h2>
             </span>
             <p>猫咪仍会照常生活；完成学习任务后即可抱猫、喂食和玩耍。</p>
           </div>
@@ -3161,7 +3163,7 @@ async function selectCat(catOrId, options = {}) {
       <div
         class="cat-world-play-content"
         :inert="playTimeLocked ? '' : null"
-        :aria-label="playTimeLocked ? '猫咪世界观察模式，互动暂时锁定' : null"
+        :aria-label="playTimeLocked ? '现在可以看猫咪，暂时不能互动' : null"
       >
       <div v-if="notice" class="cat-world-notice" aria-live="polite">
         <span>{{ notice }}</span>
@@ -3235,7 +3237,7 @@ async function selectCat(catOrId, options = {}) {
           <div class="cat-world-scene-dock-label">
             <MapPinIcon :size="20" :stroke-width="2.8" aria-hidden="true" />
             <span>
-              <small>World Map</small>
+              <small>房间地图</small>
               <strong>场景地图</strong>
             </span>
           </div>
@@ -3300,7 +3302,7 @@ async function selectCat(catOrId, options = {}) {
       <section class="cat-world-room-panel panel">
         <div class="cat-world-room-head">
           <div>
-            <p class="section-kicker">{{ currentScene.englishName || "Room" }}</p>
+            <p class="section-kicker">当前房间</p>
             <h2>{{ currentScene.label || "像素猫活动室" }}</h2>
             <p v-if="currentSceneAttractionText" class="cat-world-room-attraction" :title="sceneAttractionSummary(currentScene, 8)">
               <HeartIcon :size="14" :stroke-width="3" aria-hidden="true" />
@@ -3351,7 +3353,7 @@ async function selectCat(catOrId, options = {}) {
           aria-label="房间猫咪实时动向"
         >
           <header>
-            <span><PawPrintIcon :size="14" :stroke-width="3" aria-hidden="true" />Room Pulse</span>
+            <span><PawPrintIcon :size="14" :stroke-width="3" aria-hidden="true" />猫咪正在做</span>
             <strong>猫咪此刻在做什么</strong>
           </header>
           <div class="cat-world-room-live-list">
@@ -3422,13 +3424,13 @@ async function selectCat(catOrId, options = {}) {
             <CatWorldProductIcon :item="toolIconItems.scoop" compact aria-hidden="true" />
           </span>
           <div v-if="repairMode" class="cat-world-repair-mode" role="status">
-            <span><HammerIcon :size="18" :stroke-width="3" aria-hidden="true" />维修模式</span>
+            <span><HammerIcon :size="18" :stroke-width="3" aria-hidden="true" />拿着维修锤</span>
             <button type="button" title="收起维修锤" aria-label="收起维修锤" @click="setRepairMode(false)">
               <XIcon :size="17" :stroke-width="3" aria-hidden="true" />
             </button>
           </div>
           <div v-if="scoopMode" class="cat-world-repair-mode cat-world-scoop-mode" role="status">
-            <span><ShovelIcon :size="18" :stroke-width="3" aria-hidden="true" />铲屎模式</span>
+            <span><ShovelIcon :size="18" :stroke-width="3" aria-hidden="true" />拿着铲子</span>
             <button type="button" title="收起铲子" aria-label="收起铲子" @click="setScoopMode(false)">
               <XIcon :size="17" :stroke-width="3" aria-hidden="true" />
             </button>
@@ -3544,7 +3546,7 @@ async function selectCat(catOrId, options = {}) {
               @click="setRoomPanel('room')"
             >
               <HouseIcon :size="18" :stroke-width="2.8" aria-hidden="true" />
-              <span><strong>房间</strong><small>{{ hygiene.count ? `${hygiene.count} 处待清理` : "状态正常" }}</small></span>
+              <span><strong>房间</strong><small>{{ hygiene.count ? `${hygiene.count} 处待清理` : "一切正常" }}</small></span>
             </button>
           </nav>
 
@@ -3575,7 +3577,7 @@ async function selectCat(catOrId, options = {}) {
                 </i>
               </figure>
               <div>
-                <p class="section-kicker">Current Cat</p>
+                <p class="section-kicker">当前猫咪</p>
                 <h2>{{ focusedCat.displayLabel || focusedCat.label || "暂无猫咪" }}</h2>
                 <small>{{ focusedCat.breedLabel || "等待伙伴" }} · {{ focusedCat.currentSceneLabel || currentScene.label }}</small>
               </div>
@@ -3603,7 +3605,7 @@ async function selectCat(catOrId, options = {}) {
             </div>
             <p class="cat-world-context-thought">{{ focusedCatThought }}</p>
             <p v-if="focusedCat.actionRhythm?.label" class="cat-world-context-rhythm">
-              <span>行动节奏</span>
+              <span>活动习惯</span>
               <strong>{{ focusedCat.actionRhythm.label }}</strong>
               <em>{{ focusedCat.actionRhythm.description }}</em>
             </p>
@@ -3622,10 +3624,10 @@ async function selectCat(catOrId, options = {}) {
                 @click="catOsExpanded = !catOsExpanded"
               >
                 <span>
-                  <small>CAT-OS</small>
+                  <small>猫咪小日记</small>
                   <strong>今日动态</strong>
                 </span>
-                <em>{{ focusedAgentEvents.length ? `${focusedAgentEvents.length} 条记录` : "状态稳定" }}</em>
+                <em>{{ focusedAgentEvents.length ? `${focusedAgentEvents.length} 条记录` : "今天很平静" }}</em>
                 <ChevronDown :size="18" :stroke-width="2.8" aria-hidden="true" />
               </button>
               <div
@@ -3650,7 +3652,7 @@ async function selectCat(catOrId, options = {}) {
             <section class="cat-world-profile-dock" aria-labelledby="cat-world-profile-dock-title">
               <div class="cat-world-profile-dock-head">
                 <div>
-                  <p class="section-kicker">Agent Diary</p>
+                  <p class="section-kicker">猫咪档案</p>
                   <h3 id="cat-world-profile-dock-title">选择猫咪档案</h3>
                 </div>
                 <span>{{ catAgentDiaries.length }} 只</span>
@@ -3686,7 +3688,7 @@ async function selectCat(catOrId, options = {}) {
           >
             <div class="cat-world-owned-head">
               <div>
-                <p class="section-kicker">Bag</p>
+                <p class="section-kicker">我的东西</p>
                 <h2>已拥有道具</h2>
               </div>
               <span>{{ activeToolItems.length }} 个</span>
@@ -3788,7 +3790,7 @@ async function selectCat(catOrId, options = {}) {
           >
             <div class="cat-world-owned-head">
               <div>
-                <p class="section-kicker">Room Status</p>
+                <p class="section-kicker">房间情况</p>
                 <h2>{{ currentScene.label }}</h2>
               </div>
               <span>{{ roomCats.length }} 只</span>
@@ -3833,7 +3835,7 @@ async function selectCat(catOrId, options = {}) {
       >
         <header class="cat-world-profile-modal-head">
           <div>
-            <p class="section-kicker">Agent Diary</p>
+            <p class="section-kicker">猫咪档案</p>
             <h2 id="cat-world-profile-modal-title">{{ activeCatDiary.displayLabel || activeCatDiary.label }}的今日档案</h2>
           </div>
           <button
@@ -3884,7 +3886,7 @@ async function selectCat(catOrId, options = {}) {
         >
           <div class="cat-world-learning-scrapbook-head">
             <span>
-              <small>Learning Scrapbook</small>
+              <small>共同学习手册</small>
               <strong>共同学习手册</strong>
             </span>
             <em>{{ activeCatDiary.learningMemory.memoryPoints }} 记忆点</em>
@@ -3933,7 +3935,7 @@ async function selectCat(catOrId, options = {}) {
                 <CheckIcon :size="11" :stroke-width="3" aria-hidden="true" />已经稳固
               </small>
               <small v-else-if="day.reviewCount" class="waiting">
-                {{ day.reviewProgressLabel }} · 等待巩固
+                {{ day.reviewProgressLabel }} · 以后再想
               </small>
             </button>
           </div>
@@ -3956,12 +3958,12 @@ async function selectCat(catOrId, options = {}) {
                   settled: selectedCatMemoryReviewState.settled,
                 },
               ]"
-              aria-label="30 秒主动回想"
+              aria-label="30 秒自己想一想"
             >
               <header>
                 <span>
                   <ClockIcon :size="15" :stroke-width="2.8" aria-hidden="true" />
-                  <span><small>Active Recall</small><strong>30 秒主动回想</strong></span>
+                  <span><small>先想再看</small><strong>30 秒自己想一想</strong></span>
                 </span>
                 <em v-if="selectedCatMemoryReviewState.reviewedToday">今日已完成</em>
                 <em v-else-if="selectedCatMemoryReviewState.busy">正在保存</em>
@@ -3969,30 +3971,30 @@ async function selectCat(catOrId, options = {}) {
                 <em v-else-if="selectedCatMemoryReviewState.active">剩余 {{ selectedCatMemoryReviewState.remainingSeconds }} 秒</em>
                 <em v-else-if="selectedCatMemoryReviewState.settled">两轮已稳固</em>
                 <em v-else-if="selectedCatMemoryReviewState.reviewDue">今日{{ selectedCatMemoryReviewState.reviewStageLabel }}</em>
-                <em v-else-if="selectedCatMemoryReviewState.nextReviewLabel">{{ selectedCatMemoryReviewState.nextReviewLabel }}再回想</em>
+                <em v-else-if="selectedCatMemoryReviewState.nextReviewLabel">{{ selectedCatMemoryReviewState.nextReviewLabel }}再想一想</em>
                 <em v-else>今天一次就好</em>
               </header>
               <p v-if="selectedCatMemoryReviewState.reviewedToday">
                 <template v-if="selectedCatMemoryReviewState.reviewedThisPage">
-                  这枚回想爪印已经留在今天：你重新找回了这一页的 1 个词和 1 句话。
+                  今天的复习爪印已经留下：你重新想起了这一页的 1 个词和 1 句话。
                 </template>
                 <template v-else>
-                  今天已经回想过 {{ selectedCatMemoryReviewState.reviewedSourceLabel || "另一页" }}，明天再翻新的一页。
+                  今天已经想过 {{ selectedCatMemoryReviewState.reviewedSourceLabel || "另一页" }}，明天再翻新的一页。
                 </template>
               </p>
               <p v-else-if="selectedCatMemoryReviewState.settled">
-                这页已经完成隔日回想和三日巩固。今天可以停在这里，也可以去留下新的英语足迹。
+                这页已经想过两次，记得更牢啦。今天可以停在这里，也可以去学一点新的英语。
               </p>
               <p v-else-if="selectedCatMemoryReviewState.reviewDue">
                 这页正好到了{{ selectedCatMemoryReviewState.reviewStageLabel }}：先不看答案，找回 1 个词和 1 句话。
               </p>
               <p v-else>
-                先不看答案，在心里找回这一天的 1 个词和 1 句话；还没到巩固日，想不完整也没关系。
+                先不看答案，在心里想起这一天的 1 个词和 1 句话；想不完整也没关系。
               </p>
               <div
                 v-if="(selectedCatMemoryReviewState.reviewedThisPage || selectedCatMemoryReviewState.settled) && selectedCatMemoryReviewState.recalledWord"
                 class="cat-world-memory-recall-result"
-                aria-label="最近一次主动回想"
+                aria-label="最近一次自己想出的内容"
               >
                 <span><small>找回的词</small><strong>{{ selectedCatMemoryReviewState.recalledWord }}</strong></span>
                 <p>{{ selectedCatMemoryReviewState.recalledSentence }}</p>
@@ -4039,7 +4041,7 @@ async function selectCat(catOrId, options = {}) {
                 :aria-valuenow="selectedCatMemoryReviewState.progressPercent"
                 aria-valuemin="0"
                 aria-valuemax="100"
-                :aria-label="selectedCatMemoryReviewState.reviewedToday ? '今日主动回想已完成' : `主动回想已完成 ${selectedCatMemoryReviewState.progressPercent}%`"
+                :aria-label="selectedCatMemoryReviewState.reviewedToday ? '今天已经想过一次' : `已经完成 ${selectedCatMemoryReviewState.progressPercent}%`"
               >
                 <i :style="{ width: `${selectedCatMemoryReviewState.progressPercent}%` }"></i>
               </i>
@@ -4050,12 +4052,12 @@ async function selectCat(catOrId, options = {}) {
               >
                 <CheckIcon v-if="selectedCatMemoryReviewState.reviewedToday || selectedCatMemoryReviewState.settled || selectedCatMemoryReviewState.draftReady" :size="13" :stroke-width="3" aria-hidden="true" />
                 <ClockIcon v-else :size="13" :stroke-width="2.8" aria-hidden="true" />
-                <template v-if="selectedCatMemoryReviewState.reviewedToday">今日回想已完成</template>
-                <template v-else-if="selectedCatMemoryReviewState.settled">这页已经稳固</template>
-                <template v-else-if="selectedCatMemoryReviewState.busy">正在保存回想</template>
-                <template v-else-if="selectedCatMemoryReviewState.active && selectedCatMemoryReviewState.draftReady">保存这次回想</template>
+                <template v-if="selectedCatMemoryReviewState.reviewedToday">今天已经想过一次</template>
+                <template v-else-if="selectedCatMemoryReviewState.settled">这页已经记牢了</template>
+                <template v-else-if="selectedCatMemoryReviewState.busy">正在保存</template>
+                <template v-else-if="selectedCatMemoryReviewState.active && selectedCatMemoryReviewState.draftReady">保存这次答案</template>
                 <template v-else-if="selectedCatMemoryReviewState.active">先写下 1 词 1 句</template>
-                <template v-else>开始 30 秒回想</template>
+                <template v-else>开始想 30 秒</template>
               </button>
               <small v-if="selectedCatMemoryReviewState.error" class="cat-world-memory-review-error">
                 {{ selectedCatMemoryReviewState.error }}
@@ -4081,7 +4083,7 @@ async function selectCat(catOrId, options = {}) {
             <header>
               <span>
                 <BookMarkedIcon :size="16" :stroke-width="2.8" aria-hidden="true" />
-                <span><small>Word Treasures</small><strong>猫咪珍藏词</strong></span>
+                <span><small>记住的词</small><strong>猫咪珍藏词</strong></span>
               </span>
               <em>{{ activeCatDiary.learningMemory.recallTreasureCount }} 个珍藏词</em>
             </header>
@@ -4095,7 +4097,7 @@ async function selectCat(catOrId, options = {}) {
                 @click="selectCatRecallTreasure(treasure)"
               >
                 <strong>{{ treasure.word }}</strong>
-                <small>回想 {{ treasure.reviewCount }} 次</small>
+                <small>想起 {{ treasure.reviewCount }} 次</small>
               </button>
             </div>
             <div
@@ -4123,7 +4125,7 @@ async function selectCat(catOrId, options = {}) {
             <em>{{ catWorldLearningMemoryNextLine(activeCatDiary.learningMemory) }}</em>
           </div>
         </section>
-        <div class="cat-world-agent-meter-row" aria-label="猫咪 agent 参数">
+        <div class="cat-world-agent-meter-row" aria-label="猫咪个性特点">
           <span class="cat-world-agent-meter energy">体力<i><b :style="{ width: `${activeCatDiary.energyScore}%` }"></b></i></span>
           <span class="cat-world-agent-meter mood">心情<i><b :style="{ width: `${activeCatDiary.moodScore}%` }"></b></i></span>
           <span class="cat-world-agent-meter trust">信任<i><b :style="{ width: `${activeCatDiary.bondScore}%` }"></b></i></span>
@@ -4142,7 +4144,7 @@ async function selectCat(catOrId, options = {}) {
         </div>
         <div v-if="activeCatDiary.needsBath" class="cat-world-bath-action">
           <div>
-            <strong>毛发状态：{{ activeCatDiary.hygieneStatusLabel }}</strong>
+            <strong>毛发情况：{{ activeCatDiary.hygieneStatusLabel }}</strong>
             <span>{{ activeCatDiary.bathScheduleLabel }}</span>
           </div>
           <button
@@ -4159,14 +4161,14 @@ async function selectCat(catOrId, options = {}) {
         <dl class="cat-world-agent-facts">
           <div><dt>个体档案</dt><dd>{{ activeCatDiary.genderLabel }} · {{ activeCatDiary.patternLabel }} · {{ activeCatDiary.featureLabel }}</dd></div>
           <div><dt>个人小习惯</dt><dd>{{ activeCatDiary.individualHabit?.label || "还在慢慢观察" }}</dd></div>
-          <div><dt>行动节奏</dt><dd>{{ activeCatDiary.actionRhythm?.label || "按状态决定" }} · {{ activeCatDiary.actionRhythm?.description || "会根据体力、心情和需求安排活动" }}</dd></div>
+          <div><dt>活动习惯</dt><dd>{{ activeCatDiary.actionRhythm?.label || "看心情决定" }} · {{ activeCatDiary.actionRhythm?.description || "会看体力和心情安排活动" }}</dd></div>
           <div><dt>今日步态</dt><dd>{{ activeCatDiary.gait?.label || "自在散步" }} · 会留下短暂的像素爪印</dd></div>
-          <div><dt>陪学专长</dt><dd>{{ activeCatDiary.learningStyle?.label || "平衡陪学搭档" }} · {{ activeCatDiary.learningStyle?.focusLabel || "少量输入再表达" }}</dd></div>
+          <div><dt>陪学专长</dt><dd>{{ activeCatDiary.learningStyle?.label || "平衡陪学搭档" }} · {{ activeCatDiary.learningStyle?.focusLabel || "先练一点，再说写一次" }}</dd></div>
           <div><dt>陪学记忆</dt><dd>{{ catWorldLearningMemoryLine(activeCatDiary.learningMemory) }} · {{ catWorldLearningMemoryNextLine(activeCatDiary.learningMemory) }}</dd></div>
           <div><dt>作息</dt><dd>{{ activeCatDiary.sleepLabel }}</dd></div>
           <div><dt>消耗</dt><dd>{{ activeCatDiary.decayLabel }}</dd></div>
           <div><dt>亲密</dt><dd>{{ activeCatDiary.bondLabel }} · {{ activeCatDiary.bondDetailLabel }}</dd></div>
-          <div><dt>今日参数</dt><dd>{{ activeCatDiary.personaLabel }} · {{ activeCatDiary.dailyProfileLabel || "状态稳定" }}</dd></div>
+          <div><dt>今天的样子</dt><dd>{{ activeCatDiary.personaLabel }} · {{ activeCatDiary.dailyProfileLabel || "心情平稳" }}</dd></div>
           <div><dt>今日愿望</dt><dd>{{ activeCatDiary.dailyWish || "想安静陪你学习" }}</dd></div>
           <div><dt>相处方式</dt><dd>{{ activeCatDiary.socialStyleLabel }}</dd></div>
           <div><dt>猫咪伙伴</dt><dd>{{ activeCatDiary.socialCompanionLabel }}</dd></div>
@@ -4206,7 +4208,7 @@ async function selectCat(catOrId, options = {}) {
     >
       <div class="cat-world-market-head">
         <div>
-          <p class="section-kicker">Shop</p>
+          <p class="section-kicker">猫咪商店</p>
           <h2>猫咪商店</h2>
         </div>
         <div class="cat-world-tabs" role="tablist" aria-label="商店分类">
@@ -4314,7 +4316,7 @@ async function selectCat(catOrId, options = {}) {
     >
       <header class="cat-world-handbook-head">
         <div>
-          <p class="section-kicker">Collection</p>
+          <p class="section-kicker">猫咪图鉴</p>
           <h2 id="cat-collection-title">猫咪收集手册</h2>
         </div>
         <div class="cat-world-handbook-actions">
@@ -4427,7 +4429,7 @@ async function selectCat(catOrId, options = {}) {
     >
       <header class="cat-world-handbook-head">
         <div>
-          <p class="section-kicker">Food Guide</p>
+          <p class="section-kicker">食物手册</p>
           <h2 id="cat-food-handbook-title">猫咪食物手册</h2>
         </div>
         <div class="cat-world-handbook-actions">
@@ -4462,7 +4464,7 @@ async function selectCat(catOrId, options = {}) {
     >
       <div class="cat-world-market-head">
         <div>
-          <p class="section-kicker">Cats</p>
+          <p class="section-kicker">我的猫咪</p>
           <h2>我的猫咪</h2>
         </div>
       </div>
@@ -4519,7 +4521,7 @@ async function selectCat(catOrId, options = {}) {
               <em>{{ cat.individualHabit.label }}</em>
             </p>
             <p v-if="cat.actionRhythm?.label" class="cat-world-cat-action-rhythm">
-              <b>行动节奏</b>
+              <b>活动习惯</b>
               <em>{{ cat.actionRhythm.label }}</em>
             </p>
             <p v-if="cat.favoriteItemLabels?.length" class="cat-world-cat-individual-preference">
@@ -4540,7 +4542,7 @@ async function selectCat(catOrId, options = {}) {
               :title="catWorldLearningMemoryNextLine(cat.learningMemory)"
             >
               <b>陪学记忆</b>
-              <em>{{ cat.learningMemory.levelLabel }} · {{ cat.learningMemory.companionDays }} 天 / {{ cat.learningMemory.loopDays }} 闭环<span v-if="cat.learningMemory.recallTreasureCount"> · 珍藏 {{ cat.learningMemory.recallTreasureCount }} 词</span></em>
+              <em>{{ cat.learningMemory.levelLabel }} · 陪学 {{ cat.learningMemory.companionDays }} 天 / {{ cat.learningMemory.loopDays }} 天两项都做<span v-if="cat.learningMemory.recallTreasureCount"> · 珍藏 {{ cat.learningMemory.recallTreasureCount }} 词</span></em>
             </p>
             <p class="cat-world-cat-card-location">
               <b><MapPinIcon :size="14" :stroke-width="2.6" aria-hidden="true" />{{ cat.currentSceneLabel }}</b>
@@ -4551,7 +4553,7 @@ async function selectCat(catOrId, options = {}) {
               <em>{{ cat.behaviorLabel }}</em>
             </p>
             <p class="cat-world-cat-agent-need">
-              <b>{{ cat.needLabel || "状态稳定" }}</b>
+              <b>{{ cat.needLabel || "现在很舒服" }}</b>
               <em>{{ cat.needActionLabel || "自由活动" }}</em>
             </p>
             <div class="cat-world-cat-agent-bars" aria-label="猫咪状态">
@@ -4572,7 +4574,7 @@ async function selectCat(catOrId, options = {}) {
       <section class="cat-world-rename-modal panel" role="dialog" aria-modal="true" aria-labelledby="cat-world-rename-title">
         <header>
           <div>
-            <p class="section-kicker">Rename Card</p>
+            <p class="section-kicker">改名卡</p>
             <h2 id="cat-world-rename-title">给猫咪改名</h2>
           </div>
           <button class="secondary-button compact-button" type="button" aria-label="关闭" :disabled="renameBusy" @click="closeRenameModal">
@@ -4605,7 +4607,7 @@ async function selectCat(catOrId, options = {}) {
             @keydown.enter.prevent="submitCatRename"
           />
         </label>
-        <p>本次会消耗 1 张改名卡；品种、个性、花纹和成长状态不会改变。</p>
+        <p>本次会用掉 1 张改名卡；品种、个性、花纹和成长记录都不会改变。</p>
         <div class="cat-world-modal-actions">
           <button class="secondary-button" type="button" :disabled="renameBusy" @click="closeRenameModal">取消</button>
           <button class="primary-action-button" type="button" :disabled="renameBusy || !renameDraft.trim()" @click="submitCatRename">
@@ -4619,7 +4621,7 @@ async function selectCat(catOrId, options = {}) {
       <section class="cat-world-scene-purchase-modal panel" role="dialog" aria-modal="true" aria-labelledby="cat-world-scene-purchase-title">
         <header>
           <div>
-            <p class="section-kicker">New Scene</p>
+            <p class="section-kicker">新房间</p>
             <h2 id="cat-world-scene-purchase-title">解锁{{ scenePurchaseTarget.label }}</h2>
           </div>
           <button class="secondary-button compact-button" type="button" aria-label="关闭" @click="scenePurchaseTarget = null">
@@ -4669,9 +4671,9 @@ async function selectCat(catOrId, options = {}) {
       <section class="cat-world-energy-modal panel" role="dialog" aria-modal="true" aria-labelledby="cat-world-energy-title">
         <header>
           <div>
-            <p class="section-kicker">Energy</p>
-            <h2 id="cat-world-energy-title">学习产能</h2>
-            <p>这里只显示今天获得的能量，并用额外奖励鼓励少量开始、输入输出结合和稳定的七日节奏。</p>
+            <p class="section-kicker">能量账本</p>
+            <h2 id="cat-world-energy-title">今天的学习能量</h2>
+            <p>这里只显示今天得到的能量。每天练一点单词，再写一写或说一说英语，就能得到更多奖励。</p>
           </div>
           <button class="secondary-button compact-button" type="button" @click="energyModalOpen = false">关闭</button>
         </header>
@@ -4686,12 +4688,12 @@ async function selectCat(catOrId, options = {}) {
             <SproutIcon :size="22" :stroke-width="2.8" />
           </figure>
           <div>
-            <small>WORD GARDEN</small>
+            <small>单词小花园</small>
             <strong>单词芽 · {{ learningRoute.garden.stageLabel }}</strong>
             <p>
               {{ learningRoute.garden.activeDays }} 天有效开始 ·
-              {{ learningRoute.garden.loopDays }} 天完成闭环 ·
-              最近七天 {{ learningWeekRhythm.activeDays }}/{{ learningWeekRhythm.activeTarget }} 天有学习触点
+              {{ learningRoute.garden.loopDays }} 天两项都做了 ·
+              最近七天 {{ learningWeekRhythm.activeDays }}/{{ learningWeekRhythm.activeTarget }} 天有学习
             </p>
           </div>
           <span v-if="learningRoute.garden.nextRemaining">
@@ -4706,7 +4708,7 @@ async function selectCat(catOrId, options = {}) {
             <small>{{ source.detail || `${source.value}${source.unit} x ${source.energyPerUnit}` }}</small>
           </div>
         </div>
-        <p v-else class="cat-world-energy-empty">今天还没有获取猫咪能量，先完成 20 个拼写词开始今天的学习节奏。</p>
+        <p v-else class="cat-world-energy-empty">今天还没有得到猫咪能量，先练 5 个拼写词，让今天轻轻开始。</p>
       </section>
     </div>
   </section>

@@ -8,7 +8,7 @@ function clamp(value, min, max) {
 
 const DEFAULT_MEMORY_STAGES = Object.freeze([
   Object.freeze({ key: "starter", label: "起步搭子", threshold: 1 }),
-  Object.freeze({ key: "familiar", label: "熟悉节奏", threshold: 4 }),
+  Object.freeze({ key: "familiar", label: "常来学习", threshold: 4 }),
   Object.freeze({ key: "steady", label: "稳定陪学", threshold: 10 }),
   Object.freeze({ key: "guardian", label: "英语守护猫", threshold: 24 }),
 ]);
@@ -118,8 +118,8 @@ const MEMORY_REFLECTION_COPY = Object.freeze({
     href: "/lists",
   }),
   warmup: Object.freeze({
-    achievement: "那天完成了 20 词热身，把英语状态叫醒了。",
-    reviewPrompt: "从那天的词里挑 1 个，遮住答案主动回想一次。",
+    achievement: "那天完成了 20 词热身，脑袋里的英语醒过来啦。",
+    reviewPrompt: "从那天的词里挑 1 个，遮住答案自己想一想。",
     actionLabel: "再练一组词",
     href: "/lists",
   }),
@@ -134,7 +134,7 @@ const MEMORY_REFLECTION_COPY = Object.freeze({
     reviewPrompt: "复用那天的 1 个旧词，写或说一句新的表达。",
   }),
   loop: Object.freeze({
-    achievement: "那天走完了输入、表达和回顾的完整英语闭环。",
+    achievement: "那天练了单词、用了英语，还把学过的内容想了一遍。",
     reviewPrompt: "先回想 1 个词和 1 句话，再决定今天还要不要继续。",
   }),
 });
@@ -142,11 +142,11 @@ const MEMORY_REFLECTION_COPY = Object.freeze({
 const MEMORY_REFLECTION_TONES = Object.freeze({
   calm: Object.freeze(["我把这页安静收好了。", "这页不用赶，我记得很稳。"]),
   clingy: Object.freeze(["那天我也一直贴在你旁边。", "这枚脚印是我们靠在一起留下的。"]),
-  guardian: Object.freeze(["这页成果我替你守得好好的。", "这次闭环我一直替你记着。"]),
+  guardian: Object.freeze(["这页成果我替你守得好好的。", "这次完整学习我一直替你记着。"]),
   chatty: Object.freeze(["我还记得那天英语响起来的样子。", "这页一翻开，我就想听你再说一次。"]),
   gentle: Object.freeze(["那天慢慢完成的样子很好。", "这页很轻，但每一步都算数。"]),
   adventurous: Object.freeze(["那天我们又探索出一小段新路。", "这页是一次很像样的小冒险。"]),
-  balanced: Object.freeze(["这页把认真走过的一步留住了。", "我记得这一天的学习节奏。"]),
+  balanced: Object.freeze(["这页把认真走过的一步留住了。", "我记得这一天你学过英语。"]),
 });
 
 function stableIndex(seed, size) {
@@ -345,7 +345,7 @@ function normalizeMemoryDay(day = {}) {
     milestones: Array.isArray(day.milestones) ? day.milestones.map(String) : [],
     reviewCount: safeCount(day.reviewCount),
     reviewStageKey,
-    reviewStageLabel: String(day.reviewStageLabel || (reviewStageKey === "settled" ? "已经稳固" : "隔日回想")),
+    reviewStageLabel: String(day.reviewStageLabel || (reviewStageKey === "settled" ? "已经记牢" : "隔天想一想")),
     reviewProgressLabel: String(day.reviewProgressLabel || `${Math.min(safeCount(day.reviewCount), 2)}/2`),
     reviewDue: Boolean(day.reviewDue),
     reviewedToday: Boolean(day.reviewedToday),
@@ -464,7 +464,7 @@ export function formatCatWorldLearningMemoryDate(value = "") {
 export function catWorldLearningMemoryLine(memory = {}) {
   const normalized = normalizeCatWorldLearningMemory(memory);
   if (!normalized.hasMemory) return "还没有一起留下学习记忆";
-  return `${normalized.levelLabel} · 陪学 ${normalized.companionDays} 天 · 闭环 ${normalized.loopDays} 次`;
+  return `${normalized.levelLabel} · 陪学 ${normalized.companionDays} 天 · 两项都做 ${normalized.loopDays} 次`;
 }
 
 export function catWorldLearningMemoryNextLine(memory = {}) {
@@ -477,7 +477,7 @@ export function catWorldLearningMemoryRoomCue(memory = {}, complete = false) {
   const normalized = normalizeCatWorldLearningMemory(memory);
   if (!normalized.hasMemory) return "这是我们第一次一起留下学习记忆。";
   if (complete && normalized.loopDays) {
-    return `我们已经一起完成 ${normalized.loopDays} 次英语闭环，这次也好好记住了。`;
+    return `我们已经有 ${normalized.loopDays} 天既练单词又用了英语，这次也好好记住了。`;
   }
   const treasureLine = normalized.recallTreasureCount
     ? `，手册里还珍藏着 ${normalized.recallTreasureCount} 个回想词`
@@ -521,7 +521,7 @@ export function catWorldLearningMemoryVisitPlan(cat = {}, behavior = {}, context
   const attention = Math.max(Math.min(Number(behavior.attention || 50), 100), 0);
   const visitDay = memoryVisitDay(memory) || {};
   const reviewStageLabel = reviewDue
-    ? memory.suggestedReviewStageLabel || visitDay.reviewStageLabel || "主动回想"
+    ? memory.suggestedReviewStageLabel || visitDay.reviewStageLabel || "自己想一想"
     : "";
   const treasureChoice = reviewDue
     ? null

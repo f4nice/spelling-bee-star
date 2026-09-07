@@ -71,7 +71,7 @@ export function catWorldActionRhythmExpression(rhythmKey = "") {
   const key = ACTION_RHYTHM_ANIMATIONS[rhythmKey] ? rhythmKey : "";
   return {
     key,
-    label: ACTION_RHYTHM_EXPRESSION_LABELS[key] || "按自己的节奏",
+    label: ACTION_RHYTHM_EXPRESSION_LABELS[key] || "按自己的步子",
     animationKinds: [...(ACTION_RHYTHM_ANIMATIONS[key] || [])],
   };
 }

@@ -77,7 +77,7 @@ class CatWorldEnergyTest(unittest.TestCase):
                 "todayEnergy": 88,
                 "todayDetail": "AI Debate 今日完成",
             },
-            {"key": "operating_activity", "label": "运营活动", "todayEnergy": 0},
+            {"key": "operating_activity", "label": "特别奖励", "todayEnergy": 0},
         )
 
         self.assertEqual([row["key"] for row in rows], ["spelling_words", "ai_debate"])
@@ -128,7 +128,7 @@ class CatWorldEnergyTest(unittest.TestCase):
         self.assertTrue(source["todayHasDebate"])
         self.assertTrue(source["todayBalanceComplete"])
         self.assertEqual(source["nextAction"], "再完成 50 词，习惯奖励再 +20")
-        self.assertIn("输入输出组合 +20", source["todayDetail"])
+        self.assertIn("练词和表达都完成 +20", source["todayDetail"])
         self.assertEqual(len(source["recentDays"]), 7)
         self.assertEqual(source["recentDays"][-2]["statusKey"], "input")
         self.assertEqual(source["recentDays"][-1]["statusKey"], "loop")
@@ -158,7 +158,7 @@ class CatWorldEnergyTest(unittest.TestCase):
         self.assertEqual(source["currentStreak"], 1)
         self.assertEqual(source["todayEnergy"], 50)
         self.assertEqual(source["energy"], 60)
-        self.assertIn("近 7 日节奏 2 天 +5", source["todayDetail"])
+        self.assertIn("最近 7 天学了 2 天 +5", source["todayDetail"])
         self.assertEqual(source["recentDays"][-3]["statusKey"], "input")
         self.assertEqual(source["recentDays"][-2]["statusKey"], "rest")
         self.assertEqual(source["recentDays"][-1]["statusKey"], "loop")
@@ -181,7 +181,7 @@ class CatWorldEnergyTest(unittest.TestCase):
         self.assertEqual(source["todayEnergy"], 20)
         self.assertEqual(source["energy"], 30)
         self.assertEqual(source["totalActiveDays"], 3)
-        self.assertIn("近 7 日节奏 3 天 +10", source["todayDetail"])
+        self.assertIn("最近 7 天学了 3 天 +10", source["todayDetail"])
         self.assertEqual(source["recentDays"][-2]["statusKey"], "started")
         self.assertTrue(source["recentDays"][-2]["active"])
 

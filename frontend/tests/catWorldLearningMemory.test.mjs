@@ -25,7 +25,7 @@ test("cat learning memory keeps humane per-cat progress and readable titles", ()
     loopDays: 1,
     memoryPoints: 4,
     levelKey: "familiar",
-    levelLabel: "熟悉节奏",
+    levelLabel: "常来学习",
     levelIndex: 2,
     levelCount: 5,
     progressPercent: 0,
@@ -59,11 +59,11 @@ test("cat learning memory keeps humane per-cat progress and readable titles", ()
     lastReviewSourceDate: "2026-09-06",
     reviewDueToday: true,
     suggestedReviewDate: "2026-09-06",
-    suggestedReviewStageLabel: "三日巩固",
+    suggestedReviewStageLabel: "三天后再想",
     nextReviewDate: "2026-09-10",
     stages: [
       { key: "starter", label: "起步搭子", threshold: 1, unlocked: true },
-      { key: "familiar", label: "熟悉节奏", threshold: 4, unlocked: true, current: true },
+      { key: "familiar", label: "常来学习", threshold: 4, unlocked: true, current: true },
       { key: "steady", label: "稳定陪学", threshold: 10, unlocked: false },
       { key: "guardian", label: "英语守护猫", threshold: 24, unlocked: false },
     ],
@@ -72,7 +72,7 @@ test("cat learning memory keeps humane per-cat progress and readable titles", ()
         date: "2026-09-07",
         dayLabel: "9/7",
         statusKey: "loop",
-        statusLabel: "完成学习闭环",
+        statusLabel: "两项都完成",
         latestRecallWord: "steady",
         latestRecallSentence: "I can make steady progress.",
       },
@@ -81,10 +81,10 @@ test("cat learning memory keeps humane per-cat progress and readable titles", ()
 
   assert.equal(memory.companionDays, 3);
   assert.equal(memory.loopDays, 1);
-  assert.equal(catWorldLearningMemoryLine(memory), "熟悉节奏 · 陪学 3 天 · 闭环 1 次");
+  assert.equal(catWorldLearningMemoryLine(memory), "常来学习 · 陪学 3 天 · 两项都做 1 次");
   assert.equal(catWorldLearningMemoryNextLine(memory), "再积累 6 点陪学记忆，成为稳定陪学");
   assert.deepEqual(memory.stages.filter((stage) => stage.unlocked).map((stage) => stage.key), ["starter", "familiar"]);
-  assert.equal(memory.recentDays[0].statusLabel, "完成学习闭环");
+  assert.equal(memory.recentDays[0].statusLabel, "两项都完成");
   assert.equal(memory.reviewCount, 2);
   assert.equal(memory.recallTreasureCount, 2);
   assert.equal(memory.recallTreasures[0].reviewCount, 2);
@@ -93,13 +93,13 @@ test("cat learning memory keeps humane per-cat progress and readable titles", ()
   assert.equal(memory.todayRecallWord, "steady");
   assert.equal(memory.todayReviewSourceDate, "2026-09-06");
   assert.equal(memory.reviewDueToday, true);
-  assert.equal(memory.suggestedReviewStageLabel, "三日巩固");
+  assert.equal(memory.suggestedReviewStageLabel, "三天后再想");
   assert.equal(memory.recentDays[0].latestRecallWord, "steady");
   assert.equal(memory.recentDays[0].latestRecallSentence, "I can make steady progress.");
   assert.equal(formatCatWorldLearningMemoryDate(memory.latestDate), "9月7日");
   assert.match(catWorldLearningMemoryRoomCue(memory), /最新一页写在 9月7日/);
   assert.match(catWorldLearningMemoryRoomCue(memory), /珍藏着 2 个回想词/);
-  assert.match(catWorldLearningMemoryRoomCue(memory, true), /完成 1 次英语闭环/);
+  assert.match(catWorldLearningMemoryRoomCue(memory, true), /有 1 天既练单词又用了英语/);
 });
 
 test("active recall needs one English word and a short original sentence", () => {
@@ -138,13 +138,13 @@ test("each cat reflects on the same learning page in its own voice", () => {
     date: "2026-09-07",
     dayLabel: "9/7",
     statusKey: "loop",
-    statusLabel: "完成学习闭环",
+    statusLabel: "两项都完成",
   };
   const quietCat = catWorldLearningMemoryReflection(day, {
     id: "cat-quiet",
     nickname: "小静",
     traits: { temperament: "calm" },
-    learningStyle: { label: "遮答主动回想", preferredOutput: "essay" },
+    learningStyle: { label: "遮住答案想一想", preferredOutput: "essay" },
   });
   const chattyCat = catWorldLearningMemoryReflection(day, {
     id: "cat-chatty",
@@ -154,14 +154,14 @@ test("each cat reflects on the same learning page in its own voice", () => {
   });
 
   assert.equal(quietCat.dateLabel, "9/7");
-  assert.match(quietCat.achievement, /完整英语闭环/);
+  assert.match(quietCat.achievement, /练了单词/);
   assert.match(quietCat.reviewPrompt, /1 个词和 1 句话/);
   assert.equal(quietCat.actionLabel, "写一句新表达");
   assert.equal(quietCat.href, "/essays");
   assert.equal(chattyCat.actionLabel, "说一个新理由");
   assert.equal(chattyCat.href, "/debate");
   assert.notEqual(quietCat.catMessage, chattyCat.catMessage);
-  assert.match(quietCat.catMessage, /遮答主动回想/);
+  assert.match(quietCat.catMessage, /遮住答案想一想/);
 });
 
 test("a partial memory suggests the missing half of the English loop", () => {
@@ -177,7 +177,7 @@ test("a partial memory suggests the missing half of the English loop", () => {
   });
 
   assert.equal(warmup.href, "/lists");
-  assert.match(warmup.reviewPrompt, /主动回想/);
+  assert.match(warmup.reviewPrompt, /自己想一想/);
   assert.equal(output.href, "/lists");
   assert.match(output.reviewPrompt, /补 5 个词/);
 });
@@ -192,7 +192,7 @@ test("the room signal carries the selected cat's own learning memory", () => {
         hasMemory: true,
         companionDays: 4,
         loopDays: 2,
-        levelLabel: "熟悉节奏",
+        levelLabel: "常来学习",
       },
     },
     { catId: "cat-a" },
@@ -212,7 +212,7 @@ test("a cat opens the due page and names its gentle two-step review rhythm", () 
     levelCount: 5,
     reviewDueToday: true,
     suggestedReviewDate: "2026-09-06",
-    suggestedReviewStageLabel: "三日巩固",
+    suggestedReviewStageLabel: "三天后再想",
     recallTreasureCount: 1,
     recallTreasures: [{
       key: "steady",
@@ -230,7 +230,7 @@ test("a cat opens the due page and names its gentle two-step review rhythm", () 
         statusKey: "warmup",
         reviewCount: 1,
         reviewStageKey: "strengthen",
-        reviewStageLabel: "三日巩固",
+        reviewStageLabel: "三天后再想",
         reviewProgressLabel: "1/2",
         reviewDue: true,
       },
@@ -246,15 +246,15 @@ test("a cat opens the due page and names its gentle two-step review rhythm", () 
     { cycle: 1, sceneId: "main-room" },
   );
   assert.ok(plan);
-  assert.match(plan.message, /9\/6.*三日巩固/);
+  assert.match(plan.message, /9\/6.*三天后再想/);
   assert.doesNotMatch(plan.message, /steady/);
   assert.equal(plan.dayLabel, "9/6");
   assert.equal(plan.reviewDue, true);
-  assert.equal(plan.reviewStageLabel, "三日巩固");
+  assert.equal(plan.reviewStageLabel, "三天后再想");
   assert.equal(plan.sourceDate, "2026-09-06");
   assert.equal(plan.treasure, null);
-  assert.equal(plan.statusLabel, "正在等你三日巩固");
-  assert.equal(plan.targetLabel, "共同学习手册 · 三日巩固");
+  assert.equal(plan.statusLabel, "正在等你三天后再想");
+  assert.equal(plan.targetLabel, "共同学习手册 · 三天后再想");
   assert.equal(plan.holdMs, 7600);
   assert.ok(plan.priority >= 70);
 
@@ -319,7 +319,7 @@ test("a due review never reveals its answer through a room treasure", () => {
       date: "2026-09-06",
       dayLabel: "9/6",
       statusKey: "warmup",
-      reviewStageLabel: "三日巩固",
+      reviewStageLabel: "三天后再想",
     }],
   };
   const cat = { id: "cat-safe", learningMemory: memory };
@@ -333,7 +333,7 @@ test("a due review never reveals its answer through a room treasure", () => {
   assert.equal(plans.length, 3);
   assert.ok(plans.every((plan) => plan.reviewDue));
   assert.ok(plans.every((plan) => plan.treasure === null));
-  assert.ok(plans.every((plan) => plan.statusLabel === "正在等你三日巩固"));
+  assert.ok(plans.every((plan) => plan.statusLabel === "正在等你三天后再想"));
   assert.ok(plans.every((plan) => !/steady|curious|A curious learner/.test(plan.message)));
 
   const hiddenOnlyCat = {
@@ -348,7 +348,7 @@ test("a due review never reveals its answer through a room treasure", () => {
   assert.ok(hiddenOnlyPlan);
   assert.equal(hiddenOnlyPlan.treasure, null);
   assert.equal(hiddenOnlyPlan.reviewDue, true);
-  assert.match(hiddenOnlyPlan.message, /9\/6.*三日巩固/);
+  assert.match(hiddenOnlyPlan.message, /9\/6.*三天后再想/);
   assert.doesNotMatch(hiddenOnlyPlan.message, /steady/);
 });
 
@@ -621,7 +621,7 @@ test("a cat revisits real learning memories at a low deterministic cadence", () 
       loopDays: 2,
       memoryPoints: 7,
       levelKey: "familiar",
-      levelLabel: "熟悉节奏",
+      levelLabel: "常来学习",
       levelIndex: 2,
       levelCount: 5,
       latestDate: "2026-09-07",

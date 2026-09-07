@@ -14,7 +14,7 @@ test("expired play time keeps the room visible in observation mode", async () =>
   const lockRule = styles.match(/\.cat-world-play-lock\s*\{([^}]*)\}/)?.[1] || "";
   const lockCardRule = styles.match(/\.cat-world-play-lock-card\s*\{([^}]*)\}/)?.[1] || "";
 
-  assert.match(page, /Observation Mode/);
+  assert.match(page, /看猫模式/);
   assert.match(page, /class="cat-world-play-lock-copy"/);
   assert.match(page, /:inert="playTimeLocked \? '' : null"/);
   assert.match(page, /aria-label="观察房间下一屏"/);
@@ -81,7 +81,7 @@ test("the room assistant separates cat, bag, and room context", async () => {
   assert.match(page, /v-show="activeRoomPanel === 'room'"/);
   assert.match(page, /activeRoomPanel\.value = "cat";[\s\S]*?petCat\(cat/);
   assert.match(page, /function focusRoomItem[\s\S]*?activeRoomPanel\.value = "bag";/);
-  assert.match(page, /activeRoomPanel\.value = "room";[\s\S]*?notice\.value = nextEnabled \? "维修模式已开启/);
+  assert.match(page, /activeRoomPanel\.value = "room";[\s\S]*?notice\.value = nextEnabled \? "已经拿好维修锤/);
   assert.match(styles, /\.cat-world-context-tabs\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,/);
   assert.match(styles, /\.cat-world-context-tabs > button\.active,[\s\S]*?color:\s*#fff;[\s\S]*?background:\s*#1d7f5b;/);
 });
@@ -96,7 +96,7 @@ test("the daily route is compact until its details are requested", async () => {
   assert.match(page, /'is-expanded': learningRouteExpanded/);
   assert.match(page, /v-show="learningRouteExpanded"/);
   assert.match(page, /aria-controls="cat-world-learning-route-details"/);
-  assert.match(page, /learningRouteExpanded \? "收起" : "展开路线"/);
+  assert.match(page, /learningRouteExpanded \? "收起" : "展开计划"/);
   assert.match(styles, /\.cat-world-learning-route-details\s*\{\s*display:\s*grid;/);
   assert.match(styles, /\.cat-world-learning-route:not\(\.is-expanded\) \.cat-world-learning-companion-status\s*\{\s*display:\s*none;/);
 });
@@ -133,8 +133,8 @@ test("the weekly learning trail opens on demand", async () => {
   assert.match(page, /learningWeekExpanded \? "收起记录" : "查看七天"/);
   assert.match(page, /class="cat-world-learning-rhythm-badge"/);
   assert.match(page, /'cat-world-weekly-rhythm'/);
-  assert.match(page, /学习触点/);
-  assert.match(page, /完整闭环/);
+  assert.match(page, /有学习/);
+  assert.match(page, /两项都做/);
   assert.doesNotMatch(page, /最长连续/);
   assert.match(styles, /\.cat-world-weekly-rhythm\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,/);
   assert.match(styles, /@media \(max-width: 560px\)[\s\S]*?\.cat-world-weekly-rhythm\s*\{[\s\S]*?grid-template-columns:\s*1fr;/);

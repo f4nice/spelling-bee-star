@@ -99,7 +99,7 @@ class CatWorldLearningMemoryTest(unittest.TestCase):
         self.assertEqual(payload["loopDays"], 1)
         self.assertEqual(payload["memoryPoints"], 4)
         self.assertEqual(payload["levelKey"], "familiar")
-        self.assertEqual(payload["levelLabel"], "熟悉节奏")
+        self.assertEqual(payload["levelLabel"], "常来学习")
         self.assertEqual(payload["nextRemaining"], 6)
         self.assertEqual(payload["firstDate"], "2026-09-05")
         self.assertEqual(payload["latestDate"], "2026-09-07")
@@ -295,7 +295,7 @@ class CatWorldLearningMemoryTest(unittest.TestCase):
 
         self.assertTrue(payload["reviewDueToday"])
         self.assertEqual(payload["suggestedReviewDate"], "2026-09-06")
-        self.assertEqual(payload["suggestedReviewStageLabel"], "隔日回想")
+        self.assertEqual(payload["suggestedReviewStageLabel"], "隔天想一想")
         self.assertTrue(days["2026-09-06"]["reviewDue"])
         self.assertEqual(days["2026-09-06"]["reviewStageKey"], "first")
         self.assertEqual(days["2026-09-06"]["reviewProgressLabel"], "0/2")
@@ -322,7 +322,7 @@ class CatWorldLearningMemoryTest(unittest.TestCase):
         )
         self.assertTrue(due["reviewDueToday"])
         self.assertEqual(due["suggestedReviewDate"], "2026-09-05")
-        self.assertEqual(due["suggestedReviewStageLabel"], "三日巩固")
+        self.assertEqual(due["suggestedReviewStageLabel"], "三天后再想")
 
         settled = cat_world_learning_memory_payload(
             [source, first_review, review_log("cat-a", date(2026, 9, 9), date(2026, 9, 5))],
@@ -344,7 +344,7 @@ class CatWorldLearningMemoryTest(unittest.TestCase):
             today=date(2026, 9, 10),
         )
         self.assertIn(
-            "已经完成隔日回想和三日巩固",
+            "已经想过两次",
             cat_world_learning_memory_review_error(next_day, date(2026, 9, 5)),
         )
         self.assertIn(

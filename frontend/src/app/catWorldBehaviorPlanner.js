@@ -244,7 +244,7 @@ export function catVisitPlanStatus(plan = {}, phase = "moving") {
     phase: normalizedPhase,
     statusLabel: status[normalizedPhase],
     targetLabel: String(target.partnerLabel || target.label || "").trim(),
-    message: catVisitPlanMessage(plan) || String(target.message || "正在按自己的节奏活动。"),
+    message: catVisitPlanMessage(plan) || String(target.message || "正在按自己的步子活动。"),
     tone: status.tone,
   };
 }

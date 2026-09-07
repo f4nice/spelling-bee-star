@@ -168,7 +168,7 @@ class CatWorldIndividualProfileTest(unittest.TestCase):
                 "todayHasEssay": True,
                 "todayHasDebate": False,
                 "todayBalanceComplete": True,
-                "nextAction": "今日学习闭环已完成",
+                "nextAction": "今天的学习全部完成",
             }
 
             reward = cat_world_apply_learning_companion_rewards(
@@ -205,7 +205,7 @@ class CatWorldIndividualProfileTest(unittest.TestCase):
             self.assertEqual(len(companion_events), 4)
             self.assertEqual(
                 {event.get("label") for event in companion_events},
-                {"5 词起步", "20 词热身", "英语输出", "今日学习闭环"},
+                {"5 词起步", "20 词热身", "用一次英语", "今天全部完成"},
             )
             self.assertEqual(len({event.get("message") for event in companion_events}), 4)
 
@@ -241,7 +241,7 @@ class CatWorldIndividualProfileTest(unittest.TestCase):
             learning_style=style,
         )
 
-        self.assertIn("AI Debate", message)
+        self.assertIn("AI 英语辩论", message)
 
     def test_nickname_is_individual_and_validated(self):
         self.assertEqual(CAT_WORLD_SHOP_BY_ID[CAT_WORLD_RENAME_CARD_ITEM_ID]["cost"], 200)

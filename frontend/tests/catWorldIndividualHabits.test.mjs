@@ -47,7 +47,7 @@ test("the cat profile exposes the individual habit without weakening active-stat
   assert.match(page, /focusedCat\.actionRhythm\?\.label/);
   assert.match(page, /cat\.actionRhythm\?\.label/);
   assert.match(page, /<dt>个人小习惯<\/dt>/);
-  assert.match(page, /<dt>行动节奏<\/dt>/);
+  assert.match(page, /<dt>活动习惯<\/dt>/);
   assert.match(page, /<dt>陪学专长<\/dt>/);
   assert.match(page, /class="cat-world-cat-individual-habit"/);
   assert.match(page, /class="cat-world-cat-learning-style"/);
