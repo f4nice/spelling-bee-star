@@ -51,6 +51,30 @@ test("a pending study ritual wins once without overriding urgent care", () => {
   assert.equal(urgent.kind, "food");
 });
 
+test("a due recall ritual wins before ordinary choices without overriding urgent care", () => {
+  const ordinary = chooseCatVisitPlan([
+    { kind: "memory", target: target(76, { label: "共同学习手册 · 三日巩固" }) },
+    { kind: "favorite", target: target(99, { label: "阳光窗台" }) },
+  ], {
+    catId: "cat-review",
+    cycle: 1,
+    requiredKind: "memory",
+    behavior: { attention: 62, activityBias: 58 },
+  });
+  const urgent = chooseCatVisitPlan([
+    { kind: "memory", target: target(84, { label: "共同学习手册 · 三日巩固" }) },
+    { kind: "rest", target: target(92, { label: "猫窝" }) },
+  ], {
+    catId: "cat-review",
+    cycle: 2,
+    requiredKind: "memory",
+    behavior: { energy: 9, restThreshold: 34, attention: 72 },
+  });
+
+  assert.equal(ordinary.kind, "memory");
+  assert.equal(urgent.kind, "rest");
+});
+
 test("individual traits alter the same room choices", () => {
   const candidates = [
     { kind: "learning", target: target(66, { label: "英文书桌" }) },

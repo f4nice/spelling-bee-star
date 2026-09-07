@@ -510,16 +510,22 @@ export function catWorldLearningMemoryVisitPlan(cat = {}, behavior = {}, context
     return null;
   }
 
-  const cadence = memory.reviewDueToday ? 3 : memory.levelIndex >= 3 ? 3 : 4;
+  const reviewDue = memory.reviewDueToday && !memory.reviewedToday;
+  const cadence = reviewDue ? 3 : memory.levelIndex >= 3 ? 3 : 4;
   const memoryToken = memory.suggestedReviewDate || memory.latestDate || `${memory.levelKey}:${memory.memoryPoints}`;
   const slot = stableIndex(`${catId}:${sceneId}:${memoryToken}:memory-visit`, cadence);
-  if (cycle % cadence !== slot) return null;
+  if (!reviewDue && cycle % cadence !== slot) return null;
 
   const requestedStyleKey = String(cat.learningStyle?.key || "balanced");
   const styleKey = MEMORY_VISIT_TARGETS[requestedStyleKey] ? requestedStyleKey : "balanced";
   const attention = Math.max(Math.min(Number(behavior.attention || 50), 100), 0);
   const visitDay = memoryVisitDay(memory) || {};
-  const treasureChoice = memoryVisitTreasure(memory, catId, sceneId, memoryToken, styleKey);
+  const reviewStageLabel = reviewDue
+    ? memory.suggestedReviewStageLabel || visitDay.reviewStageLabel || "主动回想"
+    : "";
+  const treasureChoice = reviewDue
+    ? null
+    : memoryVisitTreasure(memory, catId, sceneId, memoryToken, styleKey);
   const treasure = treasureChoice?.treasure || null;
   const selectionLabel = treasureChoice?.selectionLabel || "";
   const visitCopy = treasure
@@ -531,6 +537,8 @@ export function catWorldLearningMemoryVisitPlan(cat = {}, behavior = {}, context
     targetItemIds: [...MEMORY_VISIT_TARGETS[styleKey]],
     message: visitCopy.message,
     animation: MEMORY_VISIT_ANIMATIONS[styleKey],
+    reviewDue,
+    reviewStageLabel,
     styleKey,
     ritualLabel: visitCopy.ritualLabel,
     selectionLabel,
@@ -538,11 +546,17 @@ export function catWorldLearningMemoryVisitPlan(cat = {}, behavior = {}, context
     levelLabel: memory.levelLabel,
     dayLabel: visitDay.dayLabel || formatCatWorldLearningMemoryDate(visitDay.date || memory.latestDate),
     treasure,
-    statusLabel: visitCopy.statusLabel,
-    targetLabel: treasure ? `珍藏词 ${treasure.word} · ${selectionLabel}` : "共同学习手册",
-    holdMs: 6400,
+    statusLabel: reviewDue
+      ? `正在等你${reviewStageLabel}`
+      : visitCopy.statusLabel,
+    targetLabel: treasure
+      ? `珍藏词 ${treasure.word} · ${selectionLabel}`
+      : reviewDue
+        ? `共同学习手册 · ${reviewStageLabel}`
+        : "共同学习手册",
+    holdMs: reviewDue ? 7600 : 6400,
     priority: Math.max(
-      Math.min(36 + memory.levelIndex * 4 + Math.round(attention / 20) + (memory.reviewDueToday ? 4 : 0), 62),
+      Math.min(36 + memory.levelIndex * 4 + Math.round(attention / 20) + (reviewDue ? 28 : 0), reviewDue ? 84 : 62),
       38,
     ),
   };

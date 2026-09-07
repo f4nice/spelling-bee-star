@@ -4544,7 +4544,10 @@ class CatWorldScene extends Phaser.Scene {
       }
       return;
     }
-    const ritualDue = Boolean(this.learningRitualVisitKey(cat.id));
+    const reviewRitualDue = Boolean(
+      cat.learningMemory?.reviewDueToday && !cat.learningMemory?.reviewedToday,
+    );
+    const ritualDue = Boolean(this.learningRitualVisitKey(cat.id)) || reviewRitualDue;
     const delayRange = ritualDue ? [1800, 3400] : [5800, 12200];
     const delay = Math.round((Phaser.Math.Between(...delayRange) + index * 780) / Math.max(movement, 0.38));
     const walkTimer = this.time.delayedCall(delay, () => {
@@ -4573,6 +4576,7 @@ class CatWorldScene extends Phaser.Scene {
       const learningRitualPending = Boolean(
         learningVisitKey && !this.owner.learningRitualVisits.has(learningVisitKey),
       );
+      const memoryReviewPending = Boolean(learningMemoryTarget?.reviewDue);
       const visitPlan = chooseCatVisitPlan([
         { kind: "food", target: foodTarget },
         { kind: "rest", target: restTarget },
@@ -4589,7 +4593,7 @@ class CatWorldScene extends Phaser.Scene {
         cycle: decisionCycle,
         lastKind: container.getData("lastVisitKind") || "",
         repeatCount: Number(container.getData("lastVisitStreak") || 0),
-        requiredKind: learningRitualPending ? "learning" : "",
+        requiredKind: memoryReviewPending ? "memory" : learningRitualPending ? "learning" : "",
       });
       if (!visitPlan && this.shouldCatIdle(latestBehavior)) {
         this.reportCatIntent(cat, { kind: "idle", target: { label: "原地" } }, "arrived");

@@ -240,16 +240,22 @@ test("a cat opens the due page and names its gentle two-step review rhythm", () 
   assert.equal(catWorldLearningMemoryDefaultDate(dueMemory), "2026-09-06");
   const cat = { id: "cat-review", learningMemory: dueMemory };
   const behavior = { canWalk: true, energy: 82, restThreshold: 34, attention: 70 };
-  const plan = [1, 2, 3].map((cycle) => catWorldLearningMemoryVisitPlan(
+  const plan = catWorldLearningMemoryVisitPlan(
     cat,
     behavior,
-    { cycle, sceneId: "main-room" },
-  )).find(Boolean);
+    { cycle: 1, sceneId: "main-room" },
+  );
   assert.ok(plan);
   assert.match(plan.message, /9\/6.*三日巩固/);
   assert.doesNotMatch(plan.message, /steady/);
   assert.equal(plan.dayLabel, "9/6");
-  assert.ok(plan.priority >= 42);
+  assert.equal(plan.reviewDue, true);
+  assert.equal(plan.reviewStageLabel, "三日巩固");
+  assert.equal(plan.treasure, null);
+  assert.equal(plan.statusLabel, "正在等你三日巩固");
+  assert.equal(plan.targetLabel, "共同学习手册 · 三日巩固");
+  assert.equal(plan.holdMs, 7600);
+  assert.ok(plan.priority >= 70);
 
   assert.equal(catWorldLearningMemoryDefaultDate({
     ...dueMemory,
@@ -323,10 +329,11 @@ test("a due review never reveals its answer through a room treasure", () => {
     { cycle, sceneId: "main-room" },
   )).filter(Boolean);
 
-  assert.equal(plans.length, 1);
-  assert.equal(plans[0].treasure.word, "curious");
-  assert.match(plans[0].message, /A curious learner/);
-  assert.doesNotMatch(plans[0].message, /steady/);
+  assert.equal(plans.length, 3);
+  assert.ok(plans.every((plan) => plan.reviewDue));
+  assert.ok(plans.every((plan) => plan.treasure === null));
+  assert.ok(plans.every((plan) => plan.statusLabel === "正在等你三日巩固"));
+  assert.ok(plans.every((plan) => !/steady|curious|A curious learner/.test(plan.message)));
 
   const hiddenOnlyCat = {
     ...cat,
@@ -339,6 +346,7 @@ test("a due review never reveals its answer through a room treasure", () => {
   )).find(Boolean);
   assert.ok(hiddenOnlyPlan);
   assert.equal(hiddenOnlyPlan.treasure, null);
+  assert.equal(hiddenOnlyPlan.reviewDue, true);
   assert.match(hiddenOnlyPlan.message, /9\/6.*三日巩固/);
   assert.doesNotMatch(hiddenOnlyPlan.message, /steady/);
 });

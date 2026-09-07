@@ -94,7 +94,10 @@ test("the guide cat performs each visible study ritual once before ordinary choi
   const game = await readFile(gameUrl, "utf8");
 
   assert.match(game, /this\.learningRitualVisitKey\(cat\.id\)/);
-  assert.match(game, /requiredKind: learningRitualPending \? "learning" : ""/);
+  assert.match(game, /const reviewRitualDue = Boolean\(/);
+  assert.match(game, /cat\.learningMemory\?\.reviewDueToday && !cat\.learningMemory\?\.reviewedToday/);
+  assert.match(game, /const memoryReviewPending = Boolean\(learningMemoryTarget\?\.reviewDue\)/);
+  assert.match(game, /requiredKind: memoryReviewPending \? "memory" : learningRitualPending \? "learning" : ""/);
   assert.match(game, /this\.owner\.learningRitualVisits\.add\(learningVisitKey\)/);
   assert.match(game, /this\.learningRitualVisits = new Set\(\)/);
   assert.match(game, /const delayRange = ritualDue \? \[1800, 3400\]/);

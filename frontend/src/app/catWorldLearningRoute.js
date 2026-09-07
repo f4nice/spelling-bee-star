@@ -272,7 +272,7 @@ export function buildCatWorldReturnPromise(habit = {}, cat = {}, memory = {}) {
     targetDate: "",
   };
 
-  if (normalizedMemory.reviewDueToday) {
+  if (normalizedMemory.reviewDueToday && !normalizedMemory.reviewedToday) {
     const stageLabel = normalizedMemory.suggestedReviewStageLabel || "主动回想";
     const detail = `${recallCue} 做完今天就可以安心停下。`;
     return {
