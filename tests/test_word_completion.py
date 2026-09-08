@@ -70,6 +70,30 @@ class WordCompletionTest(unittest.TestCase):
             self.assertIn("不是 IPA", caught.exception.detail)
             generate.assert_not_awaited()
 
+    def test_explicit_audio_choice_overrides_spb_source_and_clears_issue(self):
+        self.word.american_audio_url = "/media/audio/test-us-spb-language-origin.mp3"
+        self.word.american_audio_locked = True
+        self.word.audio_issue = True
+        self.db.commit()
+
+        replacement = "/media/audio/test-us-dictionary.mp3"
+        self.assertFalse(m.should_replace_audio(self.word.american_audio_url, replacement, incoming_source="choice"))
+        with patch.object(m, "require_word_write_access"), \
+             patch.object(m, "word_media_sources", return_value={}):
+            result = asyncio.run(m.word_audio_choice(
+                self.word.id,
+                accent="us",
+                audio_url=replacement,
+                edit_token="1",
+                db=self.db,
+            ))
+
+        self.db.refresh(self.word)
+        self.assertTrue(result["committed"])
+        self.assertEqual(self.word.american_audio_url, replacement)
+        self.assertTrue(self.word.american_audio_locked)
+        self.assertFalse(self.word.audio_issue)
+
     def test_complete_spb_skips_online_lookup_and_clears_old_failure(self):
         self.word.enrichment_status = "failed"
         self.word.enrichment_error = "old error"

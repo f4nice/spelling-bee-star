@@ -13461,37 +13461,27 @@ async def word_audio_choice(
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
 
-    current_audio_url = word.british_audio_url if accent == "gb" else word.american_audio_url
-    can_commit_audio = should_replace_audio(current_audio_url, audio_url, incoming_source="choice")
-    if can_commit_audio:
-        if accent == "gb":
-            word.british_audio_url = audio_url
-            word.british_audio_locked = True
-        else:
-            word.american_audio_url = audio_url
-            word.american_audio_locked = True
-        word.audio_issue = False
-        word.enrichment_error = None
-        db.add(word)
-        db.commit()
-        remember_word_resource(
-            db,
-            word,
-            american_audio_source="choice" if accent == "us" else None,
-            british_audio_source="choice" if accent == "gb" else None,
-            override_media=True,
-            commit=True,
-        )
+    apply_user_selected_word_audio(word, accent, audio_url)
+    db.add(word)
+    db.commit()
+    remember_word_resource(
+        db,
+        word,
+        american_audio_source="choice" if accent == "us" else None,
+        british_audio_source="choice" if accent == "gb" else None,
+        override_media=True,
+        commit=True,
+    )
     return {
         "ok": True,
         "word": word.word,
         "accent": accent,
         "audio_url": audio_url,
-        "committed": can_commit_audio,
+        "committed": True,
         "source": "choice",
         "source_meta": audio_source_meta("choice", audio_url),
         "media_sources": word_media_sources(db, word),
-        "message": "" if can_commit_audio else "当前音频优先级更高，已保留原音频。",
+        "message": "",
     }
 
 
@@ -13524,37 +13514,27 @@ async def word_recorded_audio(
     target.write_bytes(content)
     audio_url = f"/media/audio/{target.name}"
 
-    current_audio_url = word.british_audio_url if accent == "gb" else word.american_audio_url
-    can_commit_audio = should_replace_audio(current_audio_url, audio_url, incoming_source="recorded")
-    if can_commit_audio:
-        if accent == "gb":
-            word.british_audio_url = audio_url
-            word.british_audio_locked = True
-        else:
-            word.american_audio_url = audio_url
-            word.american_audio_locked = True
-        word.audio_issue = False
-        word.enrichment_error = None
-        db.add(word)
-        db.commit()
-        remember_word_resource(
-            db,
-            word,
-            american_audio_source="recorded" if accent == "us" else None,
-            british_audio_source="recorded" if accent == "gb" else None,
-            override_media=True,
-            commit=True,
-        )
+    apply_user_selected_word_audio(word, accent, audio_url)
+    db.add(word)
+    db.commit()
+    remember_word_resource(
+        db,
+        word,
+        american_audio_source="recorded" if accent == "us" else None,
+        british_audio_source="recorded" if accent == "gb" else None,
+        override_media=True,
+        commit=True,
+    )
     return {
         "ok": True,
         "word": word.word,
         "accent": accent,
         "audio_url": audio_url,
-        "committed": can_commit_audio,
+        "committed": True,
         "source": "recorded",
         "source_meta": audio_source_meta("recorded", audio_url),
         "media_sources": word_media_sources(db, word),
-        "message": "" if can_commit_audio else "当前音频优先级更高，已保留原音频。",
+        "message": "",
     }
 
 
@@ -13610,17 +13590,8 @@ async def word_ai_audio(
 
     should_commit = commit not in {"0", "false", "False", "no"}
     audio_source = selected_ai_tts_audio_source(text_mode, selected_audio_provider)
-    current_audio_url = word.british_audio_url if accent == "gb" else word.american_audio_url
-    can_commit_audio = should_replace_audio(current_audio_url, audio_url, incoming_source=audio_source)
-    if should_commit and can_commit_audio:
-        if accent == "gb":
-            word.british_audio_url = audio_url
-            word.british_audio_locked = True
-        else:
-            word.american_audio_url = audio_url
-            word.american_audio_locked = True
-        word.audio_issue = False
-        word.enrichment_error = None
+    if should_commit:
+        apply_user_selected_word_audio(word, accent, audio_url)
         db.add(word)
         db.commit()
         remember_word_resource(
@@ -13637,12 +13608,12 @@ async def word_ai_audio(
         "accent": accent,
         "voice_gender": voice_gender,
         "text_mode": text_mode,
-        "committed": should_commit and can_commit_audio,
-        "message": "" if (not should_commit or can_commit_audio) else "当前音频优先级更高，已生成试听但未替换。",
+        "committed": should_commit,
+        "message": "",
         "audio_url": audio_url,
         "source": audio_source,
         "source_meta": audio_source_meta(audio_source, audio_url),
-        "media_sources": word_media_sources(db, word) if should_commit and can_commit_audio else {},
+        "media_sources": word_media_sources(db, word) if should_commit else {},
     }
 
 
@@ -14127,6 +14098,18 @@ def should_replace_audio(
     if not (current_url or "").strip():
         return True
     return audio_source_priority(incoming_source, incoming_url) > audio_source_priority(current_source, current_url)
+
+
+def apply_user_selected_word_audio(word: Word, accent: str, audio_url: str) -> None:
+    # A deliberate repair must override automatic source priority.
+    if accent == "gb":
+        word.british_audio_url = audio_url
+        word.british_audio_locked = True
+    else:
+        word.american_audio_url = audio_url
+        word.american_audio_locked = True
+    word.audio_issue = False
+    word.enrichment_error = None
 
 
 def ai_tts_audio_source(text_mode: str) -> str:
