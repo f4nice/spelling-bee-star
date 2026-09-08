@@ -36,6 +36,12 @@ CHINESE_FONT_CANDIDATES = (
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
     "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
 )
+WORD_CARD_SIZE = 1024
+WORD_LABEL_MAX_FONT_SIZE = 168
+WORD_LABEL_MIN_FONT_SIZE = 72
+WORD_LABEL_MAX_WIDTH = 840
+WORD_LABEL_FONT_STEP = 8
+WORD_LABEL_STROKE_WIDTH = 5
 
 
 def build_word_image_prompt(
@@ -90,6 +96,20 @@ def chinese_label_font(size: int) -> ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
+def fit_chinese_label_font(
+    draw: ImageDraw.ImageDraw,
+    label: str,
+) -> tuple[ImageFont.ImageFont, tuple[int, int, int, int]]:
+    font_size = WORD_LABEL_MAX_FONT_SIZE
+    while True:
+        font = chinese_label_font(font_size)
+        text_box = draw.textbbox((0, 0), label, font=font, stroke_width=WORD_LABEL_STROKE_WIDTH)
+        text_width = text_box[2] - text_box[0]
+        if text_width <= WORD_LABEL_MAX_WIDTH or font_size <= WORD_LABEL_MIN_FONT_SIZE:
+            return font, text_box
+        font_size = max(font_size - WORD_LABEL_FONT_STEP, WORD_LABEL_MIN_FONT_SIZE)
+
+
 def compose_word_card_image(
     image_bytes: bytes,
     *,
@@ -97,41 +117,32 @@ def compose_word_card_image(
     chinese_definition: str | None = None,
 ) -> bytes:
     image = Image.open(BytesIO(image_bytes)).convert("RGB")
-    image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
-    canvas = Image.new("RGB", (1024, 1024), (244, 248, 245))
-    left = (1024 - image.width) // 2
-    top = (1024 - image.height) // 2
+    image.thumbnail((WORD_CARD_SIZE, WORD_CARD_SIZE), Image.Resampling.LANCZOS)
+    canvas = Image.new("RGB", (WORD_CARD_SIZE, WORD_CARD_SIZE), (244, 248, 245))
+    left = (WORD_CARD_SIZE - image.width) // 2
+    top = (WORD_CARD_SIZE - image.height) // 2
     canvas.paste(image, (left, top))
     label = primary_chinese_label(chinese_definition)
     if label:
         draw = ImageDraw.Draw(canvas, "RGBA")
-        font_size = 96
-        font = chinese_label_font(font_size)
-        while font_size > 48:
-            text_box = draw.textbbox((0, 0), label, font=font, stroke_width=2)
-            text_width = text_box[2] - text_box[0]
-            if text_width <= 720:
-                break
-            font_size -= 8
-            font = chinese_label_font(font_size)
-        text_box = draw.textbbox((0, 0), label, font=font, stroke_width=2)
+        font, text_box = fit_chinese_label_font(draw, label)
         text_width = text_box[2] - text_box[0]
         text_height = text_box[3] - text_box[1]
-        padding_x = 38
-        padding_y = 18
+        padding_x = 48
+        padding_y = 24
         pill_width = text_width + padding_x * 2
         pill_height = text_height + padding_y * 2
-        pill_left = (1024 - pill_width) // 2
-        pill_top = 1024 - pill_height - 54
+        pill_left = (WORD_CARD_SIZE - pill_width) // 2
+        pill_top = WORD_CARD_SIZE - pill_height - 42
         pill_rect = (pill_left, pill_top, pill_left + pill_width, pill_top + pill_height)
-        draw.rounded_rectangle(pill_rect, radius=28, fill=(255, 255, 255, 196))
+        draw.rounded_rectangle(pill_rect, radius=34, fill=(255, 255, 255, 226))
         draw.text(
             (pill_left + padding_x, pill_top + padding_y - text_box[1]),
             label,
             font=font,
             fill=(126, 78, 48, 255),
-            stroke_width=4,
-            stroke_fill=(255, 255, 255, 235),
+            stroke_width=WORD_LABEL_STROKE_WIDTH,
+            stroke_fill=(255, 255, 255, 250),
         )
     output = BytesIO()
     canvas.save(output, format="JPEG", quality=92, optimize=True)
