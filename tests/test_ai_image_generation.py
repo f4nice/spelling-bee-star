@@ -26,6 +26,14 @@ class WordImageLabelTests(unittest.TestCase):
         self.assertEqual(font.size, ai_image_generation.WORD_LABEL_MAX_FONT_SIZE)
         self.assertLessEqual(text_box[2] - text_box[0], ai_image_generation.WORD_LABEL_MAX_WIDTH)
 
+    def test_bundled_font_contains_distinct_chinese_glyphs(self):
+        self.assertTrue(ai_image_generation.BUNDLED_CHINESE_FONT.is_file())
+
+        font = ai_image_generation.chinese_label_font(96)
+
+        self.assertEqual(font.size, 96)
+        self.assertNotEqual(bytes(font.getmask("含")), bytes(font.getmask("水")))
+
     def test_wide_label_shrinks_without_becoming_tiny(self):
         draw = PredictableTextDraw()
 

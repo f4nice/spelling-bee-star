@@ -4,6 +4,7 @@ import hashlib
 import hmac
 from io import BytesIO
 import json
+from pathlib import Path
 import re
 import time
 from urllib.parse import urlparse
@@ -29,7 +30,9 @@ WORD_IMAGE_NEGATIVE_PROMPT = (
     "distorted text, blurry, low quality"
 )
 
+BUNDLED_CHINESE_FONT = Path(__file__).resolve().parents[1] / "assets" / "fonts" / "NotoSansSC-VF.ttf"
 CHINESE_FONT_CANDIDATES = (
+    str(BUNDLED_CHINESE_FONT),
     "C:/Windows/Fonts/msyh.ttc",
     "C:/Windows/Fonts/simhei.ttf",
     "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
@@ -90,10 +93,17 @@ def primary_chinese_label(chinese_definition: str | None) -> str:
 def chinese_label_font(size: int) -> ImageFont.ImageFont:
     for path in CHINESE_FONT_CANDIDATES:
         try:
-            return ImageFont.truetype(path, size=size)
+            font = ImageFont.truetype(path, size=size)
         except OSError:
             continue
-    return ImageFont.load_default()
+        try:
+            variation_names = font.get_variation_names()
+            if b"SemiBold" in variation_names:
+                font.set_variation_by_name("SemiBold")
+        except (AttributeError, OSError):
+            pass
+        return font
+    return ImageFont.load_default(size=size)
 
 
 def fit_chinese_label_font(
