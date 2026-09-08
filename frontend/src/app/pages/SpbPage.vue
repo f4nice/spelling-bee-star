@@ -88,8 +88,14 @@ function groupStatusLabel(group) {
 }
 
 function groupMeta(group) {
-  if (group.total_count > 0) return `${group.total_count} 个单词 · ${group.list_count} 个分表`;
-  if (group.source_url_configured) return `公开源可导入 ${group.source_count || 0} 个单词`;
+  if (group.total_count > 0) {
+    const listLabel = group.list_layout === "source_categories" ? "分类词表" : "分表";
+    return `${group.total_count} 个单词 · ${group.list_count} 个${listLabel}`;
+  }
+  if (group.source_url_configured) {
+    if (group.source_category_count) return `${group.source_category_count} 个分类 · 可导入 ${group.source_count || 0} 个单词`;
+    return `公开源可导入 ${group.source_count || 0} 个单词`;
+  }
   if (group.cached_source_count) return `公共源可导入 ${group.cached_source_count} 个单词`;
   if (group.sync_ready) return "可从小程序接口同步";
   return "等待获取词库";
@@ -263,6 +269,7 @@ async function refreshAllGroups() {
 }
 
 function listLabel(card) {
+  if (card?.display_name) return card.display_name;
   const name = String(card?.list?.name || "");
   if (!card.is_new) return name;
   return name.replace(/^SPB个人赛冠军词库-/, "").replace(/-新增$/, "");
@@ -327,7 +334,7 @@ onBeforeUnmount(clearSyncPoll);
         </span>
         <span>
           <strong>{{ totalSyncedLists }}</strong>
-          分表
+          词表
         </span>
        </div>
        <button type="button" :disabled="Boolean(syncingKey)" @click="refreshAllGroups">
@@ -446,7 +453,7 @@ onBeforeUnmount(clearSyncPoll);
 
       <div v-else class="spb-empty-panel">
         <strong>{{ activeGroup.status === "locked" ? "这组在小程序里还未解锁" : "这组还没有同步到 SpeakEasy" }}</strong>
-        <span>{{ activeGroup.source_count ? `已能读取到 ${activeGroup.source_count} 个源词，待导入后会在这里出现。` : activeGroup.sync_note || "获取到词库后会按 500 个单词自动拆分成多个单词表。" }}</span>
+        <span>{{ activeGroup.source_count ? (activeGroup.source_category_count ? `已能读取到 ${activeGroup.source_count} 个源词，同步后将建立 ${activeGroup.source_category_count} 个分类词表。` : `已能读取到 ${activeGroup.source_count} 个源词，待导入后会在这里出现。`) : activeGroup.sync_note || "获取到词库后会自动建立对应词表。" }}</span>
       </div>
     </section>
 

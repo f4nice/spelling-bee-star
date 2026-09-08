@@ -129,8 +129,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260909-001"
-DEFAULT_PAGE_VERSION = "v20260909.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260909-002"
+DEFAULT_PAGE_VERSION = "v20260909.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -9650,6 +9650,122 @@ def spb_collection_page(collection_key: str, request: Request, db: Session = Dep
     return vue_shell(request, db, f"spb/{collection_key}")
 
 
+SPB_LANGUAGE_ORIGIN_SOURCES = [
+    {
+        "key": "arabic",
+        "title": "Arabic",
+        "source_count": 119,
+        "source_file": "spb_language_origin_arabic.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Arabic_null.txt",
+        "spb_flag": "Arabic",
+    },
+    {
+        "key": "asian-languages",
+        "title": "Asian Languages",
+        "source_count": 120,
+        "source_file": "spb_language_origin_asian_languages.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Asian_Languages_null.txt",
+        "spb_flag": "Asian_Languages",
+    },
+    {
+        "key": "dutch",
+        "title": "Dutch",
+        "source_count": 147,
+        "source_file": "spb_language_origin_dutch.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Dutch_null.txt",
+        "spb_flag": "Dutch",
+    },
+    {
+        "key": "eponyms",
+        "title": "Eponyms",
+        "source_count": 66,
+        "source_file": "spb_language_origin_eponyms.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Eponyms_null.txt",
+        "spb_flag": "Eponyms",
+    },
+    {
+        "key": "french",
+        "title": "French",
+        "source_count": 393,
+        "source_file": "spb_language_origin_french.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_French_null.txt",
+        "spb_flag": "French",
+    },
+    {
+        "key": "german",
+        "title": "German",
+        "source_count": 105,
+        "source_file": "spb_language_origin_german.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_German_null.txt",
+        "spb_flag": "German",
+    },
+    {
+        "key": "greek",
+        "title": "Greek",
+        "source_count": 154,
+        "source_file": "spb_language_origin_greek.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Greek_null.txt",
+        "spb_flag": "Greek",
+    },
+    {
+        "key": "italian",
+        "title": "Italian",
+        "source_count": 268,
+        "source_file": "spb_language_origin_italian.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Italian_null.txt",
+        "spb_flag": "Italian",
+    },
+    {
+        "key": "japanese",
+        "title": "Japanese",
+        "source_count": 125,
+        "source_file": "spb_language_origin_japanese.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Japanese_null.txt",
+        "spb_flag": "Japanese",
+    },
+    {
+        "key": "latin",
+        "title": "Latin",
+        "source_count": 170,
+        "source_file": "spb_language_origin_latin.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Latin_null.txt",
+        "spb_flag": "Latin",
+    },
+    {
+        "key": "new-world-languages",
+        "title": "New World Languages",
+        "source_count": 59,
+        "source_file": "spb_language_origin_new_world_languages.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_New_World_Languages_null.txt",
+        "spb_flag": "New_World_Languages",
+    },
+    {
+        "key": "old-english",
+        "title": "Old English",
+        "source_count": 117,
+        "source_file": "spb_language_origin_old_english.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Old_English_null.txt",
+        "spb_flag": "Old_English",
+    },
+    {
+        "key": "slavic-languages",
+        "title": "Slavic Languages",
+        "source_count": 73,
+        "source_file": "spb_language_origin_slavic_languages.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Slavic_Languages_null.txt",
+        "spb_flag": "Slavic_Languages",
+    },
+    {
+        "key": "spanish",
+        "title": "Spanish",
+        "source_count": 144,
+        "source_file": "spb_language_origin_spanish.json",
+        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Spanish_null.txt",
+        "spb_flag": "Spanish",
+    },
+]
+
+
 SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
     {
         "key": "beginner",
@@ -9717,11 +9833,11 @@ SPB_INDIVIDUAL_WORD_BANK_GROUPS = [
         "subtitle": "Language Origin",
         "status": "available",
         "prefix": "SPB个人赛冠军词库-词源单词",
-        "source_count": 120,
-        "source_file": "spb_individual_language_origin_words.json",
-        "source_url": "https://cdn.spbcn.org/DownloadFile/en_word_thesaurus/2025_Asian_Languages_null.txt?v=1783514166982",
+        "source_count": sum(source["source_count"] for source in SPB_LANGUAGE_ORIGIN_SOURCES),
+        "sources": SPB_LANGUAGE_ORIGIN_SOURCES,
+        "list_layout": "source_categories",
+        "prefer_cached_source": True,
         "spb_product_id": 6,
-        "spb_flag": "Asian_Languages",
     },
     {
         "key": "challenge",
@@ -10063,14 +10179,19 @@ def run_spb_sync_job(
             status="running",
             stage="importing",
             current_word="",
-            message="正在写入数据库并按 500 个单词拆分分表。",
+            message=(
+                f"正在写入数据库并建立 {len(spb_group_source_variants(group))} 个词源分类词表。"
+                if group.get("list_layout") == "source_categories"
+                else "正在写入数据库并按 500 个单词拆分分表。"
+            ),
         )
         text_detail_count = sum(1 for row in prepared_rows if spb_has_text_fields(row))
         local_audio_count = sum(spb_local_audio_count(row) for row in prepared_rows)
         word_ids, split_lists = import_spb_word_bank_rows(db, group, prepared_rows)
         if word_ids:
             start_enrichment_thread(word_ids, include_images=False)
-        message = f"已同步 {group['title']}：{len(word_ids)} 个单词，{len(split_lists)} 个分表。"
+        list_label = "分类词表" if group.get("list_layout") == "source_categories" else "分表"
+        message = f"已同步 {group['title']}：{len(word_ids)} 个单词，{len(split_lists)} 个{list_label}。"
         if text_detail_count:
             message += f" 已写入详情字段 {text_detail_count} 个。"
         elif not spb_miniprogram_authorization_configured():
@@ -10753,18 +10874,51 @@ def spb_missing_detail_count(db: Session, group: dict[str, Any]) -> int:
     )
 
 
+def spb_group_source_variants(group: dict[str, Any]) -> list[dict[str, Any]]:
+    sources = group.get("sources")
+    if not isinstance(sources, list):
+        return []
+    variants: list[dict[str, Any]] = []
+    for index, source in enumerate(sources):
+        if not isinstance(source, dict):
+            continue
+        variant = {key: value for key, value in group.items() if key != "sources"}
+        variant.update(source)
+        if "spb_product_id" not in source:
+            variant.pop("spb_product_id", None)
+        variant["source_category_key"] = str(source.get("key") or f"category-{index + 1}")
+        variant["source_category_title"] = str(source.get("title") or variant["source_category_key"])
+        variant["source_category_order"] = index
+        variants.append(variant)
+    return variants
+
+
+def spb_group_has_public_source(group: dict[str, Any]) -> bool:
+    variants = spb_group_source_variants(group)
+    if variants:
+        return all(bool(str(source.get("source_url") or "").strip()) for source in variants)
+    return bool(str(group.get("source_url") or "").strip())
+
+
 def serialize_spb_word_bank_group(db: Session, group: dict[str, Any]) -> dict[str, Any]:
     word_lists = spb_word_lists_for_group(db, group)
     cards = [serialize_word_list_card(card) for card in batch_word_list_cards(db, word_lists, challenge_state)]
     for card, word_list in zip(cards, word_lists):
         card["is_new"] = is_spb_incremental_list(word_list)
+        if group.get("list_layout") == "source_categories":
+            category_prefix = f"{clean_list_name(str(group['prefix']))}-"
+            card["display_name"] = (
+                word_list.name.removeprefix(category_prefix)
+                if word_list.name.startswith(category_prefix)
+                else word_list.name
+            )
     total_count = int(db.scalar(
         select(func.count(func.distinct(WordListItem.word_id)))
         .where(WordListItem.word_list_id.in_([item.id for item in word_lists]))
     ) or 0) if word_lists else 0
     synced = total_count > 0
     cached_source_count = count_spb_cached_source_words(group)
-    source_url_configured = bool(str(group.get("source_url") or "").strip())
+    source_url_configured = spb_group_has_public_source(group)
     authorization_configured = spb_miniprogram_authorization_configured()
     sync_ready = (
         group.get("status") != "locked"
@@ -10778,12 +10932,14 @@ def serialize_spb_word_bank_group(db: Session, group: dict[str, Any]) -> dict[st
         "subtitle": group["subtitle"],
         "status": "synced" if synced else group.get("status", "available"),
         "source_count": group.get("source_count") or cached_source_count or None,
+        "source_category_count": len(spb_group_source_variants(group)),
         "cached_source_count": cached_source_count,
         "source_url_configured": source_url_configured,
         "sync_ready": sync_ready,
         "sync_note": sync_note,
         "total_count": total_count,
         "list_count": len(cards),
+        "list_layout": group.get("list_layout") or "chunks",
         "cards": cards,
     }
 
@@ -10804,8 +10960,11 @@ def spb_cached_source_path(group: dict[str, Any]) -> Path:
 
 
 def count_spb_cached_source_words(group: dict[str, Any]) -> int:
+    variants = spb_group_source_variants(group)
+    if variants:
+        return sum(count_spb_cached_source_words(source) for source in variants)
     path = spb_cached_source_path(group)
-    if not path.exists():
+    if not path.is_file():
         return 0
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -10828,7 +10987,7 @@ def spb_group_sync_note(
         return "已同步到 SpeakEasy。"
     if group.get("status") == "locked":
         return "这组仍在小程序里锁定，暂时不能同步。"
-    if str(group.get("source_url") or "").strip():
+    if spb_group_has_public_source(group):
         return "已配置 SPB 公共源词库，可直接同步。"
     if authorization_configured:
         return "可从小程序接口同步；如果接口返回空结果，会自动尝试本地公共源词库。"
@@ -10937,6 +11096,16 @@ def spb_download_source_payload(source_url: str) -> Any:
 
 
 def fetch_spb_source_rows_from_miniprogram(group: dict[str, Any]) -> tuple[list[dict[str, Any]], Path]:
+    variants = spb_group_source_variants(group)
+    if variants:
+        combined_rows: list[dict[str, Any]] = []
+        for source in variants:
+            rows, _source_path = fetch_spb_source_rows_from_miniprogram(source)
+            if not rows:
+                return [], Path(f"mini-program-{group.get('key') or 'sources'}.json")
+            combined_rows.extend(annotate_spb_source_category(rows, source))
+        return combined_rows, Path(f"mini-program-{group.get('key') or 'sources'}-categories.json")
+
     flag = str(group.get("spb_flag") or "").strip()
     product_id = group.get("spb_product_id")
     candidates: list[tuple[str, dict[str, Any], str]] = []
@@ -10966,6 +11135,16 @@ def fetch_spb_source_rows_from_miniprogram(group: dict[str, Any]) -> tuple[list[
 
 
 def fetch_spb_source_rows_from_url(group: dict[str, Any]) -> tuple[list[dict[str, Any]], Path]:
+    variants = spb_group_source_variants(group)
+    if variants:
+        combined_rows: list[dict[str, Any]] = []
+        for source in variants:
+            rows, _source_path = fetch_spb_source_rows_from_url(source)
+            if not rows:
+                return [], Path(f"{group.get('key') or 'sources'}-categories.json")
+            combined_rows.extend(annotate_spb_source_category(rows, source))
+        return combined_rows, Path(f"{group.get('key') or 'sources'}-categories.json")
+
     source_url = str(group.get("source_url") or "").strip()
     if not source_url:
         return [], Path("")
@@ -10978,6 +11157,21 @@ def fetch_spb_source_rows_from_url(group: dict[str, Any]) -> tuple[list[dict[str
 
 
 def load_spb_source_rows(group: dict[str, Any]) -> tuple[list[dict[str, Any]], Path]:
+    variants = spb_group_source_variants(group)
+    if variants:
+        combined_rows: list[dict[str, Any]] = []
+        for source in variants:
+            rows, _source_path = load_spb_source_rows(source)
+            if not rows:
+                return [], Path(f"{group.get('key') or 'sources'}-categories.json")
+            combined_rows.extend(annotate_spb_source_category(rows, source))
+        return combined_rows, Path(f"{group.get('key') or 'sources'}-categories.json")
+
+    path = spb_cached_source_path(group)
+    if group.get("prefer_cached_source") and path.is_file():
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return normalize_spb_word_rows(extract_spb_word_values(payload), group), path
+
     # The authenticated API tracks the current edition; public download URLs
     # can still point at an older edition with fewer words.
     api_rows, api_source = fetch_spb_source_rows_from_miniprogram(group)
@@ -10988,11 +11182,25 @@ def load_spb_source_rows(group: dict[str, Any]) -> tuple[list[dict[str, Any]], P
     if url_rows:
         return url_rows, url_source
 
-    path = spb_cached_source_path(group)
-    if path.exists():
+    if path.is_file():
         payload = json.loads(path.read_text(encoding="utf-8"))
         return normalize_spb_word_rows(extract_spb_word_values(payload), group), path
     return [], path
+
+
+def annotate_spb_source_category(
+    rows: list[dict[str, Any]],
+    source: dict[str, Any],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            **row,
+            "spb_category_key": source.get("source_category_key") or source.get("key"),
+            "spb_category_title": source.get("source_category_title") or source.get("title"),
+            "spb_category_order": int(source.get("source_category_order") or 0),
+        }
+        for row in rows
+    ]
 
 
 def extract_spb_word_values(payload: Any) -> list[Any]:
@@ -12062,8 +12270,93 @@ def is_spb_incremental_list(word_list: WordList) -> bool:
     return "-新增-" in word_list.name or word_list.name.endswith("-新增")
 
 
+def spb_category_word_list_name(group: dict[str, Any], source: dict[str, Any]) -> str:
+    return clean_list_name(f"{group['prefix']}-{source['title']}")
+
+
+def get_or_create_spb_category_word_list(
+    db: Session,
+    group: dict[str, Any],
+    source: dict[str, Any],
+    group_id: int,
+    sequence_offset: int,
+) -> WordList:
+    list_name = spb_category_word_list_name(group, source)
+    word_list = db.scalar(
+        select(WordList).where(WordList.name == list_name).order_by(WordList.id.asc()).limit(1)
+    )
+    if not word_list and source.get("key") == "asian-languages":
+        # Keep the ID of the old 120-word Language Origin list so existing
+        # challenge history and links continue to work after categorization.
+        legacy_name = clean_list_name(str(group["prefix"]))
+        word_list = db.scalar(
+            select(WordList).where(WordList.name == legacy_name).order_by(WordList.id.asc()).limit(1)
+        )
+    if not word_list:
+        word_list = WordList(name=list_name, display_order=next_word_list_display_order(db))
+        db.add(word_list)
+    word_list.name = list_name
+    word_list.group_id = group_id
+    word_list.sequence_offset = sequence_offset
+    db.commit()
+    db.refresh(word_list)
+    return word_list
+
+
+def spb_rows_for_category(source_rows: list[dict[str, Any]], source: dict[str, Any]) -> list[dict[str, Any]]:
+    category_key = str(source.get("key") or "")
+    return [row for row in source_rows if str(row.get("spb_category_key") or "") == category_key]
+
+
+def append_missing_spb_category_words(
+    db: Session,
+    group: dict[str, Any],
+    source_rows: list[dict[str, Any]],
+) -> int:
+    split_group = get_or_create_word_list_group_by_name(db, clean_list_name(str(group["prefix"])))
+    added = 0
+    for index, source in enumerate(spb_group_source_variants(group)):
+        word_list = get_or_create_spb_category_word_list(db, group, source, split_group.id, index)
+        known = {
+            normalize_resource_word(word.word)
+            for word in db.scalars(
+                select(Word)
+                .join(WordListItem, WordListItem.word_id == Word.id)
+                .where(WordListItem.word_list_id == word_list.id)
+            ).all()
+        }
+        category_rows = []
+        for row in spb_rows_for_category(source_rows, source):
+            key = normalize_resource_word(row.get("word"))
+            if not key or key in known:
+                continue
+            known.add(key)
+            category_rows.append(row)
+        if not category_rows:
+            continue
+        existing_count = int(
+            db.scalar(select(func.count(WordListItem.id)).where(WordListItem.word_list_id == word_list.id)) or 0
+        )
+        rows = [
+            {
+                **row,
+                "row_number": existing_count + row_index + 1,
+                "note": f"SPB {group['title']} · {source['title']}",
+            }
+            for row_index, row in enumerate(category_rows)
+        ]
+        ids = import_rows(rows, db, word_list)
+        if len(ids) != len(rows):
+            raise HTTPException(status_code=500, detail=f"{source['title']} 新词未全部导入，请重试。")
+        added += len(ids)
+    return added
+
+
 def append_missing_spb_words(db: Session, group: dict[str, Any], source_rows: list[dict[str, Any]]) -> int:
     """Append new edition words without rebuilding lists or changing old IDs."""
+    if group.get("list_layout") == "source_categories":
+        return append_missing_spb_category_words(db, group, source_rows)
+
     known = {normalize_resource_word(word.word) for word in spb_words_for_group(db, group)}
     missing = []
     for row in source_rows:
@@ -12109,6 +12402,25 @@ def append_missing_spb_words(db: Session, group: dict[str, Any], source_rows: li
 
 
 def import_spb_word_bank_rows(db: Session, group: dict[str, Any], source_rows: list[dict[str, Any]]) -> tuple[list[int], list[WordList]]:
+    if group.get("list_layout") == "source_categories":
+        split_group = get_or_create_word_list_group_by_name(db, clean_list_name(str(group["prefix"])))
+        word_ids: list[int] = []
+        category_lists: list[WordList] = []
+        for index, source in enumerate(spb_group_source_variants(group)):
+            word_list = get_or_create_spb_category_word_list(db, group, source, split_group.id, index)
+            clear_word_list_items(db, word_list.id)
+            rows = [
+                {
+                    **row,
+                    "row_number": row_index + 1,
+                    "note": f"SPB {group['title']} · {source['title']}",
+                }
+                for row_index, row in enumerate(spb_rows_for_category(source_rows, source))
+            ]
+            category_lists.append(word_list)
+            word_ids.extend(import_rows(rows, db, word_list))
+        return word_ids, category_lists
+
     chunk_size = 500
     base_name = clean_list_name(str(group["prefix"]))
     rows = [

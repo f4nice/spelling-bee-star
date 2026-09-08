@@ -13,6 +13,76 @@ from app.models import Word, WordList, WordListItem
 
 
 class SpbRefreshTest(unittest.TestCase):
+    def test_language_origin_catalog_has_fourteen_category_sources(self):
+        group = m.spb_collection_group_by_keys("individual", "origin")[1]
+        sources = m.spb_group_source_variants(group)
+        self.assertEqual(len(sources), 14)
+        self.assertEqual(sum(source["source_count"] for source in sources), 2060)
+        self.assertEqual(m.count_spb_cached_source_words(group), 2060)
+        self.assertEqual(
+            [source["title"] for source in sources],
+            [
+                "Arabic", "Asian Languages", "Dutch", "Eponyms", "French", "German", "Greek",
+                "Italian", "Japanese", "Latin", "New World Languages", "Old English",
+                "Slavic Languages", "Spanish",
+            ],
+        )
+
+    def test_category_sources_are_combined_with_category_identity(self):
+        group = {
+            "key": "origin",
+            "sources": [
+                {"key": "arabic", "title": "Arabic", "source_url": "https://example.test/arabic"},
+                {"key": "dutch", "title": "Dutch", "source_url": "https://example.test/dutch"},
+            ],
+        }
+        public_rows = [([{"word": "adjar"}], Path("arabic.json")), ([{"word": "beaker"}], Path("dutch.json"))]
+        with patch.object(m, "fetch_spb_source_rows_from_miniprogram", return_value=([], Path())), \
+             patch.object(m, "fetch_spb_source_rows_from_url", side_effect=public_rows):
+            rows, source = m.load_spb_source_rows(group)
+        self.assertEqual(source.name, "origin-categories.json")
+        self.assertEqual(
+            [(row["word"], row["spb_category_key"], row["spb_category_title"]) for row in rows],
+            [("adjar", "arabic", "Arabic"), ("beaker", "dutch", "Dutch")],
+        )
+
+    def test_language_origin_import_creates_one_list_per_category(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        group = {
+            "key": "origin",
+            "title": "词源单词",
+            "subtitle": "Language Origin",
+            "prefix": "SPB个人赛冠军词库-词源单词",
+            "list_layout": "source_categories",
+            "sources": [
+                {"key": "arabic", "title": "Arabic"},
+                {"key": "dutch", "title": "Dutch"},
+            ],
+        }
+        rows = [
+            {"word": "adjar", "spb_category_key": "arabic"},
+            {"word": "beaker", "spb_category_key": "dutch"},
+            {"word": "bluff", "spb_category_key": "dutch"},
+        ]
+        with Session(engine) as db:
+            word_ids, lists = m.import_spb_word_bank_rows(db, group, rows)
+            self.assertEqual(len(word_ids), 3)
+            self.assertEqual(
+                [word_list.name for word_list in lists],
+                [
+                    "SPB个人赛冠军词库-词源单词-Arabic",
+                    "SPB个人赛冠军词库-词源单词-Dutch",
+                ],
+            )
+            self.assertEqual(
+                [db.scalar(select(func.count(WordListItem.id)).where(WordListItem.word_list_id == word_list.id)) for word_list in lists],
+                [1, 2],
+            )
+            self.assertEqual(m.append_missing_spb_words(db, group, rows + [{"word": "berg", "spb_category_key": "dutch"}]), 1)
+            self.assertEqual(m.append_missing_spb_words(db, group, rows + [{"word": "berg", "spb_category_key": "dutch"}]), 0)
+        engine.dispose()
+
     def test_miniprogram_detail_fields_include_definitions_and_phonetic(self):
         payload = {
             "def": "to move or extend in different directions from a common point : draw apart",
