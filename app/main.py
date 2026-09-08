@@ -69,6 +69,7 @@ from app.services.audio_storage import audio_candidates_with_dictionary, is_loca
 from app.services.ai_image_generation import generate_dashscope_prompt_image, generate_word_image
 from app.services.ai_tts import generate_word_ai_audio
 from app.services.chinadaily import get_chinadaily_article, load_chinadaily_articles
+from app.services.challenge_masking import mask_word_in_text
 from app.services.newspaper_cache import NewspaperCache
 from app.services.list_completion_jobs import (
     ListCompletionJobs, PreserveWordValues, missing_text_fields,
@@ -128,8 +129,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260908-002"
-DEFAULT_PAGE_VERSION = "v20260908.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260909-001"
+DEFAULT_PAGE_VERSION = "v20260909.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -24427,47 +24428,6 @@ async def word_audio(word_id: int, accent: str = "us", db: Session = Depends(get
     if is_local_audio_url(audio_url):
         return RedirectResponse(url=audio_url, status_code=302)
     return await tts_audio(word.word, accent)
-
-
-def mask_word_in_text(
-    text_value: str | None,
-    word_value: str | None,
-    alternate_spellings: str | None = None,
-) -> str | None:
-    text_value = (text_value or "").strip()
-    word_value = (word_value or "").strip()
-    if not text_value:
-        return None
-    if not word_value:
-        return text_value
-
-    candidates = {word_value}
-    if alternate_spellings:
-        candidates.update(
-            item.strip()
-            for item in re.split(r"[,;/；，、\r\n]+", alternate_spellings)
-            if item.strip()
-        )
-
-    for candidate in list(candidates):
-        lower_candidate = candidate.lower()
-        if len(candidate) < 4:
-            continue
-        if lower_candidate.endswith("ies") and len(candidate) > 4:
-            candidates.add(candidate[:-3] + "y")
-        if lower_candidate.endswith("es") and len(candidate) > 4:
-            candidates.add(candidate[:-2])
-        if lower_candidate.endswith("s") and len(candidate) > 4:
-            candidates.add(candidate[:-1])
-        else:
-            candidates.add(candidate + "s")
-            candidates.add(candidate + "es")
-
-    masked_text = text_value
-    for candidate in sorted(candidates, key=len, reverse=True):
-        pattern = re.compile(rf"(?<![A-Za-z]){re.escape(candidate)}(?![A-Za-z])", re.IGNORECASE)
-        masked_text = pattern.sub("***", masked_text)
-    return masked_text
 
 
 def preview_path(preview_id: str) -> Path:
