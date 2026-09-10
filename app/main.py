@@ -129,8 +129,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260909-002"
-DEFAULT_PAGE_VERSION = "v20260909.2"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20260911-001"
+DEFAULT_PAGE_VERSION = "v20260911.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -10299,13 +10299,22 @@ async def vue_spb_sync_api(request: Request, db: Session = Depends(get_db)):
     if group.get("status") == "locked":
         raise HTTPException(status_code=400, detail="这组还在小程序里锁定，暂时不能同步")
 
-    rows, source_path = load_spb_source_rows(group)
+    rows, source_path = await asyncio.to_thread(
+        load_spb_source_rows, group, force_refresh=group.get("list_layout") == "source_categories",
+    )
     if not rows:
-        detail = (
-            f"{group['title']} 缺少小程序授权，服务器也没有这组公共源词库。请先配置 SPB 小程序授权后再同步。"
-            if not spb_miniprogram_authorization_configured()
-            else f"{group['title']} 已尝试调用小程序接口，但没有拿到可导入词库；请确认小程序账号已开通这组词库。"
-        )
+        if group.get("list_layout") == "source_categories":
+            detail = (
+                f"{group['title']} 获取最新词库需要小程序授权，请配置后重试；已有缓存和词表保留。"
+                if not spb_miniprogram_authorization_configured()
+                else f"{group['title']} 未能从小程序接口完整获取全部分类，请稍后重试；已有缓存和词表保留。"
+            )
+        else:
+            detail = (
+                f"{group['title']} 缺少小程序授权，服务器也没有这组公共源词库。请先配置 SPB 小程序授权后再同步。"
+                if not spb_miniprogram_authorization_configured()
+                else f"{group['title']} 已尝试调用小程序接口，但没有拿到可导入词库；请确认小程序账号已开通这组词库。"
+            )
         raise HTTPException(
             status_code=404,
             detail=detail,
@@ -10374,8 +10383,17 @@ async def vue_spb_backfill_details_api(request: Request, db: Session = Depends(g
     force_audio_download = bool(payload.get("force_audio_download") or payload.get("forceAudioDownload"))
     if collection["key"] == "individual" and str(group.get("source_url") or "").strip():
         force_audio_download = True
-    source_rows, _source_path = load_spb_source_rows(group)
+    source_rows, _source_path = await asyncio.to_thread(
+        load_spb_source_rows, group, force_refresh=group.get("list_layout") == "source_categories",
+    )
     if not source_rows:
+        if group.get("list_layout") == "source_categories":
+            detail = (
+                "获取最新词源分类需要小程序授权，请配置后重试；已有缓存和词表保留。"
+                if not spb_miniprogram_authorization_configured()
+                else "未能从小程序接口完整获取全部词源分类，请稍后重试；已有缓存和词表保留。"
+            )
+            raise HTTPException(status_code=502, detail=detail)
         raise HTTPException(status_code=502, detail="未能获取 SPB 词表，请稍后重试。")
     added_count = append_missing_spb_words(db, group, source_rows)
     words = spb_words_for_group(db, group)
@@ -10931,7 +10949,11 @@ def serialize_spb_word_bank_group(db: Session, group: dict[str, Any]) -> dict[st
         "title": group["title"],
         "subtitle": group["subtitle"],
         "status": "synced" if synced else group.get("status", "available"),
-        "source_count": group.get("source_count") or cached_source_count or None,
+        "source_count": (
+            cached_source_count or group.get("source_count") or None
+            if group.get("list_layout") == "source_categories"
+            else group.get("source_count") or cached_source_count or None
+        ),
         "source_category_count": len(spb_group_source_variants(group)),
         "cached_source_count": cached_source_count,
         "source_url_configured": source_url_configured,
@@ -10957,6 +10979,32 @@ def spb_cached_source_path(group: dict[str, Any]) -> Path:
         if path.exists():
             return path
     return Path(source_file)
+
+
+def cache_spb_miniprogram_source(group: dict[str, Any], payload: Any) -> bool:
+    """Atomically cache the raw word payload, retaining IDs and provider fields."""
+    source_file = str(group.get("source_file") or "").strip()
+    if not source_file or not re.fullmatch(r"[A-Za-z0-9_.-]+", source_file):
+        return False
+    if not normalize_spb_word_rows(extract_spb_word_values(payload), group):
+        return False
+    source_dir = MEDIA_DIR / "spb"
+    target = source_dir / source_file
+    temporary = source_dir / f".{source_file}.{uuid4().hex}.tmp"
+    try:
+        serialized = json.dumps(payload, ensure_ascii=False)
+        source_dir.mkdir(parents=True, exist_ok=True)
+        temporary.write_text(serialized, encoding="utf-8")
+        temporary.replace(target)
+        return True
+    except (OSError, TypeError, ValueError):
+        logging.getLogger("speakeasy.spb").warning("SPB live source cache could not be updated; previous cache retained")
+        return False
+    finally:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def count_spb_cached_source_words(group: dict[str, Any]) -> int:
@@ -11099,11 +11147,15 @@ def fetch_spb_source_rows_from_miniprogram(group: dict[str, Any]) -> tuple[list[
     variants = spb_group_source_variants(group)
     if variants:
         combined_rows: list[dict[str, Any]] = []
+        incomplete = False
         for source in variants:
             rows, _source_path = fetch_spb_source_rows_from_miniprogram(source)
             if not rows:
-                return [], Path(f"mini-program-{group.get('key') or 'sources'}.json")
+                incomplete = True
+                continue
             combined_rows.extend(annotate_spb_source_category(rows, source))
+        if incomplete:
+            return [], Path(f"mini-program-{group.get('key') or 'sources'}.json")
         return combined_rows, Path(f"mini-program-{group.get('key') or 'sources'}-categories.json")
 
     flag = str(group.get("spb_flag") or "").strip()
@@ -11130,6 +11182,7 @@ def fetch_spb_source_rows_from_miniprogram(group: dict[str, Any]) -> tuple[list[
         payload = spb_source_payload_from_api_data(spb_miniprogram_get(endpoint, params))
         rows = normalize_spb_word_rows(extract_spb_word_values(payload), group)
         if rows:
+            cache_spb_miniprogram_source(group, payload)
             return rows, Path(source_name)
     return [], Path(f"mini-program-{flag or product_id or group.get('key')}.json")
 
@@ -11156,7 +11209,14 @@ def fetch_spb_source_rows_from_url(group: dict[str, Any]) -> tuple[list[dict[str
     return [], Path(source_url)
 
 
-def load_spb_source_rows(group: dict[str, Any]) -> tuple[list[dict[str, Any]], Path]:
+def load_spb_source_rows(
+    group: dict[str, Any], *, force_refresh: bool = False,
+) -> tuple[list[dict[str, Any]], Path]:
+    # Explicit sync must use every live category, never silently report an old
+    # bundled/downloaded file as current. Routine word lookups retain the cache
+    # path below, avoiding fourteen remote downloads for every origin word.
+    if force_refresh:
+        return fetch_spb_source_rows_from_miniprogram(group)
     variants = spb_group_source_variants(group)
     if variants:
         combined_rows: list[dict[str, Any]] = []
@@ -12076,16 +12136,18 @@ def spb_catalog_groups_for_word(word_text: str | None) -> list[dict[str, Any]]:
         return []
     groups = []
     for group in all_spb_word_bank_groups():
-        path = spb_cached_source_path(group)
-        if not path.is_file():
-            continue
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            rows = normalize_spb_word_rows(extract_spb_word_values(payload), group)
-        except (OSError, ValueError):
-            continue
-        if any(normalize_resource_word(row.get("word")) == normalized for row in rows):
-            groups.append(group)
+        for source in spb_group_source_variants(group) or [group]:
+            path = spb_cached_source_path(source)
+            if not path.is_file():
+                continue
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                rows = normalize_spb_word_rows(extract_spb_word_values(payload), source)
+            except (OSError, ValueError):
+                continue
+            if any(normalize_resource_word(row.get("word")) == normalized for row in rows):
+                groups.append(group)
+                break
     return groups
 
 
