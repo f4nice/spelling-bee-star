@@ -68,6 +68,16 @@ test("already complete data does not conceal a failed status or optional source 
   }
 });
 
+test("SPB detail outage is shown as a repair failure even when legacy text is complete", () => {
+  const feedback = wordRefreshFeedback({
+    word: completeWord,
+    completion: { matched: true, detail_unavailable: true, text_refreshed: false },
+  });
+  assert.equal(feedback.status, "failed");
+  assert.equal(feedback.failed, true);
+  assert.match(feedback.notice, /文字详情接口暂时不可用/);
+});
+
 test("missing or explicitly rejected responses cannot be reported as success", () => {
   assert.throws(() => wordRefreshFeedback(undefined), /未收到补全结果/);
   assert.throws(() => wordRefreshFeedback({ ok: false, word: completeWord }), /服务器未能完成/);

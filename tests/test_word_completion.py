@@ -8,14 +8,14 @@ from unittest.mock import AsyncMock, patch
 
 os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
 from app import main as m
 from app.config import Settings
 from app.database import Base
-from app.models import Word
+from app.models import Word, WordResourcePool
 from app.services import enrichment as e
 from app.services.dictionary import DictionaryEntry
 
@@ -130,6 +130,41 @@ class WordCompletionTest(unittest.TestCase):
             asyncio.run(m.complete_word_from_sources(self.db, self.word))
         self.assertEqual(calls, ["spb", "online"])
 
+    def test_interactive_completion_reports_when_spb_text_detail_is_unavailable(self):
+        for field, value in COMPLETE.items():
+            setattr(self.word, field, value)
+
+        async def spb(db, word, **kwargs):
+            kwargs["lookup_report"].update({
+                "matched": True,
+                "detail_unavailable": True,
+                "text_refreshed": False,
+            })
+            return False
+
+        with patch.object(m, "apply_spb_details_to_word", side_effect=spb), \
+             patch.object(m, "enrich_word", new=AsyncMock()) as online:
+            result = asyncio.run(m.complete_word_from_sources(self.db, self.word, list_id=106))
+
+        online.assert_not_awaited()
+        self.assertEqual(result["matched"], True)
+        self.assertEqual(result["detail_unavailable"], True)
+        self.assertIn("SPB词库文字详情暂时不可用", self.word.enrichment_error)
+
+    def test_spb_lookup_runs_before_resource_pool_fallback(self):
+        calls = []
+
+        async def spb(db, word, **kwargs):
+            calls.append("spb")
+            return False
+
+        with patch.object(m, "apply_spb_details_to_word", side_effect=spb), \
+             patch.object(m, "enrich_word", new=AsyncMock()), \
+             patch.object(m, "apply_word_resource", side_effect=lambda *args, **kwargs: calls.append("resource")):
+            asyncio.run(m.complete_word_from_sources(self.db, self.word))
+
+        self.assertEqual(calls, ["spb", "resource"])
+
     def test_absent_or_unavailable_spb_still_uses_online(self):
         for result in (False, RuntimeError("upstream unavailable")):
             with self.subTest(result=result), \
@@ -192,6 +227,61 @@ class WordCompletionTest(unittest.TestCase):
              patch.object(m, "clear_misclassified_spb_audio_from_resource", return_value=False):
             self.assertFalse(asyncio.run(m.apply_spb_details_to_word(self.db, self.word)))
         find.assert_called_once_with(groups[0], "test")
+
+
+class WordResourceProvenanceTest(unittest.TestCase):
+    def setUp(self):
+        self.engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(self.engine)
+        self.db = Session(self.engine)
+
+    def tearDown(self):
+        self.db.close()
+        self.engine.dispose()
+
+    def test_spb_audio_does_not_promote_legacy_dictionary_text(self):
+        word = Word(word="civilization", english_definition="Current definition", english_example="Current example")
+        resource = WordResourcePool(
+            normalized_word="civilization",
+            display_word="civilization",
+            english_definition="Legacy dictionary definition",
+            english_definition_audio_url="/media/audio/spb-definition.mp3",
+            english_definition_audio_source="spb-miniprogram",
+            english_example="Legacy dictionary example",
+            english_example_audio_url="/media/audio/spb-example.mp3",
+            english_example_audio_source="spb-miniprogram",
+        )
+        self.db.add_all([word, resource])
+        self.db.commit()
+
+        m.apply_word_resource(self.db, word, include_image=False)
+        self.assertEqual(word.english_definition, "Current definition")
+        self.assertEqual(word.english_example, "Current example")
+
+    def test_spb_text_provenance_is_saved_separately_from_audio(self):
+        word = Word(
+            word="civilization",
+            english_definition="SPB definition",
+            chinese_definition="SPB 中文释义",
+            english_example="SPB example",
+        )
+        self.db.add(word)
+        self.db.commit()
+
+        self.assertTrue(m.remember_word_resource(
+            self.db,
+            word,
+            english_definition_source="spb-miniprogram",
+            chinese_definition_source="spb-miniprogram",
+            english_example_source="spb-miniprogram",
+            commit=True,
+        ))
+        resource = self.db.scalar(
+            select(WordResourcePool).where(WordResourcePool.normalized_word == "civilization")
+        )
+        self.assertEqual(resource.english_definition_source, "spb-miniprogram")
+        self.assertEqual(resource.chinese_definition_source, "spb-miniprogram")
+        self.assertEqual(resource.english_example_source, "spb-miniprogram")
 
 
 if __name__ == "__main__":

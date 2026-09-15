@@ -15,6 +15,14 @@ export function wordRefreshFeedback(result) {
     .map(([, label]) => label);
   const hasContent = missing.length < REQUIRED_TEXT.length;
   const sourceFailed = word.enrichment_status === "failed" || Boolean(word.enrichment_error);
+  const completion = result?.completion;
+
+  if (completion?.matched && completion.detail_unavailable && !completion.text_refreshed) {
+    return {
+      status: "failed", failed: true,
+      notice: "已找到当前词库，但文字详情接口暂时不可用；现有定义和例句未覆盖，请更新 SPB 授权后再次点击。",
+    };
+  }
 
   // A returned snapshot can still be pending; never label it a finished failure.
   if (word.enrichment_status === "pending") {

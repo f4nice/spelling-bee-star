@@ -8989,30 +8989,43 @@ async def vue_refresh_word(
     word = db.get(Word, word_id)
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
-    await complete_word_from_sources(db, word, list_id=list_id)
-    return {"ok": True, "word": serialize_word(word)}
+    completion = await complete_word_from_sources(db, word, list_id=list_id)
+    return {"ok": True, "word": serialize_word(word), "completion": completion}
 
 
 async def complete_word_from_sources(
     db: Session, word: Word, *, list_id: int | None = None, only_missing: bool = False,
-) -> None:
+) -> dict[str, Any]:
     """Current-word completion always prefers SPB; the web only fills gaps."""
+    lookup_report: dict[str, Any] = {}
     with PreserveWordValues(db, word) if only_missing else nullcontext() as protection:
         word.enrichment_status = "pending"
         word.enrichment_error = None
         db.add(word)
         db.commit()
-        apply_word_resource(db, word, commit=False, include_image=False)
-        if protection:
-            protection.restore()
         try:
-            await asyncio.wait_for(apply_spb_details_to_word(
-                db, word, list_id=list_id, search_all_groups=True, only_missing=only_missing,
-            ), timeout=20)
+            await asyncio.wait_for(
+                apply_spb_details_to_word(
+                    db,
+                    word,
+                    list_id=list_id,
+                    search_all_groups=True,
+                    only_missing=only_missing,
+                    lookup_report=lookup_report,
+                ),
+                timeout=20,
+            )
         except (httpx.HTTPError, OSError, ValueError, RuntimeError):
             # A temporarily unavailable upstream must not prevent online fallback.
             # Do not include exception text here: requests can contain auth details.
             logging.getLogger("speakeasy.enrichment").warning("SPB lookup unavailable for word id %s; using missing-field fallback", word.id)
+            lookup_report["detail_unavailable"] = True
+        if protection:
+            protection.restore()
+        # This is deliberately after the live SPB attempt.  Resource-pool text
+        # can be older than the current list's source, while its audio may
+        # already be a correct SPB asset.
+        apply_word_resource(db, word, commit=False, include_image=False)
         if protection:
             protection.restore()
         db.add(word)
@@ -9024,9 +9037,19 @@ async def complete_word_from_sources(
             word.enrichment_status = "done"
             word.enrichment_error = None
             db.commit()
+        if (
+            not only_missing
+            and lookup_report.get("matched")
+            and lookup_report.get("detail_unavailable")
+            and not lookup_report.get("text_refreshed")
+        ):
+            word.enrichment_error = "SPB词库文字详情暂时不可用，未覆盖现有定义和例句；请更新SPB授权后再次点击补全当前词。"
+            db.add(word)
+            db.commit()
         if protection:
             protection.restore()
         remember_word_resource(db, word, commit=True)
+    return lookup_report
 
 
 async def complete_list_word_missing_fields(db: Session, word: Word, *, list_id: int) -> None:
@@ -12188,7 +12211,14 @@ async def apply_spb_details_to_word(
     force_audio_download: bool = False,
     search_all_groups: bool = False,
     only_missing: bool = False,
+    lookup_report: dict[str, Any] | None = None,
 ) -> bool:
+    if lookup_report is not None:
+        lookup_report.update({
+            "matched": False,
+            "text_refreshed": False,
+            "detail_unavailable": False,
+        })
     changed = False
     preserved = protected_word_values(word) if only_missing else {}
     candidate_groups: list[dict[str, Any]] = []
@@ -12206,6 +12236,8 @@ async def apply_spb_details_to_word(
         row = await asyncio.to_thread(find_spb_source_row_for_word, group, word.word)
         if not row:
             continue
+        if lookup_report is not None:
+            lookup_report["matched"] = True
         prepared = dict(row)
         if spb_miniprogram_authorization_configured() and prepared.get("spb_word_id"):
             detail = await fetch_spb_word_detail_from_miniprogram(prepared, group)
@@ -12213,6 +12245,8 @@ async def apply_spb_details_to_word(
                 detail_text_fields = spb_text_fields_from_payload(detail)
                 if detail_text_fields:
                     prepared["spb_text_source"] = "spb-miniprogram"
+                    if lookup_report is not None:
+                        lookup_report["text_refreshed"] = True
                 detail_audio_fields = spb_audio_urls_from_payload(detail)
                 if detail_audio_fields.get("american_audio_url"):
                     prepared["american_audio_url_source"] = "spb-miniprogram"
@@ -12224,6 +12258,10 @@ async def apply_spb_details_to_word(
                     prepared["english_example_audio_url_source"] = "spb-miniprogram"
                 prepared.update(detail_audio_fields)
                 prepared.update(detail_text_fields)
+            elif lookup_report is not None:
+                lookup_report["detail_unavailable"] = True
+        elif lookup_report is not None:
+            lookup_report["detail_unavailable"] = True
 
         prepared_rows = await prepare_spb_rows_with_local_audio(
             [prepared],
@@ -12253,6 +12291,21 @@ async def apply_spb_details_to_word(
                 word,
                 american_audio_source=prepared.get("american_audio_url_source"),
                 british_audio_source=prepared.get("british_audio_url_source"),
+                english_definition_source=(
+                    "spb-miniprogram"
+                    if prepared.get("spb_text_source") and prepared.get("english_definition")
+                    else None
+                ),
+                chinese_definition_source=(
+                    "spb-miniprogram"
+                    if prepared.get("spb_text_source") and prepared.get("chinese_definition")
+                    else None
+                ),
+                english_example_source=(
+                    "spb-miniprogram"
+                    if prepared.get("spb_text_source") and prepared.get("english_example")
+                    else None
+                ),
                 english_definition_audio_source=prepared.get("english_definition_audio_url_source"),
                 english_example_audio_source=prepared.get("english_example_audio_url_source"),
                 override_text=not only_missing and bool(prepared.get("spb_text_source")),
@@ -12311,6 +12364,10 @@ async def spb_audio_options_for_word(db: Session, word: Word, accent: str, list_
 def apply_spb_text_fields_to_word(word: Word, row: dict[str, Any]) -> bool:
     changed = False
     prefer_spb_detail = row.get("spb_text_source") == "spb-miniprogram"
+    has_spb_text = any(str(row.get(field) or "").strip() for field in SPB_TEXT_IMPORT_FIELDS)
+    if prefer_spb_detail and has_spb_text and word.source != "SPB小程序词库接口":
+        word.source = "SPB小程序词库接口"
+        changed = True
     for field in ("phonetic", "part_of_speech"):
         value = str(row.get(field) or "").strip()
         if value and (prefer_spb_detail or not (getattr(word, field, None) or "").strip()):
@@ -14852,6 +14909,9 @@ def remember_word_resource(
     image_source: str | None = None,
     american_audio_source: str | None = None,
     british_audio_source: str | None = None,
+    english_definition_source: str | None = None,
+    chinese_definition_source: str | None = None,
+    english_example_source: str | None = None,
     english_definition_audio_source: str | None = None,
     english_example_audio_source: str | None = None,
     override_text: bool = False,
@@ -14881,6 +14941,13 @@ def remember_word_resource(
         resource.source_word_id = word.id
         changed = True
 
+    text_sources = {
+        "english_definition": english_definition_source,
+        "chinese_definition": chinese_definition_source,
+        "english_example": english_example_source,
+    }
+    if override_text and not any(text_sources.values()):
+        text_sources = {field: "word" for field in text_sources}
     for field in ("phonetic", "part_of_speech", "english_definition", "chinese_definition", "english_example"):
         value = (getattr(word, field, None) or "").strip()
         if value and (override_text or not getattr(resource, field)):
@@ -14888,6 +14955,10 @@ def remember_word_resource(
                 resource.english_example_audio_url = None
                 resource.english_example_audio_source = None
             setattr(resource, field, value)
+            changed = True
+        source = text_sources.get(field)
+        if value and source and getattr(resource, f"{field}_source", None) != source:
+            setattr(resource, f"{field}_source", source)
             changed = True
 
     if (word.image_url or "").strip() and (override_media or not resource.image_url):
@@ -14995,11 +15066,14 @@ def apply_word_resource(db: Session, word: Word, *, commit: bool = False, includ
     changed = repair_legacy_spb_example_audio_resource(resource)
     if repair_legacy_spb_example_audio_slot(word):
         changed = True
+    # Text and audio have independent provenance.  SPB audio must not make a
+    # legacy dictionary definition look like a verified SPB text response.
     resource_has_spb_detail = any(
-        is_spb_audio_source(source, url)
-        for source, url in (
-            (resource.english_definition_audio_source, resource.english_definition_audio_url),
-            (resource.english_example_audio_source, resource.english_example_audio_url),
+        source == "spb-miniprogram"
+        for source in (
+            getattr(resource, "english_definition_source", None),
+            getattr(resource, "chinese_definition_source", None),
+            getattr(resource, "english_example_source", None),
         )
     )
     for field in ("phonetic", "part_of_speech"):
@@ -23496,6 +23570,12 @@ def ensure_schema_columns() -> None:
         for column in missing_long_string_columns:
             connection.execute(text(f"ALTER TABLE words ADD COLUMN {column} VARCHAR(1000) NULL"))
         if "word_resource_pool" in table_names:
+            if "english_definition_source" not in resource_pool_columns:
+                connection.execute(text("ALTER TABLE word_resource_pool ADD COLUMN english_definition_source VARCHAR(120) NULL"))
+            if "chinese_definition_source" not in resource_pool_columns:
+                connection.execute(text("ALTER TABLE word_resource_pool ADD COLUMN chinese_definition_source VARCHAR(120) NULL"))
+            if "english_example_source" not in resource_pool_columns:
+                connection.execute(text("ALTER TABLE word_resource_pool ADD COLUMN english_example_source VARCHAR(120) NULL"))
             if "english_definition_audio_url" not in resource_pool_columns:
                 connection.execute(text("ALTER TABLE word_resource_pool ADD COLUMN english_definition_audio_url VARCHAR(1000) NULL"))
             if "english_definition_audio_source" not in resource_pool_columns:
