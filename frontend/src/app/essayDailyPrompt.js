@@ -75,8 +75,8 @@ export function essayDailyPromptsForDate(value = new Date()) {
     .map((part) => String(part).padStart(2, "0"))
     .join("-");
   return [
-    { ...GAOKAO_DAILY_PROMPTS[pairedIndex], sourceKey: "gaokao", dateKey },
-    { ...PET_DAILY_PROMPTS[pairedIndex], sourceKey: "pet", dateKey },
+    { ...GAOKAO_DAILY_PROMPTS[pairedIndex], wordRange: "At least 100 words", sourceKey: "gaokao", dateKey },
+    { ...PET_DAILY_PROMPTS[pairedIndex], wordRange: "At least 100 words", sourceKey: "pet", dateKey },
   ];
 }
 

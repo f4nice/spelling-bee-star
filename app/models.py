@@ -118,6 +118,8 @@ class EssayEntry(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
+    essay_type: Mapped[str] = mapped_column(String(20), default="free", server_default="free", nullable=False)
+    energy_limit: Mapped[int] = mapped_column(Integer, default=500, server_default="500", nullable=False)
     body: Mapped[str] = mapped_column(Text().with_variant(mysql.LONGTEXT, "mysql"), nullable=False)
     optimized_body: Mapped[str | None] = mapped_column(Text().with_variant(mysql.LONGTEXT, "mysql"))
     translation_body: Mapped[str | None] = mapped_column(Text().with_variant(mysql.LONGTEXT, "mysql"))

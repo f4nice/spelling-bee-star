@@ -4,6 +4,8 @@ from typing import Any
 
 import pandas as pd
 
+from app.services.word_spelling import clean_word_spelling, is_latin_spelling
+
 
 WORD_COLUMNS = ("word", "words", "单词", "英文单词", "english", "vocabulary", "vocab", "单字")
 ALT_WORD_COLUMNS = ("其他拼法", "其它拼法", "其他写法", "其它写法", "alternate", "alternates", "alternate spelling", "other spellings")
@@ -14,7 +16,6 @@ CHINESE_COLUMNS = ("chinese_definition", "中文定义", "中文释义", "释义
 EXAMPLE_COLUMNS = ("english_example", "example", "sentence", "例句", "英文例句")
 NOTE_COLUMNS = ("note", "备注")
 IGNORED_WORD_COLUMNS = ("序号", "编号", "id", "index", "no", "number")
-WORD_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z' -]*$")
 
 
 def _find_column(columns: list[str], candidates: tuple[str, ...]) -> str | None:
@@ -172,10 +173,7 @@ def _infer_word_column(frame: pd.DataFrame) -> str | None:
 
 
 def _looks_like_english_word(value: str) -> bool:
-    value = value.strip()
-    if not value or value.isdigit():
-        return False
-    return bool(WORD_PATTERN.fullmatch(value))
+    return is_latin_spelling(value)
 
 
 def _split_spellings(value: Any) -> list[str]:
@@ -185,7 +183,7 @@ def _split_spellings(value: Any) -> list[str]:
     if not text:
         return []
     parts = re.split(r"[,;/；，、\n\r]+", text)
-    return [part.strip() for part in parts if _looks_like_english_word(part.strip())]
+    return [clean_word_spelling(part) for part in parts if _looks_like_english_word(part)]
 
 
 def _spellings_from_row(row: Any, word_cols: list[str]) -> list[str]:

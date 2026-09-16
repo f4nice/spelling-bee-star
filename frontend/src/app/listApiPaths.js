@@ -11,6 +11,7 @@ export const listApiPaths = {
   moveToGroup: (wordListId) => `/api/vue/lists/${wordListId}/group`,
   rename: (wordListId) => `/api/vue/lists/${wordListId}/rename`,
   reorder: () => "/api/vue/lists/reorder",
+  reorderGroups: () => "/api/vue/lists/groups/reorder",
   syncImagesStart: (wordListId) => `/api/vue/lists/${wordListId}/sync-images/start`,
   syncImagesStatus: (wordListId, jobId) => `/api/vue/lists/${wordListId}/sync-images/${jobId}`,
   upload: () => "/api/vue/upload",

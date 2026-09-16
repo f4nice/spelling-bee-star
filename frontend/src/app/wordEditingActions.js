@@ -5,6 +5,7 @@ import { createWordFieldForm } from "./wordEditingForms.js";
 export function createWordEditSnapshot(word) {
   return {
     phonetic: normalizePhonetic(word.phonetic || ""),
+    part_of_speech: word.part_of_speech || "",
     alternate_spellings: word.alternate_spellings || "",
     english_definition: word.english_definition || "",
     chinese_definition: word.chinese_definition || "",

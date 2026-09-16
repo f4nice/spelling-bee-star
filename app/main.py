@@ -65,6 +65,7 @@ from app.models import (
 )
 from app.services.enrichment import enrich_word, missing_dictionary_fields, naturalize_chinese_definition, should_refresh_chinese_definition
 from app.services.excel_importer import parse_preview_from_excel, parse_words_from_preview
+from app.services.word_spelling import clean_word_spelling, is_latin_spelling
 from app.services.audio_storage import audio_candidates_with_dictionary, is_local_audio_url, store_audio_candidate
 from app.services.ai_image_generation import generate_dashscope_prompt_image, generate_word_image
 from app.services.ai_tts import generate_word_ai_audio
@@ -6630,9 +6631,19 @@ def vue_shell_api(request: Request, db: Session = Depends(get_db)):
 
 
 def essay_word_count(text_value: str | None) -> int:
-    text_value = str(text_value or "")
-    tokens = re.findall(r"[A-Za-z]+(?:[-'][A-Za-z]+)*|\d+(?:\.\d+)?|[\u4e00-\u9fff]", text_value)
+    text_value = unicodedata.normalize("NFC", str(text_value or ""))
+    letters = r"A-Za-z\u00c0-\u02af\u1e00-\u1eff"
+    tokens = re.findall(rf"[{letters}]+(?:[-'’][{letters}]+)*", text_value)
     return len(tokens)
+
+
+def essay_energy_limit(body: str, essay_type: str = "free") -> int:
+    return 500 if essay_type in {"gaokao", "pet"} or essay_word_count(body) >= 100 else 200
+
+
+def scaled_essay_writing_points(writing_score: Any, raw_breakdown: Any, energy_limit: int | None) -> int:
+    limit = 200 if energy_limit == 200 else 500
+    return round(essay_writing_points_from_values(writing_score, raw_breakdown) * limit / 500)
 
 
 def clean_essay_title(value: str | None) -> str:
@@ -6682,7 +6693,7 @@ def essay_writing_points_from_values(writing_score: Any, raw_breakdown: Any) -> 
 
 
 def current_essay_writing_points(essay: EssayEntry) -> int:
-    return essay_writing_points_from_values(essay.writing_score, essay.writing_score_breakdown)
+    return scaled_essay_writing_points(essay.writing_score, essay.writing_score_breakdown, essay.energy_limit)
 
 
 def effective_essay_best_writing_metrics(essay: EssayEntry) -> tuple[int, int]:
@@ -6824,18 +6835,20 @@ def serialize_essay(essay: EssayEntry) -> dict[str, Any]:
         writing_advice = []
     if not isinstance(writing_advice, list):
         writing_advice = []
-    writing_points = essay_writing_points_from_values(essay.writing_score, score_breakdown)
+    writing_points = current_essay_writing_points(essay)
     best_writing_score, best_writing_points = effective_essay_best_writing_metrics(essay)
     return {
         "id": essay.id,
         "title": essay.title,
+        "essayType": essay.essay_type or "free",
+        "energyLimit": essay.energy_limit or 500,
         "body": essay.body,
         "optimizedBody": essay.optimized_body or "",
         "translationBody": essay.translation_body or "",
         "optimizedTranslationBody": essay.optimized_translation_body or "",
         "coverUrl": essay.cover_url or "",
-        "wordCount": int(essay.word_count or 0),
-        "optimizedWordCount": int(essay.optimized_word_count or 0),
+        "wordCount": essay_word_count(essay.body),
+        "optimizedWordCount": essay_word_count(essay.optimized_body),
         "writingScore": min(max(int(essay.writing_score or 0), 0), 100),
         "writingScoreBreakdown": score_breakdown,
         "writingPoints": writing_points,
@@ -7676,14 +7689,25 @@ def apply_essay_payload(
 ) -> bool:
     title = clean_essay_title(payload.get("title"))
     body = clean_essay_body(payload.get("body"))
+    essay_type = str(payload.get("essayType") or essay.essay_type or "free")
+    if essay_type not in {"free", "gaokao", "pet"}:
+        raise HTTPException(status_code=400, detail="作文类型无效。")
+    if essay.id and essay_type != (essay.essay_type or "free"):
+        raise HTTPException(status_code=400, detail="已保存作文的类型不能更改，请新建作文。")
     if not body:
         raise HTTPException(status_code=400, detail="请输入作文正文。")
+    word_count = essay_word_count(body)
+    if essay_type in {"gaokao", "pet"} and word_count < 100:
+        label = "高考" if essay_type == "gaokao" else "PET"
+        raise HTTPException(status_code=400, detail=f"{label}写作至少需要 100 个英文单词，当前 {word_count} 词，还差 {100 - word_count} 词。")
     content_changed = bool(essay.id) and (essay.title != title or essay.body != body)
-    if clear_generated_on_change and content_changed:
+    if essay.id:
         preserve_essay_best_writing_result(essay)
     essay.title = title
     essay.body = body
-    essay.word_count = essay_word_count(body)
+    essay.essay_type = essay_type
+    essay.word_count = word_count
+    essay.energy_limit = essay_energy_limit(body, essay_type)
     if clear_generated_on_change and content_changed:
         essay.optimized_body = None
         essay.translation_body = None
@@ -7777,7 +7801,7 @@ async def vue_optimize_essay_api(essay_id: int, request: Request, db: Session = 
     )
     essay.writing_advice = json.dumps(assessment["advice"], ensure_ascii=False)
     essay.ai_model = model
-    current_points = min(max(sum(int(value or 0) for value in assessment["breakdown"].values()), 0), 500)
+    current_points = current_essay_writing_points(essay)
     energy_gain = award_essay_writing_improvement(
         essay,
         writing_score=int(assessment["total"]),
@@ -8437,6 +8461,30 @@ async def vue_delete_word_list_group_api(group_id: int, request: Request, db: Se
     return lists_payload(db)
 
 
+@app.post("/api/vue/lists/groups/reorder")
+async def vue_reorder_word_list_groups_api(request: Request, db: Session = Depends(get_db)):
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="排序数据不是有效 JSON。") from exc
+    raw_ids = payload.get("ordered_ids") if isinstance(payload, dict) else None
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=400, detail="缺少单词组排序数据。")
+    groups = word_list_groups(db)
+    by_id = {group.id: group for group in groups}
+    try:
+        ordered_ids = [int(value) for value in raw_ids]
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="单词组编号无效。") from exc
+    if len(set(ordered_ids)) != len(ordered_ids) or any(value not in by_id for value in ordered_ids):
+        raise HTTPException(status_code=400, detail="单词组已变化，请刷新后重新排序。")
+    ordered_ids.extend(group.id for group in groups if group.id not in ordered_ids)
+    for index, group_id in enumerate(ordered_ids, start=1):
+        by_id[group_id].display_order = index * 10
+    db.commit()
+    return {**lists_payload(db), "ok": True}
+
+
 @app.post("/api/vue/lists/reorder")
 async def vue_reorder_lists_api(request: Request, db: Session = Depends(get_db)):
     try:
@@ -8482,12 +8530,15 @@ def vue_list_word_search_api(q: str = Query(default="", max_length=80), db: Sess
     if not query:
         return {"query": "", "results": []}
 
-    like_query = f"%{query.lower()}%"
     rows = db.execute(
         select(Word, WordList)
         .join(WordListItem, WordListItem.word_id == Word.id)
         .join(WordList, WordList.id == WordListItem.word_list_id)
-        .where(func.lower(Word.word).like(like_query))
+        .where(or_(
+            func.lower(Word.word).contains(query.lower(), autoescape=True),
+            func.lower(Word.alternate_spellings).contains(query.lower(), autoescape=True),
+            Word.chinese_definition.contains(query, autoescape=True),
+        ))
         .order_by(Word.word.asc(), WordList.name.asc(), WordList.id.asc())
         .limit(300)
     ).all()
@@ -8892,6 +8943,7 @@ def vue_update_word_field(
     require_word_write_access(edit_token)
     allowed = {
         "phonetic",
+        "part_of_speech",
         "alternate_spellings",
         "english_definition",
         "chinese_definition",
@@ -8903,6 +8955,8 @@ def vue_update_word_field(
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
     next_value = value.strip() or None
+    if field == "part_of_speech" and len(next_value or "") > 120:
+        raise HTTPException(status_code=400, detail="词性不能超过 120 个字符。")
     previous_value = getattr(word, field, None)
     definition_audio_invalidated = False
     example_audio_invalidated = False
@@ -14771,20 +14825,18 @@ def clean_list_name(name: str) -> str:
 
 
 def clean_manual_word_text(value: str | None) -> str:
-    text = " ".join(str(value or "").strip().split())
+    text = clean_word_spelling(value)
     if not text:
         raise HTTPException(status_code=400, detail="请输入英文单词。")
     if len(text) > 128:
         raise HTTPException(status_code=400, detail="单词不能超过 128 个字符。")
-    if not re.search(r"[A-Za-z]", text):
-        raise HTTPException(status_code=400, detail="请输入包含英文字母的单词或词组。")
-    if re.search(r"[^A-Za-z0-9\s'’`.\-‐‑–—/&+(),]", text):
-        raise HTTPException(status_code=400, detail="单词只能包含英文、数字、空格和常见英文符号。")
+    if not is_latin_spelling(text):
+        raise HTTPException(status_code=400, detail="请输入英文单词或词组，支持重音字母、数字、空格和常见英文符号。")
     return text
 
 
 def manual_word_lookup_key(value: str | None) -> str:
-    return re.sub(r"[^a-z0-9]+", "", str(value or "").casefold())
+    return "".join(char for char in clean_word_spelling(value).casefold() if char.isalnum())
 
 
 def serialize_manual_word_candidate(db: Session, word: Word, word_list_id: int) -> dict[str, Any]:
@@ -15372,14 +15424,15 @@ def cat_world_essay_energy_source(
             EssayEntry.writing_score,
             EssayEntry.writing_score_breakdown,
             EssayEntry.created_at,
+            EssayEntry.energy_limit,
         ).where(EssayEntry.phone == phone)
     ).all()
     source_date = today or date.today()
     essay_points: list[int] = []
     today_points: list[int] = []
-    for best_writing_points, writing_score, raw_breakdown, created_at in raw_rows:
+    for best_writing_points, writing_score, raw_breakdown, created_at, energy_limit in raw_rows:
         stored_best = min(max(int(best_writing_points or 0), 0), 500)
-        effective_points = stored_best or essay_writing_points_from_values(writing_score, raw_breakdown)
+        effective_points = stored_best or scaled_essay_writing_points(writing_score, raw_breakdown, energy_limit)
         if effective_points > 0:
             essay_points.append(effective_points)
             if created_at and created_at.date() == source_date:
@@ -23662,6 +23715,10 @@ def ensure_schema_columns() -> None:
             )
         if "cat_world_cat_profiles" in table_names and "scene_positions" not in cat_world_cat_profile_columns:
             connection.execute(text("ALTER TABLE cat_world_cat_profiles ADD COLUMN scene_positions TEXT NULL"))
+        if "essay_entries" in table_names and "essay_type" not in essay_entry_columns:
+            connection.execute(text("ALTER TABLE essay_entries ADD COLUMN essay_type VARCHAR(20) NOT NULL DEFAULT 'free'"))
+        if "essay_entries" in table_names and "energy_limit" not in essay_entry_columns:
+            connection.execute(text("ALTER TABLE essay_entries ADD COLUMN energy_limit INTEGER NOT NULL DEFAULT 500"))
         if "essay_entries" in table_names and "writing_score" not in essay_entry_columns:
             connection.execute(text("ALTER TABLE essay_entries ADD COLUMN writing_score INTEGER NOT NULL DEFAULT 0"))
         if "essay_entries" in table_names and "writing_score_breakdown" not in essay_entry_columns:

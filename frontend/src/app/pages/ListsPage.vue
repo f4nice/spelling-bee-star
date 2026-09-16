@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { ArrowLeft, BookPlus, FolderPlus, Layers, Search, Trash2, X } from "lucide-vue-next";
+import { ArrowDown, ArrowLeft, ArrowUp, BookPlus, FolderPlus, GripVertical, Layers, Search, Trash2, X } from "lucide-vue-next";
 import ListsCreateModal from "../components/ListsCreateModal.vue";
 import ListsToolsPanel from "../components/ListsToolsPanel.vue";
 import WordListCard from "../components/WordListCard.vue";
@@ -45,6 +45,9 @@ const isDroppingOnGroup = ref(false);
 const groupDeletePassword = ref("");
 const groupDeleteNotice = ref("");
 const isDeletingGroup = ref(false);
+const draggedGroupId = ref(null);
+const isSavingGroupOrder = ref(false);
+const groupOrderNotice = ref("");
 let dragStartCards = [];
 let searchTimer = 0;
 
@@ -280,10 +283,65 @@ function startListDrag(card, event) {
 }
 
 function enterGroupDropTarget(group, event) {
-  if (!draggedListId.value) return;
+  if (!draggedListId.value && !draggedGroupId.value) return;
   event.preventDefault();
   event.dataTransfer.dropEffect = "move";
   dragOverGroupId.value = String(group.id);
+}
+
+function startGroupDrag(group, event) {
+  if (isSavingGroupOrder.value || draggedListId.value) {
+    event.preventDefault();
+    return;
+  }
+  draggedGroupId.value = group.id;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(group.id));
+  }
+}
+
+function resetGroupDrag() {
+  draggedGroupId.value = null;
+  dragOverGroupId.value = "";
+}
+
+async function moveGroup(groupId, targetIndex) {
+  if (isSavingGroupOrder.value) return;
+  const previous = [...wordListGroups.value];
+  const fromIndex = previous.findIndex((group) => group.id === groupId);
+  if (fromIndex < 0 || targetIndex < 0 || targetIndex >= previous.length || fromIndex === targetIndex) return;
+  const next = [...previous];
+  next.splice(targetIndex, 0, ...next.splice(fromIndex, 1));
+  props.data.groups = next;
+  isSavingGroupOrder.value = true;
+  groupOrderNotice.value = "";
+  try {
+    const payload = await fetchJson(listApiPaths.reorderGroups(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ordered_ids: next.map((group) => group.id) }),
+      skipCache: true,
+    });
+    applyListPagePayload(payload);
+  } catch (error) {
+    props.data.groups = previous;
+    groupOrderNotice.value = error.message || "单词组顺序保存失败，请重试。";
+  } finally {
+    isSavingGroupOrder.value = false;
+  }
+}
+
+async function dropOnGroup(group, index, event) {
+  if (draggedGroupId.value) {
+    event.preventDefault();
+    event.stopPropagation();
+    const groupId = draggedGroupId.value;
+    resetGroupDrag();
+    await moveGroup(groupId, index);
+  } else {
+    await moveDraggedListToGroup(group, event);
+  }
 }
 
 function leaveGroupDropTarget(group, event) {
@@ -422,7 +480,7 @@ watch(wordListGroups, (groups) => {
     <form class="list-word-search-form" @submit.prevent="runSearch">
       <label class="list-word-search-field" aria-label="搜索单词">
         <Search :size="19" aria-hidden="true" />
-        <input v-model="searchQuery" type="search" placeholder="输入单词，查看所在单词表" autocomplete="off" />
+        <input v-model="searchQuery" type="search" placeholder="输入英文单词或中文释义" autocomplete="off" />
       </label>
       <button class="primary-action-button list-word-search-button" type="submit" :disabled="!trimmedSearchQuery || isSearching">
         <Search :size="18" aria-hidden="true" />
@@ -520,7 +578,7 @@ watch(wordListGroups, (groups) => {
       </div>
     </div>
     <div v-if="wordListGroups.length" class="word-list-group-grid">
-      <button
+      <article
         v-for="(group, index) in wordListGroups"
         :key="group.id"
         class="word-list-group-card"
@@ -528,25 +586,33 @@ watch(wordListGroups, (groups) => {
           'is-active': activeGroup?.id === group.id,
           'is-drop-target': dragOverGroupId === String(group.id),
         }"
-        type="button"
-        :title="`查看 ${group.name}`"
-        @click="selectWordListGroup(group)"
+        :draggable="!isSavingGroupOrder"
+        @dragstart="startGroupDrag(group, $event)"
+        @dragend="resetGroupDrag"
         @dragenter="enterGroupDropTarget(group, $event)"
         @dragover="enterGroupDropTarget(group, $event)"
         @dragleave="leaveGroupDropTarget(group, $event)"
-        @drop="moveDraggedListToGroup(group, $event)"
+        @drop="dropOnGroup(group, index, $event)"
       >
+        <button class="word-list-group-open" type="button" :title="`查看 ${group.name}`" @click="selectWordListGroup(group)">
         <span class="word-list-group-index">{{ groupIndexLabel(index) }}</span>
         <div>
           <strong>{{ group.name }}</strong>
           <span>{{ group.list_count }} 个单词表 · {{ group.word_count }} 个单词</span>
         </div>
         <span class="word-list-group-action">查看专题</span>
-      </button>
+        </button>
+        <span class="word-list-group-sort">
+          <GripVertical :size="16" aria-hidden="true" />
+          <button type="button" :title="`上移 ${group.name}`" :aria-label="`上移 ${group.name}`" :disabled="isSavingGroupOrder || index === 0" @click="moveGroup(group.id, index - 1)"><ArrowUp :size="16" /></button>
+          <button type="button" :title="`下移 ${group.name}`" :aria-label="`下移 ${group.name}`" :disabled="isSavingGroupOrder || index === wordListGroups.length - 1" @click="moveGroup(group.id, index + 1)"><ArrowDown :size="16" /></button>
+        </span>
+      </article>
     </div>
     <p v-else class="empty-state list-group-empty">
       暂无单词组
     </p>
+    <p v-if="groupOrderNotice" class="notice" role="status">{{ groupOrderNotice }}</p>
   </section>
   <section class="panel word-list-table-panel">
     <div class="lists-section-head lists-table-head">
@@ -933,6 +999,54 @@ watch(wordListGroups, (groups) => {
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
   padding: 0;
+}
+
+.word-list-group-open {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 12px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+}
+
+.word-list-group-open:hover {
+  color: inherit;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.word-list-group-sort {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 2;
+}
+
+.word-list-group-sort button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  color: inherit;
+  background: transparent;
+  box-shadow: none;
+}
+
+.word-list-group-sort button:disabled {
+  opacity: 0.35;
 }
 
 .word-list-group-card {

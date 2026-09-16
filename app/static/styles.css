@@ -7377,6 +7377,21 @@ button.calendar-day {
   color: #fff;
 }
 
+.essay-requirements {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  color: #4b6472;
+  font-size: 13px;
+}
+
+.essay-requirements strong {
+  flex-basis: 100%;
+  color: #a13b27;
+  font-weight: 600;
+}
+
 .essay-editor-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

@@ -123,6 +123,10 @@ async function playFieldAudio() {
       v-if="canEdit"
       ref="input"
       v-model="wordEdit[field]"
+      :aria-label="field === 'part_of_speech' ? '词性' : undefined"
+      :maxlength="field === 'part_of_speech' ? 120 : undefined"
+      :rows="field === 'part_of_speech' ? 1 : 3"
+      @keydown.enter="field === 'part_of_speech' && ($event.preventDefault(), finishEditing())"
       @blur="finishEditing"
     ></textarea>
   </div>

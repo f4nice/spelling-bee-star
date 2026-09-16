@@ -3,6 +3,7 @@ import { computed, nextTick, reactive, ref, watch } from "vue";
 import { CalendarDays, PenLine } from "lucide-vue-next";
 import { essayDailyPromptsForDate } from "../essayDailyPrompt.js";
 import { sortEssaysNewestFirst } from "../essaySorting.js";
+import { countEssayWords, essayEnergyLimit, essaySubmissionError } from "../essayRules.js";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
 
@@ -28,6 +29,9 @@ let isApplyingDraft = false;
 const titleMaxChars = computed(() => Number(props.data?.limits?.titleMaxChars || 120));
 const bodyMaxChars = computed(() => Number(props.data?.limits?.bodyMaxChars || 30000));
 const currentWordCount = computed(() => countEssayWords(draft.body));
+const submissionError = computed(() => essaySubmissionError(draft.body, draft.essayType));
+const currentEnergyLimit = computed(() => draft.writingScore > 0 ? draft.energyLimit : essayEnergyLimit(draft.body, draft.essayType));
+const essayTypeLabel = computed(() => ({ free: "普通作文", gaokao: "高考写作", pet: "PET Writing" })[draft.essayType]);
 const hasEssayInput = computed(() => Boolean(draft.body.trim()));
 const dailyPrompts = computed(() => essayDailyPromptsForDate(new Date()));
 const dailyPrompt = computed(
@@ -54,7 +58,7 @@ const scoreBreakdownRows = computed(() =>
     value: Math.min(Math.max(Number(draft.writingScoreBreakdown?.[key] || 0), 0), 100),
   })),
 );
-const writingPoints = computed(() => scoreBreakdownRows.value.reduce((total, row) => total + row.value, 0));
+const writingPoints = computed(() => draft.writingPoints);
 const writingAdviceRows = computed(() =>
   (Array.isArray(draft.writingAdvice) ? draft.writingAdvice : [])
     .map((item, index) => normalizeWritingAdvice(item, index))
@@ -79,6 +83,9 @@ function emptyDraft() {
     id: 0,
     title: "",
     body: "",
+    essayType: "free",
+    energyLimit: 200,
+    writingPoints: 0,
     optimizedBody: "",
     translationBody: "",
     optimizedTranslationBody: "",
@@ -114,6 +121,9 @@ function loadDraft(essay) {
     id: Number(essay.id),
     title: essay.title || "",
     body: essay.body || "",
+    essayType: essay.essayType || "free",
+    energyLimit: Number(essay.energyLimit || 500),
+    writingPoints: Number(essay.writingPoints || 0),
     optimizedBody: essay.optimizedBody || "",
     translationBody: essay.translationBody || "",
     optimizedTranslationBody: essay.optimizedTranslationBody || "",
@@ -130,10 +140,6 @@ function loadDraft(essay) {
     coverModel: essay.coverModel || "",
     updatedAt: essay.updatedAt || "",
   });
-}
-
-function countEssayWords(value) {
-  return (String(value || "").match(/[A-Za-z]+(?:[-'][A-Za-z]+)*|\d+(?:\.\d+)?|[\u4e00-\u9fff]/g) || []).length;
 }
 
 function normalizeWritingAdvice(item, index) {
@@ -217,6 +223,7 @@ function startNewEssay() {
 async function startDailyPrompt() {
   startNewEssay();
   draft.title = dailyPrompt.value.title;
+  draft.essayType = dailyPrompt.value.sourceKey;
   notice.value = `今日命题已载入：${dailyPrompt.value.sourceLabel} · ${dailyPrompt.value.typeLabel}`;
   await nextTick();
   bodyInput.value?.focus();
@@ -230,6 +237,7 @@ watch(
       draft.optimizedBody = "";
       draft.optimizedWordCount = 0;
       draft.writingScore = 0;
+      draft.writingPoints = 0;
       draft.writingScoreBreakdown = {};
       draft.writingAdvice = [];
       draft.aiModel = "";
@@ -251,6 +259,7 @@ function requestPayload() {
   return {
     title: draft.title,
     body: draft.body,
+    essayType: draft.essayType,
   };
 }
 
@@ -276,6 +285,10 @@ async function persistEssay({ silent = false } = {}) {
     return null;
   }
   if (busyAction.value) return null;
+  if (submissionError.value) {
+    notice.value = submissionError.value;
+    return null;
+  }
   busyAction.value = "save";
   notice.value = "";
   try {
@@ -293,6 +306,10 @@ async function persistEssay({ silent = false } = {}) {
 }
 
 async function ensureSavedEssay() {
+  if (submissionError.value) {
+    notice.value = submissionError.value;
+    return null;
+  }
   if (draft.id) return { id: draft.id };
   return persistEssay({ silent: true });
 }
@@ -314,11 +331,11 @@ async function optimizeEssay() {
     const bestPoints = Number(payload?.essay?.bestWritingPoints || 0);
     const energyGain = Number(payload?.energyGain || 0);
     if (energyGain > 0) {
-      notice.value = `本次五项积分 ${currentPoints} 分，超过历史最高，新增 ${energyGain} 能量；当前最高 ${bestPoints} 分。`;
+      notice.value = `本次能量评分 ${currentPoints} / ${currentEnergyLimit.value}，新增 ${energyGain} 能量；历史最高 ${bestPoints} 能量。`;
     } else if (payload?.energyGainEligible === false) {
-      notice.value = `内容没有修改，本次不重复增加能量；历史最高保持 ${bestPoints} 分。`;
+      notice.value = `内容没有修改，本次不重复增加能量；历史最高保持 ${bestPoints} 能量。`;
     } else {
-      notice.value = `本次五项积分 ${currentPoints} 分，未超过历史最高 ${bestPoints} 分，能量保持不变。`;
+      notice.value = `本次能量评分 ${currentPoints} / ${currentEnergyLimit.value}，未超过历史最高 ${bestPoints} 能量，奖励保持不变。`;
     }
   } catch (error) {
     notice.value = error?.message || "AI 优化失败，请稍后再试。";
@@ -471,7 +488,7 @@ async function deleteEssay() {
             <img v-if="essay.coverUrl" :src="essay.coverUrl" :alt="essay.title">
             <span v-else>{{ (essay.title || "作").slice(0, 1).toUpperCase() }}</span>
             <strong>{{ essay.title || "未命名作文" }}</strong>
-            <small class="essay-list-word-count">{{ essay.wordCount || 0 }} 字</small>
+            <small class="essay-list-word-count">{{ essay.wordCount || 0 }} 词</small>
             <small class="essay-list-created-at">{{ formatEssayCreatedAt(essay.createdAt) }}</small>
           </button>
         </div>
@@ -487,8 +504,14 @@ async function deleteEssay() {
           <div class="essay-count-pill">
             <span>正文</span>
             <strong>{{ currentWordCount }}</strong>
-            <span>字</span>
+            <span>词</span>
           </div>
+        </div>
+
+        <div class="essay-requirements" aria-live="polite">
+          <span>{{ essayTypeLabel }}</span>
+          <span>本篇能量上限 {{ currentEnergyLimit }}</span>
+          <strong v-if="submissionError">{{ submissionError }}</strong>
         </div>
 
         <textarea
@@ -532,7 +555,7 @@ async function deleteEssay() {
             <article class="essay-text-panel">
               <div class="essay-section-title">
                 <span class="eyebrow">MY DRAFT</span>
-                <strong>{{ currentWordCount }} 字</strong>
+                <strong>{{ currentWordCount }} 词</strong>
               </div>
               <p class="essay-english-copy">{{ draft.body || "正文会显示在这里。" }}</p>
               <section v-if="draft.translationBody" class="essay-translation-block">
@@ -543,7 +566,7 @@ async function deleteEssay() {
             <article class="essay-text-panel">
               <div class="essay-section-title">
                 <span class="eyebrow">AI VERSION</span>
-                <strong>{{ aiVersionWordCount }} 字</strong>
+                <strong>{{ aiVersionWordCount }} 词</strong>
               </div>
               <p class="essay-english-copy">{{ aiVersionText }}</p>
               <section v-if="draft.optimizedTranslationBody" class="essay-translation-block">
@@ -561,8 +584,8 @@ async function deleteEssay() {
               <h2 id="essay-writing-feedback-title">写作评估与建议</h2>
             </div>
             <div class="essay-score-total">
-              <strong>{{ writingPoints }} / 500</strong>
-              <small>综合 {{ draft.writingScore }} / 100</small>
+              <strong>{{ writingPoints }} / {{ currentEnergyLimit }}</strong>
+              <small>能量评分 · 综合 {{ draft.writingScore }} / 100</small>
             </div>
           </header>
           <div class="essay-score-breakdown" aria-label="作文评分明细">
@@ -574,7 +597,7 @@ async function deleteEssay() {
           </div>
           <div class="essay-energy-reward">
             <span>本篇作文历史最高</span>
-            <strong>{{ draft.bestWritingPoints }} / 500 能量</strong>
+            <strong>{{ draft.bestWritingPoints }} 能量</strong>
             <small v-if="writingPoints >= draft.bestWritingPoints">本次达到历史最高，已计入猫咪世界。</small>
             <small v-else>本次 {{ writingPoints }} 分未超过最高值，已获得能量不会减少。</small>
           </div>

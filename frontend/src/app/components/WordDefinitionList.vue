@@ -1,6 +1,5 @@
 <script setup>
 import WordEditableDefinitionFields from "./WordEditableDefinitionFields.vue";
-import WordStaticDefinitionItem from "./WordStaticDefinitionItem.vue";
 
 defineProps({
   data: {
@@ -28,7 +27,6 @@ defineProps({
 
 <template>
   <dl class="definition-list">
-    <WordStaticDefinitionItem label="词性" :value="data.word.part_of_speech" />
     <WordEditableDefinitionFields
       :word="data.word"
       :word-edit="wordEdit"
