@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { ArrowDown, ArrowLeft, ArrowUp, BookPlus, FolderPlus, GripVertical, Layers, Search, Trash2, X } from "lucide-vue-next";
+import { ArrowLeft, BookPlus, FolderPlus, GripVertical, Layers, Search, Trash2, X } from "lucide-vue-next";
 import ListsCreateModal from "../components/ListsCreateModal.vue";
 import ListsToolsPanel from "../components/ListsToolsPanel.vue";
 import WordListCard from "../components/WordListCard.vue";
@@ -602,10 +602,8 @@ watch(wordListGroups, (groups) => {
         </div>
         <span class="word-list-group-action">查看专题</span>
         </button>
-        <span class="word-list-group-sort">
+        <span class="word-list-group-sort" title="拖动排序">
           <GripVertical :size="16" aria-hidden="true" />
-          <button type="button" :title="`上移 ${group.name}`" :aria-label="`上移 ${group.name}`" :disabled="isSavingGroupOrder || index === 0" @click="moveGroup(group.id, index - 1)"><ArrowUp :size="16" /></button>
-          <button type="button" :title="`下移 ${group.name}`" :aria-label="`下移 ${group.name}`" :disabled="isSavingGroupOrder || index === wordListGroups.length - 1" @click="moveGroup(group.id, index + 1)"><ArrowDown :size="16" /></button>
         </span>
       </article>
     </div>
@@ -1028,25 +1026,8 @@ watch(wordListGroups, (groups) => {
   right: 16px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  cursor: grab;
   z-index: 2;
-}
-
-.word-list-group-sort button {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 1px solid currentColor;
-  border-radius: 6px;
-  color: inherit;
-  background: transparent;
-  box-shadow: none;
-}
-
-.word-list-group-sort button:disabled {
-  opacity: 0.35;
 }
 
 .word-list-group-card {
