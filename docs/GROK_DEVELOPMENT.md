@@ -34,7 +34,7 @@ The terminal prints a compact result path and usage record. Responses and numeri
 - Grok: scoped code drafts, isolated bug analysis, concise local reviews, relevant test cases.
 - Codex: task scoping, cross-module decisions, checking and integrating proposals, running tests, releases.
 - One request at a time per bounded task; no recursive agents or full-history uploads.
-- Default model: `grok-4.7`, checked against the official model catalog on 2026-09-23. Models 4.5/4.6/4.7 use low reasoning effort. Account access still needs live verification.
+- Default model: `grok-4.7`, checked against the official model catalog on 2026-09-23. Models 4.5/4.6/4.7 use low reasoning effort. Local account access was verified on 2026-09-24: model lookup succeeded and one source-free smoke test returned `OK` (1372 input + 110 output = 1482 tokens).
 - At most 6 file excerpts and 60000 UTF-8 bytes of instructions plus input. Default output budget 2048 tokens, configurable from 128 to 4096. These are request limits, not a guaranteed dollar ceiling.
 - One API request, a 90-second client timeout, no automatic retries, no tools, and `store: false` for response retrieval storage. A timeout does not guarantee server-side cancellation.
 - Common secret paths and credential patterns are rejected. This is a precaution, not a complete secret detector; inspect the selected excerpts before sending them.
