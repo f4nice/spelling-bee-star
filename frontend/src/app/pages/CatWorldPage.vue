@@ -58,6 +58,7 @@ import {
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
 import CatWorldProductIcon from "../components/CatWorldProductIcon.vue";
+import CatWorldFestivalNotice from "../components/CatWorldFestivalNotice.vue";
 
 const props = defineProps({
   data: {
@@ -339,9 +340,32 @@ const catIconColors = {
   "japanese-bobtail": "#fff3dc",
   "turkish-van": "#fff4dc",
   "turkish-angora": "#f8fbff",
+  "festival-moon": "#8b82bb",
+  "festival-osmanthus": "#b58226",
+  "festival-lantern": "#bd5352",
+  "festival-maple": "#bb7146",
 };
 
 const energy = computed(() => payload.value.energy || {});
+const festival = computed(() => payload.value.festival || {});
+let festivalRefreshBusy = false;
+let festivalRefreshAfter = 0;
+watch(clockNow, async (now) => {
+  const nextUpdate = Date.parse(festival.value.nextUpdateAt || "");
+  if (!Number.isFinite(nextUpdate) || now < nextUpdate || now < festivalRefreshAfter
+    || festivalRefreshBusy || busyItemId.value || document.visibilityState !== "visible") return;
+  festivalRefreshBusy = true;
+  festivalRefreshAfter = now + 60000;
+  try {
+    const previousPayload = payload.value;
+    const nextPayload = await fetchJson(routeApiPaths.catWorld());
+    if (payload.value !== previousPayload || busyItemId.value) return;
+    // Refresh rewards across Beijing midnight without disturbing room editing.
+    payload.value = { ...payload.value, energy: nextPayload.energy, festival: nextPayload.festival,
+      shop: nextPayload.shop, blindBoxCatalog: nextPayload.blindBoxCatalog };
+  } catch { /* The next visible minute can retry the read-only refresh. */ }
+  finally { festivalRefreshBusy = false; }
+});
 const todayEnergy = computed(() => Math.max(Number(energy.value.today || 0), 0));
 const todayEnergySources = computed(() => Array.isArray(energy.value.todaySources) ? energy.value.todaySources : []);
 const playTime = computed(() => payload.value.playTime || {});
@@ -1855,10 +1879,11 @@ function setRepairMode(enabled) {
 
 function setScoopMode(enabled) {
   const nextEnabled = Boolean(enabled);
+  if (nextEnabled && (playTimeLocked.value || busyItemId.value)) return;
   if (nextEnabled && itemCount(LITTER_SCOOP_ITEM_ID) <= 0) {
     scoopMode.value = false;
     toolCursorVisible.value = false;
-    activeToolCategory.value = "consumable";
+    openShopCategory("consumable");
     notice.value = "背包里没有铲子，请先在消耗品商店购买。";
     return;
   }
@@ -1876,7 +1901,7 @@ function setScoopMode(enabled) {
   toolCursorVisible.value = false;
   selectedDecorId.value = "";
   notice.value = nextEnabled
-    ? "已经拿好铲子，请点击房间里冒烟的猫屎。"
+    ? "已经拿好铲子，点击猫屎就能连续清理；每堆用 1 把，点“收起铲子”退出。"
     : "已收起铲子。";
 }
 
@@ -2262,7 +2287,8 @@ function isOwnedBathtub(item) {
 function canPurchase(item) {
   if (!item?.id) return false;
   if (item.category === "consumable") return canAfford(item);
-  if (item.category === "blind-box") return !item.drawn && Number(item.remainingStock || 0) > 0 && canAfford(item);
+  if (item.category === "blind-box") return !item.drawn && item.saleState === "active"
+    && (item.unlimitedStock || Number(item.remainingStock || 0) > 0) && canAfford(item);
   if (item.limited) {
     return !isOneTimeOwned(item) && item.isActive !== false && Number(item.remainingStock || 0) > 0 && canAfford(item);
   }
@@ -2307,7 +2333,10 @@ function purchaseHint(item) {
     return colorApplied(item) ? "当前正在使用" : "已拥有，点击应用";
   }
   if (item.category === "blind-box") {
-    if (item.drawn) return `本期已开启，获得了 ${currentBlindSeries.value.cats?.find((cat) => cat.id === item.drawnCatId)?.label || "限定猫咪"}`;
+    if (item.drawn) return `本期已开启，获得了 ${item.cats?.find((cat) => cat.id === item.drawnCatId)?.label || "限定猫咪"}`;
+    if (item.saleState === "upcoming") return `尚未开放 · ${item.saleLabel}`;
+    if (item.saleState === "ended") return "本期活动已结束，获得的猫咪会一直陪着你";
+    if (item.unlimitedStock) return "活动期间开放 · 本期每个账号限开一次 · 猫咪永久保留";
     if (Number(item.remainingStock || 0) <= 0) return "本期限定猫咪已经售罄";
     return `${item.region || "地区"} ${item.issue || "限定"} · 全站剩余 ${item.remainingStock} 只 · 本期每个账号限开一次`;
   }
@@ -2355,7 +2384,9 @@ function purchaseButtonText(item) {
   if (item.category === "cat" && ownsCat(item.id)) return canAfford(item) ? `再领养一只` : "能量不足";
   if (item.category === "color" && !targetDecorOwned(item)) return "先买家具";
   if (item.category === "blind-box" && item.drawn) return "本期已开启";
-  if (item.category === "blind-box" && Number(item.remainingStock || 0) <= 0) return "本期已售罄";
+  if (item.category === "blind-box" && item.saleState === "upcoming") return "等待节日开放";
+  if (item.category === "blind-box" && item.saleState === "ended") return "本期已结束";
+  if (item.category === "blind-box" && !item.unlimitedStock && Number(item.remainingStock || 0) <= 0) return "本期已售罄";
   if (item.category === "color" && colorApplied(item)) return "已应用";
   if (item.category === "color" && itemCount(item.id) > 0) return "应用配色";
   if (isDamagedItem(item)) return "去右侧维修";
@@ -2594,13 +2625,13 @@ async function play(item) {
 }
 
 async function cleanLitter() {
-  if (roomEditMode.value || busyItemId.value) return;
+  if (roomEditMode.value || busyItemId.value || playTimeLocked.value) return;
   activeRoomPanel.value = "room";
   if (!scoopMode.value) {
     activeToolCategory.value = "consumable";
     notice.value = repairMode.value
       ? "猫屎需要用铲子清理，维修锤没有消耗。"
-      : "请先在右侧消耗品里点击铲子，再清理猫屎。";
+      : "点房间上方的“拿起铲子”，就能连续清理猫屎。";
     return;
   }
   if (itemCount(LITTER_SCOOP_ITEM_ID) <= 0) {
@@ -2615,8 +2646,11 @@ async function cleanLitter() {
     replacePayload(nextPayload);
     const effect = nextPayload.effect || {};
     notice.value = `${effect.message || "猫屎已经清理好了。"} 剩余 ${effect.remainingLitter || 0} 堆，铲子 ${effect.scoopRemaining || 0} 把。`;
-    scoopMode.value = false;
-    toolCursorVisible.value = false;
+    if (itemCount(LITTER_SCOOP_ITEM_ID) <= 0) {
+      scoopMode.value = false;
+      toolCursorVisible.value = false;
+      notice.value += " 铲子用完啦，需要时再去消耗品商店补充。";
+    }
   } catch (error) {
     notice.value = error.message || "清理失败，请先检查铲子库存。";
   } finally {
@@ -2888,6 +2922,8 @@ async function selectCat(catOrId, options = {}) {
         </button>
       </div>
     </section>
+
+    <CatWorldFestivalNotice :festival="festival" :can-shop="!playTimeLocked" @details="energyModalOpen = true" @shop="openShopCategory('blind-box')" />
 
     <section
       :class="['cat-world-learning-route', { 'is-expanded': learningRouteExpanded }]"
@@ -3346,6 +3382,19 @@ async function selectCat(catOrId, options = {}) {
           </div>
           <div class="cat-world-room-actions">
             <button
+              class="cat-world-quick-scoop"
+              type="button"
+              :class="{ active: scoopMode }"
+              :aria-pressed="scoopMode"
+              :disabled="roomEditMode || playTimeLocked || Boolean(busyItemId)"
+              :title="`每清理一堆用 1 把铲子，当前剩余 ${itemCount(LITTER_SCOOP_ITEM_ID)} 把`"
+              @click="setScoopMode(!scoopMode)"
+            >
+              <ShovelIcon :size="17" aria-hidden="true" />
+              {{ scoopMode ? "收起铲子" : "拿起铲子" }}
+              <small>剩 {{ itemCount(LITTER_SCOOP_ITEM_ID) }} 把</small>
+            </button>
+            <button
               class="cat-world-edit-button"
               type="button"
               :class="{ active: roomEditMode }"
@@ -3464,7 +3513,7 @@ async function selectCat(catOrId, options = {}) {
             </button>
           </div>
           <div v-if="scoopMode" class="cat-world-repair-mode cat-world-scoop-mode" role="status">
-            <span><ShovelIcon :size="18" :stroke-width="3" aria-hidden="true" />拿着铲子</span>
+            <span><ShovelIcon :size="18" :stroke-width="3" aria-hidden="true" />连续清理 · 剩 {{ itemCount(LITTER_SCOOP_ITEM_ID) }} 把</span>
             <button type="button" title="收起铲子" aria-label="收起铲子" @click="setScoopMode(false)">
               <XIcon :size="17" :stroke-width="3" aria-hidden="true" />
             </button>
@@ -4290,9 +4339,9 @@ async function selectCat(catOrId, options = {}) {
               <span>全站剩余 {{ item.remainingStock || 0 }}</span>
             </div>
             <div v-else-if="item.category === 'blind-box'" class="cat-world-food-tags cat-world-blind-box-tags">
-              <span>{{ item.region }}地区</span>
+              <span>{{ item.region }}</span>
               <span>{{ item.issue }}</span>
-              <span>{{ currentBlindRarityLabel }}</span>
+              <span>{{ item.timeLimited ? "节庆限定" : currentBlindRarityLabel }}</span>
             </div>
             <div v-else-if="item.category === 'handbook'" class="cat-world-food-tags cat-world-handbook-tags">
               <span>永久道具</span>
@@ -4306,6 +4355,15 @@ async function selectCat(catOrId, options = {}) {
               <span>随机个性</span>
             </div>
             <p>{{ item.description }}</p>
+            <template v-if="item.category === 'blind-box' && item.timeLimited">
+              <p class="cat-world-festival-sale-dates">{{ item.saleLabel }}</p>
+              <div class="cat-world-festival-cats" aria-label="本期可获得的猫咪">
+                <span v-for="cat in item.cats" :key="cat.id">
+                  <CatIcon :size="23" :style="{ color: catIconColor(cat.id) }" aria-hidden="true" />
+                  <strong>{{ cat.label }}</strong><small>{{ cat.oddsPercent }}%</small>
+                </span>
+              </div>
+            </template>
           </div>
           <div class="cat-world-shop-meta">
             <strong>{{ item.cost }} 能量</strong>
@@ -4318,7 +4376,7 @@ async function selectCat(catOrId, options = {}) {
               {{ colorApplied(item) ? "已应用" : "已解锁" }}
             </span>
             <span v-else-if="item.category === 'color' && item.targetDecorLabel">用于 {{ item.targetDecorLabel }}</span>
-            <span v-else-if="item.category === 'blind-box'">全站剩余 {{ item.remainingStock || 0 }}</span>
+            <span v-else-if="item.category === 'blind-box'">{{ item.unlimitedStock ? "限时开放 · 每期一次" : `全站剩余 ${item.remainingStock || 0}` }}</span>
             <span v-else-if="item.limited">全站剩余 {{ item.remainingStock || 0 }}</span>
             <span v-else-if="item.category === 'handbook' && itemCount(item.id)">已永久解锁</span>
             <span v-else-if="item.category !== 'cat' && itemCount(item.id)">已有 {{ itemCount(item.id) }}</span>
@@ -4716,6 +4774,12 @@ async function selectCat(catOrId, options = {}) {
           <span>今日 +{{ todayEnergy }}</span>
           <span>累计 {{ energy.earned || 0 }}</span>
           <span>已用 {{ energy.spent || 0 }}</span>
+        </div>
+        <div v-if="festival.visible" class="cat-world-festival-rules">
+          <strong>双节学习加赠 · {{ festival.dateLabel }}</strong>
+          <p>{{ festival.rule }}</p>
+          <p>{{ festival.note }}</p>
+          <small>今天加赠 {{ festival.todayBonus || 0 }} / {{ festival.dailyCap }} · 活动累计加赠 {{ festival.totalBonus || 0 }}</small>
         </div>
         <div class="cat-world-energy-garden">
           <figure aria-hidden="true">

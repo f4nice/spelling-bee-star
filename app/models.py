@@ -329,6 +329,19 @@ class CatWorldCatProfile(Base):
     escaped_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
+class CatWorldFestivalEarning(Base):
+    __tablename__ = "cat_world_festival_earnings"
+    __table_args__ = (UniqueConstraint("phone", "event_key", name="uq_cat_festival_phone_event"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    event_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    earned_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    base_energy: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class CatWorldEnergyGrant(Base):
     __tablename__ = "cat_world_energy_grants"
 

@@ -21318,3 +21318,39 @@ select {
     width: 98%;
   }
 }
+
+/* Festival operations: compact notices, rules, and time-limited cat previews. */
+.cat-world-festival {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 20px 24px;
+  margin-bottom: 18px;
+  border: 1px solid #e6d8ba;
+  border-radius: 12px;
+  background: linear-gradient(110deg, #fff9e9, #fcf7f0);
+  color: #594c37;
+}
+.cat-world-festival-moon { display: flex; align-items: center; gap: 4px; color: #a7803f; }
+.cat-world-festival-copy { flex: 1; min-width: 0; }
+.cat-world-festival .cat-world-festival-dates { font-size: 12px; color: #79674b; }
+.cat-world-festival h2 { margin: 6px 0; font-size: 18px; line-height: 1.5; }
+.cat-world-festival p { margin: 0; font-size: 13px; line-height: 1.7; }
+.cat-world-festival-progress { display: flex; flex-wrap: wrap; gap: 8px; max-width: 260px; font-size: 13px; }
+.cat-world-festival-progress strong, .cat-world-festival-progress > span { width: 100%; }
+.cat-world-festival-rules { padding: 16px; border-radius: 8px; background: #fff8e9; margin: 16px 0; }
+.cat-world-festival-rules strong { color: #715733; }
+.cat-world-festival-rules small { color: #75634a; }
+.cat-world-shop-card .cat-world-festival-sale-dates { color: #76532f; font-weight: 700; }
+.cat-world-festival-cats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.cat-world-festival-cats > span { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 10px; border-radius: 8px; background: #faf5ec; }
+.cat-world-festival-cats strong { font-size: 12px; color: #554b3e; }
+.cat-world-festival-cats small { font-size: 12px; color: #7a6b59; }
+.cat-world-room-actions .cat-world-quick-scoop { display: inline-flex; align-items: center; gap: 6px; }
+.cat-world-room-actions .cat-world-quick-scoop.active { background: #e3f3e7; color: #286644; border-color: #74a487; }
+@media (max-width: 700px) {
+  .cat-world-festival { align-items: flex-start; flex-wrap: wrap; gap: 12px; padding: 16px; }
+  .cat-world-festival-copy { flex-basis: calc(100% - 70px); }
+  .cat-world-festival-progress { max-width: none; padding-left: 0; }
+  .cat-world-festival h2 { font-size: 16px; }
+}

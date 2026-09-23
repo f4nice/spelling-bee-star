@@ -71,6 +71,9 @@ from app.services.ai_image_generation import generate_dashscope_prompt_image, ge
 from app.services.ai_tts import generate_word_ai_audio
 from app.services.chinadaily import get_chinadaily_article, load_chinadaily_articles
 from app.services.challenge_masking import mask_word_in_text
+from app.services.cat_world_festivals import (
+    festival_blind_box_series, festival_energy_source, festival_sale_window, record_festival_earning,
+)
 from app.services.newspaper_cache import NewspaperCache
 from app.services.list_completion_jobs import (
     ListCompletionJobs, PreserveWordValues, missing_text_fields,
@@ -1634,6 +1637,14 @@ CAT_WORLD_BLIND_BOX_SERIES = [
     },
 ]
 CAT_WORLD_CURRENT_BLIND_BOX_SERIES_KEY = "turkey-water-2026-01"
+CAT_WORLD_FESTIVAL_BLIND_BOX_SERIES = festival_blind_box_series()
+CAT_WORLD_BLIND_BOX_SERIES.extend(CAT_WORLD_FESTIVAL_BLIND_BOX_SERIES)
+CAT_WORLD_SHOP.extend({
+    "id": series["shopItemId"], "category": "blind-box", "label": series["label"] + "盲盒",
+    "englishName": "Festival Cat Blind Box", "cost": 1500, "mood": 0,
+    "seriesKey": series["key"], "festivalId": series["festivalId"],
+    "description": series["description"],
+} for series in CAT_WORLD_FESTIVAL_BLIND_BOX_SERIES)
 CAT_WORLD_BLIND_BOX_SERIES_BY_KEY = {series["key"]: series for series in CAT_WORLD_BLIND_BOX_SERIES}
 CAT_WORLD_LIMITED_CAT_SEEDS = [
     {**cat_seed, "seriesKey": series["key"]}
@@ -4945,6 +4956,8 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
     item = shop_by_id.get(item_id)
     if not item:
         raise HTTPException(status_code=404, detail="没有找到这个猫咪物品。")
+    if item.get("festivalId"):
+        require_cat_world_festival_sale(item["festivalId"])
 
     state = get_or_create_cat_world_state(db, phone)
     current = serialize_cat_world_payload(db, state)
@@ -4999,6 +5012,7 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
     elif item["category"] == "blind-box":
         state = db.scalar(
             select(CatWorldState).where(CatWorldState.id == state.id).with_for_update()
+            .execution_options(populate_existing=True)
         ) or state
         owned_cats = parse_cat_world_cats(state.cats)
         available_energy = max(int(current["energy"]["earned"]) - max(int(state.energy_spent or 0), 0), 0)
@@ -5008,6 +5022,7 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
         series = CAT_WORLD_BLIND_BOX_SERIES_BY_KEY.get(series_key)
         if not series:
             raise HTTPException(status_code=404, detail="没有找到这一期猫咪盲盒。")
+        unlimited_stock = bool(series.get("unlimitedStock"))
         existing_draw = db.scalar(
             select(CatWorldBlindBoxDraw).where(
                 CatWorldBlindBoxDraw.phone == state.phone,
@@ -5025,20 +5040,21 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
             )
             .with_for_update()
         ).all()
+        require_cat_world_festival_sale(series.get("festivalId"))
         eligible_rows = [
             row
             for row in stock_rows
             if row.is_active
             and row.cat_id not in owned_cats
-            and max(int(row.total_stock or 0) - int(row.claimed_count or 0), 0) > 0
+            and (unlimited_stock or max(int(row.total_stock or 0) - int(row.claimed_count or 0), 0) > 0)
         ]
         if not eligible_rows:
             raise HTTPException(status_code=409, detail="本期可抽取的限定猫咪已经售罄。")
-        remaining_total = sum(max(int(row.total_stock or 0) - int(row.claimed_count or 0), 0) for row in eligible_rows)
+        remaining_total = len(eligible_rows) if unlimited_stock else sum(max(int(row.total_stock or 0) - int(row.claimed_count or 0), 0) for row in eligible_rows)
         ticket = secrets.randbelow(remaining_total)
         selected_stock = eligible_rows[-1]
         for row in eligible_rows:
-            remaining = max(int(row.total_stock or 0) - int(row.claimed_count or 0), 0)
+            remaining = 1 if unlimited_stock else max(int(row.total_stock or 0) - int(row.claimed_count or 0), 0)
             if ticket < remaining:
                 selected_stock = row
                 break
@@ -7790,6 +7806,14 @@ async def vue_optimize_essay_api(essay_id: int, request: Request, db: Session = 
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"AI 优化失败: {exc}") from exc
 
+    # Reload the reward high-water mark after the AI call, under a row lock.
+    # Concurrent optimizations must only award their actual new improvement.
+    saved_best_score, saved_best_points = db.execute(
+        select(EssayEntry.best_writing_score, EssayEntry.best_writing_points)
+        .where(EssayEntry.id == essay.id).with_for_update()
+    ).one()
+    essay.best_writing_score = max(int(essay.best_writing_score or 0), int(saved_best_score or 0))
+    essay.best_writing_points = max(int(essay.best_writing_points or 0), int(saved_best_points or 0))
     essay.optimized_body = optimized_body
     essay.optimized_translation_body = None
     essay.optimized_word_count = essay_word_count(optimized_body)
@@ -7807,6 +7831,10 @@ async def vue_optimize_essay_api(essay_id: int, request: Request, db: Session = 
         writing_score=int(assessment["total"]),
         writing_points=current_points,
         eligible=energy_gain_eligible,
+    )
+    record_festival_earning(
+        db, phone=essay.phone, source="essay",
+        event_key=f"essay:{essay.id}:best:{essay.best_writing_points}", base_energy=energy_gain,
     )
     db.add(essay)
     db.commit()
@@ -8370,6 +8398,9 @@ async def vue_debate_turn_api(session_id: int, request: Request, db: Session = D
         if int(session.energy_awarded or 0) <= 0:
             energy_gain = debate_energy_reward(session.final_score)
             session.energy_awarded = energy_gain
+            record_festival_earning(
+                db, phone=session.phone, source="debate", event_key=f"debate:{session.id}", base_energy=energy_gain,
+            )
             db.add(
                 CatWorldEnergyGrant(
                     phone=session.phone,
@@ -9516,6 +9547,7 @@ def challenge_answer_api(
                     spelling=spelling,
                     answer_word_id=answer_word_id,
                     wrong_date=wrong_date,
+                    reward_phone=authenticated_phone_from_request(request),
                 )
                 break
             except (IntegrityError, OperationalError):
@@ -9564,6 +9596,7 @@ def challenge_answer_api(
                     if result.get("next_word") is not None
                     else _CHALLENGE_WORD_UNSET
                 ),
+                reward_phone=authenticated_phone_from_request(request),
             )
         except Exception:
             db.rollback()
@@ -10571,6 +10604,7 @@ def apply_challenge_answer(
     spelling: str,
     answer_word_id: int | None,
     wrong_date: str,
+    reward_phone: str = "",
 ) -> dict[str, Any]:
     word_list = db.get(WordList, word_list_id)
     if not word_list:
@@ -10625,6 +10659,7 @@ def apply_challenge_answer(
                 normalized_spelling=typed,
                 expected_spellings=expected,
                 is_correct=action == "known",
+                reward_phone=reward_phone,
             )
         if action == "wrong" and current_word:
             record_wrong_word(db, current_word.id, wrong_date_value if correction_mode else None)
@@ -10694,6 +10729,7 @@ def challenge_payload(
     wrong_date: str | None,
     restart: bool = False,
     preloaded_current_word: Word | None | object = _CHALLENGE_WORD_UNSET,
+    reward_phone: str = "",
 ) -> dict[str, Any]:
     word_list = db.get(WordList, word_list_id)
     if not word_list:
@@ -10764,7 +10800,7 @@ def challenge_payload(
         daily_done = session_answered
         daily_remaining = max(0, daily_total - session_answered)
         is_daily_complete = bool(total and daily_total and session_answered >= daily_total)
-        challenge_summary = challenge_state(db, word_list, total=total, progress=progress)
+        challenge_summary = challenge_state(db, word_list, total=total, progress=progress, reward_phone=reward_phone)
 
     if is_daily_complete:
         current_word = None
@@ -15760,6 +15796,7 @@ def cat_world_earned_energy(db: Session, phone: str, growth: dict[str, Any] | No
         + int(debate_source["energy"])
         + int(operating_source["energy"])
         + int(habit_source["energy"])
+        + int(festival_energy_source(db, phone)["energy"])
     )
 
 
@@ -15777,6 +15814,7 @@ def cat_world_today_energy_source_rows(
     debate_source: dict[str, Any],
     operating_source: dict[str, Any],
     habit_source: dict[str, Any] | None = None,
+    festival_source: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     rules = {item["key"]: item for item in growth.get("scoreRules", []) if isinstance(item, dict)}
     missions = {item["key"]: item for item in growth.get("dailyMissions", []) if isinstance(item, dict)}
@@ -15793,7 +15831,7 @@ def cat_world_today_energy_source_rows(
             "energy": spelling_energy,
         }
     ]
-    for source in (essay_source, debate_source, operating_source, habit_source or {}):
+    for source in (essay_source, debate_source, operating_source, habit_source or {}, festival_source or {}):
         if not source:
             continue
         today_energy = max(int(source.get("todayEnergy") or 0), 0)
@@ -17390,6 +17428,13 @@ def cat_world_available_scene_choices(db: Session, state: CatWorldState) -> list
     return choices
 
 
+def require_cat_world_festival_sale(festival_id: str | None) -> None:
+    window = festival_sale_window(festival_id)
+    if window["saleState"] != "active":
+        label = "尚未开放" if window["saleState"] == "upcoming" else "已经结束"
+        raise HTTPException(status_code=409, detail=f"这一期节庆盲盒{label}，开放时间：{window['saleLabel']}。")
+
+
 def cat_world_blind_box_catalog_payload(
     db: Session,
     state: CatWorldState,
@@ -17409,6 +17454,7 @@ def cat_world_blind_box_catalog_payload(
     series_payload = []
     for series in CAT_WORLD_BLIND_BOX_SERIES:
         cat_rows = []
+        unlimited_stock = bool(series.get("unlimitedStock"))
         for seed in series["cats"]:
             cat = seed["cat"]
             stock = stock_rows.get((series["key"], cat["id"]))
@@ -17422,7 +17468,7 @@ def cat_world_blind_box_catalog_payload(
                     "claimed": claimed,
                     "remaining": remaining,
                     "owned": cat["id"] in owned,
-                    "oddsPercent": round((int(seed.get("totalStock") or 0) / max(sum(int(item.get("totalStock") or 0) for item in series["cats"]), 1)) * 100, 1),
+                    "oddsPercent": round(100 / len(series["cats"]), 1) if unlimited_stock else round((int(seed.get("totalStock") or 0) / max(sum(int(item.get("totalStock") or 0) for item in series["cats"]), 1)) * 100, 1),
                 }
             )
         draw = draws.get(series["key"])
@@ -17434,6 +17480,8 @@ def cat_world_blind_box_catalog_payload(
                 "issue": series["issue"],
                 "description": series["description"],
                 "shopItemId": series["shopItemId"],
+                **festival_sale_window(series.get("festivalId")),
+                "unlimitedStock": unlimited_stock,
                 "drawn": bool(draw),
                 "drawnCatId": draw.cat_id if draw else "",
                 "drawnAt": draw.created_at.isoformat() if draw and draw.created_at else "",
@@ -23072,12 +23120,14 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     debate_energy_source = cat_world_debate_energy_source(db, state.phone)
     operating_energy_source = cat_world_operating_energy_source(db, state.phone)
     habit_energy_source = cat_world_learning_habit_source(db, state.phone)
+    festival_source = festival_energy_source(db, state.phone)
     earned_energy = (
         max(int(growth.get("points") or 0), 0)
         + int(essay_energy_source["energy"])
         + int(debate_energy_source["energy"])
         + int(operating_energy_source["energy"])
         + int(habit_energy_source["energy"])
+        + int(festival_source["energy"])
     )
     today_energy_sources = cat_world_today_energy_source_rows(
         growth,
@@ -23085,6 +23135,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         debate_energy_source,
         operating_energy_source,
         habit_energy_source,
+        festival_source,
     )
     today_energy = sum(int(source["energy"]) for source in today_energy_sources)
     spent_energy = max(int(state.energy_spent or 0), 0)
@@ -23102,27 +23153,15 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     cat_bonds = parse_cat_world_bonds(state.cat_bonds)
     blind_box_catalog = cat_world_blind_box_catalog_payload(db, state, owned_cats)
     collection_catalog = cat_world_collection_catalog_payload(blind_box_catalog, owned_cats)
-    current_blind_series = next(
-        (
-            series
-            for series in blind_box_catalog["series"]
-            if series["key"] == blind_box_catalog["currentSeriesKey"]
-        ),
-        {},
-    )
-    blind_box_item = shop_by_id.get("limited-cat-blind-box")
-    if blind_box_item is not None:
-        blind_box_item.update(
-            {
-                "seriesKey": current_blind_series.get("key") or CAT_WORLD_CURRENT_BLIND_BOX_SERIES_KEY,
-                "seriesLabel": current_blind_series.get("label") or "限定猫咪盲盒",
-                "region": current_blind_series.get("region") or "",
-                "issue": current_blind_series.get("issue") or "",
-                "remainingStock": int(current_blind_series.get("remainingStock") or 0),
-                "drawn": bool(current_blind_series.get("drawn")),
-                "drawnCatId": current_blind_series.get("drawnCatId") or "",
-            }
-        )
+    for series in blind_box_catalog["series"]:
+        blind_box_item = shop_by_id.get(series["shopItemId"])
+        if blind_box_item is None or blind_box_item.get("seriesKey") != series["key"]:
+            continue
+        blind_box_item.update({
+            "seriesLabel": series["label"], "region": series["region"], "issue": series["issue"],
+            **{key: series[key] for key in ("remainingStock", "drawn", "drawnCatId", "cats",
+                                           "saleState", "saleLabel", "timeLimited", "unlimitedStock")},
+        })
     limited_gift_item = shop_by_id.get(CAT_WORLD_LIMITED_GIFT_ITEM_ID)
     if limited_gift_item is not None:
         limited_gift_item.update(
@@ -23302,6 +23341,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     cat_social = cat_world_social_circle_payload(profile_payloads, daily_logs)
     return {
         "playTime": play_time,
+        "festival": festival_source["campaign"],
         "energy": {
             "earned": earned_energy,
             "spent": spent_energy,
@@ -23313,6 +23353,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
                 debate_energy_source,
                 operating_energy_source,
                 habit_energy_source,
+                festival_source,
             ],
             "todaySources": today_energy_sources,
             "habit": habit_energy_source,
@@ -24707,6 +24748,7 @@ def record_spelling_attempt(
     normalized_spelling: str,
     expected_spellings: set[str],
     is_correct: bool,
+    reward_phone: str = "",
 ) -> None:
     db.add(
         ChallengeSpellingAttempt(
@@ -24717,6 +24759,9 @@ def record_spelling_attempt(
             expected_spellings=json.dumps(sorted(expected_spellings), ensure_ascii=False),
             is_correct=is_correct,
         )
+    )
+    record_festival_earning(
+        db, phone=reward_phone, source="spelling", event_key=f"spelling:{uuid4().hex}", base_energy=2,
     )
 
 
@@ -24767,6 +24812,7 @@ def challenge_state(
     word_list: WordList,
     total: int | None = None,
     progress: ChallengeProgress | None = None,
+    reward_phone: str = "",
 ) -> dict:
     total = challenge_word_count(db, word_list.id) if total is None else total
     progress = progress if progress is not None else get_or_create_challenge_progress(db, word_list.id) if total else None
@@ -24781,6 +24827,10 @@ def challenge_state(
         progress.completed_count = 0
         progress.current_index = 0
         db.add(progress)
+        record_festival_earning(
+            db, phone=reward_phone, source="challenge_round",
+            event_key=f"round:{word_list.id}:{progress.completed_rounds}", base_energy=50,
+        )
         db.commit()
         db.refresh(progress)
         completed = 0

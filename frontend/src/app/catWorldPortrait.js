@@ -10,6 +10,10 @@ const CAT_PORTRAIT_PALETTES = Object.freeze({
   "japanese-bobtail": { body: "#fff3dc", shade: "#d98745", stripe: "#3f3430", belly: "#ffffff" },
   "turkish-van": { body: "#fff4dc", shade: "#c96f3f", stripe: "#743c2a", belly: "#ffffff" },
   "turkish-angora": { body: "#f8fbff", shade: "#cad8e6", stripe: "#70849a", belly: "#ffffff" },
+  "festival-moon": { body: "#ece9ff", shade: "#b8afd9", stripe: "#81729f", belly: "#fff9ed" },
+  "festival-osmanthus": { body: "#f6d585", shade: "#d6a250", stripe: "#8e6534", belly: "#fff3cf" },
+  "festival-lantern": { body: "#e79282", shade: "#b85352", stripe: "#7c4246", belly: "#fff0dc" },
+  "festival-maple": { body: "#e7aa6f", shade: "#be7446", stripe: "#774934", belly: "#ffe6c1" },
 });
 
 const PORTRAIT_BACKDROPS = ["#d9f6ff", "#fff0a6", "#ffe0ec", "#d8f5e8"];

@@ -149,6 +149,10 @@ const CAT_COLORS = {
   "japanese-bobtail": { body: 0xfff3dc, shade: 0xd98745, stripe: 0x3f3430, belly: 0xffffff, nose: 0xf08faa },
   "turkish-van": { body: 0xfff4dc, shade: 0xc96f3f, stripe: 0x743c2a, belly: 0xffffff, nose: 0xf08faa },
   "turkish-angora": { body: 0xf8fbff, shade: 0xcad8e6, stripe: 0x70849a, belly: 0xffffff, nose: 0xf29ab3 },
+  "festival-moon": { body: 0xece9ff, shade: 0xb8afd9, stripe: 0x81729f, belly: 0xfff9ed, nose: 0xf08faa },
+  "festival-osmanthus": { body: 0xf6d585, shade: 0xd6a250, stripe: 0x8e6534, belly: 0xfff3cf, nose: 0xf08faa },
+  "festival-lantern": { body: 0xe79282, shade: 0xb85352, stripe: 0x7c4246, belly: 0xfff0dc, nose: 0xf08faa },
+  "festival-maple": { body: 0xe7aa6f, shade: 0xbe7446, stripe: 0x774934, belly: 0xffe6c1, nose: 0xf08faa },
 };
 
 const TONE_PALETTES = {
