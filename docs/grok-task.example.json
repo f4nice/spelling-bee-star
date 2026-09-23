@@ -1,0 +1,7 @@
+{
+  "task": "Review this function for concrete correctness bugs. Return at most three findings with line numbers, or say no findings. Do not propose a broad rewrite.",
+  "files": [
+    { "path": "frontend/src/app/catWorldPlayTime.js", "start": 1, "end": 35 }
+  ],
+  "maxOutputTokens": 2048
+}
