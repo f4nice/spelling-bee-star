@@ -11,7 +11,7 @@ defineEmits(["details", "shop"]);
     <div class="cat-world-festival-copy">
       <span class="cat-world-festival-dates">双节学习礼物 · {{ festival.dateLabel }}</span>
       <h2 id="cat-festival-title">ABBY，{{ festival.status === 'active' ? '节日学习能量翻倍啦！' : `${festival.name}快到啦，学习能量会翻倍！` }}</h2>
-      <p>练拼写、写作文、说英语，新获学习能量再送一份，每天额外最多 500 点。还有 1500 能量的节日猫咪盲盒等你来看看。</p>
+      <p>练拼写、写作文、说英语，新获学习能量再送一份，每天额外最多 {{ festival.dailyCap }} 点。还有 1500 能量的节日猫咪盲盒等你来看看。</p>
     </div>
     <div class="cat-world-festival-progress">
       <strong v-if="festival.status === 'active'">今日加赠 {{ festival.todayBonus }} / {{ festival.dailyCap }}</strong>

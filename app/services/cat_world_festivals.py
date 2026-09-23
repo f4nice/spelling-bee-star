@@ -10,7 +10,7 @@ from app.models import CatWorldFestivalEarning
 
 
 BEIJING = timezone(timedelta(hours=8))
-DAILY_BONUS_CAP = 500
+DAILY_BONUS_CAP = 1500
 FESTIVALS = (
     ("mid-autumn-2026", "中秋", date(2026, 9, 25), date(2026, 9, 27)),
     ("national-day-2026", "国庆", date(2026, 10, 1), date(2026, 10, 7)),
@@ -143,7 +143,7 @@ def festival_energy_source(db: Session, phone: str, now: datetime | None = None)
         "remainingBonus": max(DAILY_BONUS_CAP - today_bonus, 0) if active else DAILY_BONUS_CAP,
         "totalBonus": total,
         "nextUpdateAt": datetime.combine(today + timedelta(days=1), time.min, BEIJING).isoformat(),
-        "rule": "拼写挑战（含完成整轮）、作文新获得的积分和 AI 英语辩论能量翻倍；每天额外最多 500 能量。",
+        "rule": f"拼写挑战（含完成整轮）、作文新获得的积分和 AI 英语辩论能量翻倍；每天额外最多 {DAILY_BONUS_CAP} 能量。",
         "note": "按北京时间，完成学习后自动到账。只计算活动当天新获得的学习能量，习惯奖励和特别赠送不叠加；已有奖励活动结束后仍可使用。",
     }
     return {
