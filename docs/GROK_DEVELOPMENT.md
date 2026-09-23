@@ -16,7 +16,7 @@ Paste the API key at the hidden prompt, not into chat or a command argument. Win
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\grok-dev.ps1 -Check
 ```
 
-`-Check` makes no network request; it does not validate the key with xAI. After setup, `-SmokeTest` makes one small, billable request without sending source code.
+`-Check` reports the credential source and whether it resembles an xAI key without a network request; it does not validate the key with xAI. Setup rejects unrecognized key formats before replacing the saved credential. `-ListModels` checks the available models through one read-only API request without asking for generated output. After setup, `-SmokeTest` makes one small, billable request without sending source code.
 
 ## Routine use
 

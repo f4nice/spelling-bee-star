@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { prepareRequest, callGrok } from '../scripts/grok-dev.mjs';
+import { prepareRequest, callGrok, classifyApiError, listModels } from '../scripts/grok-dev.mjs';
 
 function fixture(t) {
   const directory = mkdtempSync(path.join(os.tmpdir(), 'speakeasy-grok-test-'));
@@ -99,4 +99,32 @@ test('incomplete results are visibly marked and are not retried', async () => {
     status: 'incomplete', output: [{ type: 'message', content: [{ type: 'output_text', text: 'Partial proposal' }] }],
   }) }) });
   assert.equal(result.status, 'incomplete');
+});
+
+test('classifies authentication failures without exposing upstream data', () => {
+  assert.equal(classifyApiError({ error: 'Incorrect API key test-secret' }), ' Authentication failed.');
+  assert.equal(classifyApiError({ error: 'Unknown input parameter instructions: private source' }), ' Check the instructions parameter.');
+  assert.equal(classifyApiError({ error: 'private-source-code' }), '');
+});
+
+test('model lookup is a single GET returning only model IDs', async () => {
+  let calls = 0;
+  const models = await listModels({ apiKey: 'test-key', fetchImpl: async (url, options) => {
+    calls++;
+    assert.equal(url, 'https://api.x.ai/v1/models');
+    assert.equal(options.method, 'GET');
+    assert.equal(options.body, undefined);
+    return { ok: true, json: async () => ({ data: [{ id: 'grok-4.7', private: 'omit' }, { id: 'unexpected raw text' }] }) };
+  } });
+  assert.deepEqual(models, ['grok-4.7']);
+  assert.equal(calls, 1);
+});
+
+test('model lookup classifies HTTP 400 authentication failures without leaking or retrying', async () => {
+  let calls = 0;
+  await assert.rejects(listModels({ apiKey: 'test-key', fetchImpl: async () => {
+    calls++;
+    return { ok: false, status: 400, json: async () => ({ error: 'Incorrect API key test-key' }) };
+  } }), (error) => /400.*Authentication failed/.test(error.message) && !error.message.includes('test-key'));
+  assert.equal(calls, 1);
 });

@@ -70,22 +70,37 @@ export function prepareRequest(request, root = ROOT) {
   };
 }
 
+export function classifyApiError(error) {
+  const message = JSON.stringify(error).toLowerCase();
+  // Return fixed labels only; upstream errors may echo secrets or request data.
+  if (/api.key|authentication|unauthorized|invalid.token/.test(message)) return ' Authentication failed.';
+  if (/credit|balance|billing|spending/.test(message)) return ' Check xAI API balance or spending limits.';
+  if (/model/.test(message) && /not.found|not.exist|not.have.access|unavailable/.test(message)) return ' Model unavailable for this account.';
+  const field = ['instructions', 'max_output_tokens', 'reasoning', 'store', 'tools', 'input'].find((name) => message.includes(name));
+  return field ? ` Check the ${field} parameter.` : '';
+}
+
 export async function callGrok(body, { apiKey = process.env.XAI_API_KEY, fetchImpl = fetch } = {}) {
   if (!apiKey?.trim()) throw new Error('XAI_API_KEY is missing. Run scripts/grok-dev.ps1 -SetupKey locally.');
   let response;
   let data;
+  let problem = '';
   try {
     response = await fetchImpl(ENDPOINT, {
       method: 'POST', redirect: 'error', signal: AbortSignal.timeout(90000),
       headers: { Authorization: `Bearer ${apiKey.trim()}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      problem = classifyApiError(error);
+      throw new Error(`HTTP ${response.status}`);
+    }
     data = await response.json();
   } catch {
     // Never echo upstream error bodies, headers, or request text. Do not retry billable requests.
     throw new Error(response && !response.ok
-      ? `xAI returned HTTP ${response.status}; check credentials, model access, and API balance. No retry was made.`
+      ? `xAI returned HTTP ${response.status}.${problem} No retry was made.`
       : 'xAI request failed or timed out. Billing may have occurred; no automatic retry was made.');
   }
   const text = (data.output ?? []).filter((item) => item.type === 'message')
@@ -101,14 +116,40 @@ export async function callGrok(body, { apiKey = process.env.XAI_API_KEY, fetchIm
   return { text: safeText, status: data.status === 'completed' ? 'completed' : 'incomplete', usage };
 }
 
+export async function listModels({ apiKey = process.env.XAI_API_KEY, fetchImpl = fetch } = {}) {
+  if (!apiKey?.trim()) throw new Error('XAI_API_KEY is missing.');
+  let response;
+  let problem = '';
+  try {
+    response = await fetchImpl('https://api.x.ai/v1/models', {
+      method: 'GET', redirect: 'error', signal: AbortSignal.timeout(30000),
+      headers: { Authorization: `Bearer ${apiKey.trim()}` },
+    });
+    if (!response.ok) {
+      problem = classifyApiError(await response.json().catch(() => ({})));
+      throw new Error('Model lookup failed.');
+    }
+    const data = await response.json();
+    return (data.data ?? []).map((model) => model.id)
+      .filter((id) => typeof id === 'string' && /^grok-[a-zA-Z0-9._-]{1,80}$/.test(id));
+  } catch {
+    throw new Error(response && !response.ok ? `xAI model lookup returned HTTP ${response.status}.${problem}` : 'xAI model lookup failed.');
+  }
+}
+
 async function main(args) {
+  if (args.length === 1 && args[0] === '--list-models') {
+    console.log(JSON.stringify({ models: await listModels(), generationRequested: false }, null, 2));
+    return;
+  }
   if (args.length === 1 && args[0] === '--check') {
-    console.log(JSON.stringify({ keyConfigured: Boolean(process.env.XAI_API_KEY?.trim()), defaultModel: DEFAULT_MODEL, networkCalled: false }));
+    const key = process.env.XAI_API_KEY?.trim() ?? '';
+    console.log(JSON.stringify({ keyConfigured: Boolean(key), keyLooksLikeXaiKey: /^xai-[A-Za-z0-9_-]{20,}$/.test(key), defaultModel: DEFAULT_MODEL, networkCalled: false }));
     return;
   }
   const dryRun = args[0] === '--dry-run';
   const smoke = args.length === 1 && args[0] === '--smoke-test';
-  if (!smoke && args.length !== (dryRun ? 2 : 1)) throw new Error('Usage: grok-dev.mjs [--dry-run] request.json | --check | --smoke-test');
+  if (!smoke && args.length !== (dryRun ? 2 : 1)) throw new Error('Usage: grok-dev.mjs [--dry-run] request.json | --check | --list-models | --smoke-test');
   const request = smoke ? { task: 'Reply with only OK.', maxOutputTokens: 256 }
     : JSON.parse(readFileSync(path.resolve(args[dryRun ? 1 : 0]), 'utf8').replace(/^\uFEFF/, ''));
   const prepared = prepareRequest(request);
