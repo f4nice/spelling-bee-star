@@ -34,6 +34,7 @@ import {
   chooseCatVisitPlan,
 } from "./catWorldBehaviorPlanner.js";
 import { catWorldGaitProfile } from "./catWorldGait.js";
+import { catWorldSizeProfile } from "./catWorldSize.js";
 import { catWorldIdleAnimationPlan } from "./catWorldIdleAnimation.js";
 import { catWorldCarryReactionPlan } from "./catWorldCarryReaction.js";
 import { catWorldPlacementReactionPlan } from "./catWorldPlacementReaction.js";
@@ -2523,13 +2524,13 @@ class CatWorldScene extends Phaser.Scene {
     const body = container.getData("catBody");
     if (body?.active) {
       this.tweens.killTweensOf(body);
-      body.setPosition(0, 0);
+      body.setPosition(0, this.catBodyRestY(body));
       body.setAngle(0);
       const motion = carryPlan.motion || {};
       this.tweens.add({
         targets: body,
         x: Number(motion.swayX || 1),
-        y: -Math.max(Number(motion.bobY || 2), 0),
+        y: this.catBodyRestY(body) - Math.max(Number(motion.bobY || 2), 0),
         angle: Number(motion.tilt || 0),
         duration: Math.max(Number(motion.duration || 720), 220),
         yoyo: true,
@@ -2627,9 +2628,7 @@ class CatWorldScene extends Phaser.Scene {
     const container = entry.container;
     const body = container.getData("catBody");
     if (body?.active) {
-      this.tweens.killTweensOf(body);
-      body.setPosition(0, 0);
-      body.setAngle(0);
+      this.resetCatBodyPose(body);
     }
     container.getData("catCarryBadge")?.destroy?.();
     container.setData("catCarryBadge", null);
@@ -3033,7 +3032,7 @@ class CatWorldScene extends Phaser.Scene {
     const reactionToken = `${entry.cat.id}:${placementPlan.identityToken}:${Date.now()}`;
     container.setData("placementReactionToken", reactionToken);
     this.tweens.killTweensOf(body);
-    body.setPosition(0, 0);
+    body.setPosition(0, this.catBodyRestY(body));
     body.setAngle(0);
     this.playCatMicroAnimation(
       container,
@@ -3045,7 +3044,7 @@ class CatWorldScene extends Phaser.Scene {
     this.tweens.add({
       targets: body,
       x: Number(motion.swayX || 0),
-      y: -Math.max(Number(motion.hopY || 0), 0),
+      y: this.catBodyRestY(body) - Math.max(Number(motion.hopY || 0), 0),
       angle: Number(motion.tilt || 0),
       duration: Math.max(Number(motion.duration || 260), 120),
       yoyo: true,
@@ -3054,8 +3053,7 @@ class CatWorldScene extends Phaser.Scene {
       onComplete: () => {
         if (container.getData("placementReactionToken") !== reactionToken || !body.active) return;
         container.setData("placementReactionToken", null);
-        body.setPosition(0, 0);
-        body.setAngle(0);
+        this.resetCatBodyPose(body);
       },
     });
   }
@@ -3940,9 +3938,16 @@ class CatWorldScene extends Phaser.Scene {
 
   drawCatShape(container, cat, selected, snapshot, behavior = {}) {
     const colors = CAT_COLORS[cat.breedId || cat.id] || CAT_COLORS.mimi;
+    const sizeProfile = catWorldSizeProfile(cat);
     const graphics = makeLocalGraphics(this, container);
     graphics.setData("catBody", true);
+    graphics.setData("catBaseY", sizeProfile.baselineY);
+    graphics.setData("catBaseScale", sizeProfile.scale);
     container.setData("catBody", graphics);
+    container.setData("catSizeProfile", sizeProfile);
+    graphics.setScale(sizeProfile.scale);
+    // Keep every cat's shadow on the same floor line while its body grows or shrinks.
+    graphics.y = sizeProfile.baselineY;
     const energyScore = catEnergyForSnapshot(snapshot, cat);
     const moodScore = catMoodForSnapshot(snapshot, cat);
     graphics.fillStyle(0x203041, 0.18);
@@ -4457,11 +4462,25 @@ class CatWorldScene extends Phaser.Scene {
   resetCatGait(container) {
     const body = container?.getData?.("catBody");
     if (body?.active) {
-      this.tweens.killTweensOf(body);
-      body.setPosition(0, 0);
-      body.setAngle(0);
+      this.resetCatBodyPose(body);
     }
     container?.setData?.("gaitStepIndex", -1);
+  }
+
+  catBodyRestY(body) {
+    return Number(body?.getData?.("catBaseY") || 0);
+  }
+
+  catBodyRestScale(body) {
+    return Number(body?.getData?.("catBaseScale") || 1);
+  }
+
+  resetCatBodyPose(body) {
+    if (!body?.active) return;
+    this.tweens.killTweensOf(body);
+    body.setPosition(0, this.catBodyRestY(body));
+    body.setScale(this.catBodyRestScale(body));
+    body.setAngle(0);
   }
 
   spawnCatPawPrint(container, gait = {}, stepIndex = 0) {
@@ -4499,7 +4518,7 @@ class CatWorldScene extends Phaser.Scene {
     const cadenceMs = Math.max(Number(gait.cadenceMs || 390), 210);
     const phase = ((Date.now() / cadenceMs) + Number(gait.phase || 0)) * Math.PI;
     body.x = Math.sin(phase * 0.5) * Number(gait.swayPx || 0.8);
-    body.y = -Math.abs(Math.sin(phase)) * Number(gait.bobPx || 3);
+    body.y = this.catBodyRestY(body) - Math.abs(Math.sin(phase)) * Number(gait.bobPx || 3);
     const stepIndex = Math.floor(
       (Math.max(distance, 0) * clamp(progress, 0, 1))
       / Math.max(Number(gait.stridePx || 46), 32),
@@ -4914,13 +4933,13 @@ class CatWorldScene extends Phaser.Scene {
       cue.destroy();
       this.tweens.add({
         targets: body,
-        y: -8,
+        y: this.catBodyRestY(body) - 8,
         yoyo: true,
         repeat: 1,
         duration: 180,
         ease: "Quad.easeOut",
         onComplete: () => {
-          if (body.active) body.setPosition(0, 0);
+          this.resetCatBodyPose(body);
         },
       });
       return;
@@ -4966,19 +4985,18 @@ class CatWorldScene extends Phaser.Scene {
 
     cue.destroy();
     const stretch = kind === "stretch";
+    const baseScale = this.catBodyRestScale(body);
     this.tweens.add({
       targets: body,
-      y: stretch ? 3 : -2,
-      scaleX: stretch ? 1.06 : 1,
-      scaleY: stretch ? 0.94 : 0.98,
+      y: this.catBodyRestY(body) + (stretch ? 3 : -2),
+      scaleX: baseScale * (stretch ? 1.06 : 1),
+      scaleY: baseScale * (stretch ? 0.94 : 0.98),
       yoyo: true,
       repeat: stretch ? 1 : 2,
       duration: stretch ? 360 : 520,
       ease: "Sine.easeInOut",
       onComplete: () => {
-        if (!body.active) return;
-        body.setPosition(0, 0);
-        body.setScale(1);
+        this.resetCatBodyPose(body);
       },
     });
   }
@@ -5365,7 +5383,7 @@ class CatWorldScene extends Phaser.Scene {
       if (!body?.active) return;
       this.tweens.add({
         targets: body,
-        y: -Math.max(Number(amount || 2), 2),
+        y: this.catBodyRestY(body) - Math.max(Number(amount || 2), 2),
         angle,
         yoyo: true,
         repeat: Math.max(Number(moment.repeats || 1) - 1, 0),

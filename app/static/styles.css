@@ -14586,6 +14586,15 @@ select {
   line-height: 1;
 }
 
+.cat-world-cat-size-profile {
+  border-left: 3px solid #f0b45c;
+  padding-left: 7px;
+}
+
+.cat-world-cat-size-profile em {
+  color: #8a5b2f;
+}
+
 .cat-world-cat-rarity.rarity-famous {
   background: #236b55;
 }

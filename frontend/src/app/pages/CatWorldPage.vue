@@ -21,6 +21,7 @@ import {
 import { CAT_BUBBLE_TOTAL_MS } from "../catWorldBubbleState.js";
 import { catWorldGaitProfile } from "../catWorldGait.js";
 import { catPortraitModel } from "../catWorldPortrait.js";
+import { catWorldSizeProfile } from "../catWorldSize.js";
 import { catRarityBadge } from "../catWorldRarity.js";
 import { catWorldSocialKindLabel } from "../catWorldSocialMoment.js";
 import { catSpotMemorySummary } from "../catWorldSpotMemory.js";
@@ -804,6 +805,7 @@ const catAgentCards = computed(() =>
     return {
       ...cat,
       portrait: catPortraitModel(cat),
+      sizeProfile: catWorldSizeProfile(cat),
       rarityBadge: catRarityBadge(cat.rarity),
       owned,
       escaped: Boolean(lostInfo),
@@ -4606,7 +4608,7 @@ async function selectCat(catOrId, options = {}) {
               </b>
             </div>
           </div>
-          <small>{{ cat.owned ? `${cat.patternLabel || "原生花纹"} · ${cat.featureLabel || "普通特点"} · 个性：${cat.personality || cat.englishName}` : cat.escaped ? `${cat.lostInfo.escapeLabel}，请去商店重新领养` : cat.description }}</small>
+          <small>{{ cat.owned ? `${cat.patternLabel || "原生花纹"} · ${cat.featureLabel || "普通特点"} · ${cat.sizeProfile.label} · 个性：${cat.personality || cat.englishName}` : cat.escaped ? `${cat.lostInfo.escapeLabel}，请去商店重新领养` : cat.description }}</small>
           <div v-if="cat.owned" class="cat-world-cat-agent-status">
             <p v-if="cat.individualHabit?.label" class="cat-world-cat-individual-habit">
               <b>个人小习惯</b>
@@ -4615,6 +4617,10 @@ async function selectCat(catOrId, options = {}) {
             <p v-if="cat.actionRhythm?.label" class="cat-world-cat-action-rhythm">
               <b>活动习惯</b>
               <em>{{ cat.actionRhythm.label }}</em>
+            </p>
+            <p v-if="cat.sizeProfile" class="cat-world-cat-size-profile">
+              <b>体型趣味</b>
+              <em>{{ cat.sizeProfile.label }} · {{ cat.sizeProfile.humor }}</em>
             </p>
             <p v-if="cat.favoriteItemLabels?.length" class="cat-world-cat-individual-preference">
               <b>个体偏好</b>

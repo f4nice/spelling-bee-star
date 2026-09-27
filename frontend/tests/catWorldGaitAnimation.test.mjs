@@ -12,7 +12,7 @@ test("Phaser applies individual gait motion and fading pixel paw prints", async 
   assert.match(game, /gait: catWorldGaitProfile\(cat, behavior\)/);
   assert.match(game, /spawnCatPawPrint\(container, gait = \{\}, stepIndex = 0\)/);
   assert.match(game, /updateCatGait\(container, gait = \{\}, distance = 0, progress = 0\)/);
-  assert.match(game, /body\.y = -Math\.abs\(Math\.sin\(phase\)\)/);
+  assert.match(game, /body\.y = this\.catBodyRestY\(body\) - Math\.abs\(Math\.sin\(phase\)\)/);
   assert.match(game, /this\.updateCatGait\(container, gait, distance/);
   assert.match(game, /duration: 1500/);
   assert.match(game, /entry\.container\.setData\("walkTween", null\)/);
