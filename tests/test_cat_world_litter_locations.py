@@ -87,6 +87,31 @@ class CatWorldLitterLocationTest(unittest.TestCase):
         self.assertEqual(status["addedCount"], 0)
         self.assertEqual(cat_world_litter_scenes(state)["yard"]["catCount"], 0)
 
+    def test_buying_empty_room_does_not_double_existing_litter(self):
+        now = datetime(2026, 8, 2, 12, 0, 0)
+        state = self.make_state(
+            litter_scenes=encode_cat_world_litter_scenes(
+                {
+                    CAT_WORLD_DEFAULT_SCENE_KEY: {
+                        "count": 0,
+                        "catCount": 1,
+                        "updatedAt": (now - timedelta(hours=8)).isoformat() + "Z",
+                    },
+                    "yard": {"count": 0, "catCount": 0},
+                }
+            )
+        )
+
+        # Purchasing a room changes the active room, but does not add a cat to it.
+        state.current_scene_key = "yard"
+        status = cat_world_refresh_litter(state, {}, [CAT_WORLD_DEFAULT_SCENE_KEY], now)
+        scenes = cat_world_litter_scenes(state)
+
+        self.assertEqual(status["count"], 0)
+        self.assertEqual(scenes[CAT_WORLD_DEFAULT_SCENE_KEY]["count"], 1)
+        self.assertEqual(scenes["yard"]["count"], 0)
+        self.assertEqual(state.litter_count, 1)
+
     def test_cleaning_current_scene_keeps_other_scene_litter(self):
         state = self.make_state(
             litter_scenes=encode_cat_world_litter_scenes(

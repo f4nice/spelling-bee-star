@@ -20994,6 +20994,7 @@ def cat_world_apply_agent_routine_event(
 
 
 def cat_world_litter_interval_seconds(owned_cat_count: int) -> int:
+    """Keep litter production tied to cats, never to the number of rooms."""
     count = max(int(owned_cat_count or 1), 1)
     return max(round((8 * 60 * 60) / count), 2 * 60 * 60)
 
@@ -21367,6 +21368,8 @@ def cat_world_refresh_litter(
     cat_scene_keys: list[str],
     now: datetime | None = None,
 ) -> dict[str, Any]:
+    # A purchased room is only a location. Empty rooms must not start another
+    # litter clock; the scene list below is driven by actual cat profiles.
     now = now or datetime.utcnow()
     current_scene_key = str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
     scene_cat_counts: dict[str, int] = {}
