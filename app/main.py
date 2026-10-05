@@ -313,6 +313,9 @@ CAT_WORLD_MAX_GENDER_WEIGHT = 1000
 CAT_WORLD_GENDER_WEIGHT_STEP = 5
 CAT_WORLD_LITTER_ITEM_ID = "tofu-cat-litter"
 CAT_WORLD_LITTER_SCOOP_ITEM_ID = "litter-scoop"
+CAT_WORLD_LITTER_BOX_ITEM_ID = "litter-box"
+CAT_WORLD_LITTER_SCOOP_COST = 35
+CAT_WORLD_LITTER_BOX_USES_PER_PURCHASE = 5
 CAT_WORLD_CAT_GRASS_ITEM_ID = "cat-grass-pot"
 CAT_WORLD_BATH_ITEM_ID = "cat-bath-kit"
 CAT_WORLD_REPAIR_HAMMER_ITEM_ID = "repair-hammer"
@@ -857,9 +860,20 @@ CAT_WORLD_SHOP = [
         "useType": "litter-clean",
         "label": "一次性铲屎铲",
         "englishName": "Litter Scoop",
-        "cost": 35,
+        "cost": CAT_WORLD_LITTER_SCOOP_COST,
         "mood": 0,
         "description": "点击活动室里的猫屎时自动消耗 1 把，每把清理一堆。",
+    },
+    {
+        "id": CAT_WORLD_LITTER_BOX_ITEM_ID,
+        "category": "consumable",
+        "useType": "litter-clean",
+        "label": "耐用猫砂盆",
+        "englishName": "Durable Litter Box",
+        "cost": CAT_WORLD_LITTER_SCOOP_COST * 2,
+        "chargesPerPurchase": CAT_WORLD_LITTER_BOX_USES_PER_PURCHASE,
+        "mood": 0,
+        "description": "一个猫砂盆可连续清理 5 堆猫屎，点击猫屎时自动消耗 1 次。",
     },
     {
         "id": CAT_WORLD_LITTER_ITEM_ID,
@@ -5151,7 +5165,8 @@ async def vue_cat_world_purchase_api(request: Request, db: Session = Depends(get
     else:
         if current["energy"]["available"] < int(item["cost"]):
             raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点。")
-        inventory[item_id] = inventory.get(item_id, 0) + 1
+        grant_quantity = cat_world_purchase_inventory_quantity(item)
+        inventory[item_id] = inventory.get(item_id, 0) + grant_quantity
         state.inventory = encode_cat_world_inventory(inventory)
     state.energy_spent = max(int(state.energy_spent or 0), 0) + int(item["cost"])
     db.add(state)
@@ -5274,13 +5289,7 @@ async def vue_cat_world_clean_litter_api(request: Request, db: Session = Depends
     scene_key = str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
     if cat_world_scene_litter_count(state, scene_key) <= 0:
         raise HTTPException(status_code=400, detail="这个场景里现在没有需要清理的猫屎。")
-    scoop_count = max(int(inventory.get(CAT_WORLD_LITTER_SCOOP_ITEM_ID, 0) or 0), 0)
-    if scoop_count <= 0:
-        raise HTTPException(status_code=400, detail="需要先在消耗品商店购买一次性铲屎铲。")
-    if scoop_count == 1:
-        inventory.pop(CAT_WORLD_LITTER_SCOOP_ITEM_ID, None)
-    else:
-        inventory[CAT_WORLD_LITTER_SCOOP_ITEM_ID] = scoop_count - 1
+    cleaning_tool, tool_remaining = cat_world_consume_litter_cleaning_tool(inventory)
     state.inventory = encode_cat_world_inventory(inventory)
     remaining_litter = cat_world_clean_litter_for_scene(state, scene_key)
     db.add(state)
@@ -5292,6 +5301,9 @@ async def vue_cat_world_clean_litter_api(request: Request, db: Session = Depends
             "cleaned": True,
             "remainingLitter": remaining_litter,
             "scoopRemaining": max(int(inventory.get(CAT_WORLD_LITTER_SCOOP_ITEM_ID, 0) or 0), 0),
+            "litterBoxUsesRemaining": max(int(inventory.get(CAT_WORLD_LITTER_BOX_ITEM_ID, 0) or 0), 0),
+            "cleaningTool": cleaning_tool,
+            "toolRemaining": tool_remaining,
             "message": "猫屎清理好了，房间空气清爽了一点。",
         },
         **serialize_cat_world_payload(db, state),
@@ -16001,6 +16013,14 @@ def parse_cat_world_inventory(raw: str | None) -> dict[str, int]:
     return inventory
 
 
+def cat_world_purchase_inventory_quantity(item: dict[str, Any] | None) -> int:
+    """Return the inventory charges granted by one shop purchase."""
+    try:
+        return max(int((item or {}).get("chargesPerPurchase") or 1), 1)
+    except (TypeError, ValueError):
+        return 1
+
+
 def parse_cat_world_item_locations(
     raw: str | None,
     inventory: dict[str, int] | None = None,
@@ -16111,6 +16131,9 @@ def save_cat_world_litter_scenes(
     state: CatWorldState,
     scenes: dict[str, dict[str, Any]],
 ) -> None:
+    # `litter_updated_at` is the account-wide production clock. Keep it when
+    # scene rows are edited by cleaning or placing preventive litter.
+    account_updated_at = state.litter_updated_at
     state.litter_scenes = encode_cat_world_litter_scenes(scenes)
     normalized = parse_cat_world_litter_scenes(state.litter_scenes)
     state.litter_count = sum(int(row.get("count") or 0) for row in normalized.values())
@@ -16126,7 +16149,7 @@ def save_cat_world_litter_scenes(
         if (parsed := cat_world_parse_utc_datetime(str(row.get("updatedAt") or ""))) is not None
     ]
     state.litter_started_at = min(started_values) if started_values else None
-    state.litter_updated_at = max(updated_values) if updated_values else None
+    state.litter_updated_at = account_updated_at or (max(updated_values) if updated_values else None)
 
 
 def cat_world_scene_litter_row(state: CatWorldState, scene_key: str) -> dict[str, Any]:
@@ -16160,6 +16183,29 @@ def cat_world_clean_litter_for_scene(state: CatWorldState, scene_key: str) -> in
     scenes[key] = row
     save_cat_world_litter_scenes(state, scenes)
     return int(row["count"])
+
+
+def cat_world_consume_litter_cleaning_tool(inventory: dict[str, int]) -> tuple[str, int]:
+    """Consume one cleaning charge, keeping the original scoop priority."""
+    scoop_count = max(int(inventory.get(CAT_WORLD_LITTER_SCOOP_ITEM_ID, 0) or 0), 0)
+    if scoop_count > 0:
+        remaining = scoop_count - 1
+        if remaining:
+            inventory[CAT_WORLD_LITTER_SCOOP_ITEM_ID] = remaining
+        else:
+            inventory.pop(CAT_WORLD_LITTER_SCOOP_ITEM_ID, None)
+        return "scoop", remaining
+
+    litter_box_uses = max(int(inventory.get(CAT_WORLD_LITTER_BOX_ITEM_ID, 0) or 0), 0)
+    if litter_box_uses > 0:
+        remaining = litter_box_uses - 1
+        if remaining:
+            inventory[CAT_WORLD_LITTER_BOX_ITEM_ID] = remaining
+        else:
+            inventory.pop(CAT_WORLD_LITTER_BOX_ITEM_ID, None)
+        return "litter-box", remaining
+
+    raise HTTPException(status_code=400, detail="需要先在消耗品商店购买铲屎铲或耐用猫砂盆。")
 
 
 def cat_world_inventory_for_scene(
@@ -21368,8 +21414,6 @@ def cat_world_refresh_litter(
     cat_scene_keys: list[str],
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    # A purchased room is only a location. Empty rooms must not start another
-    # litter clock; the scene list below is driven by actual cat profiles.
     now = now or datetime.utcnow()
     current_scene_key = str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
     scene_cat_counts: dict[str, int] = {}
@@ -21381,60 +21425,86 @@ def cat_world_refresh_litter(
     scenes = cat_world_litter_scenes(state)
     changed = False
     scene_effects: dict[str, dict[str, int]] = {}
-    for scene_key in {current_scene_key, *scenes.keys(), *scene_cat_counts.keys()}:
+    scene_keys = {current_scene_key, *scenes.keys(), *scene_cat_counts.keys()}
+    total_cat_count = sum(scene_cat_counts.values())
+    interval_seconds = cat_world_litter_interval_seconds(total_cat_count)
+
+    account_updated_at = state.litter_updated_at
+    if account_updated_at is None:
+        row_updated_values = [
+            parsed
+            for scene_key in scene_keys
+            for parsed in [cat_world_parse_utc_datetime(str(scenes.get(scene_key, {}).get("updatedAt") or ""))]
+            if parsed is not None
+        ]
+        account_updated_at = max(row_updated_values) if row_updated_values else now
+        state.litter_updated_at = account_updated_at
+        changed = True
+
+    due_count = 0
+    if total_cat_count > 0:
+        elapsed_seconds = max(int((now - account_updated_at).total_seconds()), 0)
+        due_count = min(elapsed_seconds // interval_seconds, CAT_WORLD_LITTER_MAX)
+
+    # Allocate each account-wide due pile by resident-cat weight. An unlocked
+    # room with no cat contributes no weight and therefore cannot create poop.
+    weighted_scene_keys = [
+        scene_key
+        for scene_key in sorted(scene_cat_counts)
+        for _ in range(scene_cat_counts[scene_key])
+    ]
+    allocations: dict[str, int] = {scene_key: 0 for scene_key in scene_cat_counts}
+    for index in range(int(due_count)):
+        target_scene_key = weighted_scene_keys[index % len(weighted_scene_keys)]
+        allocations[target_scene_key] += 1
+
+    now_text = now.replace(microsecond=0).isoformat() + "Z"
+    for scene_key in scene_keys:
         row = normalize_cat_world_litter_scene(scenes.get(scene_key, {}))
         cat_count = scene_cat_counts.get(scene_key, 0)
         previous_cat_count = int(row.get("catCount") or 0)
-        interval_seconds = cat_world_litter_interval_seconds(cat_count)
+        allocation = int(allocations.get(scene_key, 0))
         auto_used = 0
         added_count = 0
-        if cat_count <= 0:
-            if previous_cat_count != 0:
-                row["catCount"] = 0
-                row["updatedAt"] = now.replace(microsecond=0).isoformat() + "Z"
-                changed = True
-        else:
-            updated_at = cat_world_parse_utc_datetime(str(row.get("updatedAt") or ""))
-            if not updated_at or previous_cat_count <= 0:
-                updated_at = now
-                row["updatedAt"] = now.replace(microsecond=0).isoformat() + "Z"
-                changed = True
-            else:
-                elapsed_seconds = max(int((now - updated_at).total_seconds()), 0)
-                due_count = min(elapsed_seconds // interval_seconds, CAT_WORLD_LITTER_MAX)
-                if due_count > 0:
-                    ready_litter = max(int(row.get("readyCount") or 0), 0)
-                    auto_used = min(int(due_count), ready_litter)
-                    row["readyCount"] = max(ready_litter - auto_used, 0)
-                    current_count = min(max(int(row.get("count") or 0), 0), CAT_WORLD_LITTER_MAX)
-                    next_count = min(current_count + int(due_count) - auto_used, CAT_WORLD_LITTER_MAX)
-                    added_count = max(next_count - current_count, 0)
-                    row["count"] = next_count
-                    if added_count > 0 and current_count <= 0:
-                        row["startedAt"] = now.replace(microsecond=0).isoformat() + "Z"
-                    row["updatedAt"] = now.replace(microsecond=0).isoformat() + "Z"
-                    changed = True
-            if previous_cat_count != cat_count:
-                row["catCount"] = cat_count
-                changed = True
+        if allocation > 0:
+            ready_litter = max(int(row.get("readyCount") or 0), 0)
+            auto_used = min(allocation, ready_litter)
+            row["readyCount"] = max(ready_litter - auto_used, 0)
+            current_count = min(max(int(row.get("count") or 0), 0), CAT_WORLD_LITTER_MAX)
+            next_count = min(current_count + allocation - auto_used, CAT_WORLD_LITTER_MAX)
+            added_count = max(next_count - current_count, 0)
+            row["count"] = next_count
+            row["updatedAt"] = now_text
+            if added_count > 0 and current_count <= 0:
+                row["startedAt"] = now_text
+            changed = True
+        if previous_cat_count != cat_count:
+            row["catCount"] = cat_count
+            changed = True
         if int(row.get("count") or 0) > 0 and not row.get("startedAt"):
-            row["startedAt"] = str(row.get("updatedAt") or now.replace(microsecond=0).isoformat() + "Z")
+            row["startedAt"] = str(row.get("updatedAt") or now_text)
             changed = True
         elif int(row.get("count") or 0) <= 0 and row.get("startedAt"):
             row["startedAt"] = ""
             changed = True
         scenes[scene_key] = row
         scene_effects[scene_key] = {"autoUsed": auto_used, "addedCount": added_count}
+
+    if due_count > 0:
+        state.litter_updated_at = now
+        changed = True
     encoded = encode_cat_world_litter_scenes(scenes)
     if state.litter_scenes != encoded:
         changed = True
     save_cat_world_litter_scenes(state, scenes)
     row = cat_world_scene_litter_row(state, current_scene_key)
-    cat_count = scene_cat_counts.get(current_scene_key, 0)
-    interval_seconds = cat_world_litter_interval_seconds(cat_count)
-    updated_at = cat_world_parse_utc_datetime(str(row.get("updatedAt") or ""))
     count = int(row.get("count") or 0)
-    next_at = updated_at + timedelta(seconds=interval_seconds) if updated_at and cat_count > 0 else None
+    current_scene_cat_count = scene_cat_counts.get(current_scene_key, 0)
+    next_at = (
+        state.litter_updated_at + timedelta(seconds=interval_seconds)
+        if state.litter_updated_at and current_scene_cat_count > 0
+        else None
+    )
     litter_age_hours = cat_world_litter_age_hours(state, now, current_scene_key)
     bath_acceleration_hours = cat_world_litter_bath_acceleration_hours(state, now, current_scene_key)
     effects = scene_effects.get(current_scene_key, {})
@@ -21446,6 +21516,7 @@ def cat_world_refresh_litter(
         "intervalSeconds": interval_seconds,
         "nextAt": next_at.replace(microsecond=0).isoformat() + "Z" if next_at else "",
         "scoopCount": max(int(inventory.get(CAT_WORLD_LITTER_SCOOP_ITEM_ID, 0) or 0), 0),
+        "litterBoxUsesRemaining": max(int(inventory.get(CAT_WORLD_LITTER_BOX_ITEM_ID, 0) or 0), 0),
         "catLitterCount": max(int(inventory.get(CAT_WORLD_LITTER_ITEM_ID, 0) or 0), 0),
         "placedCatLitterCount": max(int(row.get("readyCount") or 0), 0),
         "hasPlacedCatLitter": int(row.get("readyCount") or 0) > 0,

@@ -19,6 +19,8 @@ test("litter mood penalty grows per pile and is capped", () => {
 test("litter supplies explain automatic and click use", () => {
   assert.equal(litterUseHint({ useType: "litter-prevent" }), "点击放进活动室，猫咪使用后消失");
   assert.equal(litterUseHint({ useType: "litter-clean" }, 1), "点击房间里的猫屎清理");
+  assert.equal(litterUseHint({ id: "litter-box", useType: "litter-clean" }, 5), "剩余次数可连续清理猫屎");
+  assert.equal(litterUseHint({ id: "litter-box", useType: "litter-clean" }, 0), "购买后可清理 5 次猫屎");
   assert.equal(litterUseHint({ useType: "cat-care" }), "点击背包使用");
 });
 

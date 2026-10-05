@@ -8,6 +8,7 @@ export function litterMoodPenalty(count) {
 
 export function litterUseHint(item = {}, count = 0) {
   if (item.useType === "litter-clean") {
+    if (item.id === "litter-box") return Number(count) > 0 ? "剩余次数可连续清理猫屎" : "购买后可清理 5 次猫屎";
     return Number(count) > 0 ? "点击房间里的猫屎清理" : "有猫屎时点击使用";
   }
   if (item.useType === "litter-prevent") return "点击放进活动室，猫咪使用后消失";

@@ -8,6 +8,7 @@ test("shop products use recognizable item-specific icons", () => {
   assert.equal(catWorldProductIconSpec({ id: "salmon-bowl", category: "food" }).icon, "fish");
   assert.equal(catWorldProductIconSpec({ id: "repair-hammer", category: "consumable" }).icon, "hammer");
   assert.equal(catWorldProductIconSpec({ id: "litter-scoop", category: "consumable" }).icon, "shovel");
+  assert.equal(catWorldProductIconSpec({ id: "litter-box", category: "consumable" }).icon, "package-open");
   assert.equal(catWorldProductIconSpec({ id: "cat-rename-card", category: "consumable" }).icon, "contact-round");
   assert.equal(catWorldProductIconSpec({ id: "window-hammock", category: "decor" }).icon, "bed");
   assert.equal(catWorldProductIconSpec({ id: "moon-window", category: "decor" }).icon, "moon");

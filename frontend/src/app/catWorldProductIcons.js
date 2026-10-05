@@ -8,6 +8,7 @@ const ITEM_ICON_SPECS = Object.freeze({
   "silver-cod-stew": { icon: "cooking-pot", background: "#e7eef2", accent: "#8797a3", detail: "#4d5962" },
   "chicken-star-bites": { icon: "star", background: "#ffe1ad", accent: "#e78a35", detail: "#874719" },
   "litter-scoop": { icon: "shovel", background: "#c9f5e8", accent: "#238a70", detail: "#155f50" },
+  "litter-box": { icon: "package-open", background: "#dce9ff", accent: "#5f78b7", detail: "#364d80" },
   "tofu-cat-litter": { icon: "package", background: "#e7f1d6", accent: "#79a74d", detail: "#46642d" },
   "grooming-brush": { icon: "brush-cleaning", background: "#ffe0ed", accent: "#d86291", detail: "#873955" },
   "care-wipes": { icon: "package-check", background: "#dff3ff", accent: "#3d9ac8", detail: "#285f79" },

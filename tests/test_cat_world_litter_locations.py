@@ -2,13 +2,22 @@ import os
 import unittest
 from datetime import datetime, timedelta
 
+from fastapi import HTTPException
+
 
 os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
 
 from app.main import (
     CAT_WORLD_DEFAULT_SCENE_KEY,
+    CAT_WORLD_LITTER_BOX_ITEM_ID,
+    CAT_WORLD_LITTER_SCOOP_COST,
+    CAT_WORLD_LITTER_SCOOP_ITEM_ID,
+    CAT_WORLD_LITTER_BOX_USES_PER_PURCHASE,
+    CAT_WORLD_SHOP_BY_ID,
     cat_world_clean_litter_for_scene,
+    cat_world_consume_litter_cleaning_tool,
     cat_world_litter_scenes,
+    cat_world_purchase_inventory_quantity,
     cat_world_refresh_litter,
     encode_cat_world_litter_scenes,
 )
@@ -112,6 +121,39 @@ class CatWorldLitterLocationTest(unittest.TestCase):
         self.assertEqual(scenes["yard"]["count"], 0)
         self.assertEqual(state.litter_count, 1)
 
+    def test_rooms_share_one_account_litter_clock(self):
+        now = datetime(2026, 8, 2, 12, 0, 0)
+        state = self.make_state(
+            litter_updated_at=now - timedelta(hours=8),
+            litter_scenes=encode_cat_world_litter_scenes(
+                {
+                    CAT_WORLD_DEFAULT_SCENE_KEY: {
+                        "count": 0,
+                        "catCount": 1,
+                        "updatedAt": (now - timedelta(hours=8)).isoformat() + "Z",
+                    },
+                    "yard": {
+                        "count": 0,
+                        "catCount": 1,
+                        "updatedAt": (now - timedelta(hours=4)).isoformat() + "Z",
+                    },
+                }
+            ),
+        )
+
+        status = cat_world_refresh_litter(
+            state,
+            {},
+            [CAT_WORLD_DEFAULT_SCENE_KEY, "yard"],
+            now,
+        )
+        scenes = cat_world_litter_scenes(state)
+
+        self.assertEqual(status["count"], 1)
+        self.assertEqual(scenes[CAT_WORLD_DEFAULT_SCENE_KEY]["count"], 1)
+        self.assertEqual(scenes["yard"]["count"], 1)
+        self.assertEqual(state.litter_count, 2)
+
     def test_cleaning_current_scene_keeps_other_scene_litter(self):
         state = self.make_state(
             litter_scenes=encode_cat_world_litter_scenes(
@@ -128,6 +170,48 @@ class CatWorldLitterLocationTest(unittest.TestCase):
         self.assertEqual(remaining, 0)
         self.assertEqual(scenes["yard"]["count"], 0)
         self.assertEqual(scenes[CAT_WORLD_DEFAULT_SCENE_KEY]["count"], 2)
+
+    def test_litter_box_costs_twice_scoop_and_grants_five_cleaning_charges(self):
+        scoop = CAT_WORLD_SHOP_BY_ID[CAT_WORLD_LITTER_SCOOP_ITEM_ID]
+        litter_box = CAT_WORLD_SHOP_BY_ID[CAT_WORLD_LITTER_BOX_ITEM_ID]
+
+        self.assertEqual(scoop["cost"], CAT_WORLD_LITTER_SCOOP_COST)
+        self.assertEqual(litter_box["cost"], scoop["cost"] * 2)
+        self.assertEqual(
+            cat_world_purchase_inventory_quantity(litter_box),
+            CAT_WORLD_LITTER_BOX_USES_PER_PURCHASE,
+        )
+
+    def test_litter_box_provides_five_cleaning_uses_and_then_expires(self):
+        inventory = {CAT_WORLD_LITTER_BOX_ITEM_ID: CAT_WORLD_LITTER_BOX_USES_PER_PURCHASE}
+
+        for expected_remaining in range(CAT_WORLD_LITTER_BOX_USES_PER_PURCHASE - 1, 0, -1):
+            tool, remaining = cat_world_consume_litter_cleaning_tool(inventory)
+            self.assertEqual(tool, "litter-box")
+            self.assertEqual(remaining, expected_remaining)
+            self.assertEqual(inventory[CAT_WORLD_LITTER_BOX_ITEM_ID], expected_remaining)
+
+        tool, remaining = cat_world_consume_litter_cleaning_tool(inventory)
+        self.assertEqual(tool, "litter-box")
+        self.assertEqual(remaining, 0)
+        self.assertNotIn(CAT_WORLD_LITTER_BOX_ITEM_ID, inventory)
+
+        with self.assertRaises(HTTPException) as exhausted:
+            cat_world_consume_litter_cleaning_tool(inventory)
+        self.assertEqual(exhausted.exception.status_code, 400)
+
+    def test_scoop_is_consumed_before_litter_box_charges(self):
+        inventory = {
+            CAT_WORLD_LITTER_SCOOP_ITEM_ID: 1,
+            CAT_WORLD_LITTER_BOX_ITEM_ID: 5,
+        }
+
+        tool, remaining = cat_world_consume_litter_cleaning_tool(inventory)
+
+        self.assertEqual(tool, "scoop")
+        self.assertEqual(remaining, 0)
+        self.assertNotIn(CAT_WORLD_LITTER_SCOOP_ITEM_ID, inventory)
+        self.assertEqual(inventory[CAT_WORLD_LITTER_BOX_ITEM_ID], 5)
 
 
 if __name__ == "__main__":

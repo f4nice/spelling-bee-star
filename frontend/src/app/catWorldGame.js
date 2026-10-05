@@ -1784,8 +1784,9 @@ class CatWorldScene extends Phaser.Scene {
       drawPixelRect(graphics, 17, 39, 50, 19, 0x7a4a28);
       drawPixelRect(graphics, 25, 24, 34, 21, 0x8f5b32);
       drawPixelRect(graphics, 32, 12, 20, 18, 0xa36b3d);
-      const hasScoop = Number(snapshot.hygiene?.scoopCount || 0) > 0;
-      const label = this.add.text(42, 2, hasScoop ? "猫屎 · 点击铲" : "猫屎 · 需要铲子", {
+      const hasCleaningTool = Number(snapshot.hygiene?.scoopCount || 0) > 0
+        || Number(snapshot.hygiene?.litterBoxUsesRemaining || 0) > 0;
+      const label = this.add.text(42, 2, hasCleaningTool ? "猫屎 · 点击清理" : "猫屎 · 需要清洁工具", {
         color: "#263047",
         backgroundColor: "#fff4a8",
         fontFamily: "Consolas, monospace",

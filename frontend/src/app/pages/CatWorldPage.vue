@@ -303,6 +303,7 @@ const categories = [
 ];
 const REPAIR_HAMMER_ITEM_ID = "repair-hammer";
 const LITTER_SCOOP_ITEM_ID = "litter-scoop";
+const LITTER_BOX_ITEM_ID = "litter-box";
 const CAT_RENAME_CARD_ITEM_ID = "cat-rename-card";
 const toolIconItems = Object.freeze({
   repair: { id: REPAIR_HAMMER_ITEM_ID, category: "consumable", label: "一次性维修锤" },
@@ -1742,7 +1743,10 @@ function ownedToolSubtext(item) {
   if (item.category === "food") return `拥有 ${item.count} · ${foodTypeLabel(item)}${suffix}`;
   if (item.category === "consumable") {
     if (item.useType === "litter-clean") {
-      return scoopMode.value ? `已装备 · 拥有 ${item.count}` : `拥有 ${item.count} · 点击装备`;
+      if (item.id === LITTER_BOX_ITEM_ID) {
+        return scoopMode.value ? `已装备 · 剩余 ${item.count} 次清理` : `剩余 ${item.count} 次清理 · 点击装备`;
+      }
+      return scoopMode.value ? `已装备 · 拥有 ${item.count} 把` : `拥有 ${item.count} 把 · 点击装备`;
     }
     if (item.useType === "litter-prevent") return `拥有 ${item.count} · 点击放进活动室`;
     if (item.useType === "cat-bath") return `拥有 ${item.count} · 给当前档案猫咪洗澡`;
@@ -1882,11 +1886,13 @@ function setRepairMode(enabled) {
 function setScoopMode(enabled) {
   const nextEnabled = Boolean(enabled);
   if (nextEnabled && (playTimeLocked.value || busyItemId.value)) return;
-  if (nextEnabled && itemCount(LITTER_SCOOP_ITEM_ID) <= 0) {
+  const scoopCount = itemCount(LITTER_SCOOP_ITEM_ID);
+  const litterBoxUses = itemCount(LITTER_BOX_ITEM_ID);
+  if (nextEnabled && scoopCount <= 0 && litterBoxUses <= 0) {
     scoopMode.value = false;
     toolCursorVisible.value = false;
     openShopCategory("consumable");
-    notice.value = "背包里没有铲子，请先在消耗品商店购买。";
+    notice.value = "背包里没有铲屎铲或耐用猫砂盆，请先在消耗品商店购买。";
     return;
   }
   if (nextEnabled && roomEditMode.value) {
@@ -1903,8 +1909,8 @@ function setScoopMode(enabled) {
   toolCursorVisible.value = false;
   selectedDecorId.value = "";
   notice.value = nextEnabled
-    ? "已经拿好铲子，点击猫屎就能连续清理；每堆用 1 把，点“收起铲子”退出。"
-    : "已收起铲子。";
+    ? `已经准备好清洁工具，点击猫屎就能连续清理；优先用铲子，铲子用完后自动用猫砂盆（剩余 ${litterBoxUses} 次），点“收起铲子”退出。`
+    : "已收起清洁工具。";
 }
 
 function setRenameMode(enabled) {
@@ -2356,7 +2362,9 @@ function purchaseHint(item) {
     const effect = item.useType === "litter-prevent"
       ? "放进活动室，猫咪使用后自动消失"
       : item.useType === "litter-clean"
-        ? "可清理一堆猫屎"
+        ? item.id === LITTER_BOX_ITEM_ID
+          ? "可清理 5 堆猫屎，按次消耗"
+          : "可清理一堆猫屎"
         : item.useType === "cat-rename"
           ? "选择一只自己的猫咪修改名字"
           : item.useType === "repair-tool"
@@ -2376,6 +2384,7 @@ function purchaseButtonText(item) {
   if (isOwnedBathtub(item)) return "补充洗澡用品";
   if (item.category === "consumable") {
     if (!canAfford(item)) return `还差 ${Number(item.cost || 0) - Number(energy.value.available || 0)} 能量`;
+    if (item.id === LITTER_BOX_ITEM_ID) return `再买 1 个 · ${item.cost} 能量（增加 5 次清理）`;
     return `${itemCount(item.id) > 0 ? "再买" : "买"} 1 份 · ${item.cost} 能量`;
   }
   if (item.category === "handbook" && isOneTimeOwned(item)) return "打开手册";
@@ -2554,7 +2563,10 @@ async function purchase(item) {
     });
     replacePayload(nextPayload);
     if (item.category === "consumable" || item.category === "food") {
-      notice.value = `买好了！${item.label} +1，背包现在有 ${itemCount(item.id)} 份。`;
+      const ownedLabel = item.id === LITTER_BOX_ITEM_ID
+        ? `剩余 ${itemCount(item.id)} 次清理`
+        : `背包现在有 ${itemCount(item.id)} 份`;
+      notice.value = `买好了！${item.label}${item.id === LITTER_BOX_ITEM_ID ? " +5 次清理" : " +1"}，${ownedLabel}。`;
       return;
     }
     if (nextPayload.blindBoxResult?.cat) {
@@ -2632,13 +2644,13 @@ async function cleanLitter() {
   if (!scoopMode.value) {
     activeToolCategory.value = "consumable";
     notice.value = repairMode.value
-      ? "猫屎需要用铲子清理，维修锤没有消耗。"
-      : "点房间上方的“拿起铲子”，就能连续清理猫屎。";
+      ? "猫屎需要用铲屎铲或耐用猫砂盆清理，维修锤没有消耗。"
+      : "点房间上方的“拿起清洁工具”，就能连续清理猫屎。";
     return;
   }
-  if (itemCount(LITTER_SCOOP_ITEM_ID) <= 0) {
+  if (itemCount(LITTER_SCOOP_ITEM_ID) <= 0 && itemCount(LITTER_BOX_ITEM_ID) <= 0) {
     setScoopMode(false);
-    notice.value = "背包里没有铲子，请先在消耗品商店购买。";
+    notice.value = "背包里没有铲屎铲或耐用猫砂盆，请先在消耗品商店购买。";
     return;
   }
   busyItemId.value = "litter-clean";
@@ -2647,11 +2659,15 @@ async function cleanLitter() {
     const nextPayload = await fetchJson(routeApiPaths.catWorldCleanLitter(), { method: "POST" });
     replacePayload(nextPayload);
     const effect = nextPayload.effect || {};
-    notice.value = `${effect.message || "猫屎已经清理好了。"} 剩余 ${effect.remainingLitter || 0} 堆，铲子 ${effect.scoopRemaining || 0} 把。`;
-    if (itemCount(LITTER_SCOOP_ITEM_ID) <= 0) {
+    const toolLabel = effect.cleaningTool === "litter-box" ? "猫砂盆" : "铲子";
+    const toolRemaining = effect.toolRemaining ?? (effect.cleaningTool === "litter-box"
+      ? effect.litterBoxUsesRemaining
+      : effect.scoopRemaining);
+    notice.value = `${effect.message || "猫屎已经清理好了。"} 剩余 ${effect.remainingLitter || 0} 堆，本次用${toolLabel}，该工具剩余 ${toolRemaining || 0} 次。`;
+    if (itemCount(LITTER_SCOOP_ITEM_ID) <= 0 && itemCount(LITTER_BOX_ITEM_ID) <= 0) {
       scoopMode.value = false;
       toolCursorVisible.value = false;
-      notice.value += " 铲子用完啦，需要时再去消耗品商店补充。";
+      notice.value += " 清洁工具用完啦，需要时再去消耗品商店补充。";
     }
   } catch (error) {
     notice.value = error.message || "清理失败，请先检查铲子库存。";
@@ -3389,12 +3405,12 @@ async function selectCat(catOrId, options = {}) {
               :class="{ active: scoopMode }"
               :aria-pressed="scoopMode"
               :disabled="roomEditMode || playTimeLocked || Boolean(busyItemId)"
-              :title="`每清理一堆用 1 把铲子，当前剩余 ${itemCount(LITTER_SCOOP_ITEM_ID)} 把`"
+              :title="`每清理一堆消耗 1 次清洁工具；铲子 ${itemCount(LITTER_SCOOP_ITEM_ID)} 把，猫砂盆 ${itemCount(LITTER_BOX_ITEM_ID)} 次`"
               @click="setScoopMode(!scoopMode)"
             >
               <ShovelIcon :size="17" aria-hidden="true" />
-              {{ scoopMode ? "收起铲子" : "拿起铲子" }}
-              <small>剩 {{ itemCount(LITTER_SCOOP_ITEM_ID) }} 把</small>
+              {{ scoopMode ? "收起清洁工具" : "拿起清洁工具" }}
+              <small>铲 {{ itemCount(LITTER_SCOOP_ITEM_ID) }} · 盆 {{ itemCount(LITTER_BOX_ITEM_ID) }}</small>
             </button>
             <button
               class="cat-world-edit-button"
@@ -3515,8 +3531,8 @@ async function selectCat(catOrId, options = {}) {
             </button>
           </div>
           <div v-if="scoopMode" class="cat-world-repair-mode cat-world-scoop-mode" role="status">
-            <span><ShovelIcon :size="18" :stroke-width="3" aria-hidden="true" />连续清理 · 剩 {{ itemCount(LITTER_SCOOP_ITEM_ID) }} 把</span>
-            <button type="button" title="收起铲子" aria-label="收起铲子" @click="setScoopMode(false)">
+            <span><ShovelIcon :size="18" :stroke-width="3" aria-hidden="true" />连续清理 · 铲 {{ itemCount(LITTER_SCOOP_ITEM_ID) }} 把 · 盆 {{ itemCount(LITTER_BOX_ITEM_ID) }} 次</span>
+            <button type="button" title="收起清洁工具" aria-label="收起清洁工具" @click="setScoopMode(false)">
               <XIcon :size="17" :stroke-width="3" aria-hidden="true" />
             </button>
           </div>
@@ -3897,7 +3913,7 @@ async function selectCat(catOrId, options = {}) {
               <strong>{{ hygiene.count ? `${hygiene.count} 堆猫屎` : "干净" }}</strong>
               <small v-if="hygiene.count">每只猫每小时心情额外 -{{ hygieneMoodPenalty }} · 点击房间里的猫屎清理</small>
               <small v-if="litterBathAccelerationText">{{ litterBathAccelerationText }}</small>
-              <small v-else>猫砂 {{ hygiene.catLitterCount || 0 }} 包 · 铲子 {{ hygiene.scoopCount || 0 }} 把</small>
+              <small v-else>猫砂 {{ hygiene.catLitterCount || 0 }} 包 · 铲子 {{ hygiene.scoopCount || 0 }} 把 · 猫砂盆 {{ hygiene.litterBoxUsesRemaining || 0 }} 次</small>
               <small v-if="hygiene.hasPlacedCatLitter">已放好豆腐猫砂，等待猫咪使用</small>
             </div>
 
@@ -4327,7 +4343,8 @@ async function selectCat(catOrId, options = {}) {
               <span>基础体力 +{{ item.catEnergy }}</span>
             </div>
             <div v-else-if="item.category === 'consumable'" class="cat-world-food-tags cat-world-consumable-tags">
-              <span>每次用 1 份</span>
+              <span v-if="item.id === LITTER_BOX_ITEM_ID">每个可用 5 次</span>
+              <span v-else>每次用 1 份</span>
               <span v-if="item.useType === 'litter-prevent'">点击放置</span>
               <span v-else-if="item.useType === 'litter-clean'">点击猫屎使用</span>
               <span v-else-if="item.useType === 'cat-rename'">选择猫咪改名</span>
@@ -4381,6 +4398,7 @@ async function selectCat(catOrId, options = {}) {
             <span v-else-if="item.category === 'blind-box'">{{ item.unlimitedStock ? "限时开放 · 每期一次" : `全站剩余 ${item.remainingStock || 0}` }}</span>
             <span v-else-if="item.limited">全站剩余 {{ item.remainingStock || 0 }}</span>
             <span v-else-if="item.category === 'handbook' && itemCount(item.id)">已永久解锁</span>
+            <span v-else-if="item.id === LITTER_BOX_ITEM_ID && itemCount(item.id)">剩余 {{ itemCount(item.id) }} 次清理</span>
             <span v-else-if="item.category !== 'cat' && itemCount(item.id)">已有 {{ itemCount(item.id) }}</span>
             <span v-else>心情 +{{ item.mood }}</span>
           </div>
