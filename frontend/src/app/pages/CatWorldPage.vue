@@ -696,7 +696,7 @@ const focusedCatDailyNote = computed(() => {
   const damaged = agent.mischiefLabel
     ? ` · 今天弄坏过 ${agent.mischiefLabel}`
     : agent.mischiefRepairedLabel
-      ? ` · 已维修 ${agent.mischiefRepairedLabel}，花费 ${agent.mischiefRepairCost || 0} 能量`
+      ? ` · 已维修 ${agent.mischiefRepairedLabel}，使用 1 把维修锤`
     : agent.mischiefAttemptReason
       ? ` · 捣蛋观察: ${agent.mischiefAttemptReason}`
       : "";
@@ -981,7 +981,7 @@ const catAgentDiaries = computed(() =>
         damageLabel: damagedItem
           ? `今天弄坏过 ${damagedItem}`
           : repairedItem
-            ? `今天已维修 ${repairedItem}，花费 ${agent.mischiefRepairCost || 0} 能量`
+            ? `今天已维修 ${repairedItem}，使用 1 把维修锤`
           : mischiefAttemptReason
             ? `今天有捣蛋冲动: ${mischiefAttemptReason}，但没有弄坏东西`
             : "今天没有破坏记录",
@@ -1732,7 +1732,7 @@ function ownedToolCount(categoryKey) {
 
 function ownedToolSubtext(item) {
   const damaged = damageInfo(item);
-  if (damaged) return `损坏 · 维修需 1 把锤子 + ${damaged.repairCost || 0} 能量`;
+  if (damaged) return "损坏 · 维修需 1 把维修锤（购买时已扣能量）";
   if (item.category === "cat") {
     const profile = [item.genderLabel, item.patternLabel, item.featureLabel].filter(Boolean).join(" · ")
       || item.personality
@@ -2722,9 +2722,8 @@ async function repairItem(item) {
     });
     replacePayload(nextPayload);
     const repair = nextPayload.repair || {};
-    const cost = repair.cost ?? damaged.repairCost ?? 0;
     const targetCat = cats.value.find((cat) => cat.id === repair.catId) || focusedCat.value;
-    notice.value = `${repair.label || item.label} 已维修好，消耗 1 把维修锤和 ${cost} 能量，背包还剩 ${repair.hammerRemaining || 0} 把。`;
+    notice.value = `${repair.label || item.label} 已维修好，消耗 1 把维修锤（购买时已扣能量），背包还剩 ${repair.hammerRemaining || 0} 把。`;
     showCatReaction(targetCat, `${repair.label || item.label}修好了，我会小心一点。`);
     repairMode.value = false;
     toolCursorVisible.value = false;

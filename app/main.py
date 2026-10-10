@@ -133,8 +133,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20260916-001"
-DEFAULT_PAGE_VERSION = "v20260916.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20261010-001"
+DEFAULT_PAGE_VERSION = "v20261010.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -949,7 +949,7 @@ CAT_WORLD_SHOP = [
         "englishName": "Repair Hammer",
         "cost": 100,
         "mood": 0,
-        "description": "维修损坏道具时自动消耗 1 把；只有维修成功后才会从背包扣除。",
+        "description": "购买时扣除能量；维修损坏道具时只消耗 1 把，不再重复扣能量。",
     },
     {
         "id": CAT_WORLD_RENAME_CARD_ITEM_ID,
@@ -5203,8 +5203,7 @@ async def vue_cat_world_play_api(request: Request, db: Session = Depends(get_db)
     inventory = parse_cat_world_inventory(state.inventory)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     if item_id in damaged_items:
-        repair_cost = damaged_items[item_id].get("repairCost") or 0
-        raise HTTPException(status_code=400, detail=f"这个道具被弄坏了，先花 {repair_cost} 能量维修。")
+        raise HTTPException(status_code=400, detail="这个道具被弄坏了，请先用 1 把维修锤修好，维修时不再扣能量。")
     if inventory.get(item_id, 0) <= 0:
         raise HTTPException(status_code=400, detail="还没有这个道具，先用能量值买一个。")
     if item["category"] == "food":
@@ -5758,18 +5757,9 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
     hammer_count = max(int(inventory.get(CAT_WORLD_REPAIR_HAMMER_ITEM_ID, 0) or 0), 0)
     if hammer_count <= 0:
         raise HTTPException(status_code=400, detail="维修需要 1 把一次性维修锤，请先去消耗品商店购买。")
-    growth = learning_growth_summary(db)
-    available_energy = max(
-        cat_world_earned_energy(db, state.phone, growth) - max(int(state.energy_spent or 0), 0),
-        0,
-    )
-    repair_cost = max(int(damaged.get("repairCost") or 0), 1)
-    if available_energy < repair_cost:
-        raise HTTPException(status_code=400, detail="能量值还不够，先去学习赚一点再维修。")
     damaged, hammer_remaining = cat_world_consume_repair_resources(inventory, damaged_items, item_id)
     state.inventory = encode_cat_world_inventory(inventory)
     state.damaged_items = encode_cat_world_damaged_items(damaged_items)
-    state.energy_spent = max(int(state.energy_spent or 0), 0) + repair_cost
     repair_cat_id = str(damaged.get("catId") or state.selected_cat or CAT_WORLD_DEFAULT_CAT_ID)
     repair_label = str(damaged.get("label") or CAT_WORLD_SHOP_BY_ID.get(item_id, {}).get("label") or item_id)
     repair_cat = cat_world_cat_for_reference(db, state, repair_cat_id) or cat_world_cat_payload(
@@ -5785,12 +5775,12 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
         repair_traits,
         "repair",
         "维修完成",
-        f"{repair_label}已经维修好，消耗 1 把维修锤和 {repair_cost} 能量。",
+        f"{repair_label}已经维修好，消耗 1 把维修锤（购买时已扣能量）。",
         now,
     )
     repair_agent_state["mischiefRepairedItemId"] = item_id
     repair_agent_state["mischiefRepairedLabel"] = repair_label
-    repair_agent_state["mischiefRepairCost"] = repair_cost
+    repair_agent_state["mischiefRepairCost"] = 0
     repair_agent_state["mischiefRepairedAt"] = now.replace(microsecond=0).isoformat() + "Z"
     if repair_agent_state.get("mischiefItemId") == item_id or repair_log.damaged_item_id == item_id:
         repair_agent_state.pop("mischiefItemId", None)
@@ -5808,7 +5798,9 @@ async def vue_cat_world_repair_api(request: Request, db: Session = Depends(get_d
         "repair": {
             "itemId": item_id,
             "label": repair_label,
-            "cost": repair_cost,
+            # Keep the response field for older clients, but repair itself has
+            # no second energy charge. The hammer was paid for at purchase.
+            "cost": 0,
             "hammerItemId": CAT_WORLD_REPAIR_HAMMER_ITEM_ID,
             "hammerRemaining": hammer_remaining,
             "catId": repair_cat["id"],
