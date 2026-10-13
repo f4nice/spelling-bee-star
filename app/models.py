@@ -290,6 +290,10 @@ class CatWorldState(Base):
     active_care_item: Mapped[str | None] = mapped_column(String(80))
     active_care_cat_id: Mapped[str | None] = mapped_column(String(80))
     active_care_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # Durable bath queue state.  The JSON value keeps staged bath kits,
+    # waiting cat profile ids and the currently bathing cat together so a
+    # refresh or process restart does not lose the queue.
+    bath_queue: Mapped[str | None] = mapped_column(Text)
     litter_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     litter_ready_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     litter_updated_at: Mapped[datetime | None] = mapped_column(DateTime)

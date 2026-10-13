@@ -133,8 +133,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20261010-001"
-DEFAULT_PAGE_VERSION = "v20261010.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20261013-001"
+DEFAULT_PAGE_VERSION = "v20261013.1"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -318,6 +318,8 @@ CAT_WORLD_LITTER_SCOOP_COST = 35
 CAT_WORLD_LITTER_BOX_USES_PER_PURCHASE = 5
 CAT_WORLD_CAT_GRASS_ITEM_ID = "cat-grass-pot"
 CAT_WORLD_BATH_ITEM_ID = "cat-bath-kit"
+CAT_WORLD_BATH_DURATION_SECONDS = 12
+CAT_WORLD_BATH_QUEUE_LIMIT = 20
 CAT_WORLD_REPAIR_HAMMER_ITEM_ID = "repair-hammer"
 CAT_WORLD_RENAME_CARD_ITEM_ID = "cat-rename-card"
 CAT_WORLD_LIMITED_GIFT_ITEM_ID = "limited-gift-toy"
@@ -5328,6 +5330,34 @@ async def vue_cat_world_use_consumable_api(request: Request, db: Session = Depen
         raise HTTPException(status_code=400, detail="维修锤会在维修损坏道具时自动消耗，请直接点击损坏的道具。")
     if use_type == "cat-rename":
         raise HTTPException(status_code=400, detail="请先装备改名卡，再点击自己的猫咪卡片。")
+    if use_type == "cat-bath":
+        # Older clients called this endpoint after the bathtub animation. Keep
+        # that request compatible, but route it through the durable queue so a
+        # kit is reserved once and the server remains the source of truth.
+        state = get_or_create_cat_world_state(db, phone)
+        inventory = parse_cat_world_inventory(state.inventory)
+        if inventory.get(item_id, 0) <= 0:
+            raise HTTPException(status_code=400, detail="背包里没有泡泡浴套装，请先在浴缸投入洗澡用品。")
+        cat_reference = str(payload.get("catId") or state.selected_cat_profile or state.selected_cat or "").strip()
+        target = cat_world_enqueue_bath(db, state, cat_reference, auto_supply=1)
+        db.add(state)
+        db.commit()
+        db.refresh(state)
+        target_payload = cat_world_cat_profile_payload(target)
+        return {
+            "ok": True,
+            "effect": {
+                "itemId": item_id,
+                "itemLabel": item.get("label") or item_id,
+                "useType": use_type,
+                "remaining": max(int(parse_cat_world_inventory(state.inventory).get(item_id, 0) or 0), 0),
+                "catId": target.profile_id,
+                "catLabel": target_payload.get("displayLabel") or target_payload.get("label") or "猫咪",
+                "effects": [],
+                "message": "已经加入洗澡队列，浴缸会按顺序自动处理。",
+            },
+            **serialize_cat_world_payload(db, state),
+        }
     state = get_or_create_cat_world_state(db, phone)
     inventory = parse_cat_world_inventory(state.inventory)
     if inventory.get(item_id, 0) <= 0:
@@ -5500,6 +5530,98 @@ async def vue_cat_world_use_consumable_api(request: Request, db: Session = Depen
                 else "；".join(effect["message"] for effect in effects)
             ),
         },
+        **serialize_cat_world_payload(db, state),
+    }
+
+
+@app.post("/api/vue/cat-world/bath/queue")
+async def vue_cat_world_bath_queue_api(request: Request, db: Session = Depends(get_db)):
+    """Put one room cat in the bath line without consuming a kit yet."""
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="洗澡排队数据不是有效 JSON。") from exc
+    payload = payload if isinstance(payload, dict) else {}
+    state = cat_world_locked_state(db, phone)
+    active_scene_key = str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+    profiles = cat_world_active_cat_profiles(db, state.phone)
+    room_profiles = [
+        profile for profile in profiles
+        if str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) == active_scene_key
+    ]
+    target = cat_world_profile_for_reference(db, state, str(payload.get("catId") or "").strip(), room_profiles)
+    if not target:
+        raise HTTPException(status_code=400, detail="当前房间没有找到这只猫咪。")
+    cat_id = target.profile_id
+    queue_state = parse_cat_world_bath_queue(state.bath_queue)
+    active = queue_state.get("active") or {}
+    if str(active.get("catId") or "") == cat_id or any(
+        str(row.get("catId") or "") == cat_id for row in queue_state.get("queue") or []
+    ):
+        raise HTTPException(status_code=409, detail="这只猫已经在洗澡中或排队等待，请不要重复安排。")
+    if len(queue_state.get("queue") or []) >= CAT_WORLD_BATH_QUEUE_LIMIT:
+        raise HTTPException(status_code=409, detail="洗澡队列已满，请等前面的猫咪洗完。")
+    queue_state["queue"].append(
+        {
+            "catId": cat_id,
+            "queuedAt": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+        }
+    )
+    state.bath_queue = encode_cat_world_bath_queue(queue_state)
+    status = cat_world_bath_queue_tick(db, state)
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return {
+        "ok": True,
+        "bath": {
+            "catId": cat_id,
+            "catLabel": cat_world_cat_profile_payload(target).get("displayLabel") or target.nickname or "猫咪",
+            "queued": True,
+        },
+        **serialize_cat_world_payload(db, state),
+    }
+
+
+@app.post("/api/vue/cat-world/bath/supply")
+async def vue_cat_world_bath_supply_api(request: Request, db: Session = Depends(get_db)):
+    """Move purchased bath kits into the bathtub's ready supply."""
+    phone = require_cat_world_phone(request)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="浴缸投放数据不是有效 JSON。") from exc
+    payload = payload if isinstance(payload, dict) else {}
+    state = cat_world_locked_state(db, phone)
+    inventory = parse_cat_world_inventory(state.inventory)
+    damaged = parse_cat_world_damaged_items(state.damaged_items)
+    if inventory.get("bubble-bathtub", 0) <= 0:
+        raise HTTPException(status_code=400, detail="请先购买泡泡浴缸，再向浴缸投放沐浴露。")
+    if "bubble-bathtub" in damaged:
+        raise HTTPException(status_code=400, detail="泡泡浴缸已经损坏，请先维修后再投放沐浴露。")
+    try:
+        quantity = int(payload.get("quantity") or 1)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="投放数量必须是整数。") from exc
+    quantity = max(quantity, 1)
+    available = max(int(inventory.get(CAT_WORLD_BATH_ITEM_ID, 0) or 0), 0)
+    if available < quantity:
+        raise HTTPException(status_code=400, detail=f"泡泡浴套装库存只有 {available} 份，不能投放 {quantity} 份。")
+    queue_state = parse_cat_world_bath_queue(state.bath_queue)
+    queue_state["supply"] = max(int(queue_state.get("supply") or 0), 0) + quantity
+    inventory[CAT_WORLD_BATH_ITEM_ID] = available - quantity
+    if inventory[CAT_WORLD_BATH_ITEM_ID] <= 0:
+        inventory.pop(CAT_WORLD_BATH_ITEM_ID, None)
+    state.inventory = encode_cat_world_inventory(inventory)
+    state.bath_queue = encode_cat_world_bath_queue(queue_state)
+    cat_world_bath_queue_tick(db, state)
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return {
+        "ok": True,
+        "bath": {"added": quantity, "inventoryRemaining": max(int(inventory.get(CAT_WORLD_BATH_ITEM_ID, 0) or 0), 0)},
         **serialize_cat_world_payload(db, state),
     }
 
@@ -16491,6 +16613,81 @@ def encode_cat_world_care(care: dict[str, dict[str, Any]]) -> str:
     return json.dumps(clean, ensure_ascii=False, sort_keys=True)
 
 
+def parse_cat_world_bath_queue(raw: str | None) -> dict[str, Any]:
+    """Read the persisted bath station state.
+
+    ``supply`` is the number of bath kits already put into the tub.  A kit is
+    reserved when a queued cat starts bathing, so it is not counted twice in
+    the queue or inventory.  ``active`` and ``queue`` contain profile ids,
+    which remain stable even when two cats share the same breed.
+    """
+    try:
+        loaded = json.loads(raw or "{}")
+    except (TypeError, json.JSONDecodeError):
+        loaded = {}
+    if not isinstance(loaded, dict):
+        loaded = {}
+    try:
+        supply = max(int(loaded.get("supply") or 0), 0)
+    except (TypeError, ValueError):
+        supply = 0
+    queue: list[dict[str, str]] = []
+    raw_queue = loaded.get("queue")
+    if isinstance(raw_queue, list):
+        for source in raw_queue:
+            if not isinstance(source, dict):
+                continue
+            cat_id = cat_world_individual_state_key(source.get("catId"))
+            if not cat_id or any(row["catId"] == cat_id for row in queue):
+                continue
+            queue.append(
+                {
+                    "catId": cat_id,
+                    "queuedAt": str(source.get("queuedAt") or ""),
+                }
+            )
+            if len(queue) >= CAT_WORLD_BATH_QUEUE_LIMIT:
+                break
+    active_source = loaded.get("active")
+    active: dict[str, str] | None = None
+    if isinstance(active_source, dict):
+        cat_id = cat_world_individual_state_key(active_source.get("catId"))
+        started_at = str(active_source.get("startedAt") or "")
+        ends_at = str(active_source.get("endsAt") or "")
+        if cat_id and started_at and ends_at:
+            active = {"catId": cat_id, "startedAt": started_at, "endsAt": ends_at}
+    return {"supply": supply, "queue": queue, "active": active}
+
+
+def encode_cat_world_bath_queue(value: dict[str, Any] | None) -> str:
+    source = value if isinstance(value, dict) else {}
+    try:
+        supply = max(int(source.get("supply") or 0), 0)
+    except (TypeError, ValueError):
+        supply = 0
+    queue: list[dict[str, str]] = []
+    raw_queue = source.get("queue")
+    if isinstance(raw_queue, list):
+        for row in raw_queue:
+            if not isinstance(row, dict):
+                continue
+            cat_id = cat_world_individual_state_key(row.get("catId"))
+            if not cat_id or any(item["catId"] == cat_id for item in queue):
+                continue
+            queue.append({"catId": cat_id, "queuedAt": str(row.get("queuedAt") or "").strip()})
+            if len(queue) >= CAT_WORLD_BATH_QUEUE_LIMIT:
+                break
+    active_source = source.get("active")
+    active: dict[str, str] | None = None
+    if isinstance(active_source, dict):
+        cat_id = cat_world_individual_state_key(active_source.get("catId"))
+        started_at = str(active_source.get("startedAt") or "").strip()
+        ends_at = str(active_source.get("endsAt") or "").strip()
+        if cat_id and started_at and ends_at:
+            active = {"catId": cat_id, "startedAt": started_at, "endsAt": ends_at}
+    return json.dumps({"supply": supply, "queue": queue, "active": active}, ensure_ascii=False, sort_keys=True)
+
+
 def cat_world_clamp_bond_score(value: int | float) -> int:
     return int(min(max(round(float(value or 0)), 0), 100))
 
@@ -22025,6 +22222,197 @@ def cat_world_active_care_payload(
     }
 
 
+def cat_world_apply_bath_completion(
+    db: Session,
+    state: CatWorldState,
+    cat_id: str,
+    now: datetime,
+) -> dict[str, Any]:
+    """Apply one queued bath when its server-side timer completes."""
+    target_cat = cat_world_cat_for_reference(db, state, cat_id)
+    if not target_cat:
+        return {"catId": cat_id, "catLabel": "猫咪", "skipped": True, "message": "目标猫咪已经离开。"}
+    active_profiles = cat_world_active_cat_profiles(db, state.phone)
+    profile_id = str(target_cat.get("profileId") or target_cat.get("id") or cat_id)
+    traits = cat_world_cat_traits(target_cat)
+    usable_inventory = cat_world_usable_inventory(
+        parse_cat_world_inventory(state.inventory),
+        parse_cat_world_damaged_items(state.damaged_items),
+    )
+    scene_id = cat_world_cat_scene_key(target_cat)
+    environment = cat_world_scene_environment(db, state, usable_inventory, scene_id)
+    room_inventory = environment.get("inventory") if isinstance(environment.get("inventory"), dict) else {}
+    room_layout = environment.get("layout") if isinstance(environment.get("layout"), dict) else {}
+    favorite_ids = cat_world_active_favorite_decor_ids_for_cat(target_cat, room_inventory, room_layout)
+    log = get_or_create_cat_world_daily_log(db, state.phone, profile_id, date.today(), now, target_cat)
+    apply_cat_world_hourly_decay(
+        log,
+        traits,
+        room_inventory,
+        len(favorite_ids),
+        now,
+        cat_world_cat_litter_count(state, target_cat),
+        cat_world_cat_bath_mood_penalty(state, profile_id, now, target_cat),
+        target_cat,
+    )
+    item = CAT_WORLD_SHOP_BY_ID.get(CAT_WORLD_BATH_ITEM_ID, {})
+    mood_gain = max(int(item.get("mood") or 0), 0)
+    energy_gain = max(int(item.get("catEnergy") or 0), 0)
+    log.mood_score = clamp_cat_world_score(int(log.mood_score or 0) + mood_gain)
+    if energy_gain:
+        log.energy_score = clamp_cat_world_score(int(log.energy_score or 0) + energy_gain)
+    message = f"{target_cat.get('label') or target_cat.get('displayLabel') or '猫咪'}洗完澡，炸开的毛重新顺下来了，心情 +{mood_gain}。"
+    append_cat_world_agent_event(log, target_cat, traits, "cat-bath", "洗澡护理", message, now)
+    cat_world_apply_cat_bond(
+        state,
+        profile_id,
+        max(int(item.get("bond") or 0), 0),
+        "care-item",
+        item.get("label") or CAT_WORLD_BATH_ITEM_ID,
+        now,
+    )
+    care, _ = cat_world_ensure_profile_care_records(state, active_profiles, now)
+    care_row = {**care.get(profile_id, {})}
+    care_row["lastBathAt"] = now.replace(microsecond=0).isoformat() + "Z"
+    care_row["bathCount"] = max(int(care_row.get("bathCount") or 0), 0) + 1
+    care[profile_id] = care_row
+    state.cat_care = encode_cat_world_care(care)
+    db.add(log)
+    return {
+        "catId": profile_id,
+        "catLabel": target_cat.get("displayLabel") or target_cat.get("label") or "猫咪",
+        "moodGain": mood_gain,
+        "energyGain": energy_gain,
+        "message": message,
+    }
+
+
+def cat_world_bath_queue_tick(
+    db: Session,
+    state: CatWorldState,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Advance the durable bath station and return UI-ready queue state."""
+    now = now or datetime.utcnow()
+    queue_state = parse_cat_world_bath_queue(state.bath_queue)
+    changed = False
+    completed: list[dict[str, Any]] = []
+    active = queue_state.get("active")
+    if active:
+        ends_at = cat_world_parse_utc_datetime(active.get("endsAt"))
+        if not ends_at or ends_at <= now:
+            completed.append(cat_world_apply_bath_completion(db, state, active.get("catId") or "", now))
+            queue_state["active"] = None
+            changed = True
+
+    valid_queue: list[dict[str, str]] = []
+    for row in queue_state.get("queue") or []:
+        cat_id = str(row.get("catId") or "")
+        if not cat_id or any(item.get("catId") == cat_id for item in valid_queue):
+            changed = True
+            continue
+        if not cat_world_cat_for_reference(db, state, cat_id):
+            changed = True
+            continue
+        valid_queue.append({"catId": cat_id, "queuedAt": str(row.get("queuedAt") or "")})
+    queue_state["queue"] = valid_queue[:CAT_WORLD_BATH_QUEUE_LIMIT]
+
+    if not queue_state.get("active") and queue_state.get("queue") and int(queue_state.get("supply") or 0) > 0:
+        next_row = queue_state["queue"].pop(0)
+        started_at = now.replace(microsecond=0)
+        queue_state["supply"] = max(int(queue_state.get("supply") or 0) - 1, 0)
+        queue_state["active"] = {
+            "catId": next_row["catId"],
+            "startedAt": started_at.isoformat() + "Z",
+            "endsAt": (started_at + timedelta(seconds=CAT_WORLD_BATH_DURATION_SECONDS)).isoformat() + "Z",
+        }
+        changed = True
+
+    encoded = encode_cat_world_bath_queue(queue_state)
+    if str(state.bath_queue or "") != encoded:
+        state.bath_queue = encoded
+        changed = True
+    active = queue_state.get("active")
+    active_payload: dict[str, Any] | None = None
+    if active:
+        ends_at = cat_world_parse_utc_datetime(active.get("endsAt"))
+        target_cat = cat_world_cat_for_reference(db, state, active.get("catId") or "")
+        active_payload = {
+            "catId": active.get("catId") or "",
+            "catLabel": (target_cat or {}).get("displayLabel") or (target_cat or {}).get("label") or "猫咪",
+            "startedAt": active.get("startedAt") or "",
+            "endsAt": active.get("endsAt") or "",
+            "remainingSeconds": max(int((ends_at - now).total_seconds()), 0) if ends_at else 0,
+        }
+    queue_payload = []
+    for row in queue_state.get("queue") or []:
+        target_cat = cat_world_cat_for_reference(db, state, row.get("catId") or "")
+        queue_payload.append(
+            {
+                "catId": row.get("catId") or "",
+                "catLabel": (target_cat or {}).get("displayLabel") or (target_cat or {}).get("label") or "猫咪",
+                "queuedAt": row.get("queuedAt") or "",
+            }
+        )
+    return {
+        "active": active_payload,
+        "queue": queue_payload,
+        "supplyCount": max(int(queue_state.get("supply") or 0), 0),
+        "queuedCount": len(queue_payload),
+        "busy": bool(active_payload),
+        "changed": changed,
+        "completed": completed,
+        "durationSeconds": CAT_WORLD_BATH_DURATION_SECONDS,
+    }
+
+
+def cat_world_enqueue_bath(
+    db: Session,
+    state: CatWorldState,
+    cat_reference: str,
+    *,
+    auto_supply: int = 0,
+) -> CatWorldCatProfile:
+    """Queue a room cat, optionally moving kits in for an old client call."""
+    active_scene_key = str(state.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY)
+    profiles = cat_world_active_cat_profiles(db, state.phone)
+    room_profiles = [
+        profile for profile in profiles
+        if str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) == active_scene_key
+    ]
+    target = cat_world_profile_for_reference(db, state, cat_reference, room_profiles)
+    if not target:
+        raise HTTPException(status_code=400, detail="这只猫不在当前房间，先把它带到当前房间再排队洗澡。")
+    cat_id = target.profile_id
+    queue_state = parse_cat_world_bath_queue(state.bath_queue)
+    active = queue_state.get("active") or {}
+    if str(active.get("catId") or "") == cat_id or any(
+        str(row.get("catId") or "") == cat_id for row in queue_state.get("queue") or []
+    ):
+        raise HTTPException(status_code=409, detail="这只猫已经在洗澡中或排队等待，请不要重复安排。")
+    if len(queue_state.get("queue") or []) >= CAT_WORLD_BATH_QUEUE_LIMIT:
+        raise HTTPException(status_code=409, detail="洗澡队列已满，请等前面的猫咪洗完。")
+    if auto_supply:
+        inventory = parse_cat_world_inventory(state.inventory)
+        available = max(int(inventory.get(CAT_WORLD_BATH_ITEM_ID, 0) or 0), 0)
+        if available < auto_supply:
+            raise HTTPException(status_code=400, detail="背包里没有足够的泡泡浴套装，请先购买并投放到浴缸。")
+        queue_state["supply"] = max(int(queue_state.get("supply") or 0), 0) + auto_supply
+        inventory[CAT_WORLD_BATH_ITEM_ID] = available - auto_supply
+        if inventory[CAT_WORLD_BATH_ITEM_ID] <= 0:
+            inventory.pop(CAT_WORLD_BATH_ITEM_ID, None)
+        state.inventory = encode_cat_world_inventory(inventory)
+    queue_state["queue"].append(
+        {
+            "catId": cat_id,
+            "queuedAt": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+        }
+    )
+    state.bath_queue = encode_cat_world_bath_queue(queue_state)
+    cat_world_bath_queue_tick(db, state)
+    return target
+
+
 def cat_world_active_food_token(state: CatWorldState, item_id: str, cat_id: str) -> str:
     started_at = state.active_food_at.replace(microsecond=0).isoformat() if state.active_food_at else ""
     return f"{item_id}:{cat_id}:{started_at}"
@@ -22927,6 +23315,7 @@ def get_or_create_cat_world_state(db: Session, phone: str) -> CatWorldState:
         current_scene_key=CAT_WORLD_DEFAULT_SCENE_KEY,
         cat_bonds=encode_cat_world_bonds({}),
         cat_care=encode_cat_world_care({}),
+        bath_queue=encode_cat_world_bath_queue({}),
         selected_cat=drawn_limited_cats[-1] if drawn_limited_cats else CAT_WORLD_DEFAULT_CAT_ID,
     )
     db.add(state)
@@ -23242,8 +23631,9 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         inventory,
         [str(profile.current_scene_key or CAT_WORLD_DEFAULT_SCENE_KEY) for profile in cat_profiles],
     )
+    bath_queue = cat_world_bath_queue_tick(db, state)
     active_care = cat_world_active_care_payload(db, state)
-    if cat_care_changed or litter_status.get("changed") or active_care.get("changed"):
+    if cat_care_changed or litter_status.get("changed") or bath_queue.get("changed") or active_care.get("changed"):
         db.add(state)
         db.commit()
         db.refresh(state)
@@ -23259,6 +23649,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "addedCount": int(litter_status.get("addedCount") or 0),
             "changed": False,
         }
+        bath_queue = cat_world_bath_queue_tick(db, state)
         active_care = cat_world_active_care_payload(db, state)
     damaged_items, damaged_changed = cat_world_apply_agent_damage_events(
         db,
@@ -23450,6 +23841,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             "catSocial": cat_social,
             "sceneMoves": scene_moves,
             "hygiene": litter_status,
+            "bathQueue": bath_queue,
             "activeCare": active_care,
             "dailyLogs": daily_logs,
             "mood": cat_world_mood(
@@ -23782,6 +24174,8 @@ def ensure_schema_columns() -> None:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_care_cat_id VARCHAR(80) NULL"))
         if "cat_world_states" in table_names and "active_care_at" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN active_care_at DATETIME NULL"))
+        if "cat_world_states" in table_names and "bath_queue" not in cat_world_state_columns:
+            connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN bath_queue TEXT NULL"))
         if "cat_world_states" in table_names and "litter_count" not in cat_world_state_columns:
             connection.execute(text("ALTER TABLE cat_world_states ADD COLUMN litter_count INTEGER NOT NULL DEFAULT 0"))
         if "cat_world_states" in table_names and "litter_ready_count" not in cat_world_state_columns:

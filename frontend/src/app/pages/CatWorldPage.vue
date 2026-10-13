@@ -114,6 +114,8 @@ const activeHandbook = ref("");
 const selectedCollectionRegionKey = ref("");
 const selectedCollectionCatId = ref("");
 const petBusyCatId = ref("");
+const catActionMenuCatId = ref("");
+const bathQueueBusy = ref(false);
 const roomCanPan = ref(false);
 const roomPanActive = ref(false);
 const liveCatIntents = ref({});
@@ -211,6 +213,7 @@ onMounted(async () => {
         petCat(cat, { message, anchor: false });
       }
     },
+    onCatClick: (cat) => openCatActionMenu(cat),
     onCatCarryStart: (_cat, interaction) => {
       activeRoomPanel.value = "cat";
       if (interaction?.message) notice.value = friendlyCatWorldText(interaction.message);
@@ -230,7 +233,12 @@ onMounted(async () => {
       if (interaction?.message) notice.value = friendlyCatWorldText(interaction.message);
     },
     onLitterClick: cleanLitter,
-    onBathtubBath: (bath) => useConsumable(shopById.value["cat-bath-kit"], { targetCatId: bath?.catId }),
+    onCatBathQueue: (cat) => queueCatBath(cat),
+    onBathtubSupply: () => {
+      addBathSupply();
+      return { handled: true, message: "正在把 1 份泡泡沐浴露投入浴盆。" };
+    },
+    onBathtubBath: () => refreshCatWorldBathQueue(),
     onItemInteractionEnd: (interaction) => {
       if (interaction?.message) notice.value = friendlyCatWorldText(interaction.message);
     },
@@ -459,6 +467,7 @@ const catSocial = computed(() => state.value.catSocial || {});
 const lostCats = computed(() => state.value.lostCats || {});
 const lostCatRows = computed(() => Object.values(lostCats.value));
 const hygiene = computed(() => state.value.hygiene || {});
+const bathQueue = computed(() => state.value.bathQueue || {});
 const hygieneMoodPenalty = computed(() => Number(hygiene.value.moodDecayBonus ?? litterMoodPenalty(hygiene.value.count)));
 const litterBathAccelerationText = computed(() => litterBathAccelerationLabel(hygiene.value));
 const ownedCats = computed(() => state.value.ownedCats || []);
@@ -1082,6 +1091,7 @@ const gameSnapshot = computed(() => ({
   mood: mood.value,
   activeFood: gameActiveFood.value,
   activeCare: gameActiveCare.value,
+  bathQueue: bathQueue.value,
   hygiene: hygiene.value,
   dailyLogs: gameDailyLogs.value,
   socialCircle: catSocial.value,
@@ -1548,6 +1558,10 @@ async function focusSelectedCatMemory() {
 
 function handleGlobalKeydown(event) {
   if (event.key !== "Escape") return;
+  if (catActionMenuCatId.value) {
+    closeCatActionMenu();
+    return;
+  }
   if (renameModalOpen.value) {
     closeRenameModal();
     return;
@@ -2109,6 +2123,10 @@ function handleOwnedToolClick(item) {
       useConsumable(item);
       return;
     }
+    if (item.useType === "cat-bath") {
+      queueCatBath(focusedCat.value);
+      return;
+    }
     useConsumable(item);
     return;
   }
@@ -2547,6 +2565,119 @@ async function petCat(cat = selectedCat.value, options = {}) {
     notice.value = error.message || "猫咪互动失败，请稍后再试。";
   } finally {
     petBusyCatId.value = "";
+  }
+}
+
+const catActionMenuCat = computed(() => catForId(catActionMenuCatId.value));
+const bathSupplyCount = computed(() => Math.max(Number(bathQueue.value.supplyCount || 0), 0));
+const bathQueueRows = computed(() => Array.isArray(bathQueue.value.queue) ? bathQueue.value.queue : []);
+const bathActive = computed(() => bathQueue.value.active || null);
+
+function openCatActionMenu(cat = {}) {
+  if (roomEditMode.value || repairMode.value || scoopMode.value || !cat?.id) return;
+  activeRoomPanel.value = "cat";
+  focusedCatId.value = cat.id;
+  catActionMenuCatId.value = cat.id;
+  catWorldGame.value?.focusCat?.(cat.id);
+}
+
+function closeCatActionMenu() {
+  catActionMenuCatId.value = "";
+}
+
+function carryCatFromMenu() {
+  const cat = catActionMenuCat.value;
+  if (!cat?.id) return;
+  const interaction = catWorldGame.value?.carryCat?.(cat.id);
+  closeCatActionMenu();
+  if (interaction?.message) notice.value = interaction.message;
+}
+
+function petCatFromMenu() {
+  const cat = catActionMenuCat.value;
+  if (!cat?.id) return;
+  closeCatActionMenu();
+  petCat(cat);
+}
+
+function openCatDiaryFromMenu() {
+  const cat = catActionMenuCat.value;
+  if (!cat?.id) return;
+  closeCatActionMenu();
+  toggleCatDiary(cat);
+}
+
+async function refreshCatWorldBathQueue() {
+  try {
+    const nextPayload = await fetchJson(routeApiPaths.catWorld(), { method: "GET" });
+    replacePayload(nextPayload);
+    return nextPayload;
+  } catch (error) {
+    notice.value = error.message || "洗澡队列刷新失败，请稍后再试。";
+    return null;
+  }
+}
+
+async function queueCatBath(cat = catActionMenuCat.value) {
+  if (!cat?.id || bathQueueBusy.value || roomEditMode.value) return false;
+  const bathtub = shopById.value["bubble-bathtub"];
+  if (!bathtub || itemCount("bubble-bathtub") <= 0 || !itemIsInCurrentScene(bathtub)) {
+    closeCatActionMenu();
+    notice.value = "当前活动室还没有泡泡浴缸，请先购买并放到这里。";
+    openShopCategory("decor");
+    return false;
+  }
+  if (itemCount("cat-bath-kit") <= 0 && bathSupplyCount.value <= 0) {
+    closeCatActionMenu();
+    openBathSupplies();
+    notice.value = "背包里没有泡泡沐浴露，请先购买后再排队洗澡。";
+    return false;
+  }
+  bathQueueBusy.value = true;
+  notice.value = "正在把猫咪加入洗澡队列…";
+  try {
+    const nextPayload = await fetchJson(routeApiPaths.catWorldBathQueue(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ catId: cat.id }),
+    });
+    replacePayload(nextPayload);
+    closeCatActionMenu();
+    const queue = nextPayload.state?.bathQueue || {};
+    notice.value = `${cat.displayLabel || cat.label || "猫咪"}已排入洗澡队列，浴盆里还有 ${Number(queue.supplyCount || 0)} 份泡泡沐浴露。`;
+    return true;
+  } catch (error) {
+    notice.value = error.message || "加入洗澡队列失败，请稍后再试。";
+    return false;
+  } finally {
+    bathQueueBusy.value = false;
+  }
+}
+
+async function addBathSupply() {
+  if (bathQueueBusy.value || roomEditMode.value) return false;
+  if (itemCount("cat-bath-kit") <= 0) {
+    openBathSupplies();
+    notice.value = "背包里没有泡泡沐浴露，请先购买。";
+    return false;
+  }
+  bathQueueBusy.value = true;
+  notice.value = "正在投入 1 份泡泡沐浴露…";
+  try {
+    const nextPayload = await fetchJson(routeApiPaths.catWorldBathSupply(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ quantity: 1 }),
+    });
+    replacePayload(nextPayload);
+    const queue = nextPayload.state?.bathQueue || {};
+    notice.value = `已投入 1 份泡泡沐浴露，浴盆里现在有 ${Number(queue.supplyCount || 0)} 份。`;
+    return true;
+  } catch (error) {
+    notice.value = error.message || "投入泡泡沐浴露失败，请稍后再试。";
+    return false;
+  } finally {
+    bathQueueBusy.value = false;
   }
 }
 
@@ -3506,6 +3637,41 @@ async function selectCat(catOrId, options = {}) {
             @wheel.capture="handleRoomWheel"
           >
             <div ref="gameMountRef" class="cat-world-game-stage"></div>
+            <div v-if="catActionMenuCat" class="cat-world-cat-action-menu" role="dialog" aria-label="猫咪操作菜单">
+              <header>
+                <span class="cat-world-cat-action-avatar"><CatIcon :size="17" :stroke-width="2.8" aria-hidden="true" /></span>
+                <div>
+                  <strong>{{ catActionMenuCat.displayLabel || catActionMenuCat.label }}</strong>
+                  <small>想和我做什么？</small>
+                </div>
+                <button type="button" aria-label="关闭猫咪操作菜单" @click="closeCatActionMenu">
+                  <XIcon :size="16" :stroke-width="3" aria-hidden="true" />
+                </button>
+              </header>
+              <div class="cat-world-cat-action-menu-actions">
+                <button type="button" @click="carryCatFromMenu">
+                  <MoveRightIcon :size="15" :stroke-width="3" aria-hidden="true" />举起
+                </button>
+                <button type="button" :disabled="bathQueueBusy" @click="queueCatBath(catActionMenuCat)">
+                  <CatIcon :size="15" :stroke-width="2.8" aria-hidden="true" />洗澡排队
+                </button>
+                <button type="button" @click="petCatFromMenu">
+                  <HeartIcon :size="15" :stroke-width="2.8" aria-hidden="true" />摸摸
+                </button>
+                <button type="button" @click="openCatDiaryFromMenu">
+                  <MoveRightIcon :size="15" :stroke-width="3" aria-hidden="true" />档案
+                </button>
+              </div>
+            </div>
+            <section v-if="shopById['bubble-bathtub'] && itemIsInCurrentScene(shopById['bubble-bathtub'])" class="cat-world-bath-queue-toolbar" aria-label="泡泡浴盆队列">
+              <div>
+                <strong>泡泡浴盆</strong>
+                <span>浴盆用品 {{ bathSupplyCount }} 份 · 排队 {{ bathQueueRows.length }} 只<span v-if="bathActive"> · {{ bathActive.catLabel || "洗澡中" }}</span></span>
+              </div>
+              <button type="button" :disabled="bathQueueBusy || itemCount('cat-bath-kit') <= 0" @click="addBathSupply">
+                {{ bathQueueBusy ? "处理中…" : "投入 1 份沐浴露" }}
+              </button>
+            </section>
           </div>
           <span
             v-if="repairMode && toolCursorVisible"
@@ -4248,15 +4414,15 @@ async function selectCat(catOrId, options = {}) {
             <span>{{ activeCatDiary.bathScheduleLabel }}</span>
           </div>
           <button
-            v-if="activeCatDiary.bathKitCount && activeCatDiary.currentSceneId === currentScene.id"
+            v-if="activeCatDiary.currentSceneId === currentScene.id"
             type="button"
-            :disabled="busyItemId === 'cat-bath-kit'"
-            @click="useConsumable(shopById['cat-bath-kit'])"
+            :disabled="bathQueueBusy"
+            @click="queueCatBath(activeCatDiary)"
           >
-            {{ busyItemId === 'cat-bath-kit' ? "洗澡中..." : `使用泡泡浴套装 (${activeCatDiary.bathKitCount})` }}
+            {{ bathQueueBusy ? "排队中..." : bathActive?.catId === activeCatDiary.id ? "正在浴盆洗澡" : bathQueueRows.some((row) => row.catId === activeCatDiary.id) ? "已在洗澡队列" : "排队洗澡" }}
           </button>
-          <small v-else-if="activeCatDiary.bathKitCount">先把它带到{{ currentScene.label }}，再使用泡泡浴套装。</small>
-          <button v-else type="button" @click="openBathSupplies">购买洗澡用品</button>
+          <small v-else>先把它带到{{ currentScene.label }}，再排队洗澡。</small>
+          <button v-if="!activeCatDiary.bathKitCount && !bathSupplyCount" type="button" @click="openBathSupplies">购买洗澡用品</button>
         </div>
         <dl class="cat-world-agent-facts">
           <div><dt>个体档案</dt><dd>{{ activeCatDiary.genderLabel }} · {{ activeCatDiary.patternLabel }} · {{ activeCatDiary.featureLabel }}</dd></div>

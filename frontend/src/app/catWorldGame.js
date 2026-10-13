@@ -327,6 +327,7 @@ function normalizeSnapshot(snapshot = {}) {
     mood: snapshot.mood || {},
     activeFood: snapshot.activeFood || snapshot.mood?.activeFood || {},
     activeCare: snapshot.activeCare || {},
+    bathQueue: snapshot.bathQueue || {},
     hygiene: snapshot.hygiene || {},
     dailyLogs: snapshot.dailyLogs || {},
     socialCircle: snapshot.socialCircle || {},
@@ -1651,6 +1652,9 @@ class CatWorldScene extends Phaser.Scene {
         });
       }
       this.drawDecorShape(container, decorId, spec, palette(tone));
+      if (decorId === "bubble-bathtub" && !editMode && !damaged) {
+        this.drawBathtubQueueBadge(position, spec, snapshot);
+      }
       if (decorId === "reading-lamp" && this.owner.itemInteractionStates.get(decorId)?.active && !damaged) {
         this.applyLampVisual(container, true);
       }
@@ -1660,6 +1664,32 @@ class CatWorldScene extends Phaser.Scene {
       }
       this.decorContainers.set(decorId, container);
     }
+  }
+
+  drawBathtubQueueBadge(position, spec, snapshot = {}) {
+    const bathQueue = snapshot.bathQueue || {};
+    const supplyCount = Math.max(Number(bathQueue.supplyCount || 0), 0);
+    const queuedCount = Array.isArray(bathQueue.queue) ? bathQueue.queue.length : 0;
+    const activeCount = bathQueue.active ? 1 : 0;
+    const badge = this.add.container(position.x + spec.width / 2, Math.max(position.y - 8, 18));
+    badge.setDepth(CAT_INTERACTION_DEPTH + 230);
+    const label = supplyCount > 0
+      ? `泡泡沐浴露 ×${supplyCount}`
+      : "浴盆待补充";
+    const queueLabel = queuedCount || activeCount
+      ? ` · ${activeCount ? "洗澡中" : "排队"}${queuedCount ? ` ${queuedCount}` : ""}`
+      : "";
+    const text = this.add.text(0, 0, `${label}${queueLabel}`, {
+      color: "#176f58",
+      backgroundColor: "#fff8df",
+      fontFamily: "Consolas, monospace",
+      fontSize: "11px",
+      fontStyle: "bold",
+      padding: { x: 7, y: 4 },
+      stroke: "#fff8df",
+      strokeThickness: 1,
+    }).setOrigin(0.5, 1);
+    badge.add(text);
   }
 
   drawInventoryItems(snapshot) {
@@ -2219,6 +2249,10 @@ class CatWorldScene extends Phaser.Scene {
         if (this.pointerHitsFeatherWand(pointer)) {
           const interaction = this.interactWithToy("feather-wand");
           this.owner.handlers.onToyClick?.("feather-wand", interaction);
+          return;
+        }
+        if (this.owner.handlers.onCatClick) {
+          this.owner.handlers.onCatClick?.(cat);
           return;
         }
         const interaction = this.startCatCarry(cat.id, pointer);
@@ -2867,25 +2901,19 @@ class CatWorldScene extends Phaser.Scene {
 
   placeCarriedCatOnDecor(entry, target) {
     const { decorId, interaction } = target;
-    if (decorId === "bubble-bathtub" && Number(this.owner.snapshot.inventory?.["cat-bath-kit"] || 0) > 0) {
-      const action = {
-        kind: "carried-bathtub",
-        itemId: decorId,
-        expiresAt: Date.now() + interaction.holdMs + 18000,
-      };
-      this.owner.catItemActions.set(entry.cat.id, action);
-      this.startCarriedBathtubAction(entry, action);
+    const noBathKit = decorId === "bubble-bathtub";
+    if (decorId === "bubble-bathtub") {
+      const result = this.owner.handlers.onCatBathQueue?.(entry.cat);
       return {
         handled: true,
         catId: entry.cat.id,
         targetType: "decor",
         itemId: decorId,
-        message: `${entry.cat.label}已放进泡泡浴缸，正在使用 1 套泡泡浴用品洗澡。`,
+        message: result?.message || `${entry.cat.label}已加入泡泡浴缸洗澡队列。`,
       };
     }
-    const noBathKit = decorId === "bubble-bathtub";
     const favorite = catLikesItem(entry.cat, decorId, "decor");
-    const placementPlan = noBathKit ? null : catWorldPlacementReactionPlan(entry.cat, entry.behavior, {
+    const placementPlan = catWorldPlacementReactionPlan(entry.cat, entry.behavior, {
       targetType: "decor",
       itemId: decorId,
       itemLabel: interaction.label,
@@ -2894,37 +2922,33 @@ class CatWorldScene extends Phaser.Scene {
     const action = {
       kind: "manual-decor",
       itemId: decorId,
-      message: noBathKit ? "浴缸里还没有泡泡浴用品，先在这里等一等。" : placementPlan.message,
+      message: placementPlan.message,
       placementPlan,
-      expiresAt: Date.now() + (noBathKit ? 5200 : interaction.holdMs),
-      showTimedStatus: !noBathKit,
+      expiresAt: Date.now() + interaction.holdMs,
+      showTimedStatus: true,
     };
     this.owner.catItemActions.set(entry.cat.id, action);
     this.startManualDecorAction(entry, action);
-    if (!noBathKit) {
-      const ambientKind = favorite
-        ? "favorite-decor"
-        : ["nap", "roll"].includes(interaction.behavior)
-          ? "rest-spot"
-          : "";
-      if (ambientKind) {
-        this.owner.handlers.onCatAmbient?.(entry.cat, {
-          kind: ambientKind,
-          itemId: decorId,
-          label: interaction.label,
-        });
-      }
+    const ambientKind = favorite
+      ? "favorite-decor"
+      : ["nap", "roll"].includes(interaction.behavior)
+        ? "rest-spot"
+        : "";
+    if (ambientKind) {
+      this.owner.handlers.onCatAmbient?.(entry.cat, {
+        kind: ambientKind,
+        itemId: decorId,
+        label: interaction.label,
+      });
     }
     return {
       handled: true,
       catId: entry.cat.id,
       targetType: "decor",
       itemId: decorId,
-      catMessage: noBathKit ? action.message : placementPlan.message,
+      catMessage: placementPlan.message,
       placementStyle: placementPlan?.styleKey || "",
-      message: noBathKit
-        ? `${entry.cat.label}已放到浴缸旁，但背包里没有泡泡浴套装。`
-        : `${entry.cat.displayLabel || entry.cat.label}已放到${interaction.label}（${placementPlan.badgeLabel}），开始${interaction.actionLabel}互动。`,
+      message: `${entry.cat.displayLabel || entry.cat.label}已放到${interaction.label}（${placementPlan.badgeLabel}），开始${interaction.actionLabel}互动。`,
     };
   }
 
@@ -3131,7 +3155,10 @@ class CatWorldScene extends Phaser.Scene {
     if (this.owner.wandMode) this.stopFeatherWandMode({ notify: false });
     if (interaction.behavior === "toggle-attract") return this.toggleReadingLamp(decorId);
     if (interaction.behavior === "walk-and-jump") return this.startDeskFavoriteInteraction(decorId);
-    if (interaction.behavior === "walk-and-bathe") return this.startBathtubInteraction(decorId);
+    if (interaction.behavior === "walk-and-bathe") {
+      return this.owner.handlers.onBathtubSupply?.(decorId)
+        || { handled: true, message: "点击浴缸后可以投入一份泡泡沐浴露。" };
+    }
     return null;
   }
 
@@ -3324,7 +3351,10 @@ class CatWorldScene extends Phaser.Scene {
             onComplete: () => {
               if (this.owner.catItemActions.get(entry.cat.id) !== action || !entry.container.active) return;
               const overlay = this.createBathtubBubbleOverlay(bathtub, spec, entry.index);
-              const washDuration = interaction.holdMs;
+              const remainingBathMs = Math.max(Number(action.expiresAt || 0) - Date.now(), 0);
+              const washDuration = remainingBathMs > 0
+                ? Math.min(interaction.holdMs, remainingBathMs)
+                : interaction.holdMs;
               this.showTimedInteractionStatus(entry, decorId, washDuration);
               this.spawnCatBubble(entry.container, entry.cat, "泡泡好多，洗得香香的。");
               const timer = this.time.delayedCall(washDuration, () => {
@@ -3726,6 +3756,23 @@ class CatWorldScene extends Phaser.Scene {
   restoreActiveItemInteractions() {
     const entries = new Map(this.roomCatEntries().map((entry) => [entry.cat.id, entry]));
     const activeCare = this.owner.snapshot.activeCare || {};
+    const activeBath = this.owner.snapshot.bathQueue?.active || null;
+    if (activeBath?.catId) {
+      const bathEntry = entries.get(String(activeBath.catId));
+      if (bathEntry?.behavior.canWalk && !this.owner.catItemActions.has(bathEntry.cat.id)) {
+        const interaction = this.catDropInteraction("bubble-bathtub");
+        const endsAt = Date.parse(String(activeBath.endsAt || activeBath.completedAt || ""));
+        const remaining = Number.isFinite(endsAt)
+          ? Math.max(endsAt - Date.now(), 900)
+          : interaction?.holdMs || 12000;
+        const action = {
+          kind: "bathtub",
+          itemId: "bubble-bathtub",
+          expiresAt: Date.now() + remaining,
+        };
+        this.owner.catItemActions.set(bathEntry.cat.id, action);
+      }
+    }
     if (this.owner.wandMode) {
       for (const catId of [...this.owner.wandCatIds]) {
         const entry = entries.get(catId);
