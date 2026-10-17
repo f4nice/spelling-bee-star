@@ -9,6 +9,7 @@ import {
   uploadWordAudioOption,
 } from "../wordAudioChoiceBindings.js";
 import { useWordRecorder } from "./useWordRecorder.js";
+import { applyCommittedWordAudio } from "../wordAudioState.js";
 
 export function useWordAudio({ data, loadRoute }) {
   const audioOptions = ref({ us: [], gb: [] });
@@ -37,30 +38,21 @@ export function useWordAudio({ data, loadRoute }) {
   async function chooseAudio(accent, url) {
     const result = await chooseWordAudioOption({ wordId: data.value.word.id, accent, url, loadRoute });
     if (result?.media_sources) data.value.media_sources = result.media_sources;
-    if (result?.committed && result?.audio_url) {
-      if (accent === "gb") data.value.word.british_audio_url = result.audio_url;
-      else data.value.word.american_audio_url = result.audio_url;
-    }
+    applyCommittedWordAudio(data.value, accent, result);
     return result;
   }
 
   async function uploadAudio(accent, file) {
     const result = await uploadWordAudioOption({ wordId: data.value.word.id, accent, file, loadRoute });
     if (result?.media_sources) data.value.media_sources = result.media_sources;
-    if (result?.committed && result?.audio_url) {
-      if (accent === "gb") data.value.word.british_audio_url = result.audio_url;
-      else data.value.word.american_audio_url = result.audio_url;
-    }
+    applyCommittedWordAudio(data.value, accent, result);
     return result;
   }
 
   async function generateAiAudio(accent, voiceGender = "female", textMode = "word") {
     const result = await generateWordAiAudioOption({ wordId: data.value.word.id, accent, voiceGender, textMode, loadRoute });
     if (result?.media_sources) data.value.media_sources = result.media_sources;
-    if (result?.committed && result?.audio_url) {
-      if (accent === "gb") data.value.word.british_audio_url = result.audio_url;
-      else data.value.word.american_audio_url = result.audio_url;
-    }
+    applyCommittedWordAudio(data.value, accent, result);
     return result;
   }
 

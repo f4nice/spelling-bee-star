@@ -3,6 +3,7 @@ import json
 import os
 import tempfile
 import unittest
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -10,7 +11,7 @@ os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 
 from app import main as m
 from app.config import Settings
@@ -93,6 +94,34 @@ class WordCompletionTest(unittest.TestCase):
         self.assertEqual(self.word.american_audio_url, replacement)
         self.assertTrue(self.word.american_audio_locked)
         self.assertFalse(self.word.audio_issue)
+
+    def test_uploaded_audio_replaces_existing_accent_and_is_saved_locally(self):
+        self.word.american_audio_url = "/media/audio/old-us.mp3"
+        self.word.american_audio_locked = True
+        self.db.commit()
+
+        with tempfile.TemporaryDirectory() as folder, patch.object(m, "AUDIO_DIR", Path(folder)):
+            uploaded = UploadFile(
+                file=BytesIO(b"new-audio" * 200),
+                filename="replacement.mp3",
+                headers={"content-type": "audio/mpeg"},
+            )
+            with patch.object(m, "require_word_write_access"), patch.object(m, "word_media_sources", return_value={}):
+                result = asyncio.run(m.word_recorded_audio(
+                    self.word.id,
+                    accent="us",
+                    audio_file=uploaded,
+                    edit_token="1",
+                    db=self.db,
+                ))
+
+            self.db.refresh(self.word)
+            self.assertTrue(result["committed"])
+            self.assertTrue(result["audio_url"].startswith("/media/audio/record-test-us-"))
+            self.assertTrue(result["audio_url"].endswith(".mp3"))
+            self.assertEqual(self.word.american_audio_url, result["audio_url"])
+            self.assertTrue(self.word.american_audio_locked)
+            self.assertTrue((Path(folder) / result["audio_url"].rsplit("/", 1)[-1]).is_file())
 
     def test_complete_spb_skips_online_lookup_and_clears_old_failure(self):
         self.word.enrichment_status = "failed"
