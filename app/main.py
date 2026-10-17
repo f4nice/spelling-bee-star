@@ -133,8 +133,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20261017-001"
-DEFAULT_PAGE_VERSION = "v20261017.1"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20261017-002"
+DEFAULT_PAGE_VERSION = "v20261017.2"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -25395,11 +25395,15 @@ def word_navigation_context(
     if not list_id:
         return {"list_id": None, "index": None, "previous_word_id": max(word_id - 1, 1), "next_word_id": word_id + 1}
 
+    # A word detail opened from a list must follow that list's stored order.
+    # WordListItem.id is the durable insertion/order key used by the list
+    # page; sorting by Word.word alphabetically made automatic study jump to
+    # a different sequence than the learner sees.
     word_ids = db.scalars(
         select(Word.id)
         .join(WordListItem, WordListItem.word_id == Word.id)
         .where(WordListItem.word_list_id == list_id)
-        .order_by(Word.word.asc())
+        .order_by(WordListItem.id.asc())
     ).all()
     try:
         current_index = list(word_ids).index(word_id)

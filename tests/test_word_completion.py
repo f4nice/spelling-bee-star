@@ -16,7 +16,7 @@ from fastapi import HTTPException, UploadFile
 from app import main as m
 from app.config import Settings
 from app.database import Base
-from app.models import Word, WordResourcePool
+from app.models import Word, WordList, WordListItem, WordResourcePool
 from app.services import enrichment as e
 from app.services.dictionary import DictionaryEntry
 
@@ -122,6 +122,26 @@ class WordCompletionTest(unittest.TestCase):
             self.assertEqual(self.word.american_audio_url, result["audio_url"])
             self.assertTrue(self.word.american_audio_locked)
             self.assertTrue((Path(folder) / result["audio_url"].rsplit("/", 1)[-1]).is_file())
+
+    def test_word_navigation_follows_word_list_item_order(self):
+        first = Word(word="zulu")
+        last = Word(word="alpha")
+        self.db.add_all([first, last])
+        self.db.commit()
+        word_list = WordList(name="ordered list")
+        self.db.add(word_list)
+        self.db.commit()
+        self.db.add_all([
+            WordListItem(word_list_id=word_list.id, word_id=first.id),
+            WordListItem(word_list_id=word_list.id, word_id=self.word.id),
+            WordListItem(word_list_id=word_list.id, word_id=last.id),
+        ])
+        self.db.commit()
+
+        navigation = m.word_navigation_context(self.db, self.word.id, word_list.id)
+
+        self.assertEqual(navigation["previous_word_id"], first.id)
+        self.assertEqual(navigation["next_word_id"], last.id)
 
     def test_complete_spb_skips_online_lookup_and_clears_old_failure(self):
         self.word.enrichment_status = "failed"
