@@ -21747,11 +21747,11 @@ select {
   }
 
   .app-page-heading .page-heading-actions {
-    position: absolute;
-    top: 14px;
-    right: 14px;
-    width: auto;
-    margin-left: 0;
+    position: absolute !important;
+    top: 14px !important;
+    right: 14px !important;
+    width: auto !important;
+    margin-left: 0 !important;
     justify-content: flex-end;
   }
 
