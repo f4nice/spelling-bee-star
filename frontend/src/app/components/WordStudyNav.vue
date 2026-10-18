@@ -7,6 +7,7 @@ const STORAGE_KEY = "speakeasy.wordAutoStudy";
 const AUTO_STUDY_READ_COUNT = 2;
 const AUTO_STUDY_REPLAY_GAP_MS = 350;
 const AUTO_STUDY_FALLBACK_READ_MS = 1800;
+const AUTO_STUDY_AUDIO_START_TIMEOUT_MS = 8000;
 const AUTO_STUDY_SESSION_FLAG = "__speakeasyAutoStudySessionActive";
 
 const props = defineProps({
@@ -186,10 +187,12 @@ async function playCurrentWord(runId = studyRunId) {
       text: word,
       lang: candidate.lang,
     };
-    if (audio && target.source && audio.getAttribute("src") !== target.source) {
-      audio.setAttribute("src", target.source);
-    }
-    const played = await props.playAudio(target.audioId, target.text, target.lang, { fallbackToSpeech: false });
+    const sourceChanged = Boolean(audio && target.source && audio.getAttribute("src") !== target.source);
+    if (sourceChanged) audio.setAttribute("src", target.source);
+    const played = await props.playAudio(target.audioId, target.text, target.lang, {
+      fallbackToSpeech: false,
+      reload: sourceChanged,
+    });
     if (played) {
       if (runId !== studyRunId || !isAutoStudying.value) return null;
       return target;
@@ -225,50 +228,71 @@ function waitForAudioToFinish(audioId, runId = studyRunId) {
       cancelAudioWait = cancel;
     });
   }
-  const durationMs = Number.isFinite(audio.duration) && audio.duration > 0
-    ? Math.min(Math.max((audio.duration + 0.35) * 1000, AUTO_STUDY_FALLBACK_READ_MS), 6000)
-    : AUTO_STUDY_FALLBACK_READ_MS;
   return new Promise((resolve) => {
     let finished = false;
     let fallbackId = null;
+    let loadingId = null;
+    let started = false;
     let startedAt = performance.now();
-    let remainingMs = durationMs;
+    let remainingMs = AUTO_STUDY_FALLBACK_READ_MS;
     const clearFallback = () => {
       if (fallbackId) window.clearTimeout(fallbackId);
       fallbackId = null;
     };
-    const scheduleFallback = () => {
-      clearFallback();
-      if (isPausedByUser || runId !== studyRunId || !isAutoStudying.value) return;
+    const clearLoading = () => {
+      if (loadingId) window.clearTimeout(loadingId);
+      loadingId = null;
+    };
+    const startPlaybackTimer = () => {
+      if (started || isPausedByUser || runId !== studyRunId || !isAutoStudying.value) return;
+      started = true;
+      clearLoading();
+      remainingMs = Number.isFinite(audio.duration) && audio.duration > 0
+        ? Math.min(Math.max((audio.duration + 0.35) * 1000, AUTO_STUDY_FALLBACK_READ_MS), 6000)
+        : AUTO_STUDY_FALLBACK_READ_MS;
       startedAt = performance.now();
+      clearFallback();
       fallbackId = window.setTimeout(finish, remainingMs);
     };
     const finish = (completed = true) => {
       if (finished) return;
       finished = true;
       clearFallback();
+      clearLoading();
       audio.removeEventListener("ended", finish);
-      audio.removeEventListener("error", finish);
+      audio.removeEventListener("error", handleError);
       audio.removeEventListener("pause", handlePause);
-      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("playing", handlePlaying);
+      audio.removeEventListener("canplay", handleCanPlay);
       if (cancelAudioWait === cancel) cancelAudioWait = null;
       resolve(completed);
     };
     const cancel = () => finish(false);
     const handlePause = () => {
-      if (!isPausedByUser) return;
+      if (!isPausedByUser || !started) return;
       remainingMs = Math.max(remainingMs - (performance.now() - startedAt), 0);
       clearFallback();
     };
-    const handlePlay = () => {
-      if (!isPausedByUser) scheduleFallback();
+    const handlePlaying = () => {
+      startPlaybackTimer();
     };
+    const handleCanPlay = () => {
+      if (!audio.paused) startPlaybackTimer();
+    };
+    const handleError = () => finish(false);
     audio.addEventListener("ended", finish, { once: true });
-    audio.addEventListener("error", finish, { once: true });
+    audio.addEventListener("error", handleError, { once: true });
     audio.addEventListener("pause", handlePause);
-    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("playing", handlePlaying);
+    audio.addEventListener("canplay", handleCanPlay);
     cancelAudioWait = cancel;
-    scheduleFallback();
+    if (audio.ended) {
+      finish(true);
+    } else if (!audio.paused && audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      startPlaybackTimer();
+    } else {
+      loadingId = window.setTimeout(() => finish(false), AUTO_STUDY_AUDIO_START_TIMEOUT_MS);
+    }
   });
 }
 
@@ -292,7 +316,12 @@ async function playAutoStudyRead(readCount = 1, runId = studyRunId) {
   currentReadCount.value = readCount;
   const target = await playCurrentWord(runId);
   if (!target) return;
-  const completed = await waitForAudioToFinish(target.audioId, runId);
+  let completed = await waitForAudioToFinish(target.audioId, runId);
+  if (!completed && !isPausedByUser && isAutoStudying.value && runId === studyRunId) {
+    const retryTarget = await playCurrentWord(runId);
+    if (!retryTarget) return;
+    completed = await waitForAudioToFinish(retryTarget.audioId, runId);
+  }
   if (!completed || !isAutoStudying.value || runId !== studyRunId) return;
   if (readCount >= AUTO_STUDY_READ_COUNT) {
     scheduleNext();

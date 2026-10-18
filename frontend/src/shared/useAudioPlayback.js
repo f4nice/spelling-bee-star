@@ -41,6 +41,7 @@ export function useAudioPlayback() {
 
   async function playAudio(id, fallbackText = "", lang = "en-US", options = {}) {
     const fallbackToSpeech = options.fallbackToSpeech !== false;
+    const forceReload = options.reload === true;
     const audio = document.getElementById(id);
     if (!audio) {
       if (fallbackToSpeech) speakFallback(fallbackText, lang);
@@ -48,24 +49,26 @@ export function useAudioPlayback() {
     }
     stopPageAudio(audio);
     audio.controls = false;
+    const sourceAtStart = audio.getAttribute("src") || audio.currentSrc || "";
     // WordStudyNav preloads the persistent node on pointerdown. Reloading an
     // already-ready source here discards that work and is especially flaky on
     // mobile networks, where the user gesture may be over before the retry.
-    if (audio.readyState === HTMLMediaElement.HAVE_NOTHING || audio.error) audio.load();
+    if (forceReload || audio.readyState === HTMLMediaElement.HAVE_NOTHING || audio.error) audio.load();
     audio.currentTime = 0;
     try {
       await audio.play();
-      if (audio.error) throw new Error("audio-not-playable");
+      if (audio.error || (sourceAtStart && audio.getAttribute("src") !== sourceAtStart)) throw new Error("audio-not-playable");
       return true;
-    } catch {
+    } catch (error) {
       // Start playback before waiting for canplay so a user click keeps its
       // transient activation on mobile browsers. If the first attempt failed
       // because the resource was still loading, wait once and retry normally.
-      const ready = audio.error ? false : await waitForAudioReady(audio);
+      const blockedByBrowser = ["AbortError", "NotAllowedError", "NotSupportedError"].includes(error?.name);
+      const ready = blockedByBrowser || audio.error ? false : await waitForAudioReady(audio);
       if (ready || audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
         try {
           await audio.play();
-          if (audio.error) throw new Error("audio-not-playable");
+          if (audio.error || (sourceAtStart && audio.getAttribute("src") !== sourceAtStart)) throw new Error("audio-not-playable");
           return true;
         } catch {
           // Fall through to speech synthesis below.
