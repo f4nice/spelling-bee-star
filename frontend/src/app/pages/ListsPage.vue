@@ -48,6 +48,7 @@ const isDeletingGroup = ref(false);
 const draggedGroupId = ref(null);
 const isSavingGroupOrder = ref(false);
 const groupOrderNotice = ref("");
+const mobileDisplayMode = computed(() => typeof window !== "undefined" && window.matchMedia?.("(max-width: 900px)").matches);
 let dragStartCards = [];
 let searchTimer = 0;
 
@@ -586,7 +587,7 @@ watch(wordListGroups, (groups) => {
           'is-active': activeGroup?.id === group.id,
           'is-drop-target': dragOverGroupId === String(group.id),
         }"
-        :draggable="!isSavingGroupOrder"
+        :draggable="!isSavingGroupOrder && !mobileDisplayMode"
         @dragstart="startGroupDrag(group, $event)"
         @dragend="resetGroupDrag"
         @dragenter="enterGroupDropTarget(group, $event)"
@@ -667,7 +668,7 @@ watch(wordListGroups, (groups) => {
         :go="go"
         :sequence="index + 1"
         show-manage
-        draggable="true"
+        :draggable="!mobileDisplayMode"
         role="listitem"
         :aria-grabbed="draggedListId === card.list.id ? 'true' : 'false'"
         show-challenge

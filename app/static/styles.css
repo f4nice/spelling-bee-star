@@ -21759,6 +21759,7 @@ select {
   .lists-page-heading-actions,
   .list-actions,
   .list-card-manage-button,
+  .word-list-group-sort,
   .list-title-edit-button,
   .list-title-save-button,
   .list-title-cancel-button,
@@ -21792,9 +21793,18 @@ select {
   .home-upload-form,
   .batch-image-form,
   .lists-tools-panel,
+  .preview-panel,
+  .import-toolbar,
+  .book-upload-preview-panel,
+  .word-image-manager-backdrop,
+  .audio-manager-backdrop,
   .book-upload-modal,
   .book-upload-modal-backdrop {
     display: none !important;
+  }
+
+  .book-detail-cover-action {
+    pointer-events: none;
   }
 
   .word-title-main h1,
