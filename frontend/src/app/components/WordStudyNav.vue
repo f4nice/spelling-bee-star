@@ -1,7 +1,7 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { fetchJson } from "../utils.js";
-import { preferredWordAudioAccent } from "../wordAudioSource.js";
+import { wordAudioCandidates } from "../wordAudioSource.js";
 
 const STORAGE_KEY = "speakeasy.wordAutoStudy";
 const AUTO_STUDY_READ_COUNT = 2;
@@ -138,22 +138,39 @@ function scheduleNext() {
 }
 
 function currentAudioTarget() {
-  const audioSources = props.data.audio_sources || {};
   const word = props.data.word?.word || "";
-  const accent = preferredWordAudioAccent(props.data);
-  return accent === "gb"
-    ? { audioId: "audio-gb", text: word, lang: "en-GB" }
-    : { audioId: "audio-us", text: word, lang: "en-US" };
+  const [candidate] = wordAudioCandidates(props.data);
+  return {
+    audioId: "auto-study-audio",
+    source: candidate?.source || "",
+    text: word,
+    lang: candidate?.lang || "en-US",
+  };
 }
 
-async function playCurrentWord(runId = studyRunId, waitForRender = false) {
-  const target = currentAudioTarget();
+async function playCurrentWord(runId = studyRunId) {
+  const word = props.data.word?.word || "";
+  const candidates = wordAudioCandidates(props.data);
   isPausedByUser = false;
-  // The first auto-study click must call play() while Chrome still has the
-  // user's transient activation. Only wait for Vue to render when a route
-  // transition has replaced the audio element.
-  if (waitForRender || !document.getElementById(target.audioId)) await nextTick();
-  await props.playAudio(target.audioId, target.text, target.lang);
+  const audio = document.getElementById("auto-study-audio");
+  for (const candidate of candidates) {
+    const target = {
+      audioId: "auto-study-audio",
+      source: candidate.source,
+      text: word,
+      lang: candidate.lang,
+    };
+    if (audio && target.source && audio.getAttribute("src") !== target.source) {
+      audio.setAttribute("src", target.source);
+    }
+    const played = await props.playAudio(target.audioId, target.text, target.lang, { fallbackToSpeech: false });
+    if (played) {
+      if (runId !== studyRunId || !isAutoStudying.value) return null;
+      return target;
+    }
+  }
+  const target = currentAudioTarget();
+  await props.playAudio(target.audioId, target.text, target.lang, { fallbackToSpeech: true });
   if (runId !== studyRunId || !isAutoStudying.value) return null;
   return target;
 }
@@ -231,7 +248,7 @@ function waitForAudioToFinish(audioId, runId = studyRunId) {
 
 function toggleAudioFromImage() {
   if (!isAutoStudying.value) return;
-  const audio = document.getElementById(currentAudioTarget().audioId);
+  const audio = document.getElementById("auto-study-audio");
   if (!audio) return;
   if (audio.paused) {
     isPausedByUser = false;
@@ -244,10 +261,10 @@ function toggleAudioFromImage() {
   audio.pause();
 }
 
-async function playAutoStudyRead(readCount = 1, runId = studyRunId, waitForRender = false) {
+async function playAutoStudyRead(readCount = 1, runId = studyRunId) {
   if (!isAutoStudying.value || runId !== studyRunId) return;
   currentReadCount.value = readCount;
-  const target = await playCurrentWord(runId, waitForRender);
+  const target = await playCurrentWord(runId);
   if (!target) return;
   const completed = await waitForAudioToFinish(target.audioId, runId);
   if (!completed || !isAutoStudying.value || runId !== studyRunId) return;
@@ -258,14 +275,14 @@ async function playAutoStudyRead(readCount = 1, runId = studyRunId, waitForRende
   audioReplayIds.push(window.setTimeout(() => playAutoStudyRead(readCount + 1, runId), AUTO_STUDY_REPLAY_GAP_MS));
 }
 
-function playCurrentWordTwiceThenSchedule(waitForRender = false) {
+function playCurrentWordTwiceThenSchedule() {
   clearCountdownTimers();
   clearAudioReplayTimers();
   cancelPendingAudioWait();
   isPausedByUser = false;
   remainingSeconds.value = 0;
   currentReadCount.value = 0;
-  playAutoStudyRead(1, studyRunId, waitForRender);
+  playAutoStudyRead(1, studyRunId);
 }
 
 function startAutoStudy() {
@@ -286,13 +303,17 @@ function stopAutoStudy() {
   isCountingDown.value = false;
   writeStoredState(false);
   clearTimers();
+  const audio = document.getElementById("auto-study-audio");
+  if (audio) {
+    audio.pause();
+    audio.currentTime = 0;
+  }
 }
 
 watch(() => props.data.word?.id, (wordId) => {
   if (!isAutoStudying.value || !awaitingWordId || Number(wordId) !== awaitingWordId) return;
   awaitingWordId = null;
-  // Route data updates before the new audio elements have rendered.
-  nextTick(() => playCurrentWordTwiceThenSchedule(true));
+  playCurrentWordTwiceThenSchedule();
 });
 
 onMounted(() => {
@@ -312,6 +333,8 @@ onBeforeUnmount(() => {
   window.removeEventListener("speakeasy:audio-toggle", toggleAudioFromImage);
   cancelPendingAudioWait();
   clearTimers();
+  const audio = document.getElementById("auto-study-audio");
+  if (audio) audio.pause();
 });
 </script>
 
@@ -333,5 +356,6 @@ onBeforeUnmount(() => {
       </button>
       <span class="auto-study-status">{{ statusText }}</span>
     </div>
+    <audio id="auto-study-audio" hidden preload="auto"></audio>
   </div>
 </template>

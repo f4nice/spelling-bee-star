@@ -19,3 +19,24 @@ export function preferredWordAudioAccent(data) {
   if (sources.gb) return "gb";
   return "us";
 }
+
+export function wordAudioCandidates(data) {
+  const word = String(data?.word?.word || "");
+  const preferred = preferredWordAudioAccent(data);
+  const accents = preferred === "gb" ? ["gb", "us"] : ["us", "gb"];
+  const local = accents
+    .map((accent) => ({
+      accent,
+      source: resolveWordAudioSource(data, accent),
+      lang: accent === "gb" ? "en-GB" : "en-US",
+    }))
+    .filter((candidate) => candidate.source.startsWith("/media/audio/"));
+  const tts = accents.map((accent) => ({
+    accent,
+    source: `/tts?word=${encodeURIComponent(word)}&accent=${accent}&v=2`,
+    lang: accent === "gb" ? "en-GB" : "en-US",
+  }));
+  return [...local, ...tts].filter((candidate, index, all) => (
+    candidate.source && all.findIndex((item) => item.source === candidate.source) === index
+  ));
+}

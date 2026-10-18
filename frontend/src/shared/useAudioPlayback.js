@@ -39,33 +39,39 @@ export function useAudioPlayback() {
     });
   }
 
-  async function playAudio(id, fallbackText = "", lang = "en-US") {
+  async function playAudio(id, fallbackText = "", lang = "en-US", options = {}) {
+    const fallbackToSpeech = options.fallbackToSpeech !== false;
     const audio = document.getElementById(id);
     if (!audio) {
-      speakFallback(fallbackText, lang);
+      if (fallbackToSpeech) speakFallback(fallbackText, lang);
       return false;
     }
     stopPageAudio(audio);
+    audio.controls = false;
     audio.load();
     audio.currentTime = 0;
     try {
       await audio.play();
+      if (audio.error || audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) throw new Error("audio-not-playable");
       return true;
     } catch {
       // Start playback before waiting for canplay so a user click keeps its
       // transient activation on mobile browsers. If the first attempt failed
       // because the resource was still loading, wait once and retry normally.
-      const ready = await waitForAudioReady(audio);
+      const ready = audio.error ? false : await waitForAudioReady(audio);
       if (ready || audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
         try {
           await audio.play();
+          if (audio.error || audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) throw new Error("audio-not-playable");
           return true;
         } catch {
           // Fall through to speech synthesis below.
         }
       }
-      audio.controls = true;
-      speakFallback(fallbackText, lang);
+      if (fallbackToSpeech) {
+        audio.controls = true;
+        speakFallback(fallbackText, lang);
+      }
       return false;
     }
   }

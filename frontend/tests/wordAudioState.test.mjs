@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { applyCommittedWordAudio } from "../src/app/wordAudioState.js";
-import { preferredWordAudioAccent, resolveWordAudioSource } from "../src/app/wordAudioSource.js";
+import { preferredWordAudioAccent, resolveWordAudioSource, wordAudioCandidates } from "../src/app/wordAudioSource.js";
 
 test("word detail keeps generated TTS sources playable when local audio is absent", () => {
   const data = {
@@ -23,6 +23,16 @@ test("auto study prefers an available local accent before generated TTS", () => 
     word: { american_audio_url: "", british_audio_url: "" },
     audio_sources: { us: "/tts?word=rare&accent=us", gb: "/tts?word=rare&accent=gb" },
   }), "us");
+});
+
+test("auto study keeps TTS candidates after stale local audio", () => {
+  const candidates = wordAudioCandidates({
+    word: { word: "rare", american_audio_url: "/media/audio/missing.mp3", british_audio_url: "" },
+    audio_sources: { us: "/media/audio/missing.mp3", gb: "/tts?word=rare&accent=gb&v=2" },
+  });
+  assert.equal(candidates[0].source, "/media/audio/missing.mp3");
+  assert.equal(candidates.at(-2).source, "/tts?word=rare&accent=us&v=2");
+  assert.equal(candidates.at(-1).source, "/tts?word=rare&accent=gb&v=2");
 });
 
 test("committed uploaded audio replaces the active accent and playback URL", () => {

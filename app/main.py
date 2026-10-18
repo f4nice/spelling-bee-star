@@ -133,8 +133,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20261018-019"
-DEFAULT_PAGE_VERSION = "v20261018.19"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20261018-020"
+DEFAULT_PAGE_VERSION = "v20261018.20"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -25468,18 +25468,23 @@ async def tts_audio(word: str = Query(..., min_length=1, max_length=80), accent:
 
     last_error = None
     fallback_response = None
+
+    def usable_audio_response(response: httpx.Response) -> bool:
+        content_type = (response.headers.get("content-type") or "").lower()
+        return content_type.startswith("audio/") and len(response.content) >= 1000
+
     async with httpx.AsyncClient(timeout=20, headers=headers) as client:
         for url, params in candidates:
             try:
                 response = await client.get(url, params=params)
                 response.raise_for_status()
-                if response.content and len(response.content) >= 9000:
+                if usable_audio_response(response) and len(response.content) >= 9000:
                     return Response(
                         content=response.content,
                         media_type=response.headers.get("content-type", "audio/mpeg"),
                         headers={"Cache-Control": "public, max-age=2592000"},
                     )
-                if response.content and fallback_response is None:
+                if usable_audio_response(response) and fallback_response is None:
                     fallback_response = response
             except Exception as exc:
                 last_error = exc
