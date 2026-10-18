@@ -7,6 +7,10 @@ const STORAGE_KEY = "speakeasy.wordAutoStudy";
 const AUTO_STUDY_READ_COUNT = 2;
 const AUTO_STUDY_REPLAY_GAP_MS = 350;
 const AUTO_STUDY_FALLBACK_READ_MS = 1800;
+// A route change can remount this component while the SPA is still in the
+// same auto-study session. Keep that distinction in the module, which resets
+// only on a real document reload.
+let autoStudySessionActive = false;
 
 const props = defineProps({
   data: {
@@ -306,6 +310,7 @@ function startAutoStudy() {
   studyRunId += 1;
   cancelPendingAudioWait();
   requiresMobileAudioUnlock.value = false;
+  autoStudySessionActive = true;
   isAutoStudying.value = true;
   writeStoredState(true);
   playCurrentWordTwiceThenSchedule();
@@ -314,6 +319,7 @@ function startAutoStudy() {
 function stopAutoStudy() {
   studyRunId += 1;
   cancelPendingAudioWait();
+  autoStudySessionActive = false;
   isAutoStudying.value = false;
   awaitingWordId = null;
   remainingSeconds.value = 0;
@@ -340,10 +346,11 @@ onMounted(() => {
   if (stored.intervalSeconds) intervalSeconds.value = stored.intervalSeconds;
   prefetchNextWord();
   if (stored.active) {
-    if (isMobileBrowser()) {
+    if (isMobileBrowser() && !autoStudySessionActive) {
       requiresMobileAudioUnlock.value = true;
       writeStoredState(false);
     } else {
+      autoStudySessionActive = true;
       isAutoStudying.value = true;
       playCurrentWordTwiceThenSchedule();
     }
