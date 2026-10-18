@@ -41,8 +41,7 @@ const activeNavLabel = computed(() => navItems.value.find((item) => item.active)
       </a>
     </nav>
     <details class="mobile-nav-menu">
-      <summary>
-        <span>打开导航</span>
+      <summary aria-label="打开主导航">
         <strong>{{ activeNavLabel }}</strong>
       </summary>
       <nav class="mobile-nav-grid" aria-label="移动端主导航">

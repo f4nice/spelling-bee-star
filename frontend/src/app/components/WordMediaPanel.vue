@@ -36,6 +36,19 @@ async function generateAiImage(option, controls = {}) {
   return props.generateAiImage(option, controls);
 }
 
+function navigateFromImage(direction) {
+  const wordId = direction === "previous"
+    ? props.data.navigation?.previous_word_id
+    : props.data.navigation?.next_word_id;
+  if (!wordId) return;
+  const targetUrl = props.wordNavUrl(wordId);
+  if (typeof props.navigateWord === "function") {
+    props.navigateWord(targetUrl);
+    return;
+  }
+  window.location.href = targetUrl;
+}
+
 function openAudioModal() {
   selectedAudioAccentKey.value = "us";
   isAudioModalOpen.value = true;
@@ -44,7 +57,11 @@ function openAudioModal() {
 
 <template>
   <aside class="panel media-panel">
-    <WordImageFrame :word="data.word" :image-url="imageForWord(data.word)" />
+    <WordImageFrame
+      :word="data.word"
+      :image-url="imageForWord(data.word)"
+      @swipe="navigateFromImage"
+    />
 
     <div v-if="data.can_edit" class="word-media-action-row">
       <button

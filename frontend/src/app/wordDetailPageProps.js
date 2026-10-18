@@ -4,6 +4,8 @@ export function buildWordDetailPageProps(ctx) {
       data: ctx.data,
       imageCandidates: ctx.imageCandidates,
       imageForWord: ctx.imageForWord,
+      wordNavUrl: ctx.wordNavUrl,
+      navigateWord: ctx.go,
       uploadWordImage: ctx.uploadWordImage,
       findImages: ctx.findImages,
       chooseNetworkImage: ctx.chooseNetworkImage,

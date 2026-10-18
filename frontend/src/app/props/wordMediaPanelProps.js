@@ -11,6 +11,14 @@ export const wordMediaPanelProps = {
     type: Function,
     required: true,
   },
+  wordNavUrl: {
+    type: Function,
+    required: true,
+  },
+  navigateWord: {
+    type: Function,
+    default: null,
+  },
   uploadWordImage: {
     type: Function,
     required: true,
