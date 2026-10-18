@@ -21531,3 +21531,319 @@ select {
   .cat-world-festival-progress { max-width: none; padding-left: 0; }
   .cat-world-festival h2 { font-size: 16px; }
 }
+
+/* Mobile shell rebuild: one compact header, an explicit navigation drawer,
+   and full-width touch-friendly content instead of a clipped desktop row. */
+.mobile-nav-menu {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
+  body {
+    background: linear-gradient(180deg, #f7faf7 0%, #eef3ef 100%);
+  }
+
+  .app-topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 10px;
+    min-height: 0;
+    padding: 9px 12px 10px;
+  }
+
+  .app-brand {
+    min-width: 0;
+  }
+
+  .app-brand .newabby-logo {
+    width: min(148px, 100%);
+    height: auto;
+  }
+
+  .topbar-nav,
+  .daily-quote {
+    display: none;
+  }
+
+  .topbar-account-menu {
+    margin: 0;
+  }
+
+  .topbar-account-menu summary {
+    min-height: 38px;
+    padding: 0 10px;
+    font-size: 13px;
+  }
+
+  .mobile-nav-menu {
+    position: relative;
+    grid-column: 1 / -1;
+    display: block;
+  }
+
+  .mobile-nav-menu summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 40px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    padding: 0 12px;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    font-size: 13px;
+    font-weight: 900;
+    list-style: none;
+  }
+
+  .mobile-nav-menu summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .mobile-nav-menu summary::after {
+    width: 7px;
+    height: 7px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    content: "";
+    transform: rotate(45deg) translateY(-2px);
+  }
+
+  .mobile-nav-menu summary strong {
+    margin-left: auto;
+    margin-right: 12px;
+    color: #bcebd8;
+    font-size: 12px;
+  }
+
+  .mobile-nav-menu[open] summary {
+    border-color: rgba(147, 235, 194, 0.66);
+    background: rgba(29, 127, 91, 0.36);
+  }
+
+  .mobile-nav-grid {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    left: 0;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px;
+    background: #fff;
+    box-shadow: 0 18px 42px rgba(16, 24, 40, 0.2);
+  }
+
+  .mobile-nav-grid a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-width: 0;
+    min-height: 44px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 0 10px;
+    color: var(--ink);
+    background: #fbfdfb;
+    font-size: 13px;
+    font-weight: 900;
+    text-decoration: none;
+  }
+
+  .mobile-nav-grid a.active {
+    border-color: rgba(29, 127, 91, 0.42);
+    color: #fff;
+    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  }
+
+  .mobile-nav-grid em {
+    min-width: 20px;
+    border-radius: 999px;
+    padding: 2px 6px;
+    color: var(--accent-dark);
+    background: #d9f7e9;
+    font-size: 11px;
+    font-style: normal;
+    text-align: center;
+  }
+
+  .mobile-nav-grid a.active em {
+    color: var(--accent-dark);
+    background: #fff;
+  }
+
+  .app-layout,
+  .app-layout-topnav,
+  .app-layout-admin {
+    width: 100%;
+    margin: 0;
+    padding: 12px 12px 42px;
+  }
+
+  .shell {
+    gap: 12px;
+  }
+
+  .panel {
+    border-radius: 12px;
+  }
+
+  .panel,
+  .app-page-heading,
+  .detail-panel,
+  .media-panel {
+    padding: 14px;
+  }
+
+  .app-page-heading h1,
+  .page-heading-title h1 {
+    font-size: clamp(25px, 8vw, 32px);
+    line-height: 1.12;
+    overflow-wrap: anywhere;
+  }
+
+  .section-kicker {
+    font-size: 11px;
+  }
+
+  button,
+  .secondary-button,
+  .primary-button,
+  .challenge-button,
+  input,
+  select,
+  textarea {
+    min-height: 42px;
+  }
+
+  .app-footer {
+    padding-top: 14px;
+    font-size: 11px;
+  }
+
+  .app-footer-meta,
+  .app-footer-version {
+    gap: 4px 8px;
+  }
+
+  .detail-layout {
+    gap: 12px;
+  }
+
+  .detail-heading-actions,
+  .detail-study-row,
+  .word-study-controls,
+  .detail-heading,
+  .audio-actions,
+  .audio-manager-button-group {
+    width: 100%;
+  }
+
+  .word-study-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .word-study-controls label,
+  .word-study-controls .auto-study-status {
+    grid-column: 1 / -1;
+  }
+
+  .word-study-controls label {
+    justify-content: space-between;
+  }
+
+  .word-study-controls input {
+    width: 72px;
+  }
+
+  .media-panel img,
+  .word-image-manager-preview {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .definition-list,
+  .challenge-stats,
+  .challenge-result-grid,
+  .image-picker-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .word-resource-filter-actions,
+  .spb-list-actions,
+  .detail-heading-actions,
+  .essay-actions,
+  .challenge-top-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .word-resource-filter-actions > *,
+  .spb-list-actions > *,
+  .detail-heading-actions > *,
+  .essay-actions > *,
+  .challenge-top-actions > * {
+    width: 100%;
+  }
+
+  .table-wrap,
+  .preview-table {
+    font-size: 12px;
+  }
+
+  .cat-world-page {
+    padding: 10px;
+    box-shadow: 4px 4px 0 #2c2f3a;
+  }
+
+  .cat-world-hero,
+  .cat-world-room-panel,
+  .cat-world-ledger,
+  .cat-world-market,
+  .cat-world-cats {
+    border-width: 3px;
+    padding: 12px;
+    box-shadow: 3px 3px 0 #2c2f3a;
+  }
+
+  .cat-world-copy h1 {
+    font-size: 25px;
+  }
+}
+
+@media (max-width: 420px) {
+  .mobile-nav-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-layout,
+  .app-layout-topnav,
+  .app-layout-admin {
+    padding-right: 9px;
+    padding-left: 9px;
+  }
+
+  .app-brand .newabby-logo {
+    width: 134px;
+  }
+
+  .word-study-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .word-study-controls label,
+  .word-study-controls .auto-study-status {
+    grid-column: auto;
+  }
+}

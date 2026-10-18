@@ -22,6 +22,7 @@ const props = defineProps({
 const accountName = computed(() => props.shell.currentUser?.username || "我的账号");
 const phoneLabel = computed(() => props.shell.currentUser?.phoneMasked || "");
 const navItems = computed(() => buildSidebarNavItems({ route: props.route, shell: props.shell }));
+const activeNavLabel = computed(() => navItems.value.find((item) => item.active)?.label || "导航");
 </script>
 
 <template>
@@ -39,6 +40,24 @@ const navItems = computed(() => buildSidebarNavItems({ route: props.route, shell
         <em v-if="Number(item.count || 0) > 0">{{ item.count }}</em>
       </a>
     </nav>
+    <details class="mobile-nav-menu">
+      <summary>
+        <span>打开导航</span>
+        <strong>{{ activeNavLabel }}</strong>
+      </summary>
+      <nav class="mobile-nav-grid" aria-label="移动端主导航">
+        <a
+          v-for="item in navItems"
+          :key="item.path"
+          :class="{ active: item.active }"
+          :href="item.path"
+          @click.prevent="go(item.path); $event.currentTarget.closest('details').open = false"
+        >
+          <span>{{ item.label }}</span>
+          <em v-if="Number(item.count || 0) > 0">{{ item.count }}</em>
+        </a>
+      </nav>
+    </details>
     <AppDailyQuote :quote="shell.dailyQuote" />
     <details class="topbar-account-menu">
       <summary>
