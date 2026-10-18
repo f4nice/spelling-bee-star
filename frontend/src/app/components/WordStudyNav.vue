@@ -32,6 +32,7 @@ const isAutoStudying = ref(false);
 const remainingSeconds = ref(0);
 const currentReadCount = ref(0);
 const isCountingDown = ref(false);
+const requiresMobileAudioUnlock = ref(false);
 let timerId = null;
 let countdownId = null;
 let audioReplayIds = [];
@@ -43,6 +44,7 @@ let cancelAudioWait = null;
 const previousWordUrl = computed(() => props.wordNavUrl(props.data.navigation.previous_word_id));
 const nextWordUrl = computed(() => props.wordNavUrl(props.data.navigation.next_word_id));
 const statusText = computed(() => {
+  if (requiresMobileAudioUnlock.value) return "点击自动学习开启声音";
   if (!isAutoStudying.value) return "未开始";
   if (!isCountingDown.value) return `朗读 ${Math.max(currentReadCount.value, 1)} / ${AUTO_STUDY_READ_COUNT}`;
   return `已读 ${AUTO_STUDY_READ_COUNT} 次，${remainingSeconds.value || intervalSeconds.value} 秒后下一个`;
@@ -146,6 +148,18 @@ function currentAudioTarget() {
     text: word,
     lang: candidate?.lang || "en-US",
   };
+}
+
+function isMobileBrowser() {
+  return window.matchMedia?.("(max-width: 900px)").matches;
+}
+
+function unlockAudioFromUserGesture() {
+  const target = currentAudioTarget();
+  const audio = document.getElementById(target.audioId);
+  if (!audio || !target.source) return;
+  if (audio.getAttribute("src") !== target.source) audio.setAttribute("src", target.source);
+  audio.play().catch(() => {});
 }
 
 async function playCurrentWord(runId = studyRunId) {
@@ -288,6 +302,7 @@ function playCurrentWordTwiceThenSchedule() {
 function startAutoStudy() {
   studyRunId += 1;
   cancelPendingAudioWait();
+  requiresMobileAudioUnlock.value = false;
   isAutoStudying.value = true;
   writeStoredState(true);
   playCurrentWordTwiceThenSchedule();
@@ -322,8 +337,13 @@ onMounted(() => {
   if (stored.intervalSeconds) intervalSeconds.value = stored.intervalSeconds;
   prefetchNextWord();
   if (stored.active) {
-    isAutoStudying.value = true;
-    playCurrentWordTwiceThenSchedule();
+    if (isMobileBrowser()) {
+      requiresMobileAudioUnlock.value = true;
+      writeStoredState(false);
+    } else {
+      isAutoStudying.value = true;
+      playCurrentWordTwiceThenSchedule();
+    }
   }
 });
 
@@ -348,7 +368,7 @@ onBeforeUnmount(() => {
         <input v-model.number="intervalSeconds" type="number" min="1" max="60">
         <span>秒</span>
       </label>
-      <button class="secondary-button" type="button" :disabled="isAutoStudying" @click="startAutoStudy">
+      <button class="secondary-button" type="button" :disabled="isAutoStudying" @pointerdown="unlockAudioFromUserGesture" @click="startAutoStudy">
         自动学习
       </button>
       <button class="secondary-button" type="button" :disabled="!isAutoStudying" @click="stopAutoStudy">
@@ -356,6 +376,6 @@ onBeforeUnmount(() => {
       </button>
       <span class="auto-study-status">{{ statusText }}</span>
     </div>
-    <audio id="auto-study-audio" hidden preload="auto"></audio>
+    <audio id="auto-study-audio" hidden playsinline preload="auto"></audio>
   </div>
 </template>
