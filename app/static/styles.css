@@ -21604,7 +21604,7 @@ select {
     grid-row: 1;
     display: block;
     min-width: 0;
-    width: min(108px, 100%);
+    width: clamp(76px, 24vw, 108px);
     justify-self: end;
   }
 
@@ -21660,10 +21660,11 @@ select {
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
-    left: 0;
+    left: auto;
     z-index: 30;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: min(340px, calc(100vw - 24px));
     gap: 8px;
     border: 1px solid var(--line);
     border-radius: 12px;
