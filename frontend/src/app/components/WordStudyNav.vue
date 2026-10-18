@@ -159,7 +159,10 @@ function unlockAudioFromUserGesture() {
   const audio = document.getElementById(target.audioId);
   if (!audio || !target.source) return;
   if (audio.getAttribute("src") !== target.source) audio.setAttribute("src", target.source);
-  audio.play().catch(() => {});
+  // Preload on pointerdown, but leave the actual play() call to the click
+  // handler. Some mobile browsers cancel a pointerdown-started playback when
+  // click calls load() again, which makes the first word appear silent.
+  audio.load();
 }
 
 async function playCurrentWord(runId = studyRunId) {
@@ -376,6 +379,6 @@ onBeforeUnmount(() => {
       </button>
       <span class="auto-study-status">{{ statusText }}</span>
     </div>
-    <audio id="auto-study-audio" hidden playsinline preload="auto"></audio>
+    <audio id="auto-study-audio" class="auto-study-audio" playsinline preload="auto"></audio>
   </div>
 </template>
