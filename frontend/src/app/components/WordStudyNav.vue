@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { fetchJson } from "../utils.js";
+import { preferredWordAudioAccent } from "../wordAudioSource.js";
 
 const STORAGE_KEY = "speakeasy.wordAutoStudy";
 const AUTO_STUDY_READ_COUNT = 2;
@@ -139,13 +140,10 @@ function scheduleNext() {
 function currentAudioTarget() {
   const audioSources = props.data.audio_sources || {};
   const word = props.data.word?.word || "";
-  if (audioSources.us) {
-    return { audioId: "audio-us", text: word, lang: "en-US" };
-  }
-  if (audioSources.gb) {
-    return { audioId: "audio-gb", text: word, lang: "en-GB" };
-  }
-  return { audioId: "audio-us", text: word, lang: "en-US" };
+  const accent = preferredWordAudioAccent(props.data);
+  return accent === "gb"
+    ? { audioId: "audio-gb", text: word, lang: "en-GB" }
+    : { audioId: "audio-us", text: word, lang: "en-US" };
 }
 
 async function playCurrentWord(runId = studyRunId) {

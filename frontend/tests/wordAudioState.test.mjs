@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { applyCommittedWordAudio } from "../src/app/wordAudioState.js";
-import { resolveWordAudioSource } from "../src/app/wordAudioSource.js";
+import { preferredWordAudioAccent, resolveWordAudioSource } from "../src/app/wordAudioSource.js";
 
 test("word detail keeps generated TTS sources playable when local audio is absent", () => {
   const data = {
@@ -12,6 +12,17 @@ test("word detail keeps generated TTS sources playable when local audio is absen
   assert.equal(resolveWordAudioSource(data, "us"), "/tts?word=rare&accent=us&v=2");
   assert.equal(resolveWordAudioSource(data, "gb"), "/media/audio/gb.mp3?v=2");
   assert.equal(resolveWordAudioSource({ word: { american_audio_url: "/media/audio/fallback.mp3" } }, "us"), "/media/audio/fallback.mp3");
+});
+
+test("auto study prefers an available local accent before generated TTS", () => {
+  assert.equal(preferredWordAudioAccent({
+    word: { american_audio_url: "", british_audio_url: "/media/audio/gb.mp3" },
+    audio_sources: { us: "/tts?word=rare&accent=us", gb: "/media/audio/gb.mp3" },
+  }), "gb");
+  assert.equal(preferredWordAudioAccent({
+    word: { american_audio_url: "", british_audio_url: "" },
+    audio_sources: { us: "/tts?word=rare&accent=us", gb: "/tts?word=rare&accent=gb" },
+  }), "us");
 });
 
 test("committed uploaded audio replaces the active accent and playback URL", () => {
