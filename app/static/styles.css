@@ -21557,6 +21557,9 @@ select {
   }
 
   .app-brand {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
     min-width: 0;
   }
 
@@ -21571,6 +21574,9 @@ select {
   }
 
   .topbar-account-menu {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
     margin: 0;
   }
 
@@ -21582,10 +21588,12 @@ select {
 
   .mobile-nav-menu {
     position: relative;
-    grid-column: auto;
+    grid-column: 2;
     grid-row: 1;
     display: block;
     min-width: 0;
+    width: min(108px, 100%);
+    justify-self: end;
   }
 
   .mobile-nav-menu summary {
