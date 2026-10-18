@@ -133,8 +133,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20261018-021"
-DEFAULT_PAGE_VERSION = "v20261018.21"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20261018-022"
+DEFAULT_PAGE_VERSION = "v20261018.22"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -8946,7 +8946,8 @@ def existing_local_audio_url(value: str | None) -> bool:
     text = str(value or "").strip()
     if not is_local_audio_url(text):
         return False
-    relative = unquote(text.split("?", 1)[0].split("#", 1)[0]).lstrip("/")
+    relative = unquote(text.split("?", 1)[0].split("#", 1)[0])
+    relative = relative.removeprefix("/media/").lstrip("/")
     candidate = (MEDIA_DIR / relative).resolve()
     media_root = MEDIA_DIR.resolve()
     return media_root in candidate.parents and candidate.is_file()
