@@ -21772,6 +21772,30 @@ select {
     height: auto;
   }
 
+  /* Mobile word details keep the destructive action out of reach while
+     allowing the desktop workflow to remain unchanged. Images are sized by
+     their intrinsic aspect ratio instead of the desktop preview heights. */
+  .page-heading-delete-button,
+  .word-delete-dialog {
+    display: none !important;
+  }
+
+  .word-image-frame {
+    min-height: 0;
+  }
+
+  .word-image-frame img,
+  .word-image-manager-preview,
+  .word-image-upload-preview,
+  .word-image-compare-section .word-image-manager-preview {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: none;
+    aspect-ratio: auto;
+    object-fit: contain;
+  }
+
   .definition-list,
   .challenge-stats,
   .challenge-result-grid,
