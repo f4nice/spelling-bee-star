@@ -49,11 +49,21 @@ export function useAudioPlayback() {
     audio.load();
     audio.currentTime = 0;
     try {
-      const ready = await waitForAudioReady(audio);
-      if (!ready && audio.readyState < HTMLMediaElement.HAVE_METADATA) throw new Error("audio-not-ready");
       await audio.play();
       return true;
     } catch {
+      // Start playback before waiting for canplay so a user click keeps its
+      // transient activation on mobile browsers. If the first attempt failed
+      // because the resource was still loading, wait once and retry normally.
+      const ready = await waitForAudioReady(audio);
+      if (ready || audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
+        try {
+          await audio.play();
+          return true;
+        } catch {
+          // Fall through to speech synthesis below.
+        }
+      }
       audio.controls = true;
       speakFallback(fallbackText, lang);
       return false;

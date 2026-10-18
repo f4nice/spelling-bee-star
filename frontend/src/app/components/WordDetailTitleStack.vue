@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, ref } from "vue";
 import { formatPhonetic, normalizePhonetic } from "../wordEditingActions.js";
+import { resolveWordAudioSource } from "../wordAudioSource.js";
 
 const props = defineProps({
   data: {
@@ -35,25 +36,19 @@ const wordAudioButtons = computed(() => [
     label: "美式",
     lang: "en-US",
     audioId: "audio-us",
-    source: localWordAudioSource("us"),
+    source: wordAudioSource("us"),
   },
   {
     key: "gb",
     label: "英式",
     lang: "en-GB",
     audioId: "audio-gb",
-    source: localWordAudioSource("gb"),
+    source: wordAudioSource("gb"),
   },
 ]);
 
-function isLocalAudioUrl(url) {
-  return String(url || "").startsWith("/media/audio/");
-}
-
-function localWordAudioSource(accent) {
-  const fieldValue = accent === "gb" ? props.data.word.british_audio_url : props.data.word.american_audio_url;
-  if (!isLocalAudioUrl(fieldValue)) return "";
-  return props.data.audio_sources?.[accent] || fieldValue;
+function wordAudioSource(accent) {
+  return resolveWordAudioSource(props.data, accent);
 }
 
 function playWordAudio(audio) {
