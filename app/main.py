@@ -17,7 +17,7 @@ import sys
 from threading import Lock, Thread
 from typing import Any, Callable
 import unicodedata
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import quote_plus, unquote, urlparse
 from uuid import uuid4
 import zipfile
 
@@ -133,8 +133,8 @@ ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
-DEFAULT_RELEASE_VERSION = "BIZ-REL-20261018-020"
-DEFAULT_PAGE_VERSION = "v20261018.20"
+DEFAULT_RELEASE_VERSION = "BIZ-REL-20261018-021"
+DEFAULT_PAGE_VERSION = "v20261018.21"
 CHALLENGE_LOGGER = logging.getLogger("speakeasy.challenge")
 LEGACY_MACHINE_CODE_FIELD = "machine" + "Code"
 PUBLIC_ASSET_DIR = MEDIA_DIR / "generated-assets"
@@ -8936,10 +8936,20 @@ def word_detail_payload(db: Session, word: Word, edit: int, list_id: int | None,
 
 def word_audio_source(word: Word, accent: str, audio_version: str | None = None) -> str:
     audio_url = word.british_audio_url if accent == "gb" else word.american_audio_url
-    source = audio_url if is_local_audio_url(audio_url) else f"/tts?word={quote_plus(word.word)}&accent={accent}&v=2"
+    source = audio_url if existing_local_audio_url(audio_url) else f"/tts?word={quote_plus(word.word)}&accent={accent}&v=2"
     if audio_version:
         separator = "&" if "?" in source else "?"
         return f"{source}{separator}av={audio_version}"
+
+
+def existing_local_audio_url(value: str | None) -> bool:
+    text = str(value or "").strip()
+    if not is_local_audio_url(text):
+        return False
+    relative = unquote(text.split("?", 1)[0].split("#", 1)[0]).lstrip("/")
+    candidate = (MEDIA_DIR / relative).resolve()
+    media_root = MEDIA_DIR.resolve()
+    return media_root in candidate.parents and candidate.is_file()
     return source
 
 
