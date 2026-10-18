@@ -36,6 +36,8 @@ let countdownId = null;
 let audioReplayIds = [];
 let awaitingWordId = null;
 let isPausedByUser = false;
+let studyRunId = 0;
+let cancelAudioWait = null;
 
 const previousWordUrl = computed(() => props.wordNavUrl(props.data.navigation.previous_word_id));
 const nextWordUrl = computed(() => props.wordNavUrl(props.data.navigation.next_word_id));
@@ -146,19 +148,37 @@ function currentAudioTarget() {
   return { audioId: "audio-us", text: word, lang: "en-US" };
 }
 
-async function playCurrentWord() {
+async function playCurrentWord(runId = studyRunId) {
   const target = currentAudioTarget();
   isPausedByUser = false;
   await nextTick();
   await props.playAudio(target.audioId, target.text, target.lang);
+  if (runId !== studyRunId || !isAutoStudying.value) return null;
   return target;
 }
 
-function waitForAudioToFinish(audioId) {
+function cancelPendingAudioWait() {
+  const cancel = cancelAudioWait;
+  cancelAudioWait = null;
+  if (cancel) cancel();
+}
+
+function waitForAudioToFinish(audioId, runId = studyRunId) {
+  if (runId !== studyRunId || !isAutoStudying.value) return Promise.resolve(false);
   const audio = document.getElementById(audioId);
   if (!audio) {
     return new Promise((resolve) => {
-      window.setTimeout(resolve, AUTO_STUDY_FALLBACK_READ_MS);
+      let fallbackId = window.setTimeout(() => {
+        if (cancelAudioWait === cancel) cancelAudioWait = null;
+        resolve(true);
+      }, AUTO_STUDY_FALLBACK_READ_MS);
+      const cancel = () => {
+        window.clearTimeout(fallbackId);
+        fallbackId = null;
+        if (cancelAudioWait === cancel) cancelAudioWait = null;
+        resolve(false);
+      };
+      cancelAudioWait = cancel;
     });
   }
   const durationMs = Number.isFinite(audio.duration) && audio.duration > 0
@@ -175,11 +195,11 @@ function waitForAudioToFinish(audioId) {
     };
     const scheduleFallback = () => {
       clearFallback();
-      if (isPausedByUser) return;
+      if (isPausedByUser || runId !== studyRunId || !isAutoStudying.value) return;
       startedAt = performance.now();
       fallbackId = window.setTimeout(finish, remainingMs);
     };
-    const finish = () => {
+    const finish = (completed = true) => {
       if (finished) return;
       finished = true;
       clearFallback();
@@ -187,8 +207,10 @@ function waitForAudioToFinish(audioId) {
       audio.removeEventListener("error", finish);
       audio.removeEventListener("pause", handlePause);
       audio.removeEventListener("play", handlePlay);
-      resolve();
+      if (cancelAudioWait === cancel) cancelAudioWait = null;
+      resolve(completed);
     };
+    const cancel = () => finish(false);
     const handlePause = () => {
       if (!isPausedByUser) return;
       remainingMs = Math.max(remainingMs - (performance.now() - startedAt), 0);
@@ -201,6 +223,7 @@ function waitForAudioToFinish(audioId) {
     audio.addEventListener("error", finish, { once: true });
     audio.addEventListener("pause", handlePause);
     audio.addEventListener("play", handlePlay);
+    cancelAudioWait = cancel;
     scheduleFallback();
   });
 }
@@ -211,41 +234,50 @@ function toggleAudioFromImage() {
   if (!audio) return;
   if (audio.paused) {
     isPausedByUser = false;
-    audio.play().catch(() => {});
+    audio.play().catch(() => {
+      isPausedByUser = true;
+    });
     return;
   }
   isPausedByUser = true;
   audio.pause();
 }
 
-async function playAutoStudyRead(readCount = 1) {
-  if (!isAutoStudying.value) return;
+async function playAutoStudyRead(readCount = 1, runId = studyRunId) {
+  if (!isAutoStudying.value || runId !== studyRunId) return;
   currentReadCount.value = readCount;
-  const target = await playCurrentWord();
-  await waitForAudioToFinish(target.audioId);
-  if (!isAutoStudying.value) return;
+  const target = await playCurrentWord(runId);
+  if (!target) return;
+  const completed = await waitForAudioToFinish(target.audioId, runId);
+  if (!completed || !isAutoStudying.value || runId !== studyRunId) return;
   if (readCount >= AUTO_STUDY_READ_COUNT) {
     scheduleNext();
     return;
   }
-  audioReplayIds.push(window.setTimeout(() => playAutoStudyRead(readCount + 1), AUTO_STUDY_REPLAY_GAP_MS));
+  audioReplayIds.push(window.setTimeout(() => playAutoStudyRead(readCount + 1, runId), AUTO_STUDY_REPLAY_GAP_MS));
 }
 
 function playCurrentWordTwiceThenSchedule() {
   clearCountdownTimers();
   clearAudioReplayTimers();
+  cancelPendingAudioWait();
+  isPausedByUser = false;
   remainingSeconds.value = 0;
   currentReadCount.value = 0;
-  playAutoStudyRead(1);
+  playAutoStudyRead(1, studyRunId);
 }
 
 function startAutoStudy() {
+  studyRunId += 1;
+  cancelPendingAudioWait();
   isAutoStudying.value = true;
   writeStoredState(true);
   playCurrentWordTwiceThenSchedule();
 }
 
 function stopAutoStudy() {
+  studyRunId += 1;
+  cancelPendingAudioWait();
   isAutoStudying.value = false;
   awaitingWordId = null;
   remainingSeconds.value = 0;
@@ -274,8 +306,10 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  studyRunId += 1;
   isAutoStudying.value = false;
   window.removeEventListener("speakeasy:audio-toggle", toggleAudioFromImage);
+  cancelPendingAudioWait();
   clearTimers();
 });
 </script>

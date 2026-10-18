@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from "vue";
+import { onBeforeUnmount, ref } from "vue";
 
 defineProps({
   word: {
@@ -15,6 +15,7 @@ defineProps({
 const emit = defineEmits(["swipe"]);
 const touchStart = ref(null);
 const suppressClick = ref(false);
+let suppressClickTimer = null;
 
 function handleTouchStart(event) {
   const touch = event.touches?.[0];
@@ -31,7 +32,11 @@ function handleTouchEnd(event) {
   const dy = touch.clientY - start.y;
   if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
   suppressClick.value = true;
-  window.setTimeout(() => { suppressClick.value = false; }, 350);
+  if (suppressClickTimer) window.clearTimeout(suppressClickTimer);
+  suppressClickTimer = window.setTimeout(() => {
+    suppressClick.value = false;
+    suppressClickTimer = null;
+  }, 350);
   emit("swipe", dx < 0 ? "next" : "previous");
 }
 
@@ -39,6 +44,10 @@ function handleClick() {
   if (suppressClick.value) return;
   window.dispatchEvent(new Event("speakeasy:audio-toggle"));
 }
+
+onBeforeUnmount(() => {
+  if (suppressClickTimer) window.clearTimeout(suppressClickTimer);
+});
 </script>
 
 <template>
