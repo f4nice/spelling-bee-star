@@ -146,10 +146,13 @@ function currentAudioTarget() {
     : { audioId: "audio-us", text: word, lang: "en-US" };
 }
 
-async function playCurrentWord(runId = studyRunId) {
+async function playCurrentWord(runId = studyRunId, waitForRender = false) {
   const target = currentAudioTarget();
   isPausedByUser = false;
-  await nextTick();
+  // The first auto-study click must call play() while Chrome still has the
+  // user's transient activation. Only wait for Vue to render when a route
+  // transition has replaced the audio element.
+  if (waitForRender || !document.getElementById(target.audioId)) await nextTick();
   await props.playAudio(target.audioId, target.text, target.lang);
   if (runId !== studyRunId || !isAutoStudying.value) return null;
   return target;
@@ -241,10 +244,10 @@ function toggleAudioFromImage() {
   audio.pause();
 }
 
-async function playAutoStudyRead(readCount = 1, runId = studyRunId) {
+async function playAutoStudyRead(readCount = 1, runId = studyRunId, waitForRender = false) {
   if (!isAutoStudying.value || runId !== studyRunId) return;
   currentReadCount.value = readCount;
-  const target = await playCurrentWord(runId);
+  const target = await playCurrentWord(runId, waitForRender);
   if (!target) return;
   const completed = await waitForAudioToFinish(target.audioId, runId);
   if (!completed || !isAutoStudying.value || runId !== studyRunId) return;
@@ -255,14 +258,14 @@ async function playAutoStudyRead(readCount = 1, runId = studyRunId) {
   audioReplayIds.push(window.setTimeout(() => playAutoStudyRead(readCount + 1, runId), AUTO_STUDY_REPLAY_GAP_MS));
 }
 
-function playCurrentWordTwiceThenSchedule() {
+function playCurrentWordTwiceThenSchedule(waitForRender = false) {
   clearCountdownTimers();
   clearAudioReplayTimers();
   cancelPendingAudioWait();
   isPausedByUser = false;
   remainingSeconds.value = 0;
   currentReadCount.value = 0;
-  playAutoStudyRead(1, studyRunId);
+  playAutoStudyRead(1, studyRunId, waitForRender);
 }
 
 function startAutoStudy() {
@@ -289,7 +292,7 @@ watch(() => props.data.word?.id, (wordId) => {
   if (!isAutoStudying.value || !awaitingWordId || Number(wordId) !== awaitingWordId) return;
   awaitingWordId = null;
   // Route data updates before the new audio elements have rendered.
-  nextTick(() => playCurrentWordTwiceThenSchedule());
+  nextTick(() => playCurrentWordTwiceThenSchedule(true));
 });
 
 onMounted(() => {
