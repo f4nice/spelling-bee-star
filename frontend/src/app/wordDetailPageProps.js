@@ -22,6 +22,7 @@ export function buildWordDetailPageProps(ctx) {
       audioOptions: ctx.audioOptions,
       recorderState: ctx.recorderState,
       wordNavUrl: ctx.wordNavUrl,
+      navigateWord: ctx.go,
       saveWordField: ctx.saveWordField,
       refreshWord: ctx.refreshWord,
       playAudio: ctx.playAudio,

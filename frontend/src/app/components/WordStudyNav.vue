@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { fetchJson } from "../utils.js";
 
 const STORAGE_KEY = "speakeasy.wordAutoStudy";
@@ -16,6 +16,10 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  navigateWord: {
+    type: Function,
+    default: null,
+  },
   playAudio: {
     type: Function,
     required: true,
@@ -30,6 +34,7 @@ const isCountingDown = ref(false);
 let timerId = null;
 let countdownId = null;
 let audioReplayIds = [];
+let awaitingWordId = null;
 
 const previousWordUrl = computed(() => props.wordNavUrl(props.data.navigation.previous_word_id));
 const nextWordUrl = computed(() => props.wordNavUrl(props.data.navigation.next_word_id));
@@ -80,6 +85,19 @@ function clearAudioReplayTimers() {
 }
 
 function goNext() {
+  const nextWordId = props.data.navigation.next_word_id;
+  if (typeof props.navigateWord === "function") {
+    // Keep the SPA document alive between words. A full page reload loses the
+    // user activation that allowed the first audio playback, so browsers
+    // commonly block every later word's audio as autoplay.
+    if (Number(nextWordId) === Number(props.data.word?.id)) {
+      playCurrentWordTwiceThenSchedule();
+      return;
+    }
+    awaitingWordId = Number(nextWordId);
+    props.navigateWord(nextWordUrl.value);
+    return;
+  }
   window.location.href = nextWordUrl.value;
 }
 
@@ -189,12 +207,20 @@ function startAutoStudy() {
 
 function stopAutoStudy() {
   isAutoStudying.value = false;
+  awaitingWordId = null;
   remainingSeconds.value = 0;
   currentReadCount.value = 0;
   isCountingDown.value = false;
   writeStoredState(false);
   clearTimers();
 }
+
+watch(() => props.data.word?.id, (wordId) => {
+  if (!isAutoStudying.value || !awaitingWordId || Number(wordId) !== awaitingWordId) return;
+  awaitingWordId = null;
+  // Route data updates before the new audio elements have rendered.
+  nextTick(() => playCurrentWordTwiceThenSchedule());
+});
 
 onMounted(() => {
   const stored = readStoredState();

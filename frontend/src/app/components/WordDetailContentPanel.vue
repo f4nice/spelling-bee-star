@@ -9,7 +9,12 @@ defineProps(wordDetailContentPanelProps);
 
 <template>
   <article class="panel detail-panel">
-    <WordStudyNav :data="data" :word-nav-url="wordNavUrl" :play-audio="playAudio" />
+    <WordStudyNav
+      :data="data"
+      :word-nav-url="wordNavUrl"
+      :navigate-word="navigateWord"
+      :play-audio="playAudio"
+    />
     <WordDetailHeading
       :data="data"
       :word-edit="wordEdit"

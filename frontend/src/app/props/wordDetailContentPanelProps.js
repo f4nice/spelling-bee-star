@@ -10,6 +10,10 @@ export const wordDetailContentPanelProps = {
     type: Function,
     required: true,
   },
+  navigateWord: {
+    type: Function,
+    default: null,
+  },
   saveWordField: {
     type: Function,
     required: true,
