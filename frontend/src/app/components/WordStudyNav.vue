@@ -145,9 +145,10 @@ function currentAudioTarget() {
   return { audioId: "audio-us", text: word, lang: "en-US" };
 }
 
-function playCurrentWord() {
+async function playCurrentWord() {
   const target = currentAudioTarget();
-  props.playAudio(target.audioId, target.text, target.lang);
+  await nextTick();
+  await props.playAudio(target.audioId, target.text, target.lang);
   return target;
 }
 
@@ -181,7 +182,7 @@ function waitForAudioToFinish(audioId) {
 async function playAutoStudyRead(readCount = 1) {
   if (!isAutoStudying.value) return;
   currentReadCount.value = readCount;
-  const target = playCurrentWord();
+  const target = await playCurrentWord();
   await waitForAudioToFinish(target.audioId);
   if (!isAutoStudying.value) return;
   if (readCount >= AUTO_STUDY_READ_COUNT) {

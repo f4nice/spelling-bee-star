@@ -16,19 +16,48 @@ export function useAudioPlayback() {
     window.speechSynthesis.speak(utterance);
   }
 
-  function playAudio(id, fallbackText = "", lang = "en-US") {
+  function waitForAudioReady(audio) {
+    if (audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      let settled = false;
+      let timeoutId = null;
+      const finish = (ready) => {
+        if (settled) return;
+        settled = true;
+        if (timeoutId) window.clearTimeout(timeoutId);
+        audio.removeEventListener("canplay", onReady);
+        audio.removeEventListener("loadeddata", onReady);
+        audio.removeEventListener("error", onError);
+        resolve(ready);
+      };
+      const onReady = () => finish(true);
+      const onError = () => finish(false);
+      audio.addEventListener("canplay", onReady, { once: true });
+      audio.addEventListener("loadeddata", onReady, { once: true });
+      audio.addEventListener("error", onError, { once: true });
+      timeoutId = window.setTimeout(() => finish(audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA), 6000);
+    });
+  }
+
+  async function playAudio(id, fallbackText = "", lang = "en-US") {
     const audio = document.getElementById(id);
     if (!audio) {
       speakFallback(fallbackText, lang);
-      return;
+      return false;
     }
     stopPageAudio(audio);
-    if (!audio.readyState) audio.load();
+    audio.load();
     audio.currentTime = 0;
-    audio.play().catch(() => {
+    try {
+      const ready = await waitForAudioReady(audio);
+      if (!ready && audio.readyState < HTMLMediaElement.HAVE_METADATA) throw new Error("audio-not-ready");
+      await audio.play();
+      return true;
+    } catch {
       audio.controls = true;
       speakFallback(fallbackText, lang);
-    });
+      return false;
+    }
   }
 
   return {
