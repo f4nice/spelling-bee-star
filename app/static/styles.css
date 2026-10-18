@@ -21736,6 +21736,7 @@ select {
 
   .app-page-heading .page-heading-title {
     width: 100%;
+    padding-right: 120px;
   }
 
   .page-heading-title h1 {
@@ -21746,7 +21747,10 @@ select {
   }
 
   .app-page-heading .page-heading-actions {
-    width: 100%;
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: auto;
     margin-left: 0;
     justify-content: flex-end;
   }
