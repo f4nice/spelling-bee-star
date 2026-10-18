@@ -48,11 +48,14 @@ export function useAudioPlayback() {
     }
     stopPageAudio(audio);
     audio.controls = false;
-    audio.load();
+    // WordStudyNav preloads the persistent node on pointerdown. Reloading an
+    // already-ready source here discards that work and is especially flaky on
+    // mobile networks, where the user gesture may be over before the retry.
+    if (audio.readyState === HTMLMediaElement.HAVE_NOTHING || audio.error) audio.load();
     audio.currentTime = 0;
     try {
       await audio.play();
-      if (audio.error || audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) throw new Error("audio-not-playable");
+      if (audio.error) throw new Error("audio-not-playable");
       return true;
     } catch {
       // Start playback before waiting for canplay so a user click keeps its
@@ -62,7 +65,7 @@ export function useAudioPlayback() {
       if (ready || audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
         try {
           await audio.play();
-          if (audio.error || audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) throw new Error("audio-not-playable");
+          if (audio.error) throw new Error("audio-not-playable");
           return true;
         } catch {
           // Fall through to speech synthesis below.
