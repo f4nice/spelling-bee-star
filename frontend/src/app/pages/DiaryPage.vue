@@ -186,7 +186,7 @@ function entryStatus(entry) {
             <button v-if="!isToday" type="button" class="secondary-button diary-icon-button" @click="returnToToday">
               <RotateCcw :size="17" aria-hidden="true" /> 回到今天
             </button>
-            <button v-else type="button" class="secondary-button diary-icon-button" :disabled="Boolean(busyAction)" @click="saveDraft">
+            <button v-else type="button" class="secondary-button diary-icon-button diary-save-button" :disabled="Boolean(busyAction)" @click="saveDraft">
               <Save :size="17" aria-hidden="true" /> {{ busyAction === "save" ? "保存中..." : "保存草稿" }}
             </button>
           </div>

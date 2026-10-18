@@ -62,7 +62,7 @@ function playWordAudio(audio) {
 }
 
 async function startAlternateEdit() {
-  if (!props.data.can_edit) return;
+  if (!props.data.can_edit || window.matchMedia?.("(max-width: 900px)").matches) return;
   props.wordEdit.alternate_spellings = props.data.word.alternate_spellings || props.wordEdit.alternate_spellings || "";
   isEditingAlternate.value = true;
   await nextTick();
@@ -82,7 +82,7 @@ function cancelAlternateEdit() {
 }
 
 async function startPhoneticEdit() {
-  if (!props.data.can_edit) return;
+  if (!props.data.can_edit || window.matchMedia?.("(max-width: 900px)").matches) return;
   props.wordEdit.phonetic = normalizePhonetic(props.data.word.phonetic || props.wordEdit.phonetic || "");
   isEditingPhonetic.value = true;
   await nextTick();

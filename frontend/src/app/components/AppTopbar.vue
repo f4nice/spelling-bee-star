@@ -67,6 +67,7 @@ const activeNavLabel = computed(() => navItems.value.find((item) => item.active)
         <span v-if="phoneLabel">{{ phoneLabel }}</span>
         <button
           v-if="shell.currentUser?.canAdmin"
+          class="topbar-admin-link"
           type="button"
           @click="go('/admin')"
         >

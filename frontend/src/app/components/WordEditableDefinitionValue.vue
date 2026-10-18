@@ -60,7 +60,7 @@ const audioButtonTitle = computed(() => {
 });
 
 async function startEditing() {
-  if (!props.canEdit) return;
+  if (!props.canEdit || window.matchMedia?.("(max-width: 900px)").matches) return;
   isEditing.value = true;
   await nextTick();
   input.value?.focus();

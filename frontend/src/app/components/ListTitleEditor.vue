@@ -39,6 +39,7 @@ const isMovingGroup = ref(false);
 const groupMoveNotice = ref("");
 
 async function startEditing() {
+  if (window.matchMedia?.("(max-width: 900px)").matches) return;
   originalName.value = props.wordList.name || "";
   isEditing.value = true;
   await nextTick();

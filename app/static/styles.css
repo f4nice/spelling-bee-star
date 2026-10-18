@@ -21749,6 +21749,60 @@ select {
     display: none !important;
   }
 
+  /* Mobile is a read / study surface. Keep all content visible while
+     reserving edits, imports, uploads, deletes and generation for desktop. */
+  .detail-heading-actions,
+  .topbar-admin-link,
+  .word-title-stack .inline-edit-input,
+  .word-title-stack .phonetic.is-placeholder,
+  .definition-inline-edit textarea,
+  .lists-page-heading-actions,
+  .list-actions,
+  .list-card-manage-button,
+  .list-title-edit-button,
+  .list-title-save-button,
+  .list-title-cancel-button,
+  .list-title-edit .word-list-meta > button,
+  .word-list-group-picker,
+  .delete-list-form,
+  .word-list-group-delete-form,
+  .list-image-sync-panel,
+  .list-completion-toolbar,
+  .list-ai-image-toolbar,
+  .spb-heading-actions > button,
+  .spb-group-actions > button,
+  .newspaper-hero-actions .primary-action-button,
+  .booklearner-hero-actions .quote-upload-link,
+  .quote-upload-link,
+  .book-cover-manager-trigger,
+  .book-cover-manager-pill,
+  .book-detail-create-button,
+  .essay-editor-actions,
+  .essay-primary-actions,
+  .essay-actions,
+  .essay-cover-button,
+  .essay-bottom-actions,
+  .essays-page-head > button,
+  .essay-daily-prompt footer button,
+  .diary-complete-button,
+  .diary-editor-actions .diary-save-button,
+  .upload-panel + .upload-form,
+  .upload-panel + .upload-excel-form,
+  .upload-form,
+  .home-upload-form,
+  .batch-image-form,
+  .lists-tools-panel,
+  .book-upload-modal,
+  .book-upload-modal-backdrop {
+    display: none !important;
+  }
+
+  .word-title-main h1,
+  .word-title-stack .phonetic,
+  .definition-display-text {
+    pointer-events: none;
+  }
+
   .word-study-controls > a.secondary-button {
     display: none !important;
   }
