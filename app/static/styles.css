@@ -21538,6 +21538,10 @@ select {
   display: none;
 }
 
+.mobile-word-definition {
+  display: none;
+}
+
 @media (max-width: 900px) {
   html,
   body {
@@ -21728,6 +21732,17 @@ select {
     overflow-wrap: anywhere;
   }
 
+  .mobile-word-definition {
+    display: -webkit-box;
+    margin: 0;
+    color: #536b60;
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+  }
+
   .app-page-heading {
     flex-direction: column;
     align-items: stretch;
@@ -21758,6 +21773,11 @@ select {
   .word-membership-tags,
   .word-membership-empty,
   .word-media-action-row {
+    display: none !important;
+  }
+
+  .definition-term-english_definition,
+  .definition-value-english_definition {
     display: none !important;
   }
 

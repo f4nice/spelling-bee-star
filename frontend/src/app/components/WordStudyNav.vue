@@ -35,6 +35,7 @@ let timerId = null;
 let countdownId = null;
 let audioReplayIds = [];
 let awaitingWordId = null;
+let isPausedByUser = false;
 
 const previousWordUrl = computed(() => props.wordNavUrl(props.data.navigation.previous_word_id));
 const nextWordUrl = computed(() => props.wordNavUrl(props.data.navigation.next_word_id));
@@ -147,6 +148,7 @@ function currentAudioTarget() {
 
 async function playCurrentWord() {
   const target = currentAudioTarget();
+  isPausedByUser = false;
   await nextTick();
   await props.playAudio(target.audioId, target.text, target.lang);
   return target;
@@ -165,18 +167,55 @@ function waitForAudioToFinish(audioId) {
   return new Promise((resolve) => {
     let finished = false;
     let fallbackId = null;
+    let startedAt = performance.now();
+    let remainingMs = durationMs;
+    const clearFallback = () => {
+      if (fallbackId) window.clearTimeout(fallbackId);
+      fallbackId = null;
+    };
+    const scheduleFallback = () => {
+      clearFallback();
+      if (isPausedByUser) return;
+      startedAt = performance.now();
+      fallbackId = window.setTimeout(finish, remainingMs);
+    };
     const finish = () => {
       if (finished) return;
       finished = true;
-      if (fallbackId) window.clearTimeout(fallbackId);
+      clearFallback();
       audio.removeEventListener("ended", finish);
       audio.removeEventListener("error", finish);
+      audio.removeEventListener("pause", handlePause);
+      audio.removeEventListener("play", handlePlay);
       resolve();
+    };
+    const handlePause = () => {
+      if (!isPausedByUser) return;
+      remainingMs = Math.max(remainingMs - (performance.now() - startedAt), 0);
+      clearFallback();
+    };
+    const handlePlay = () => {
+      if (!isPausedByUser) scheduleFallback();
     };
     audio.addEventListener("ended", finish, { once: true });
     audio.addEventListener("error", finish, { once: true });
-    fallbackId = window.setTimeout(finish, durationMs);
+    audio.addEventListener("pause", handlePause);
+    audio.addEventListener("play", handlePlay);
+    scheduleFallback();
   });
+}
+
+function toggleAudioFromImage() {
+  if (!isAutoStudying.value) return;
+  const audio = document.getElementById(currentAudioTarget().audioId);
+  if (!audio) return;
+  if (audio.paused) {
+    isPausedByUser = false;
+    audio.play().catch(() => {});
+    return;
+  }
+  isPausedByUser = true;
+  audio.pause();
 }
 
 async function playAutoStudyRead(readCount = 1) {
@@ -224,6 +263,7 @@ watch(() => props.data.word?.id, (wordId) => {
 });
 
 onMounted(() => {
+  window.addEventListener("speakeasy:audio-toggle", toggleAudioFromImage);
   const stored = readStoredState();
   if (stored.intervalSeconds) intervalSeconds.value = stored.intervalSeconds;
   prefetchNextWord();
@@ -235,6 +275,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   isAutoStudying.value = false;
+  window.removeEventListener("speakeasy:audio-toggle", toggleAudioFromImage);
   clearTimers();
 });
 </script>

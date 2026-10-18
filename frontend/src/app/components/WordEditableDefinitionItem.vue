@@ -38,8 +38,8 @@ defineProps({
 </script>
 
 <template>
-  <dt>{{ label }}</dt>
-  <dd>
+  <dt :class="`definition-term-${field}`">{{ label }}</dt>
+  <dd :class="`definition-value-${field}`">
     <WordEditableDefinitionValue
       :field="field"
       :word="word"

@@ -153,6 +153,12 @@ async function removeWordFromList() {
     <div class="page-heading-title">
       <p class="section-kicker">SpeakEasy</p>
       <h1>{{ routeTitle }}</h1>
+      <p
+        v-if="route?.name === 'wordDetail' && data?.word?.english_definition"
+        class="mobile-word-definition"
+      >
+        {{ data.word.english_definition }}
+      </p>
       <nav v-if="membershipTags.length" class="word-membership-tags" aria-label="所属词表">
         <span class="word-membership-label">所属</span>
         <a v-for="tag in membershipTags" :key="tag.id" :href="`/lists/${tag.id}`"
