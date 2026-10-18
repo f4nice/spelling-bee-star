@@ -34,6 +34,7 @@ const minimumCharacters = computed(() => Number(rules.value.minimumCharacters ||
 const rewardMinutes = computed(() => Number(rules.value.rewardMinutes || 10));
 const titleMaxChars = computed(() => Number(rules.value.titleMaxChars || 120));
 const bodyMaxChars = computed(() => Number(rules.value.bodyMaxChars || 12000));
+const isMobileDisplay = computed(() => typeof window !== "undefined" && window.matchMedia?.("(max-width: 900px)").matches);
 const isToday = computed(() => selectedDate.value === today.value);
 const characterCount = computed(() => countDiaryCharacters(draft.body));
 const charactersRemaining = computed(() => diaryCharactersRemaining(draft.body, minimumCharacters.value));
@@ -198,7 +199,7 @@ function entryStatus(entry) {
             v-model="draft.title"
             type="text"
             :maxlength="titleMaxChars"
-            :readonly="!isToday"
+            :readonly="!isToday || isMobileDisplay"
             placeholder="记录今天的一件小事"
           >
         </label>
@@ -207,7 +208,7 @@ function entryStatus(entry) {
           <textarea
             v-model="draft.body"
             :maxlength="bodyMaxChars"
-            :readonly="!isToday"
+            :readonly="!isToday || isMobileDisplay"
             placeholder="今天，我……"
           />
         </label>

@@ -28,6 +28,7 @@ let isApplyingDraft = false;
 
 const titleMaxChars = computed(() => Number(props.data?.limits?.titleMaxChars || 120));
 const bodyMaxChars = computed(() => Number(props.data?.limits?.bodyMaxChars || 30000));
+const isMobileDisplay = computed(() => typeof window !== "undefined" && window.matchMedia?.("(max-width: 900px)").matches);
 const currentWordCount = computed(() => countEssayWords(draft.body));
 const submissionError = computed(() => essaySubmissionError(draft.body, draft.essayType));
 const currentEnergyLimit = computed(() => draft.writingScore > 0 ? draft.energyLimit : essayEnergyLimit(draft.body, draft.essayType));
@@ -499,7 +500,7 @@ async function deleteEssay() {
         <div class="essay-editor-head">
           <label class="essay-title-field">
             <span>标题</span>
-            <input v-model="draft.title" type="text" :maxlength="titleMaxChars" placeholder="A Day I Will Remember">
+            <input v-model="draft.title" type="text" :maxlength="titleMaxChars" :readonly="isMobileDisplay" placeholder="A Day I Will Remember">
           </label>
           <div class="essay-count-pill">
             <span>正文</span>
@@ -519,6 +520,7 @@ async function deleteEssay() {
           v-model="draft.body"
           class="essay-body-input"
           :maxlength="bodyMaxChars"
+          :readonly="isMobileDisplay"
           placeholder="在这里输入作文正文..."
         ></textarea>
 
