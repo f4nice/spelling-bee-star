@@ -52,6 +52,7 @@ const generatingAiModels = ref([]);
 const selectedReplacement = ref(null);
 const aiCandidates = ref([]);
 const aiNotice = ref("");
+const uploadNotice = ref("");
 const aiTheme = ref("");
 const aiStyle = ref("写实摄影");
 const aiMeaning = ref("");
@@ -152,6 +153,7 @@ async function runFindImages() {
 async function saveReplacement() {
   if (!selectedReplacement.value) return;
   isSavingReplacement.value = true;
+  uploadNotice.value = "";
   try {
     if (selectedReplacement.value.type === "upload") {
       if (!props.selectedImageFile) return;
@@ -161,6 +163,8 @@ async function saveReplacement() {
     if (selectedReplacement.value.imageUrl) {
       await props.chooseNetworkImage(selectedReplacement.value.imageUrl);
     }
+  } catch (error) {
+    uploadNotice.value = error.message || "图片保存失败，请稍后重试。";
   } finally {
     isSavingReplacement.value = false;
   }
@@ -274,6 +278,7 @@ async function generateAllAiCandidates() {
             {{ isSavingReplacement ? "保存中..." : "保存" }}
           </button>
         </div>
+        <p v-if="uploadNotice" class="notice word-image-upload-notice">{{ uploadNotice }}</p>
 
         <section class="word-image-manager-section">
           <div class="word-image-manager-section-head">
@@ -290,6 +295,7 @@ async function generateAllAiCandidates() {
             <span>选择图片</span>
             <strong>{{ selectedFileName }}</strong>
           </label>
+          <p class="word-image-upload-hint">支持 JPG、PNG、WebP、GIF、BMP；较大的图片会先按比例压缩。</p>
         </section>
 
         <section class="word-image-manager-section">

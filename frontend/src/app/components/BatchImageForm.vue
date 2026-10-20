@@ -11,8 +11,20 @@ const selectedImageLabel = computed(() => {
 });
 
 function setImageFiles(event) {
-  props.batchImageState.image_files = Array.from(event.target.files || []);
+  const selected = Array.from(event.target.files || []);
+  const existing = props.batchImageState.image_files || [];
+  const seen = new Set(existing.map((file) => `${file.name}:${file.size}:${file.lastModified}`));
+  props.batchImageState.image_files = [
+    ...existing,
+    ...selected.filter((file) => {
+      const key = `${file.name}:${file.size}:${file.lastModified}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }),
+  ];
   props.batchImageState.notice = "";
+  event.target.value = "";
 }
 
 function handleSubmit() {
@@ -31,12 +43,22 @@ function handleSubmit() {
         type="file"
         accept="image/*"
         multiple
-        webkitdirectory
-        directory
         required
         @change="setImageFiles"
       >
-      <span>选择图片</span>
+      <span>选择图片文件</span>
+      <small>{{ selectedImageLabel }}</small>
+    </label>
+    <label class="batch-image-file-picker">
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        webkitdirectory
+        directory
+        @change="setImageFiles"
+      >
+      <span>选择图片文件夹</span>
       <small>{{ selectedImageLabel }}</small>
     </label>
     <button type="button" :disabled="batchImageState.isUploading" @click="handleSubmit">

@@ -9,6 +9,7 @@ from io import BytesIO
 import json
 import logging
 import math
+import mimetypes
 from pathlib import Path
 import random
 import re
@@ -3580,6 +3581,12 @@ BOOK_COVER_DIR.mkdir(parents=True, exist_ok=True)
 ESSAY_COVER_DIR.mkdir(parents=True, exist_ok=True)
 PUBLIC_ASSET_DIR.mkdir(parents=True, exist_ok=True)
 SCIENCE_DISCOVERY_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+# Python's slim runtime does not always register WebP, while uploaded word
+# images are normalized to this format. Register it before StaticFiles serves
+# the media directory so browsers receive an image MIME type instead of
+# ``text/plain``.
+mimetypes.add_type("image/webp", ".webp")
 
 
 def login_cookie_max_age_seconds() -> int:

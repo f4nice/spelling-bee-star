@@ -14,7 +14,13 @@ export async function fetchJson(url, options) {
   const isJson = response.headers.get("content-type")?.includes("application/json");
   const payload = isJson ? await response.json() : null;
   if (!response.ok) {
-    const error = new Error(response.status === 401 ? "登录已失效，正在前往登录页..." : payloadErrorMessage(payload));
+    const error = new Error(
+      response.status === 401
+        ? "登录已失效，正在前往登录页..."
+        : response.status === 413
+          ? "图片太大，当前网关拒绝了上传；请换小一些的图片后重试。"
+          : payloadErrorMessage(payload),
+    );
     error.status = response.status;
     error.url = url;
     if (response.status === 401) scheduleLoginRedirect();

@@ -1714,6 +1714,7 @@ body {
   flex-wrap: wrap;
   align-items: center;
   position: relative;
+  gap: 8px;
 }
 
 .lists-import-form > input[type="text"] {
@@ -9627,6 +9628,17 @@ button.calendar-day:disabled {
 
 .word-image-manager-section h3 {
   font-size: 16px;
+}
+
+.word-image-upload-hint,
+.word-image-upload-notice {
+  margin: 0;
+}
+
+.word-image-upload-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .word-image-compare-section {

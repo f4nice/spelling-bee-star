@@ -24,6 +24,10 @@
 - 运行时版本矩阵：`uploads/version_matrix.json`，首次启动从默认模板生成；部署不会覆盖这个运行时文件，后续只展示版本号。
 - 上传运行目录：生产服务使用 `spellingbee` 用户；部署脚本会保留 `uploads/` 并把它归还给 `spellingbee:spellingbee`，避免 Excel 预览、图片、音频上传写入失败。
 
+- 2026-10-20：核查 NAS 测试环境的媒体来源。D 盘工作树的 `uploads/` 只保留版本矩阵，实际图片/音频位于本机 Ubuntu `172.26.234.138:/opt/speakeasy/current/uploads`。已将非音频媒体同步到 NAS `/volume1/docker/newabby-staging/uploads`（`images` 9629 个，另含 `book-covers` 13、`essay-covers` 24、`previews` 43、`science-discoveries` 41、`spb` 19、`generated-assets` 1），约 505 MB；音频已完整同步 190030 个文件（约 9.1 GB），源/目标抽查 SHA-256 一致。NAS 测试服务使用 `192.168.1.247:8012`，数据库端口为 `3307`，不影响线上服务和其它容器。已验证首页、`/api/vue/home`、`/api/vue/wrong-words`、列表数据、英文小报接口和音频资源均返回 200；音频响应为 `audio/mpeg`。原 `newabby-staging` 项目存在 Container Manager 残留容器记录，已保留其数据库和媒体数据，另创建隔离的 `newabby-staging-run` 项目运行测试；该项目启用 `unless-stopped`，只绑定最新 `app/main.py`、静态文件和共享 `uploads`，数据库继续复用 NAS 的 3307 服务。已完成一次停止→启动，等待应用恢复后首页、生词本接口和音频均再次返回 200。
+
+- 2026-10-20：检查图片上传链路。线上网关对约 1 MB 以上的 multipart 请求返回 413，而应用端单图接口允许 12 MB；同时 Python slim 运行时未注册 `.webp` MIME，上传后静态响应为 `text/plain`，部分浏览器会拒绝显示。应用注册 `image/webp`，前端对大图按比例压缩并将批量上传拆成小批次，单图保存失败会在图片管理弹窗显示原因；批量图片入口同时支持选择文件和选择文件夹。新增图片 MIME 与批量分包测试。线上网关仍需将 `client_max_body_size` 调整到至少 20 MB，才能完全取消对未能在浏览器压缩的超大/特殊格式图片的限制；本轮未触碰生产代理配置。
+
 ## 当前功能记录
 
 - 2026-10-18：修复手机端导航下拉菜单被压缩成窄条的问题：导航按钮保持紧凑，下拉面板改为按屏幕可用宽度显示，两列导航项可正常点击。发布 `BIZ-REL-20261018-029`。

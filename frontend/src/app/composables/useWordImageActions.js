@@ -1,10 +1,11 @@
 import { fetchJson } from "../utils.js";
 import { wordApiPaths } from "../wordApiPaths.js";
 import { createWordAiImageForm, createWordImageUploadForm, createWordNetworkImageForm } from "../wordImageForms.js";
+import { prepareImageUpload } from "../imageUpload.js";
 
 export function useWordImageActions({ data, loadRoute }) {
   async function uploadWordImage(file) {
-    const form = createWordImageUploadForm(file);
+    const form = createWordImageUploadForm(await prepareImageUpload(file));
     const result = await fetchJson(wordApiPaths.image(data.value.word.id), { method: "POST", body: form });
     if (result?.media_sources) data.value.media_sources = result.media_sources;
     if (result?.image_url) data.value.word.image_url = result.image_url;
