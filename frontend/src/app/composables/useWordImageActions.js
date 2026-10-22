@@ -3,10 +3,12 @@ import { wordApiPaths } from "../wordApiPaths.js";
 import { createWordAiImageForm, createWordImageUploadForm, createWordNetworkImageForm } from "../wordImageForms.js";
 import { prepareImageUpload } from "../imageUpload.js";
 
-export function useWordImageActions({ data, loadRoute }) {
+export function useWordImageActions({ data, loadRoute }, { request = fetchJson, prepareUpload = prepareImageUpload } = {}) {
   async function uploadWordImage(file) {
-    const form = createWordImageUploadForm(await prepareImageUpload(file));
-    const result = await fetchJson(wordApiPaths.image(data.value.word.id), { method: "POST", body: form });
+    const wordId = data.value.word.id;
+    const form = createWordImageUploadForm(await prepareUpload(file));
+    const result = await request(wordApiPaths.image(wordId), { method: "POST", body: form });
+    if (data.value?.word?.id !== wordId) return result;
     if (result?.media_sources) data.value.media_sources = result.media_sources;
     if (result?.image_url) data.value.word.image_url = result.image_url;
     if (!result?.media_sources) await loadRoute();
@@ -14,8 +16,10 @@ export function useWordImageActions({ data, loadRoute }) {
   }
 
   async function chooseNetworkImage(url) {
+    const wordId = data.value.word.id;
     const form = createWordNetworkImageForm(url);
-    const result = await fetchJson(wordApiPaths.networkImage(data.value.word.id), { method: "POST", body: form });
+    const result = await request(wordApiPaths.networkImage(wordId), { method: "POST", body: form });
+    if (data.value?.word?.id !== wordId) return result;
     if (result?.media_sources) data.value.media_sources = result.media_sources;
     if (result?.image_url) data.value.word.image_url = result.image_url;
     if (!result?.media_sources) await loadRoute();
@@ -23,8 +27,10 @@ export function useWordImageActions({ data, loadRoute }) {
   }
 
   async function generateAiImage(option, controls = {}) {
+    const wordId = data.value.word.id;
     const form = createWordAiImageForm(option, controls);
-    const result = await fetchJson(wordApiPaths.aiImage(data.value.word.id), { method: "POST", body: form });
+    const result = await request(wordApiPaths.aiImage(wordId), { method: "POST", body: form });
+    if (data.value?.word?.id !== wordId) return result;
     if (result?.media_sources) data.value.media_sources = result.media_sources;
     if (result?.committed && result?.image_url) data.value.word.image_url = result.image_url;
     return result;

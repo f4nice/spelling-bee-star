@@ -1,5 +1,5 @@
 <script setup>
-import { computed, defineAsyncComponent, ref } from "vue";
+import { computed, defineAsyncComponent, ref, watch } from "vue";
 import { useSelectedWordImage } from "../composables/useSelectedWordImage.js";
 import { wordMediaPanelProps } from "../props/wordMediaPanelProps.js";
 import { wordAudioAccents } from "../wordAudioAccents.js";
@@ -19,14 +19,23 @@ const { selectedImageFile, selectImageFile, saveSelectedImage } = useSelectedWor
   uploadWordImage: props.uploadWordImage,
 });
 
-async function saveUploadedImage() {
-  await saveSelectedImage();
+watch(() => props.data.word?.id, () => {
+  selectImageFile(null);
   isImageModalOpen.value = false;
+}, { flush: "sync" });
+
+async function saveUploadedImage() {
+  const wordId = props.data.word.id;
+  const savedCurrentSelection = await saveSelectedImage();
+  if (savedCurrentSelection && props.data.word?.id === wordId) {
+    isImageModalOpen.value = false;
+  }
 }
 
 async function chooseNetworkImageAndClose(url) {
+  const wordId = props.data.word.id;
   await props.chooseNetworkImage(url);
-  isImageModalOpen.value = false;
+  if (props.data.word?.id === wordId) isImageModalOpen.value = false;
 }
 
 async function generateAiImage(option, controls = {}) {

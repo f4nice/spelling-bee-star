@@ -1,5 +1,6 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
+import { useWordImageReplacement } from "../composables/useWordImageReplacement.js";
 import { inferImageSourceMeta, sourceText } from "../mediaSourceLabels.js";
 import VersionStamp from "./VersionStamp.vue";
 import WordImageCandidateGrid from "./WordImageCandidateGrid.vue";
@@ -45,11 +46,13 @@ const props = defineProps({
 
 const emit = defineEmits(["close", "select-image"]);
 
-const previewUrl = ref("");
 const isFinding = ref(false);
 const isSavingReplacement = ref(false);
 const generatingAiModels = ref([]);
-const selectedReplacement = ref(null);
+const { selectedReplacement } = useWordImageReplacement({
+  getWordId: () => props.word?.id,
+  getFile: () => props.selectedImageFile,
+});
 const aiCandidates = ref([]);
 const aiNotice = ref("");
 const uploadNotice = ref("");
@@ -93,11 +96,6 @@ function endGeneratingModel(key) {
   generatingAiModels.value = generatingAiModels.value.filter((item) => item !== key);
 }
 
-function clearPreview() {
-  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
-  previewUrl.value = "";
-}
-
 function candidateSourceMeta(candidate) {
   return inferImageSourceMeta(
     candidate?.source_meta || candidate?.sourceMeta || { source: candidate?.source || candidate?.provider || candidate?.model || candidate?.label || "" },
@@ -110,36 +108,15 @@ function candidateSourceText(candidate) {
 }
 
 watch(
-  () => props.selectedImageFile,
-  (file) => {
-    clearPreview();
-    if (file) {
-      previewUrl.value = URL.createObjectURL(file);
-      selectedReplacement.value = {
-        type: "upload",
-        imageUrl: previewUrl.value,
-        label: "上传图片",
-        sourceMeta: inferImageSourceMeta({ source: "upload" }, previewUrl.value),
-      };
-    } else if (selectedReplacement.value?.type === "upload") {
-      selectedReplacement.value = null;
-    }
-  },
-  { immediate: true },
-);
-
-watch(
-  () => props.word,
-  (word) => {
-    aiMeaning.value = word?.chinese_definition || "";
+  () => props.word?.id,
+  () => {
+    aiMeaning.value = props.word?.chinese_definition || "";
     aiCandidates.value = [];
-    selectedReplacement.value = null;
     aiNotice.value = "";
+    uploadNotice.value = "";
   },
   { immediate: true },
 );
-
-onBeforeUnmount(clearPreview);
 
 async function runFindImages() {
   isFinding.value = true;
@@ -151,12 +128,12 @@ async function runFindImages() {
 }
 
 async function saveReplacement() {
-  if (!selectedReplacement.value) return;
+  if (!selectedReplacement.value || isSavingReplacement.value) return;
   isSavingReplacement.value = true;
   uploadNotice.value = "";
   try {
     if (selectedReplacement.value.type === "upload") {
-      if (!props.selectedImageFile) return;
+      if (!props.selectedImageFile) throw new Error("请重新选择要上传的图片。");
       await props.saveSelectedImage();
       return;
     }

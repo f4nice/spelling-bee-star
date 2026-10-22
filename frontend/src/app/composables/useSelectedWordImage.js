@@ -8,9 +8,13 @@ export function useSelectedWordImage({ uploadWordImage }) {
   }
 
   async function saveSelectedImage() {
-    if (!selectedImageFile.value) return;
-    await uploadWordImage(selectedImageFile.value);
+    const file = selectedImageFile.value;
+    if (!file) return false;
+    await uploadWordImage(file);
+    // A different file may have been selected while this upload was pending.
+    if (selectedImageFile.value !== file) return false;
     selectedImageFile.value = null;
+    return true;
   }
 
   return {

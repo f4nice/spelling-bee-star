@@ -13242,6 +13242,19 @@ def vue_delete_word_list(
     return {"ok": True}
 
 
+def cleanup_replaced_word_image(url: str | None, image_dir: Path) -> None:
+    """Old-file cleanup must not turn a committed image replacement into a 500."""
+    try:
+        remove_local_image(url, image_dir)
+    except OSError as exc:
+        # NAS ACLs may allow new uploads but deny deleting migrated old files.
+        # Keep the old file for later cleanup and return the saved new image.
+        logging.getLogger("speakeasy.images").warning(
+            "Keeping old image %s: cleanup failed (%s)",
+            Path(url or "").name, type(exc).__name__,
+        )
+
+
 @app.post("/api/vue/words/{word_id}/image")
 async def replace_word_image(
     word_id: int,
@@ -13276,7 +13289,7 @@ async def replace_word_image(
     db.commit()
     remember_word_resource(db, word, image_source="upload", override_media=True, commit=True)
     if previous_url != word.image_url:
-        remove_local_image(previous_url, IMAGE_DIR)
+        cleanup_replaced_word_image(previous_url, IMAGE_DIR)
     return {
         "ok": True,
         "word": word.word,
@@ -13479,7 +13492,7 @@ async def generate_ai_word_image(
         image_source = f"ai-image:{committed_model}"
         remember_word_resource(db, word, image_source=image_source, override_media=True, commit=True)
         if previous_url != word.image_url:
-            remove_local_image(previous_url, IMAGE_DIR)
+            cleanup_replaced_word_image(previous_url, IMAGE_DIR)
     else:
         committed_model = (
             selected_openai_model
@@ -13565,7 +13578,7 @@ async def replace_word_image_from_network(
     db.commit()
     remember_word_resource(db, word, image_source="network", override_media=True, commit=True)
     if previous_url != word.image_url:
-        remove_local_image(previous_url, IMAGE_DIR)
+        cleanup_replaced_word_image(previous_url, IMAGE_DIR)
     return {
         "ok": True,
         "word": word.word,
@@ -24616,7 +24629,7 @@ async def apply_uploaded_images_to_words(
         db.commit()
         remember_word_resource(db, word, image_source="batch-upload", override_media=True, commit=True)
         if previous_url != word.image_url:
-            remove_local_image(previous_url, IMAGE_DIR)
+            cleanup_replaced_word_image(previous_url, IMAGE_DIR)
         result["matched"] += 1
 
     return result
@@ -25053,7 +25066,7 @@ async def generate_missing_word_ai_image(db: Session, word: Word, model: str) ->
     db.commit()
     remember_word_resource(db, word, image_source=f"ai-image:{model}", override_media=True, commit=True)
     if previous_url != word.image_url:
-        remove_local_image(previous_url, IMAGE_DIR)
+        cleanup_replaced_word_image(previous_url, IMAGE_DIR)
     quota = increment_ai_image_quota(db, model)
     return {
         "ok": True,
