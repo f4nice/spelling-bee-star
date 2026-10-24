@@ -58,6 +58,7 @@ import {
 } from "../catWorldPlayTime.js";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
+import { useCatWorldInteractionTarget } from "../composables/useCatWorldInteractionTarget.js";
 import CatWorldProductIcon from "../components/CatWorldProductIcon.vue";
 import CatWorldFestivalNotice from "../components/CatWorldFestivalNotice.vue";
 
@@ -81,6 +82,7 @@ const catReaction = ref("");
 const catReactionAnchored = ref(false);
 const catPetSequence = ref(0);
 const focusedCatId = ref("");
+const { interactionCatId, selectInteractionCat, clearInteractionCat, completeInteractionSelection, buildPlayPayload } = useCatWorldInteractionTarget();
 const openCatDiaryId = ref("");
 const gameMountRef = ref(null);
 const catWorldGame = ref(null);
@@ -1062,7 +1064,8 @@ const gameDailyLogs = computed(() =>
   ),
 );
 const selectedProfileId = computed(() =>
-  roomCats.value.find((cat) => cat.id === state.value.selectedCatProfile)?.id
+  roomCats.value.find((cat) => cat.id === interactionCatId.value)?.id
+  || roomCats.value.find((cat) => cat.id === state.value.selectedCatProfile)?.id
   || roomCats.value.find((cat) => catBreedId(cat) === state.value.selectedCat)?.id
   || roomCats.value[0]?.id
   || "",
@@ -1099,6 +1102,7 @@ const gameSnapshot = computed(() => ({
   ownedFoodCount: ownedFoodCount.value,
   roomStyles: roomStyles.value,
   selectedCatId: selectedProfileId.value,
+  interactionCatId: interactionCatId.value,
   gameSettings: gameSettings.value,
   learningSignal: learningRoomSignal.value,
   sceneMoves: state.value.sceneMoves,
@@ -1107,6 +1111,8 @@ const gameSnapshot = computed(() => ({
   observationMode: playTimeLocked.value,
   toolMode: repairMode.value ? "repair" : scoopMode.value ? "scoop" : "",
 }));
+
+watch(() => currentScene.value.id, clearInteractionCat, { flush: "sync" });
 
 watch(
   gameSnapshot,
@@ -2575,6 +2581,7 @@ const bathActive = computed(() => bathQueue.value.active || null);
 
 function openCatActionMenu(cat = {}) {
   if (roomEditMode.value || repairMode.value || scoopMode.value || !cat?.id) return;
+  selectInteractionCat(cat);
   activeRoomPanel.value = "cat";
   focusedCatId.value = cat.id;
   catActionMenuCatId.value = cat.id;
@@ -2735,7 +2742,7 @@ async function play(item) {
     const nextPayload = await fetchJson(routeApiPaths.catWorldPlay(), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ itemId: item.id }),
+      body: JSON.stringify(buildPlayPayload(item, roomCats.value)),
     });
     replacePayload(nextPayload);
     if (item.category === "food") {
@@ -2976,6 +2983,7 @@ async function handleCatCardClick(cat) {
 function focusLiveCat(entry = {}) {
   const cat = entry.cat || catForId(entry.id);
   if (!cat?.id) return;
+  selectInteractionCat(cat);
   activeRoomPanel.value = "cat";
   focusedCatId.value = cat.id;
   catWorldGame.value?.focusCat?.(cat.id);
@@ -2987,6 +2995,7 @@ async function selectCat(catOrId, options = {}) {
   const catId = catBreedId(profile) || String(catOrId || "");
   const profileId = profile?.profileId || (profile?.breedId ? profile.id : "");
   if (!catId || busyItemId.value) return;
+  const selectionVersion = selectInteractionCat(profile || { id: profileId || catId });
   const carry = Boolean(options.carry);
   activeRoomPanel.value = "cat";
   if (carry) {
@@ -3004,7 +3013,8 @@ async function selectCat(catOrId, options = {}) {
     });
     replacePayload(nextPayload);
     const cat = profile || catForId(nextPayload.state?.selectedCatProfile) || catForId(catId);
-    const roomCatId = profileId || cat?.id || catId;
+    const roomCatId = profileId || nextPayload.state?.selectedCatProfile || cat?.id || catId;
+    if (!completeInteractionSelection(selectionVersion, { id: roomCatId })) return;
     focusedCatId.value = roomCatId;
     await nextTick();
     const carryInteraction = carry ? catWorldGame.value?.carryCat?.(roomCatId) : null;

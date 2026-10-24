@@ -336,6 +336,7 @@ function normalizeSnapshot(snapshot = {}) {
     ownedFoodCount: Number(snapshot.ownedFoodCount || 0),
     roomStyles: snapshot.roomStyles || {},
     selectedCatId: snapshot.selectedCatId || "",
+    interactionCatId: snapshot.interactionCatId || "",
     gameSettings: snapshot.gameSettings || {},
     learningSignal: normalizeLearningSignal(snapshot.learningSignal),
     sceneMoves: normalizeCatWorldSceneMoves(snapshot.sceneMoves),
@@ -3517,13 +3518,17 @@ class CatWorldScene extends Phaser.Scene {
       this.stopFeatherWandMode({ notify: false });
       return { handled: true, active: false, message: "逗猫棒互动结束，猫咪恢复自己的活动。" };
     }
-    const favorites = this.favoriteCatEntries(itemId, "toy");
+    const selectedId = this.owner.snapshot.interactionCatId;
+    const favorites = selectedId
+      ? this.roomCatEntries().filter((entry) => entry.cat.id === selectedId)
+      : this.favoriteCatEntries(itemId, "toy");
     const movable = favorites.filter((entry) => entry.behavior.canWalk);
     if (!favorites.length) {
+      if (selectedId) return { handled: true, active: false, message: "刚才选中的猫咪已不在当前房间，请重新选择一只猫再玩。" };
       return { handled: true, active: false, message: "挥了挥逗猫棒，目前房间里还没有偏爱它的猫咪。" };
     }
     if (!movable.length) {
-      return { handled: true, active: false, message: `${favorites.map((entry) => entry.cat.label).join("、")}喜欢逗猫棒，不过现在正在休息。` };
+      return { handled: true, active: false, message: `${favorites.map((entry) => entry.cat.label).join("、")}现在正在休息，醒来后再一起玩逗猫棒。` };
     }
     this.owner.wandMode = true;
     this.owner.wandCatIds = new Set(movable.map((entry) => entry.cat.id));

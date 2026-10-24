@@ -5209,6 +5209,19 @@ async def vue_cat_world_play_api(request: Request, db: Session = Depends(get_db)
     ]
     if not room_profiles:
         raise HTTPException(status_code=400, detail="当前房间里没有猫咪，先从猫咪卡片把一只猫带过来。")
+    target_cat_id = ""
+    if item["category"] == "toy":
+        requested_cat_id = str((payload or {}).get("catId") or "").strip()
+        if requested_cat_id:
+            # A manual click identifies one owned cat instance, never a breed
+            # or a fallback cat. Do not change the user's persistent main cat.
+            target_profile = next(
+                (profile for profile in room_profiles if profile.profile_id == requested_cat_id),
+                None,
+            )
+            if target_profile is None:
+                raise HTTPException(status_code=400, detail="选中的猫咪已不在当前房间，请重新选择一只自己的猫再玩。")
+            target_cat_id = target_profile.profile_id
     inventory = parse_cat_world_inventory(state.inventory)
     damaged_items = parse_cat_world_damaged_items(state.damaged_items)
     if item_id in damaged_items:
@@ -5243,6 +5256,7 @@ async def vue_cat_world_play_api(request: Request, db: Session = Depends(get_db)
         usable_inventory,
         room_layout,
         "food" if item["category"] == "food" else "toy",
+        target_cat_id=target_cat_id,
     )
     db.add(state)
     db.commit()
@@ -22797,8 +22811,12 @@ def cat_world_apply_daily_effect(
     inventory: dict[str, int],
     room_layout: dict[str, dict[str, float]],
     effect_type: str,
+    *,
+    target_cat_id: str = "",
 ) -> dict[str, Any]:
-    cat_id = cat_world_effect_target_cat_id(db, state, inventory, room_layout, effect_type, item.get("id") or "")
+    cat_id = target_cat_id if effect_type == "toy" and target_cat_id else cat_world_effect_target_cat_id(
+        db, state, inventory, room_layout, effect_type, item.get("id") or ""
+    )
     cat = cat_world_cat_for_reference(db, state, cat_id) or cat_world_cat_payload(
         CAT_WORLD_CAT_BY_ID[CAT_WORLD_DEFAULT_CAT_ID]
     )
