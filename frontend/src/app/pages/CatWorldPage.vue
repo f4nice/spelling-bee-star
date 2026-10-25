@@ -356,6 +356,8 @@ const catIconColors = {
   "festival-osmanthus": "#b58226",
   "festival-lantern": "#bd5352",
   "festival-maple": "#bb7146",
+  "festival-pumpkin": "#f28c28",
+  "festival-ghost": "#8d77b8",
 };
 
 const energy = computed(() => payload.value.energy || {});
@@ -2322,7 +2324,8 @@ function canPurchase(item) {
   if (item.category === "blind-box") return !item.drawn && item.saleState === "active"
     && (item.unlimitedStock || Number(item.remainingStock || 0) > 0) && canAfford(item);
   if (item.limited) {
-    return !isOneTimeOwned(item) && item.isActive !== false && Number(item.remainingStock || 0) > 0 && canAfford(item);
+    return !isOneTimeOwned(item) && (!item.festivalId || item.saleState === "active")
+      && item.isActive !== false && Number(item.remainingStock || 0) > 0 && canAfford(item);
   }
   if (item.category === "cat") return canAfford(item);
   if (item.category === "color") return targetDecorOwned(item) && (itemCount(item.id) > 0 || canAfford(item));
@@ -2342,6 +2345,8 @@ function purchaseHint(item) {
   }
   if (item.limited) {
     if (isOneTimeOwned(item)) return "已拥有 1 件，本期不能重复购买";
+    if (item.saleState === "upcoming") return `尚未开放 · ${item.saleLabel || "节庆期间开放"}`;
+    if (item.saleState === "ended") return "本期活动已结束，已获得的物品会一直保留";
     if (item.isActive === false) return "这件限定礼物暂时没有上架";
     if (Number(item.remainingStock || 0) <= 0) return "这件限定礼物已经售罄";
     return `全站仅剩 ${item.remainingStock} 件 · 每个账号限购 ${item.maxOwned || 1} 件`;
@@ -2413,6 +2418,8 @@ function purchaseButtonText(item) {
   }
   if (item.category === "handbook" && isOneTimeOwned(item)) return "打开手册";
   if (item.limited && isOneTimeOwned(item)) return "已拥有 1 件";
+  if (item.limited && item.saleState === "upcoming") return "等待节日开放";
+  if (item.limited && item.saleState === "ended") return "本期已结束";
   if (item.limited && item.isActive === false) return "暂停领取";
   if (item.limited && Number(item.remainingStock || 0) <= 0) return "已售罄";
   if (item.category === "cat" && lostCats.value[item.id]) return canAfford(item) ? `扣 ${item.cost} 能量重新领养` : "能量不足";
@@ -4528,7 +4535,7 @@ async function selectCat(catOrId, options = {}) {
               <span v-else>点击背包使用</span>
             </div>
             <div v-else-if="item.limited" class="cat-world-food-tags cat-world-limited-gift-tags">
-              <span>限定礼物</span>
+              <span>{{ item.festivalId ? "节庆限定" : "限定礼物" }}</span>
               <span>账号限购 {{ item.maxOwned || 1 }} 件</span>
               <span>全站剩余 {{ item.remainingStock || 0 }}</span>
             </div>

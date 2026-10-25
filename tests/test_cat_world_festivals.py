@@ -1,7 +1,7 @@
 import asyncio
 import os
 import unittest
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
@@ -13,7 +13,16 @@ from starlette.requests import Request
 
 from app import main as m
 from app.database import Base
-from app.models import CatWorldBlindBoxDraw, CatWorldFestivalEarning, CatWorldState, WordList, Word, WordListItem, ChallengeProgress
+from app.models import (
+    CatWorldBlindBoxDraw,
+    CatWorldFestivalEarning,
+    CatWorldLimitedItemStock,
+    CatWorldState,
+    WordList,
+    Word,
+    WordListItem,
+    ChallengeProgress,
+)
 from app.services import cat_world_festivals as f
 
 
@@ -37,6 +46,7 @@ class FestivalTest(unittest.TestCase):
         for key, before, opening, last, end in (
             ("mid-autumn-2026", "2026-09-24T15:59:59", "2026-09-24T16:00:00", "2026-09-27T15:59:59", "2026-09-27T16:00:00"),
             ("national-day-2026", "2026-09-30T15:59:59", "2026-09-30T16:00:00", "2026-10-07T15:59:59", "2026-10-07T16:00:00"),
+            ("halloween-2026", "2026-10-30T15:59:59", "2026-10-30T16:00:00", "2026-11-02T15:59:59", "2026-11-02T16:00:00"),
         ):
             for instant, status in ((before, "upcoming"), (opening, "active"), (last, "active"), (end, "ended")):
                 with self.subTest(key=key, instant=instant):
@@ -51,9 +61,9 @@ class FestivalTest(unittest.TestCase):
         self.assertFalse(self.earn(380, "essay-best-380", source="essay"))
         self.assertTrue(self.earn(220, "debate-1", source="debate"))
         partial = f.festival_energy_source(self.db, "13900000000", utc("2026-09-25T15:59:59"))
-        self.assertEqual(partial["todayEnergy"], 600)
+        self.assertEqual(partial["todayEnergy"], 1200)
         self.assertEqual(partial["campaign"]["dailyCap"], 1500)
-        self.assertEqual(partial["campaign"]["remainingBonus"], 900)
+        self.assertEqual(partial["campaign"]["remainingBonus"], 300)
         self.assertIn("1500", partial["campaign"]["rule"])
         self.assertTrue(self.earn(950, "more-learning"))
         self.assertTrue(self.earn(50, "round-1", "2026-09-25T16:00:00", source="challenge_round"))
@@ -67,11 +77,28 @@ class FestivalTest(unittest.TestCase):
         self.assertEqual(day_one["energy"], 1500)
         self.assertEqual(day_one["campaign"]["remainingBonus"], 0)
         day_two = f.festival_energy_source(self.db, "13900000000", utc("2026-09-25T16:00:00"))
-        self.assertEqual(day_two["todayEnergy"], 50)
+        self.assertEqual(day_two["todayEnergy"], 100)
         ended = f.festival_energy_source(self.db, "13900000000", utc("2026-10-08T00:00:00"))
-        self.assertEqual(ended["energy"], 1550)
+        self.assertEqual(ended["energy"], 1600)
         self.assertEqual(ended["todayEnergy"], 0)
-        self.assertFalse(ended["campaign"]["visible"])
+        self.assertTrue(ended["campaign"]["visible"])
+
+    def test_weekend_and_festival_multipliers_use_beijing_day_and_do_not_retroactively_change_rows(self):
+        self.assertEqual(f.reward_multiplier(date(2026, 10, 23)), 1)
+        self.assertEqual(f.reward_multiplier(date(2026, 10, 24)), 2)
+        self.assertEqual(f.reward_multiplier(date(2026, 10, 25)), 2)
+        self.assertEqual(f.reward_multiplier(date(2026, 10, 31)), 3)
+        self.assertEqual(f.reward_multiplier(date(2026, 11, 2)), 3)
+        self.assertEqual(f.reward_multiplier(date(2026, 11, 3)), 1)
+
+        self.assertFalse(self.earn(10, "weekday", "2026-10-23T12:00:00"))
+        self.assertTrue(self.earn(10, "weekend", "2026-10-24T12:00:00"))
+        self.assertTrue(self.earn(10, "halloween", "2026-10-31T12:00:00"))
+        rows = self.db.scalars(select(CatWorldFestivalEarning)).all()
+        self.assertEqual(sorted(row.base_energy for row in rows), [10, 20])
+        source = f.festival_energy_source(self.db, "13900000000", utc("2026-10-31T12:00:00"))
+        self.assertEqual(source["todayEnergy"], 20)
+        self.assertEqual(source["campaign"]["todayMultiplier"], 3)
 
     def test_reward_rolls_back_with_learning_write(self):
         self.db.add(Word(word="rollback"))
@@ -95,9 +122,9 @@ class FestivalTest(unittest.TestCase):
             m.challenge_payload(self.db, word_list_id=word_list.id, daily_count=1, start_count=0,
                 session_correct=answer["session_correct"], session_wrong=0, wrong_date=None,
                 preloaded_current_word=answer["next_word"], reward_phone="13900000000")
-            self.assertEqual(f.festival_energy_source(self.db, "13900000000")["energy"], 52)
+            self.assertEqual(f.festival_energy_source(self.db, "13900000000")["energy"], 104)
             m.challenge_state(self.db, word_list)
-            self.assertEqual(f.festival_energy_source(self.db, "13900000000")["energy"], 52)
+            self.assertEqual(f.festival_energy_source(self.db, "13900000000")["energy"], 104)
 
     def purchase(self, series_key, now):
         import json
@@ -105,10 +132,18 @@ class FestivalTest(unittest.TestCase):
         async def receive():
             return {"type": "http.request", "body": body}
         request = Request({"type": "http", "headers": []}, receive=receive)
-        with patch.object(m, "require_cat_world_phone", return_value="13900000000"), \
+        event_loop_policy = getattr(asyncio, "WindowsSelectorEventLoopPolicy", None)
+        previous_policy = asyncio.get_event_loop_policy()
+        if event_loop_policy is not None:
+            asyncio.set_event_loop_policy(event_loop_policy())
+        try:
+            with patch.object(m, "require_cat_world_phone", return_value="13900000000"), \
              patch.object(f, "festival_now", return_value=f.festival_now(utc(now))), \
              patch.object(m, "serialize_cat_world_payload", return_value={"energy": {"earned": 10000, "available": 10000}}):
-            return asyncio.run(m.vue_cat_world_purchase_api(request, self.db))
+                return asyncio.run(m.vue_cat_world_purchase_api(request, self.db))
+        finally:
+            if event_loop_policy is not None:
+                asyncio.set_event_loop_policy(previous_policy)
 
     def test_purchase_is_time_gated_costs_once_and_both_festivals_are_independent(self):
         m.seed_cat_world_scenes(self.db)
@@ -119,6 +154,7 @@ class FestivalTest(unittest.TestCase):
         for series_key, before, active, after in (
             ("mid-autumn-2026", "2026-09-24T15:59:59", "2026-09-24T16:00:00", "2026-09-27T16:00:00"),
             ("national-day-2026", "2026-09-30T15:59:59", "2026-09-30T16:00:00", "2026-10-07T16:00:00"),
+            ("halloween-2026", "2026-10-30T15:59:59", "2026-10-30T16:00:00", "2026-11-02T16:00:00"),
         ):
             spent = state.energy_spent
             with self.assertRaises(HTTPException) as denied:
@@ -136,13 +172,24 @@ class FestivalTest(unittest.TestCase):
                 self.purchase(series_key, after)
             self.assertEqual(state.energy_spent, spent + 1500)
             self.assertIn(cat_id, m.parse_cat_world_cats(state.cats))
-        self.assertEqual(len(self.db.scalars(select(CatWorldBlindBoxDraw)).all()), 2)
+        self.assertEqual(len(self.db.scalars(select(CatWorldBlindBoxDraw)).all()), 3)
         catalog = m.cat_world_blind_box_catalog_payload(self.db, state, m.parse_cat_world_cats(state.cats))
         seasonal = [s for s in catalog["series"] if s["timeLimited"]]
-        self.assertEqual(len(seasonal), 2)
+        self.assertEqual(len(seasonal), 3)
         for series in seasonal:
             self.assertTrue(series["drawn"])
             self.assertEqual([cat["oddsPercent"] for cat in series["cats"]], [50, 50])
+
+    def test_halloween_items_are_time_limited_and_seeded(self):
+        m.seed_cat_world_limited_item_stock(self.db)
+        for item_id in ("halloween-pumpkin-lantern", "halloween-ghost-plush", "halloween-candy-bowl"):
+            item = m.CAT_WORLD_SHOP_BY_ID[item_id]
+            self.assertEqual(item["festivalId"], "halloween-2026")
+            self.assertTrue(item["limited"])
+            self.assertEqual(item["maxOwned"], 1)
+            stock = self.db.scalar(select(CatWorldLimitedItemStock).where(CatWorldLimitedItemStock.item_id == item_id))
+            self.assertIsNotNone(stock)
+            self.assertEqual(stock.total_stock, 500)
 
 
 if __name__ == "__main__":

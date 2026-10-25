@@ -1662,6 +1662,49 @@ CAT_WORLD_SHOP.extend({
     "seriesKey": series["key"], "festivalId": series["festivalId"],
     "description": series["description"],
 } for series in CAT_WORLD_FESTIVAL_BLIND_BOX_SERIES)
+CAT_WORLD_HALLOWEEN_ITEM_STOCK = {
+    "halloween-pumpkin-lantern": 500,
+    "halloween-ghost-plush": 500,
+    "halloween-candy-bowl": 500,
+}
+CAT_WORLD_SHOP.extend([
+    {
+        "id": "halloween-pumpkin-lantern",
+        "category": "decor",
+        "label": "南瓜灯摆件",
+        "englishName": "Pumpkin Lantern",
+        "cost": 260,
+        "mood": 12,
+        "limited": True,
+        "maxOwned": 1,
+        "festivalId": "halloween-2026",
+        "description": "万圣节限定南瓜灯，点亮后让猫咪房间多一点橙色的夜光。",
+    },
+    {
+        "id": "halloween-ghost-plush",
+        "category": "toy",
+        "label": "幽灵抱枕",
+        "englishName": "Ghost Plush",
+        "cost": 180,
+        "mood": 16,
+        "limited": True,
+        "maxOwned": 1,
+        "festivalId": "halloween-2026",
+        "description": "万圣节限定幽灵抱枕，点击玩具就能陪猫咪玩一会儿。",
+    },
+    {
+        "id": "halloween-candy-bowl",
+        "category": "decor",
+        "label": "糖果篮摆件",
+        "englishName": "Halloween Candy Bowl",
+        "cost": 220,
+        "mood": 10,
+        "limited": True,
+        "maxOwned": 1,
+        "festivalId": "halloween-2026",
+        "description": "万圣节限定糖果篮，收集到房间里就会留下节日小彩蛋。",
+    },
+])
 CAT_WORLD_BLIND_BOX_SERIES_BY_KEY = {series["key"]: series for series in CAT_WORLD_BLIND_BOX_SERIES}
 CAT_WORLD_LIMITED_CAT_SEEDS = [
     {**cat_seed, "seriesKey": series["key"]}
@@ -1699,6 +1742,8 @@ CAT_WORLD_DECOR_FAVORITE_CAT = {
     "cat-climbing-tree": "maine-coon",
     "mini-fountain": "siamese",
     "bubble-bathtub": "ragdoll",
+    "halloween-pumpkin-lantern": "festival-pumpkin",
+    "halloween-candy-bowl": "festival-ghost",
 }
 CAT_WORLD_EXTRA_DECOR_FAVORITES = {
     "turkish-van": ["mini-fountain", "bubble-bathtub"],
@@ -1741,6 +1786,8 @@ CAT_WORLD_DECOR_DEFAULT_LAYOUT = {
     "cat-climbing-tree": {"x": 86, "y": 48},
     "mini-fountain": {"x": 54, "y": 76},
     "bubble-bathtub": {"x": 77, "y": 58},
+    "halloween-pumpkin-lantern": {"x": 25, "y": 42},
+    "halloween-candy-bowl": {"x": 61, "y": 63},
 }
 CAT_WORLD_TOY_DEFAULT_LAYOUT = {
     "rolling-ball": {"x": 24, "y": 70},
@@ -1748,6 +1795,7 @@ CAT_WORLD_TOY_DEFAULT_LAYOUT = {
     "feather-wand": {"x": 83, "y": 45},
     "yarn-basket": {"x": 55, "y": 78},
     CAT_WORLD_LIMITED_GIFT_ITEM_ID: {"x": 66, "y": 73},
+    "halloween-ghost-plush": {"x": 45, "y": 72},
 }
 CAT_WORLD_ROOM_DEFAULT_LAYOUT = {
     **CAT_WORLD_DECOR_DEFAULT_LAYOUT,
@@ -17114,6 +17162,8 @@ def cat_world_effective_shop(db: Session) -> list[dict[str, Any]]:
             effective["hasCustomCost"] = False
         if effective.get("targetDecor"):
             effective["targetDecorLabel"] = CAT_WORLD_DECOR_LABELS.get(str(effective["targetDecor"]), "")
+        if effective.get("festivalId"):
+            effective.update(festival_sale_window(str(effective["festivalId"])))
         favorite_cat_id = cat_world_item_favorite_cat_id(effective["id"])
         if favorite_cat_id:
             effective["favoriteCatId"] = favorite_cat_id
@@ -17337,22 +17387,35 @@ def seed_cat_world_limited_cat_stock(db: Session) -> None:
 
 
 def seed_cat_world_limited_item_stock(db: Session) -> None:
-    stock = db.scalar(
-        select(CatWorldLimitedItemStock).where(
-            CatWorldLimitedItemStock.item_id == CAT_WORLD_LIMITED_GIFT_ITEM_ID
+    existing = {
+        row.item_id: row
+        for row in db.scalars(select(CatWorldLimitedItemStock)).all()
+    }
+    changed = False
+    limited_items = [
+        item for item in CAT_WORLD_SHOP
+        if item.get("limited") and item.get("category") in {"toy", "decor"}
+    ]
+    for item in limited_items:
+        item_id = str(item["id"])
+        if item_id in existing:
+            continue
+        total_stock = (
+            CAT_WORLD_LIMITED_GIFT_INITIAL_STOCK
+            if item_id == CAT_WORLD_LIMITED_GIFT_ITEM_ID
+            else int(CAT_WORLD_HALLOWEEN_ITEM_STOCK.get(item_id, 500))
         )
-    )
-    if stock:
-        return
-    db.add(
-        CatWorldLimitedItemStock(
-            item_id=CAT_WORLD_LIMITED_GIFT_ITEM_ID,
-            total_stock=CAT_WORLD_LIMITED_GIFT_INITIAL_STOCK,
-            claimed_count=0,
-            is_active=True,
+        db.add(
+            CatWorldLimitedItemStock(
+                item_id=item_id,
+                total_stock=max(total_stock, 0),
+                claimed_count=0,
+                is_active=True,
+            )
         )
-    )
-    db.commit()
+        changed = True
+    if changed:
+        db.commit()
 
 
 def cat_world_limited_item_stock_payload(db: Session, item_id: str) -> dict[str, Any]:
@@ -23666,12 +23729,13 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
             **{key: series[key] for key in ("remainingStock", "drawn", "drawnCatId", "cats",
                                            "saleState", "saleLabel", "timeLimited", "unlimitedStock")},
         })
-    limited_gift_item = shop_by_id.get(CAT_WORLD_LIMITED_GIFT_ITEM_ID)
-    if limited_gift_item is not None:
-        limited_gift_item.update(
+    for limited_item in shop:
+        if not limited_item.get("limited") or limited_item.get("category") not in {"toy", "decor"}:
+            continue
+        limited_item.update(
             {
-                **cat_world_limited_item_stock_payload(db, CAT_WORLD_LIMITED_GIFT_ITEM_ID),
-                "owned": inventory.get(CAT_WORLD_LIMITED_GIFT_ITEM_ID, 0) > 0,
+                **cat_world_limited_item_stock_payload(db, str(limited_item["id"])),
+                "owned": inventory.get(str(limited_item["id"]), 0) > 0,
             }
         )
     cat_care, cat_care_changed = cat_world_ensure_profile_care_records(state, cat_profiles)
@@ -23953,7 +24017,11 @@ def admin_cat_world_pricing_payload(db: Session) -> dict[str, Any]:
     return {
         "plans": CAT_WORLD_PRICING_PLANS,
         "items": cat_world_effective_shop(db),
-        "limitedItems": [cat_world_limited_item_stock_payload(db, CAT_WORLD_LIMITED_GIFT_ITEM_ID)],
+        "limitedItems": [
+            cat_world_limited_item_stock_payload(db, str(item["id"]))
+            for item in CAT_WORLD_SHOP
+            if item.get("limited") and item.get("category") in {"toy", "decor"}
+        ],
         "scenes": admin_cat_world_scene_pricing_payload(db),
         "settings": cat_world_game_settings_payload(db),
     }
