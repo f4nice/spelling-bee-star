@@ -127,8 +127,11 @@ class FestivalTest(unittest.TestCase):
             self.assertEqual(f.festival_energy_source(self.db, "13900000000")["energy"], 104)
 
     def purchase(self, series_key, now):
+        return self.purchase_item(f"{series_key}-blind-box", now)
+
+    def purchase_item(self, item_id, now):
         import json
-        body = json.dumps({"itemId": f"{series_key}-blind-box"}).encode()
+        body = json.dumps({"itemId": item_id}).encode()
         async def receive():
             return {"type": "http.request", "body": body}
         request = Request({"type": "http", "headers": []}, receive=receive)
@@ -190,6 +193,65 @@ class FestivalTest(unittest.TestCase):
             stock = self.db.scalar(select(CatWorldLimitedItemStock).where(CatWorldLimitedItemStock.item_id == item_id))
             self.assertIsNotNone(stock)
             self.assertEqual(stock.total_stock, 500)
+
+    def test_halloween_goods_charge_once_and_preserve_existing_state_and_stock(self):
+        m.seed_cat_world_scenes(self.db)
+        m.seed_cat_world_limited_item_stock(self.db)
+        old_stock = self.db.scalar(select(CatWorldLimitedItemStock).where(
+            CatWorldLimitedItemStock.item_id == m.CAT_WORLD_LIMITED_GIFT_ITEM_ID))
+        old_stock.total_stock = 27
+        old_stock.claimed_count = 3
+        old_stock.is_active = False
+        state = CatWorldState(phone="13900000000", energy_spent=75, cats='["mimi"]',
+                              inventory='{"rolling-ball":1,"daily-kibble":4}')
+        self.db.add(state)
+        self.db.commit()
+        m.seed_cat_world_limited_item_stock(self.db)
+        self.assertEqual((old_stock.total_stock, old_stock.claimed_count, old_stock.is_active), (27, 3, False))
+        for item_id in m.CAT_WORLD_HALLOWEEN_ITEM_STOCK:
+            before_spent = state.energy_spent
+            stock = self.db.scalar(select(CatWorldLimitedItemStock).where(
+                CatWorldLimitedItemStock.item_id == item_id))
+            with self.assertRaises(HTTPException) as denied:
+                self.purchase_item(item_id, "2026-10-30T15:59:59")
+            self.assertEqual(denied.exception.status_code, 409)
+            self.assertEqual((state.energy_spent, stock.claimed_count), (before_spent, 0))
+            self.purchase_item(item_id, "2026-10-30T16:00:00")
+            expected_spent = before_spent + m.CAT_WORLD_SHOP_BY_ID[item_id]["cost"]
+            self.assertEqual((state.energy_spent, stock.claimed_count), (expected_spent, 1))
+            self.purchase_item(item_id, "2026-10-31T12:00:00")
+            self.assertEqual((state.energy_spent, stock.claimed_count), (expected_spent, 1))
+            with self.assertRaises(HTTPException):
+                self.purchase_item(item_id, "2026-11-02T16:00:00")
+            inventory = m.parse_cat_world_inventory(state.inventory)
+            self.assertEqual(inventory[item_id], 1)
+            self.assertEqual(inventory["rolling-ball"], 1)
+            self.assertEqual(inventory["daily-kibble"], 4)
+            self.assertEqual(m.parse_cat_world_cats(state.cats), ["mimi"])
+
+    def test_weekend_remaining_bonus_and_cross_month_campaign_label(self):
+        self.earn(600, "weekend-cap", "2026-10-24T12:00:00")
+        campaign = f.festival_energy_source(self.db, "13900000000", utc("2026-10-24T12:00:00"))["campaign"]
+        self.assertEqual(campaign["todayMultiplier"], 2)
+        self.assertEqual(campaign["remainingBonus"], 900)
+        self.assertIn("10月31–11月2日", campaign["dateLabel"])
+
+    def test_admin_can_manage_limited_decor_stock_without_resetting_claims(self):
+        import json
+        m.seed_cat_world_limited_item_stock(self.db)
+        item_id = "halloween-pumpkin-lantern"
+        stock = self.db.scalar(select(CatWorldLimitedItemStock).where(
+            CatWorldLimitedItemStock.item_id == item_id))
+        stock.claimed_count = 2
+        self.db.commit()
+        async def receive():
+            return {"type": "http.request", "body": json.dumps({
+                "itemId": item_id, "totalStock": 600, "isActive": True}).encode()}
+        request = Request({"type": "http", "headers": []}, receive=receive)
+        with patch.object(m, "require_admin_panel_access"), patch.object(m, "admin_cat_world_pricing_payload", return_value={}):
+            result = asyncio.run(m.vue_admin_cat_world_limited_item_stock_api(request, self.db))
+        self.assertTrue(result["ok"])
+        self.assertEqual((stock.total_stock, stock.claimed_count), (600, 2))
 
 
 if __name__ == "__main__":

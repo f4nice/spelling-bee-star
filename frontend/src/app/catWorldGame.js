@@ -105,6 +105,7 @@ const ROOM_TOY_TARGETS = {
   "feather-wand": { label: "逗猫棒", width: 172, height: 70, defaultX: GAME_WIDTH - 208, defaultY: 250, focusX: 88, focusY: 52 },
   "yarn-basket": { label: "彩色毛线篮", width: 112, height: 72, defaultX: 670, defaultY: 432, focusX: 58, focusY: 36 },
   "limited-gift-toy": { label: "限定礼物玩具", width: 90, height: 72, defaultX: 810, defaultY: 410, focusX: 45, focusY: 34 },
+  "halloween-ghost-plush": { label: "幽灵抱枕", width: 88, height: 82, defaultX: 650, defaultY: 420, focusX: 44, focusY: 42 },
 };
 
 const DECOR_SPECS = {
@@ -125,6 +126,8 @@ const DECOR_SPECS = {
   "cat-climbing-tree": { label: "原木猫爬架", width: 132, height: 184, defaultX: 1090, defaultY: 292 },
   "mini-fountain": { label: "循环饮水机", width: 100, height: 82, defaultX: 694, defaultY: 432 },
   "bubble-bathtub": { label: "泡泡浴缸", width: 180, height: 108, defaultX: 940, defaultY: 332 },
+  "halloween-pumpkin-lantern": { label: "南瓜灯摆件", width: 96, height: 88, defaultX: 400, defaultY: 408 },
+  "halloween-candy-bowl": { label: "糖果篮摆件", width: 112, height: 84, defaultX: 930, defaultY: 426 },
 };
 
 const WINDOW_DECOR_VARIANTS = Object.freeze({
@@ -154,6 +157,8 @@ const CAT_COLORS = {
   "festival-osmanthus": { body: 0xf6d585, shade: 0xd6a250, stripe: 0x8e6534, belly: 0xfff3cf, nose: 0xf08faa },
   "festival-lantern": { body: 0xe79282, shade: 0xb85352, stripe: 0x7c4246, belly: 0xfff0dc, nose: 0xf08faa },
   "festival-maple": { body: 0xe7aa6f, shade: 0xbe7446, stripe: 0x774934, belly: 0xffe6c1, nose: 0xf08faa },
+  "festival-pumpkin": { body: 0xf6a13d, shade: 0xd16b28, stripe: 0x69412c, belly: 0xffe4a3, nose: 0x8e4868 },
+  "festival-ghost": { body: 0xeae5ff, shade: 0xb4a4db, stripe: 0x6b548f, belly: 0xffffff, nose: 0xe88eae },
 };
 
 const TONE_PALETTES = {
@@ -1653,6 +1658,9 @@ class CatWorldScene extends Phaser.Scene {
         });
       }
       this.drawDecorShape(container, decorId, spec, palette(tone));
+      if (decorId === "halloween-pumpkin-lantern" && !damaged) {
+        this.applyHalloweenLanternGlow(container, Boolean(this.owner.itemInteractionStates.get(decorId)?.active));
+      }
       if (decorId === "bubble-bathtub" && !editMode && !damaged) {
         this.drawBathtubQueueBadge(position, spec, snapshot);
       }
@@ -1978,6 +1986,23 @@ class CatWorldScene extends Phaser.Scene {
       graphics.strokeCircle(35, 25, 17);
       graphics.strokeCircle(62, 21, 18);
       graphics.strokeCircle(84, 28, 15);
+    } else if (itemId === "halloween-ghost-plush") {
+      graphics.fillStyle(0x2c2f3a, 0.18);
+      graphics.fillEllipse(44, 73, 74, 12);
+      drawPixelRect(graphics, 24, 8, 40, 12, 0xf6f2ff);
+      drawPixelRect(graphics, 14, 20, 60, 40, 0xf6f2ff);
+      drawPixelRect(graphics, 14, 54, 16, 16, 0xe2d9fa, INK, 3);
+      drawPixelRect(graphics, 36, 54, 16, 20, 0xf6f2ff, INK, 3);
+      drawPixelRect(graphics, 58, 54, 16, 16, 0xe2d9fa, INK, 3);
+      graphics.fillStyle(0xf6f2ff, 1);
+      graphics.fillRect(18, 47, 52, 13);
+      graphics.fillStyle(0x6b548f, 1);
+      graphics.fillRect(28, 31, 8, 10);
+      graphics.fillRect(52, 31, 8, 10);
+      graphics.fillRect(40, 45, 8, 5);
+      graphics.fillStyle(0xf5adc5, 1);
+      graphics.fillRect(23, 43, 9, 4);
+      graphics.fillRect(56, 43, 9, 4);
     } else if (itemId === "limited-gift-toy") {
       graphics.fillStyle(0x2c2f3a, 0.22);
       graphics.fillEllipse(45, 62, 76, 12);
@@ -2063,7 +2088,47 @@ class CatWorldScene extends Phaser.Scene {
 
   drawDecorShape(container, decorId, spec, colors) {
     const graphics = makeLocalGraphics(this, container);
-    if (WINDOW_DECOR_VARIANTS[decorId]) {
+    if (decorId === "halloween-pumpkin-lantern") {
+      graphics.fillStyle(0x2c2f3a, 0.18);
+      graphics.fillEllipse(48, 78, 86, 12);
+      drawPixelRect(graphics, 40, 3, 12, 20, 0x65884b, INK, 3);
+      drawPixelRect(graphics, 18, 18, 60, 58, 0xed8b2d);
+      drawPixelRect(graphics, 8, 30, 80, 34, 0xf6a13d);
+      graphics.fillStyle(0xf6a13d, 1);
+      graphics.fillRect(23, 23, 50, 48);
+      graphics.fillStyle(0xd16b28, 1);
+      graphics.fillRect(28, 22, 5, 49);
+      graphics.fillRect(61, 22, 5, 49);
+      graphics.fillStyle(0x4b3443, 1);
+      graphics.fillTriangle(22, 47, 32, 34, 42, 47);
+      graphics.fillTriangle(54, 47, 64, 34, 74, 47);
+      graphics.fillRect(29, 55, 38, 9);
+      graphics.fillStyle(0xffe783, 1);
+      graphics.fillRect(34, 55, 8, 4);
+      graphics.fillRect(55, 60, 7, 4);
+    } else if (decorId === "halloween-candy-bowl") {
+      graphics.fillStyle(0x2c2f3a, 0.18);
+      graphics.fillEllipse(56, 76, 100, 12);
+      graphics.lineStyle(7, INK, 1);
+      graphics.lineBetween(22, 44, 22, 9);
+      graphics.lineBetween(22, 9, 90, 9);
+      graphics.lineBetween(90, 9, 90, 44);
+      graphics.lineStyle(3, 0xb4a4db, 1);
+      graphics.lineBetween(22, 42, 22, 9);
+      graphics.lineBetween(22, 9, 90, 9);
+      graphics.lineBetween(90, 9, 90, 42);
+      [[25, 29, 0xf5adc5], [48, 24, 0xffe783], [73, 30, 0x9ce7cf]].forEach(([x, y, color]) => {
+        drawPixelRect(graphics, x, y, 18, 16, color, INK, 2);
+        graphics.fillStyle(color, 1);
+        graphics.fillTriangle(x - 7, y, x - 7, y + 16, x, y + 8);
+        graphics.fillTriangle(x + 25, y, x + 25, y + 16, x + 18, y + 8);
+      });
+      drawPixelRect(graphics, 12, 46, 88, 27, 0x8d77b8);
+      drawPixelRect(graphics, 6, 39, 100, 12, 0xf6a13d);
+      graphics.fillStyle(0xffe783, 1);
+      graphics.fillRect(49, 54, 14, 5);
+      graphics.fillRect(53, 50, 6, 15);
+    } else if (WINDOW_DECOR_VARIANTS[decorId]) {
       drawWindowDecor(graphics, spec, colors, WINDOW_DECOR_VARIANTS[decorId]);
     } else if (decorId === "book-shelf") {
       graphics.fillStyle(colors.main, 1);
@@ -2200,6 +2265,20 @@ class CatWorldScene extends Phaser.Scene {
       duration: 900,
       ease: "Sine.easeInOut",
     });
+  }
+
+  applyHalloweenLanternGlow(container, active) {
+    const previousGlow = container?.getData("halloweenGlow");
+    previousGlow?.destroy();
+    container?.setData("halloweenGlow", null);
+    if (!container?.active || !active) return;
+    const glow = this.add.graphics();
+    glow.fillStyle(0xffb641, 0.18);
+    glow.fillCircle(48, 47, 62);
+    glow.fillStyle(0xffe783, 0.22);
+    glow.fillCircle(48, 47, 42);
+    container.addAt(glow, 0);
+    container.setData("halloweenGlow", glow);
   }
 
   drawCats(snapshot) {
@@ -3151,6 +3230,21 @@ class CatWorldScene extends Phaser.Scene {
   }
 
   interactWithDecor(decorId) {
+    if (decorId === "halloween-pumpkin-lantern") {
+      const active = !this.owner.itemInteractionStates.get(decorId)?.active;
+      this.owner.itemInteractionStates.set(decorId, { active });
+      this.applyHalloweenLanternGlow(this.decorContainers.get(decorId), active);
+      return { handled: true, active, message: active ? "南瓜灯亮起来了，暖暖的灯光照着小猫。" : "南瓜灯关上了，橙色小南瓜静静陪着你。" };
+    }
+    if (decorId === "halloween-candy-bowl") {
+      const basket = this.decorContainers.get(decorId);
+      if (basket?.active) {
+        this.tweens.killTweensOf(basket);
+        basket.setScale(1);
+        this.tweens.add({ targets: basket, scaleX: 1.06, scaleY: 0.94, yoyo: true, repeat: 1, duration: 180 });
+      }
+      return { handled: true, message: "糖果篮轻轻晃了晃，彩色糖纸沙沙响——这是节日摆件，不给小猫吃糖哦。" };
+    }
     const interaction = itemInteractionFor(decorId, "decor");
     if (!interaction) return null;
     if (this.owner.wandMode) this.stopFeatherWandMode({ notify: false });
@@ -4354,6 +4448,20 @@ class CatWorldScene extends Phaser.Scene {
       pixelBlock(graphics, 36, 8, 4, 4, colors.shade);
       pixelBlock(graphics, 43, 8, 4, 3, colors.shade);
       pixelBlock(graphics, 37, 5, 3, 2, colors.stripe);
+    } else if (breedId === "festival-pumpkin") {
+      // A tiny stem hat and warm collar distinguish the seasonal companion.
+      pixelBlock(graphics, 39, 1, 5, 3, 0x65884b);
+      pixelBlock(graphics, 41, 0, 2, 2, 0x426b3d);
+      pixelBlock(graphics, 34, 20, 13, 2, 0x6b548f);
+      pixelBlock(graphics, 39, 22, 3, 2, 0xffe783);
+    } else if (breedId === "festival-ghost") {
+      // A small scalloped cape leaves the individual face and paws visible.
+      pixelBlock(graphics, 13, 10, 20, 2, 0x6b548f);
+      pixelBlock(graphics, 12, 12, 22, 9, 0xeae5ff);
+      pixelBlock(graphics, 12, 20, 4, 3, 0xb4a4db);
+      pixelBlock(graphics, 21, 20, 4, 3, 0xb4a4db);
+      pixelBlock(graphics, 30, 20, 4, 3, 0xb4a4db);
+      pixelBlock(graphics, 28, 13, 3, 3, 0xffe783);
     } else if (breedId === "turkish-angora") {
       pixelBlock(graphics, 1, 10, 6, 7, INK);
       pixelBlock(graphics, 2, 11, 5, 5, colors.body);

@@ -6676,7 +6676,7 @@ async def vue_admin_cat_world_limited_item_stock_api(request: Request, db: Sessi
         raise HTTPException(status_code=400, detail="限定礼物库存数据不是有效 JSON。") from exc
     item_id = str((payload or {}).get("itemId") or "").strip()
     item = CAT_WORLD_SHOP_BY_ID.get(item_id)
-    if not item or not item.get("limited") or item.get("category") != "toy":
+    if not item or not item.get("limited") or item.get("category") not in {"toy", "decor"}:
         raise HTTPException(status_code=404, detail="没有找到这件限定礼物。")
     stock = db.scalar(
         select(CatWorldLimitedItemStock)
@@ -17775,7 +17775,7 @@ def require_cat_world_festival_sale(festival_id: str | None) -> None:
     window = festival_sale_window(festival_id)
     if window["saleState"] != "active":
         label = "尚未开放" if window["saleState"] == "upcoming" else "已经结束"
-        raise HTTPException(status_code=409, detail=f"这一期节庆盲盒{label}，开放时间：{window['saleLabel']}。")
+        raise HTTPException(status_code=409, detail=f"这一期节庆限定商品{label}，开放时间：{window['saleLabel']}。")
 
 
 def cat_world_blind_box_catalog_payload(

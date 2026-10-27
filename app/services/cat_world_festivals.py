@@ -166,7 +166,8 @@ def festival_energy_source(db: Session, phone: str, now: datetime | None = None)
     event = active or upcoming
     status = "active" if active else "upcoming" if upcoming else "ended"
     date_label = " · ".join(
-        f"{event[2].month}月{event[2].day}–{event[3].day}日"
+        f"{event[2].month}月{event[2].day}–"
+        f"{str(event[3].month) + '月' if event[2].month != event[3].month else ''}{event[3].day}日"
         for event in FESTIVALS
     )
     multiplier = reward_multiplier(today)
@@ -182,7 +183,7 @@ def festival_energy_source(db: Session, phone: str, now: datetime | None = None)
         "todayMultiplier": multiplier,
         "multiplierLabel": f"今日 {multiplier} 倍" if multiplier > 1 else "今日普通倍率",
         "todayBonus": today_bonus,
-        "remainingBonus": max(DAILY_BONUS_CAP - today_bonus, 0) if active else DAILY_BONUS_CAP,
+        "remainingBonus": max(DAILY_BONUS_CAP - today_bonus, 0) if multiplier > 1 else DAILY_BONUS_CAP,
         "totalBonus": total,
         "nextUpdateAt": datetime.combine(today + timedelta(days=1), time.min, BEIJING).isoformat(),
         "rule": f"节庆日新获得的拼写、整轮挑战、作文和 AI 英语辩论积分 3 倍；普通周末 2 倍；每天额外加成最多 {DAILY_BONUS_CAP} 能量。",

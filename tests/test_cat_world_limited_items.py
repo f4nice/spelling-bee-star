@@ -36,7 +36,9 @@ class CatWorldLimitedItemTest(unittest.TestCase):
             seed_cat_world_limited_item_stock(db)
             seed_cat_world_limited_item_stock(db)
 
-            rows = db.scalars(select(CatWorldLimitedItemStock)).all()
+            rows = db.scalars(select(CatWorldLimitedItemStock).where(
+                CatWorldLimitedItemStock.item_id == CAT_WORLD_LIMITED_GIFT_ITEM_ID
+            )).all()
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0].total_stock, CAT_WORLD_LIMITED_GIFT_INITIAL_STOCK)
 
