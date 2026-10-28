@@ -10,6 +10,10 @@ export const coreRouteLoaders = {
     data.value = await fetchJson(routeApiPaths.growth());
   },
 
+  async funMath({ data }) {
+    data.value = await fetchJson(routeApiPaths.funMath(), { skipCache: true, cache: "no-store" });
+  },
+
   async catWorld({ data }) {
     data.value = await fetchJson(routeApiPaths.catWorld(), { skipCache: true });
   },

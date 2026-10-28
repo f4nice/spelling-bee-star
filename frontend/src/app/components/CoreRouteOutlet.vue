@@ -4,6 +4,7 @@ import { defineAsyncComponent } from "vue";
 const ChallengeDayPage = defineAsyncComponent(() => import("../pages/ChallengeDayPage.vue"));
 const AdminPage = defineAsyncComponent(() => import("../pages/AdminPage.vue"));
 const CatWorldPage = defineAsyncComponent(() => import("../pages/CatWorldPage.vue"));
+const FunMathPage = defineAsyncComponent(() => import("../pages/FunMathPage.vue"));
 const DebatePage = defineAsyncComponent(() => import("../pages/DebatePage.vue"));
 const DiaryPage = defineAsyncComponent(() => import("../pages/DiaryPage.vue"));
 const EssaysPage = defineAsyncComponent(() => import("../pages/EssaysPage.vue"));
@@ -26,6 +27,7 @@ defineProps({
   <HomePage v-if="ctx.route.name === 'home' && ctx.data" :data="ctx.data" :go="ctx.go" :fallback-letter="ctx.fallbackLetter" />
   <AdminPage v-else-if="ctx.route.name === 'admin' && ctx.data" :data="ctx.data" />
   <CatWorldPage v-else-if="ctx.route.name === 'catWorld' && ctx.data" :data="ctx.data" />
+  <FunMathPage v-else-if="ctx.route.name === 'funMath' && ctx.data" :data="ctx.data" :go="ctx.go" />
   <DebatePage v-else-if="ctx.route.name === 'debate' && ctx.data" :data="ctx.data" />
   <DiaryPage v-else-if="ctx.route.name === 'diary' && ctx.data" :data="ctx.data" />
   <EssaysPage v-else-if="ctx.route.name === 'essays' && ctx.data" :data="ctx.data" />

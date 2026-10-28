@@ -1,6 +1,9 @@
 export const routeApiPaths = {
   home: () => "/api/vue/home",
   growth: () => "/api/vue/growth",
+  funMath: () => "/api/vue/fun-math",
+  funMathStart: () => "/api/vue/fun-math/start",
+  funMathAnswer: () => "/api/vue/fun-math/answer",
   catWorld: () => "/api/vue/cat-world",
   catWorldPlayTime: () => "/api/vue/cat-world/play-time",
   catWorldPurchase: () => "/api/vue/cat-world/purchase",

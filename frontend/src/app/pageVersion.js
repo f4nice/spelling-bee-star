@@ -4,6 +4,7 @@ const ROUTE_MODULES = [
   { names: ["home"], key: "home", label: "首页" },
   { names: ["admin"], key: "admin", label: "后台管理" },
   { names: ["growth"], key: "growth", label: "成长体系" },
+  { names: ["funMath"], key: "fun-math", label: "趣味数学" },
   { names: ["catWorld"], key: "cat-world", label: "猫咪世界" },
   { names: ["essays"], key: "essays", label: "我的作文集" },
   { names: ["debate"], key: "ai-debate", label: "AI Debate" },

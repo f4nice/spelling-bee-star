@@ -75,6 +75,12 @@ from app.services.challenge_masking import mask_word_in_text
 from app.services.cat_world_festivals import (
     festival_blind_box_series, festival_energy_source, festival_sale_window, record_festival_earning,
 )
+from app.services.fun_math import (
+    FUN_MATH_GRANT_SOURCE,
+    get_daily_payload as fun_math_daily_payload,
+    start_question as fun_math_start_question,
+    submit_answer as fun_math_submit_answer,
+)
 from app.services.newspaper_cache import NewspaperCache
 from app.services.list_completion_jobs import (
     ListCompletionJobs, PreserveWordValues, missing_text_fields,
@@ -4477,6 +4483,45 @@ def newspaper_article_page(
 @app.get("/diary", response_class=HTMLResponse)
 def diary_page(request: Request, db: Session = Depends(get_db)):
     return vue_shell(request, db, "diary")
+
+
+@app.get("/fun-math", response_class=HTMLResponse)
+def fun_math_page(request: Request, db: Session = Depends(get_db)):
+    return vue_shell(request, db, "fun-math")
+
+
+@app.get("/api/vue/fun-math")
+def vue_fun_math_api(request: Request, db: Session = Depends(get_db)):
+    user = current_admin_user(request, db)
+    return JSONResponse(fun_math_daily_payload(db, user.phone), headers={"Cache-Control": "no-store"})
+
+
+async def read_fun_math_request(request: Request) -> dict[str, Any]:
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="数学答题数据不是有效 JSON。") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="数学答题数据格式不正确。")
+    return payload
+
+
+@app.post("/api/vue/fun-math/start")
+async def vue_fun_math_start_api(request: Request, db: Session = Depends(get_db)):
+    user = current_admin_user(request, db)
+    payload = await read_fun_math_request(request)
+    result = fun_math_start_question(db, user.phone, payload.get("questionId"), payload.get("day"))
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/vue/fun-math/answer")
+async def vue_fun_math_answer_api(request: Request, db: Session = Depends(get_db)):
+    user = current_admin_user(request, db)
+    payload = await read_fun_math_request(request)
+    result = fun_math_submit_answer(
+        db, user.phone, payload.get("questionId"), payload.get("day"), payload.get("answer"),
+    )
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/essays", response_class=HTMLResponse)
@@ -15749,6 +15794,7 @@ def cat_world_operating_energy_source(
         select(CatWorldEnergyGrant)
         .where(CatWorldEnergyGrant.phone == phone)
         .where(CatWorldEnergyGrant.granted_by_phone != CAT_WORLD_DEBATE_ENERGY_GRANT_SOURCE)
+        .where(CatWorldEnergyGrant.granted_by_phone != FUN_MATH_GRANT_SOURCE)
         .order_by(CatWorldEnergyGrant.created_at.desc(), CatWorldEnergyGrant.id.desc())
     ).all()
     total_energy = sum(max(int(grant.amount or 0), 0) for grant in grants)
@@ -15770,6 +15816,32 @@ def cat_world_operating_energy_source(
         "todayGrantCount": len(today_grants),
         "todayDetail": f"今天：{latest_today.reason}" if latest_today else "今天还没有特别奖励",
         "detail": f"最近：{latest.reason}" if latest else "还没有特别奖励",
+    }
+
+
+def cat_world_math_energy_source(db: Session, phone: str, today: date | None = None) -> dict[str, Any]:
+    # Math timestamps are UTC; its daily quota and reward view use Beijing time.
+    reward_day = today or (datetime.utcnow() + timedelta(hours=8)).date()
+    start = datetime.combine(reward_day, datetime.min.time()) - timedelta(hours=8)
+    end = start + timedelta(days=1)
+    in_today = (CatWorldEnergyGrant.created_at >= start) & (CatWorldEnergyGrant.created_at < end)
+    row = db.execute(
+        select(
+            func.coalesce(func.sum(CatWorldEnergyGrant.amount), 0),
+            func.count(CatWorldEnergyGrant.id),
+            func.coalesce(func.sum(case((in_today, CatWorldEnergyGrant.amount), else_=0)), 0),
+            func.coalesce(func.sum(case((in_today, 1), else_=0)), 0),
+        ).where(
+            CatWorldEnergyGrant.phone == phone,
+            CatWorldEnergyGrant.granted_by_phone == FUN_MATH_GRANT_SOURCE,
+        )
+    ).one()
+    energy, count, today_energy, today_count = map(int, row)
+    return {
+        "key": "fun_math", "label": "趣味数学", "value": count, "unit": "题",
+        "energyPerUnit": 100, "energy": energy, "grantCount": count,
+        "todayValue": today_count, "todayEnergy": today_energy, "todayGrantCount": today_count,
+        "todayDetail": f"今天答对 {today_count} 题 · +{today_energy} 能量（固定奖励）",
     }
 
 
@@ -16008,12 +16080,14 @@ def cat_world_earned_energy(db: Session, phone: str, growth: dict[str, Any] | No
     essay_source = cat_world_essay_energy_source(db, phone)
     debate_source = cat_world_debate_energy_source(db, phone)
     operating_source = cat_world_operating_energy_source(db, phone)
+    math_source = cat_world_math_energy_source(db, phone)
     habit_source = cat_world_learning_habit_source(db, phone)
     return (
         max(int(growth.get("points") or 0), 0)
         + int(essay_source["energy"])
         + int(debate_source["energy"])
         + int(operating_source["energy"])
+        + int(math_source["energy"])
         + int(habit_source["energy"])
         + int(festival_energy_source(db, phone)["energy"])
     )
@@ -16034,6 +16108,7 @@ def cat_world_today_energy_source_rows(
     operating_source: dict[str, Any],
     habit_source: dict[str, Any] | None = None,
     festival_source: dict[str, Any] | None = None,
+    math_source: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     rules = {item["key"]: item for item in growth.get("scoreRules", []) if isinstance(item, dict)}
     missions = {item["key"]: item for item in growth.get("dailyMissions", []) if isinstance(item, dict)}
@@ -16050,7 +16125,7 @@ def cat_world_today_energy_source_rows(
             "energy": spelling_energy,
         }
     ]
-    for source in (essay_source, debate_source, operating_source, habit_source or {}, festival_source or {}):
+    for source in (essay_source, debate_source, operating_source, habit_source or {}, festival_source or {}, math_source or {}):
         if not source:
             continue
         today_energy = max(int(source.get("todayEnergy") or 0), 0)
@@ -23686,6 +23761,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
     essay_energy_source = cat_world_essay_energy_source(db, state.phone)
     debate_energy_source = cat_world_debate_energy_source(db, state.phone)
     operating_energy_source = cat_world_operating_energy_source(db, state.phone)
+    math_energy_source = cat_world_math_energy_source(db, state.phone)
     habit_energy_source = cat_world_learning_habit_source(db, state.phone)
     festival_source = festival_energy_source(db, state.phone)
     earned_energy = (
@@ -23693,6 +23769,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         + int(essay_energy_source["energy"])
         + int(debate_energy_source["energy"])
         + int(operating_energy_source["energy"])
+        + int(math_energy_source["energy"])
         + int(habit_energy_source["energy"])
         + int(festival_source["energy"])
     )
@@ -23703,6 +23780,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
         operating_energy_source,
         habit_energy_source,
         festival_source,
+        math_energy_source,
     )
     today_energy = sum(int(source["energy"]) for source in today_energy_sources)
     spent_energy = max(int(state.energy_spent or 0), 0)
@@ -23922,6 +24000,7 @@ def serialize_cat_world_payload(db: Session, state: CatWorldState) -> dict[str, 
                 essay_energy_source,
                 debate_energy_source,
                 operating_energy_source,
+                math_energy_source,
                 habit_energy_source,
                 festival_source,
             ],

@@ -1,5 +1,9 @@
 export const studyRouteMatchers = [
   {
+    match: ([section]) => section === "fun-math",
+    route: () => ({ name: "funMath", params: {} }),
+  },
+  {
     match: ([section]) => section === "growth",
     route: () => ({ name: "growth", params: {} }),
   },

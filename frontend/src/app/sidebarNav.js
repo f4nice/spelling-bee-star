@@ -5,6 +5,7 @@ export const sidebarNavItems = [
   { label: "AI Debate", path: "/debate", routes: ["debate"] },
   { label: "英文小报", path: "/newspaper", routePrefix: "newspaper" },
   { label: "日记本", path: "/diary", routes: ["diary"] },
+  { label: "趣味数学", path: "/fun-math", routes: ["funMath"] },
   { label: "SPB-个人赛冠军词库", path: "/spb", routes: ["spb"], collection: "individual" },
   { label: "我的生词本", path: "/wrong-words", routes: ["wrongWords"], countKey: "wrongWordCount" },
   { label: "猫咪能量世界", path: "/cat-world", routes: ["catWorld"] },

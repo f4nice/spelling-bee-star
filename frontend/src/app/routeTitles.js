@@ -4,6 +4,7 @@ export function routeTitle(route, data) {
   if (route.name === "wrongWords") return "我的生词本";
   if (route.name === "spb") return "SPB-个人赛冠军词库";
   if (route.name === "growth") return "成长体系";
+  if (route.name === "funMath") return "趣味数学";
   if (route.name === "catWorld") return "猫咪世界";
   if (route.name === "essays") return "我的作文集";
   if (route.name === "diary") return "日记本";

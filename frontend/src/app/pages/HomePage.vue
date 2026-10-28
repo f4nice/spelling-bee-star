@@ -77,6 +77,16 @@ function openTodayWrongChallenge() {
 
     <HomeStatsGrid :stats="data.stats" :go="go" />
 
+    <section class="panel home-math-card" aria-labelledby="home-math-title">
+      <div class="home-math-symbol" aria-hidden="true">×</div>
+      <div class="home-math-copy">
+        <p class="section-kicker">DAILY MATH</p>
+        <h2 id="home-math-title">趣味数学</h2>
+        <p>每天 5 道三位数乘法 · 每题 10 分钟 · 答对获得 100 猫咪能量</p>
+      </div>
+      <button class="primary-action-button" type="button" @click="go('/fun-math')">去挑战 →</button>
+    </section>
+
     <section v-if="todayWrongWords.length" class="panel home-wrong-panel home-wrong-strip">
       <div class="home-wrong-heading">
         <p class="section-kicker">Mistakes</p>
@@ -99,3 +109,13 @@ function openTodayWrongChallenge() {
     <HomeFeaturedLists :cards="data.featured_cards" :go="go" :fallback-letter="fallbackLetter" />
   </section>
 </template>
+
+<style scoped>
+.home-math-card { display: flex; align-items: center; gap: 20px; padding: 24px; margin-block: 22px; background: linear-gradient(115deg, #f0faf6, #fff9e8); border-color: #c6e4d6; }
+.home-math-symbol { display: grid; place-items: center; flex: 0 0 64px; height: 64px; border-radius: 20px; background: #d9f1e6; color: #146e55; font: 800 46px/1 sans-serif; transform: rotate(-7deg); }
+.home-math-copy { flex: 1; min-width: 0; }
+.home-math-copy h2 { margin: 4px 0 6px; }
+.home-math-copy p { margin: 0; color: #526c62; line-height: 1.6; }
+.home-math-card > button { flex-shrink: 0; }
+@media (max-width: 600px) { .home-math-card { flex-wrap: wrap; padding: 20px; gap: 14px; } .home-math-symbol { flex-basis: 48px; height: 48px; font-size: 36px; border-radius: 15px; } .home-math-card > button { width: 100%; min-height: 44px; } }
+</style>
