@@ -9565,10 +9565,14 @@ def run_import_preview_job(
     total_lists = max((total + chunk_size - 1) // chunk_size, 1)
     base_name = clean_list_name(word_list_name)
     word_ids: list[int] = []
+    enrichment_word_ids: list[int] = []
     split_lists: list[WordList] = []
     target_list: WordList | None = None
 
     try:
+        word_list_id = str(word_list_id or "").strip()
+        existing_target = db.get(WordList, int(word_list_id)) if word_list_id.isdigit() else None
+        preserve_existing_words = existing_target is None
         update_import_preview_job(
             job_id,
             status="running",
@@ -9585,8 +9589,12 @@ def run_import_preview_job(
             for chunk_index in range(0, total, chunk_size):
                 chunk_number = (chunk_index // chunk_size) + 1
                 chunk = rows[chunk_index : chunk_index + chunk_size]
-                chunk_list = get_or_create_word_list_by_name(db, f"{base_name}-{chunk_number}")
-                clear_word_list_items(db, chunk_list.id)
+                if preserve_existing_words:
+                    # A new import must never clear a same-named existing list.
+                    chunk_list = get_or_create_word_list(db, "", f"{base_name}-{chunk_number}")
+                else:
+                    chunk_list = get_or_create_word_list_by_name(db, f"{base_name}-{chunk_number}")
+                    clear_word_list_items(db, chunk_list.id)
                 chunk_list.group_id = split_group.id
                 chunk_list.sequence_offset = chunk_index
                 db.add(chunk_list)
@@ -9602,7 +9610,11 @@ def run_import_preview_job(
                     if chunk_processed == size or chunk_processed % 10 == 0:
                         update_import_preview_job(job_id, processed=start + chunk_processed)
 
-                word_ids.extend(import_rows(chunk, db, chunk_list, progress_callback=report_chunk_progress))
+                word_ids.extend(import_rows(
+                    chunk, db, chunk_list, progress_callback=report_chunk_progress,
+                    preserve_existing_words=preserve_existing_words,
+                    enrichment_word_ids=enrichment_word_ids,
+                ))
                 update_import_preview_job(
                     job_id,
                     processed=min(chunk_index + len(chunk), total),
@@ -9620,7 +9632,11 @@ def run_import_preview_job(
                 if processed == total or processed % 10 == 0:
                     update_import_preview_job(job_id, processed=processed)
 
-            word_ids = import_rows(rows, db, target_list, progress_callback=report_single_list_progress)
+            word_ids = import_rows(
+                rows, db, target_list, progress_callback=report_single_list_progress,
+                preserve_existing_words=preserve_existing_words,
+                enrichment_word_ids=enrichment_word_ids,
+            )
             update_import_preview_job(job_id, processed=total, completed_lists=1)
 
         update_import_preview_job(
@@ -9630,8 +9646,8 @@ def run_import_preview_job(
             processed=total,
             message="正在完成导入并准备单词详情。",
         )
-        if word_ids:
-            start_enrichment_thread(word_ids, include_images=False)
+        if enrichment_word_ids:
+            start_enrichment_thread(list(dict.fromkeys(enrichment_word_ids)), include_images=False)
         if target_list is None:
             raise RuntimeError("导入完成后没有找到目标词表")
 
@@ -9640,6 +9656,7 @@ def run_import_preview_job(
             "word_list_id": target_list.id,
             "word_list_name": target_list.name,
             "count": len(word_ids),
+            "existing_word_policy": "preserve" if preserve_existing_words else "merge",
             "split_word_lists": [
                 {"id": word_list.id, "name": word_list.name, "sequence_offset": word_list.sequence_offset}
                 for word_list in split_lists
@@ -14403,6 +14420,9 @@ def import_rows(
     db: Session,
     word_list: WordList,
     progress_callback: Callable[[int], None] | None = None,
+    *,
+    preserve_existing_words: bool = False,
+    enrichment_word_ids: list[int] | None = None,
 ) -> list[int]:
     created = updated = skipped = 0
     errors: list[str] = []
@@ -14411,7 +14431,12 @@ def import_rows(
     for row_index, row in enumerate(rows, start=1):
         word_text = row["word"]
         existing = db.scalar(select(Word).where(func.lower(Word.word) == word_text.lower()))
-        if existing:
+        keep_existing = existing is not None and preserve_existing_words
+        if keep_existing:
+            # Words are shared across lists. Only add the list association;
+            # do not touch text, media, locks, spelling, status, or its pool row.
+            word = existing
+        elif existing:
             if existing.word != word_text:
                 existing.word = word_text
             existing.phonetic = row.get("phonetic") or existing.phonetic
@@ -14467,29 +14492,32 @@ def import_rows(
             created += 1
 
         try:
-            db.commit()
-            db.refresh(word)
-            apply_word_resource(db, word, commit=False, include_image=False)
-            remember_word_resource(
-                db,
-                word,
-                american_audio_source=row.get("american_audio_url_source"),
-                british_audio_source=row.get("british_audio_url_source"),
-                english_definition_audio_source=row.get("english_definition_audio_url_source"),
-                english_example_audio_source=row.get("english_example_audio_url_source"),
-                override_text=bool(row.get("spb_text_source")),
-                override_media=bool(
-                    row.get("american_audio_url_source")
-                    or row.get("british_audio_url_source")
-                    or row.get("english_definition_audio_url_source")
-                    or row.get("english_example_audio_url_source")
-                ),
-                commit=False,
-            )
-            db.commit()
-            db.refresh(word)
+            if not keep_existing:
+                db.commit()
+                db.refresh(word)
+                apply_word_resource(db, word, commit=False, include_image=False)
+                remember_word_resource(
+                    db,
+                    word,
+                    american_audio_source=row.get("american_audio_url_source"),
+                    british_audio_source=row.get("british_audio_url_source"),
+                    english_definition_audio_source=row.get("english_definition_audio_url_source"),
+                    english_example_audio_source=row.get("english_example_audio_url_source"),
+                    override_text=bool(row.get("spb_text_source")),
+                    override_media=bool(
+                        row.get("american_audio_url_source")
+                        or row.get("british_audio_url_source")
+                        or row.get("english_definition_audio_url_source")
+                        or row.get("english_example_audio_url_source")
+                    ),
+                    commit=False,
+                )
+                db.commit()
+                db.refresh(word)
             link_word_to_list(db, word_list.id, word.id)
             word_ids.append(word.id)
+            if enrichment_word_ids is not None and not keep_existing:
+                enrichment_word_ids.append(word.id)
         except Exception as exc:
             db.rollback()
             skipped += 1
