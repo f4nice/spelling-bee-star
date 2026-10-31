@@ -9566,13 +9566,15 @@ def run_import_preview_job(
     base_name = clean_list_name(word_list_name)
     word_ids: list[int] = []
     enrichment_word_ids: list[int] = []
+    added_count = 0
     split_lists: list[WordList] = []
     target_list: WordList | None = None
 
     try:
         word_list_id = str(word_list_id or "").strip()
         existing_target = db.get(WordList, int(word_list_id)) if word_list_id.isdigit() else None
-        preserve_existing_words = existing_target is None
+        if existing_target is not None:
+            total_lists = 1
         update_import_preview_job(
             job_id,
             status="running",
@@ -9584,17 +9586,13 @@ def run_import_preview_job(
             message=f"正在写入第 1 / {total_lists} 个词表。",
         )
 
-        if total > chunk_size:
+        if total > chunk_size and existing_target is None:
             split_group = get_or_create_word_list_group_by_name(db, base_name)
             for chunk_index in range(0, total, chunk_size):
                 chunk_number = (chunk_index // chunk_size) + 1
                 chunk = rows[chunk_index : chunk_index + chunk_size]
-                if preserve_existing_words:
-                    # A new import must never clear a same-named existing list.
-                    chunk_list = get_or_create_word_list(db, "", f"{base_name}-{chunk_number}")
-                else:
-                    chunk_list = get_or_create_word_list_by_name(db, f"{base_name}-{chunk_number}")
-                    clear_word_list_items(db, chunk_list.id)
+                # New split lists never replace or clear same-named old lists.
+                chunk_list = get_or_create_word_list(db, "", f"{base_name}-{chunk_number}")
                 chunk_list.group_id = split_group.id
                 chunk_list.sequence_offset = chunk_index
                 db.add(chunk_list)
@@ -9610,11 +9608,13 @@ def run_import_preview_job(
                     if chunk_processed == size or chunk_processed % 10 == 0:
                         update_import_preview_job(job_id, processed=start + chunk_processed)
 
-                word_ids.extend(import_rows(
+                chunk_word_ids = import_rows(
                     chunk, db, chunk_list, progress_callback=report_chunk_progress,
-                    preserve_existing_words=preserve_existing_words,
+                    preserve_existing_words=True,
                     enrichment_word_ids=enrichment_word_ids,
-                ))
+                )
+                word_ids.extend(chunk_word_ids)
+                added_count += len(set(chunk_word_ids))
                 update_import_preview_job(
                     job_id,
                     processed=min(chunk_index + len(chunk), total),
@@ -9622,11 +9622,17 @@ def run_import_preview_job(
                 )
             target_list = split_lists[0]
         else:
-            target_list = get_or_create_word_list(db, word_list_id, base_name)
-            if not word_list_id:
+            # Continue importing into the selected list without renaming,
+            # regrouping, splitting, clearing, or resetting its progress.
+            target_list = existing_target
+            if target_list is None:
+                target_list = get_or_create_word_list(db, "", base_name)
                 target_list.sequence_offset = 0
                 db.add(target_list)
                 db.commit()
+            existing_word_ids = set(db.scalars(
+                select(WordListItem.word_id).where(WordListItem.word_list_id == target_list.id)
+            ).all())
 
             def report_single_list_progress(processed: int) -> None:
                 if processed == total or processed % 10 == 0:
@@ -9634,9 +9640,10 @@ def run_import_preview_job(
 
             word_ids = import_rows(
                 rows, db, target_list, progress_callback=report_single_list_progress,
-                preserve_existing_words=preserve_existing_words,
+                preserve_existing_words=True,
                 enrichment_word_ids=enrichment_word_ids,
             )
+            added_count = len(set(word_ids) - existing_word_ids)
             update_import_preview_job(job_id, processed=total, completed_lists=1)
 
         update_import_preview_job(
@@ -9656,7 +9663,9 @@ def run_import_preview_job(
             "word_list_id": target_list.id,
             "word_list_name": target_list.name,
             "count": len(word_ids),
-            "existing_word_policy": "preserve" if preserve_existing_words else "merge",
+            "existing_word_policy": "preserve",
+            "added_count": added_count,
+            "skipped_count": total - added_count,
             "split_word_lists": [
                 {"id": word_list.id, "name": word_list.name, "sequence_offset": word_list.sequence_offset}
                 for word_list in split_lists
@@ -9670,7 +9679,7 @@ def run_import_preview_job(
             processed=total,
             completed_lists=total_lists,
             current_list=total_lists,
-            message=f"导入完成：{len(word_ids)} 个单词，{total_lists} 个词表。",
+            message=f"导入完成：处理 {total} 个单词，新增 {added_count} 个，未新增 {total - added_count} 个；{total_lists} 个词表。",
             result=result,
         )
         preview_path(job_id).unlink(missing_ok=True)
@@ -9705,6 +9714,7 @@ async def vue_import_preview(
     selected_rows: list[int] = Form(default=[]),
     selected_columns: list[str] = Form(default=[]),
     image_files: list[UploadFile] = File(default=[]),
+    db: Session = Depends(get_db),
 ):
     path = preview_path(preview_id)
     if not path.exists():
@@ -9724,7 +9734,14 @@ async def vue_import_preview(
         word_columns=word_columns,
     )
     total = len(rows)
-    total_lists = max((total + 499) // 500, 1)
+    normalized_target = str(word_list_id or "").strip()
+    existing_target = db.get(WordList, int(normalized_target)) if normalized_target.isdigit() else None
+    total_lists = 1 if existing_target is not None else max((total + 499) // 500, 1)
+    queued_message = (
+        f"准备向已有词表追加 {total} 个单词，已有内容和学习记录保持不变。"
+        if existing_target is not None
+        else f"准备导入 {total} 个单词，将生成 {total_lists} 个词表。"
+    )
     now = datetime.utcnow().isoformat()
     job, should_start = store_import_preview_job({
         "id": preview_id,
@@ -9736,7 +9753,7 @@ async def vue_import_preview(
         "total_lists": total_lists,
         "completed_lists": 0,
         "current_list": 0,
-        "message": f"准备导入 {total} 个单词，将生成 {total_lists} 个词表。",
+        "message": queued_message,
         "created_at": now,
         "updated_at": now,
         "result": None,

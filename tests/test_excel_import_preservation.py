@@ -1,4 +1,6 @@
-"""Excel new-list preservation; every database and job is isolated from NAS."""
+"""Excel new-list and continuation preservation; all databases/jobs are isolated."""
+import asyncio
+import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -139,12 +141,95 @@ class ExcelImportPreservationTests(unittest.TestCase):
         self.assertEqual(calls[0].kwargs,{"include_images":False})
         self.assert_original_unchanged()
 
-    def test_existing_target_job_keeps_merge_behavior(self):
-        result,calls = self.run_job([self.replacement()],str(self.old_list.id),self.old_list.name)
-        self.assertEqual(result["existing_word_policy"],"merge")
+    def test_existing_target_job_preserves_word_and_list_metadata(self):
+        original_list = snapshot(self.old_list)
+        result,calls = self.run_job([self.replacement()],str(self.old_list.id),"Must not rename")
+        self.assertEqual(result["existing_word_policy"],"preserve")
         self.assertEqual(result["word_list_id"],self.old_list.id)
-        self.assertEqual(self.db.get(Word,self.word.id).english_definition,"replacement definition")
-        self.assertEqual(calls[0].args,([self.word.id],))
+        self.assertEqual((result["added_count"],result["skipped_count"]),(0,1))
+        self.assertEqual(calls,[])
+        self.assertEqual(snapshot(self.db.get(WordList,self.old_list.id)),original_list)
+        self.assert_original_unchanged()
+
+    def test_continue_mixed_rows_only_appends_missing_links_and_enriches_new_words(self):
+        shared = Word(word="shared",english_definition="shared original",enrichment_status="ready")
+        self.db.add(shared)
+        self.db.commit()
+        self.db.add(WordListItem(word_list_id=self.new_list.id,word_id=shared.id))
+        self.db.commit()
+        shared_before = snapshot(shared)
+        old_link_ids = list(self.db.scalars(select(WordListItem.id).where(
+            WordListItem.word_list_id==self.old_list.id)).all())
+        rows = [self.replacement(),{"word":"SHARED","english_definition":"must not replace"},
+            {"word":"brandnew","english_definition":"new entry"}]
+        result,calls = self.run_job(rows,str(self.old_list.id),self.old_list.name)
+        new_word = self.db.scalar(select(Word).where(Word.word=="brandnew"))
+        self.assertEqual((result["added_count"],result["skipped_count"]),(2,1))
+        self.assertEqual(calls[0].args,([new_word.id],))
+        links = self.db.scalars(select(WordListItem).where(
+            WordListItem.word_list_id==self.old_list.id).order_by(WordListItem.id)).all()
+        self.assertEqual([link.word_id for link in links],[self.word.id,shared.id,new_word.id])
+        self.assertEqual([link.id for link in links[:1]],old_link_ids)
+        self.assertEqual(snapshot(self.db.get(Word,shared.id)),shared_before)
+        self.assert_original_unchanged()
+
+    def test_repeated_continue_import_is_idempotent(self):
+        rows = [self.replacement(),{"word":"brandnew","english_definition":"first"}]
+        result,_ = self.run_job(rows,str(self.old_list.id),self.old_list.name)
+        self.assertEqual(result["added_count"],1)
+        words_before = [snapshot(word) for word in self.db.scalars(select(Word).order_by(Word.id))]
+        pool_before = [snapshot(row) for row in self.db.scalars(select(WordResourcePool).order_by(WordResourcePool.id))]
+        links_before = [snapshot(row) for row in self.db.scalars(select(WordListItem).order_by(WordListItem.id))]
+        rows[1]["english_definition"] = "must not replace first"
+        repeated,calls = self.run_job(rows,str(self.old_list.id),"Must not rename")
+        self.assertEqual((repeated["added_count"],repeated["skipped_count"]),(0,2))
+        self.assertEqual(calls,[])
+        self.assertEqual([snapshot(word) for word in self.db.scalars(select(Word).order_by(Word.id))],words_before)
+        self.assertEqual([snapshot(row) for row in self.db.scalars(select(WordResourcePool).order_by(WordResourcePool.id))],pool_before)
+        self.assertEqual([snapshot(row) for row in self.db.scalars(select(WordListItem).order_by(WordListItem.id))],links_before)
+        self.assert_original_unchanged()
+
+    def test_large_continue_import_never_splits_clears_or_changes_group(self):
+        group = WordListGroup(name="Original group",display_order=-30)
+        self.db.add(group)
+        self.db.flush()
+        self.old_list.group_id = group.id
+        self.old_list.sequence_offset = 500
+        unrelated = WordList(name="Book-1",sequence_offset=77)
+        self.db.add(unrelated)
+        self.db.commit()
+        self.db.add(WordListItem(word_list_id=unrelated.id,word_id=self.word.id))
+        self.db.commit()
+        lists_before = [snapshot(row) for row in self.db.scalars(select(WordList).order_by(WordList.id))]
+        groups_before = [snapshot(row) for row in self.db.scalars(select(WordListGroup).order_by(WordListGroup.id))]
+        with patch.object(m,"clear_word_list_items") as clear:
+            result,calls = self.run_job([self.replacement() for _ in range(501)],str(self.old_list.id),"Book")
+        clear.assert_not_called()
+        self.assertEqual(result["split_word_lists"],[])
+        self.assertEqual(result["word_list_id"],self.old_list.id)
+        self.assertEqual((result["added_count"],result["skipped_count"]),(0,501))
+        self.assertEqual(calls,[])
+        self.assertEqual([snapshot(row) for row in self.db.scalars(select(WordList).order_by(WordList.id))],lists_before)
+        self.assertEqual([snapshot(row) for row in self.db.scalars(select(WordListGroup).order_by(WordListGroup.id))],groups_before)
+        self.assertEqual(self.db.scalar(select(func.count()).select_from(WordListItem).where(
+            WordListItem.word_list_id==unrelated.id)),1)
+        self.assert_original_unchanged()
+
+    def test_large_continue_preview_reports_one_existing_target(self):
+        job_id = uuid4().hex
+        self.addCleanup(m.IMPORT_PREVIEW_JOBS.pop,job_id,None)
+        with TemporaryDirectory() as temporary, patch.object(m,"PREVIEW_DIR",Path(temporary)), \
+                patch.object(m,"parse_words_from_preview",return_value=[self.replacement() for _ in range(501)]), \
+                patch.object(m,"Thread") as thread:
+            (Path(temporary)/f"{job_id}.json").write_text(json.dumps({"rows":[{"index":0}],"columns":["word"]}),encoding="utf8")
+            response = asyncio.run(m.vue_import_preview(preview_id=job_id,word_list_id=str(self.old_list.id),
+                word_list_name="Book",word_columns=["word"],selected_rows=[0],selected_columns=["word"],
+                image_files=[],db=self.db))
+        payload = json.loads(response.body)
+        self.assertEqual(payload["job"]["total_lists"],1)
+        self.assertIn("已有词表",payload["job"]["message"])
+        thread.return_value.start.assert_called_once()
+        self.assert_original_unchanged()
 
     def test_missing_and_invalid_targets_are_protected_new_lists(self):
         for target in ("", " ", "invalid", "999999"):
