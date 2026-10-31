@@ -14,7 +14,7 @@ const props = defineProps({
 
 const users = ref((props.data.users || []).map(createEditableUser));
 const savingPhones = ref([]);
-const visiblePasswordPhones = ref([]);
+const hiddenPasswordPhones = ref([]);
 const notice = ref("");
 const newUser = ref({ phone: "", username: "", role: "viewer", loginPassword: "" });
 const catWorldPricing = ref(normalizeCatWorldPricing(props.data.catWorldPricing || {}));
@@ -234,7 +234,7 @@ function isSaving(phone) {
 }
 
 function isPasswordVisible(phone) {
-  return visiblePasswordPhones.value.includes(phone);
+  return !hiddenPasswordPhones.value.includes(phone);
 }
 
 function setSaving(phone, saving) {
@@ -244,9 +244,9 @@ function setSaving(phone, saving) {
 }
 
 function togglePasswordVisibility(phone) {
-  visiblePasswordPhones.value = isPasswordVisible(phone)
-    ? visiblePasswordPhones.value.filter((item) => item !== phone)
-    : [...new Set([...visiblePasswordPhones.value, phone])];
+  hiddenPasswordPhones.value = isPasswordVisible(phone)
+    ? [...new Set([...hiddenPasswordPhones.value, phone])]
+    : hiddenPasswordPhones.value.filter((item) => item !== phone);
 }
 
 function defaultPermissions(role) {
@@ -607,7 +607,7 @@ async function resetCatWorldData() {
               <p>手机号是唯一登录标识，昵称用于前台右上角显示。</p>
             </div>
             <input v-model="newUser.phone" type="tel" inputmode="numeric" placeholder="手机号">
-            <input v-model="newUser.loginPassword" type="password" autocomplete="new-password" placeholder="登录密码">
+            <input v-model="newUser.loginPassword" type="text" autocomplete="new-password" placeholder="登录密码">
             <input v-model="newUser.username" type="text" placeholder="昵称">
             <select v-model="newUser.role">
               <option v-for="role in data.roleOptions" :key="role.key" :value="role.key">{{ role.label }}</option>
