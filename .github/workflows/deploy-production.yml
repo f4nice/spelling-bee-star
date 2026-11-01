@@ -1,9 +1,8 @@
 name: Deploy SpeakEasy production
 
 on:
-  push:
-    branches:
-      - main
+  # The live application is now on the NAS. Never deploy to the legacy Ubuntu
+  # host as a side effect of a source push; this old workflow is manual only.
   workflow_dispatch:
 
 permissions:
