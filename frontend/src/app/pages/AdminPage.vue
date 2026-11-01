@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { Eye, EyeOff } from "lucide-vue-next";
 import VersionStamp from "../components/VersionStamp.vue";
+import SiteDeletePasswordSettings from "../components/SiteDeletePasswordSettings.vue";
 import { routeApiPaths } from "../routeApiPaths.js";
 import { fetchJson } from "../utils.js";
 
@@ -739,7 +740,7 @@ async function resetCatWorldData() {
             <div>
               <p class="section-kicker">SITE</p>
               <h2>网站管理</h2>
-              <p>当前先集中展示站点策略和默认服务，后续可继续拆入备案、版本和全局开关。</p>
+              <p>管理站点策略、默认服务和全站删除安全设置。</p>
             </div>
           </div>
           <div class="admin-site-grid">
@@ -749,6 +750,7 @@ async function resetCatWorldData() {
               <p>{{ card.detail }}</p>
             </article>
           </div>
+          <SiteDeletePasswordSettings v-if="data.currentUser?.role === 'admin' && data.deletePassword" :settings="data.deletePassword" />
           <VersionStamp label="后台管理" />
         </section>
 

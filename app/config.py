@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     login_cookie_days: int = 30
     login_session_secret: str = ""
     login_phone_allowlist: str = ""
+    site_security_settings_file: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

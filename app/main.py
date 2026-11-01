@@ -3891,6 +3891,12 @@ def verify_login_password(password: str, password_hash: str | None) -> bool:
     return hmac.compare_digest(candidate, digest)
 
 
+def site_delete_password_store():
+    from app.services.site_security import DeletePasswordStore
+    return DeletePasswordStore(settings.site_security_settings_file, settings.list_delete_password,
+        hash_password=hash_login_password, verify_password=verify_login_password)
+
+
 ADMIN_ROLE_OPTIONS = [
     {"key": "admin", "label": "管理员"},
     {"key": "teacher", "label": "老师"},
@@ -6628,7 +6634,29 @@ def vue_admin_api(request: Request, db: Session = Depends(get_db)):
         ],
         "catWorldPricing": admin_cat_world_pricing_payload(db),
         "catWorldPlayTimeRewards": cat_world_play_time_reward_source(db, current.phone),
+        "deletePassword": site_delete_password_store().status(),
     }
+
+
+@app.post("/api/vue/admin/site/delete-password")
+async def vue_admin_site_delete_password_api(request: Request, db: Session = Depends(get_db)):
+    current = require_admin_panel_access(request, db)
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(400, "删除密码设置不是有效 JSON。") from None
+    if not isinstance(payload, dict):
+        raise HTTPException(400, "删除密码设置不是有效对象。")
+    password = payload.get("newPassword", "")
+    confirmation = payload.get("confirmPassword", "")
+    store = site_delete_password_store()
+    if not store.validate_new(password, confirmation):
+        return {"ok": True, "changed": False, "deletePassword": store.status()}
+    admin_password = payload.get("adminPassword")
+    if not isinstance(admin_password, str) or len(admin_password) > 128 or not current.login_password_hash or not verify_login_password(normalize_login_password(admin_password), current.login_password_hash):
+        raise HTTPException(403, "当前管理员登录密码不正确，删除密码未修改。")
+    changed = store.save(password, confirmation, actor_id=current.id)
+    return {"ok": True, "changed": changed, "deletePassword": store.status()}
 
 
 @app.post("/api/vue/admin/users")
@@ -8807,7 +8835,7 @@ async def vue_delete_word_list_group_api(group_id: int, request: Request, db: Se
         raise HTTPException(status_code=400, detail="删除单词组数据不是有效 JSON。") from exc
 
     password = str((payload or {}).get("password") or "")
-    if password != settings.list_delete_password:
+    if not site_delete_password_store().verify(password):
         raise HTTPException(status_code=403, detail="删除密码不正确")
 
     group = db.get(WordListGroup, group_id)
@@ -13472,7 +13500,7 @@ def delete_word_list_record(word_list_id: int, password: str, db: Session) -> No
     word_list = db.get(WordList, word_list_id)
     if not word_list:
         raise HTTPException(status_code=404, detail="Word list not found")
-    if password != settings.list_delete_password:
+    if not site_delete_password_store().verify(password):
         raise HTTPException(status_code=403, detail="删除密码不正确")
 
     word_ids = [
