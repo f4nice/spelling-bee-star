@@ -159,11 +159,12 @@ async function confirmPaidBatch() {
       </div>
     </div>
     <ListCompletionToolbar
+      v-if="data.can_manage !== false"
       :word-list-id="Number(data.word_list.id)"
       :incomplete-count="resourceCounts.incomplete"
       :refresh-list-detail="refreshListDetail"
     />
-    <div class="list-ai-image-toolbar" :class="aiImageJobClass">
+    <div class="list-ai-image-toolbar" v-if="data.can_manage !== false" :class="aiImageJobClass">
       <div class="list-ai-image-summary">
         <strong>批量 AI 图片</strong>
         <span>{{ aiImageJobText }}</span>

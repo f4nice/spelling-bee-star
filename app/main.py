@@ -15,7 +15,12 @@ import random
 import re
 import secrets
 import sys
-from threading import Lock, Thread
+from threading import Lock
+from app.data_context import (ContextThread as Thread, ScopedJobStore, DataMediaDirectory,
+    current_data_context, data_owner_phone, upload_url, DATA_MODULES)
+from app.data_scope_http import (DataScopeMiddleware, scope_payload, signed_scope,
+    SCOPE_COOKIE, CACHE_COOKIE, MODULE_LABELS)
+from app.data_media import assert_media_access
 from typing import Any, Callable
 import unicodedata
 from urllib.parse import quote_plus, unquote, urlparse
@@ -52,6 +57,7 @@ from app.models import (
     ChallengeProgress,
     ChallengeSpellingAttempt,
     AdminUserSetting,
+    DataScopeGrant,
     DailyQuote,
     DebateSession,
     DiaryEntry,
@@ -77,6 +83,7 @@ from app.services.cat_world_festivals import (
 )
 from app.services.fun_math import (
     FUN_MATH_GRANT_SOURCE,
+    MathDailySession,
     get_daily_payload as fun_math_daily_payload,
     start_question as fun_math_start_question,
     submit_answer as fun_math_submit_answer,
@@ -131,12 +138,12 @@ from booklearner.storage import (
 )
 
 
-PREVIEW_DIR = BASE_DIR.parent / "uploads" / "previews"
+PREVIEW_DIR = DataMediaDirectory(BASE_DIR.parent / "uploads" / "previews")
 MEDIA_DIR = BASE_DIR.parent / "uploads"
-IMAGE_DIR = MEDIA_DIR / "images"
-AUDIO_DIR = MEDIA_DIR / "audio"
-BOOK_COVER_DIR = MEDIA_DIR / "book-covers"
-ESSAY_COVER_DIR = MEDIA_DIR / "essay-covers"
+IMAGE_DIR = DataMediaDirectory(MEDIA_DIR / "images")
+AUDIO_DIR = DataMediaDirectory(MEDIA_DIR / "audio")
+BOOK_COVER_DIR = DataMediaDirectory(MEDIA_DIR / "book-covers")
+ESSAY_COVER_DIR = DataMediaDirectory(MEDIA_DIR / "essay-covers")
 VERSION_MATRIX_PATH = MEDIA_DIR / "version_matrix.json"
 DEFAULT_VERSION_MATRIX_PATH = BASE_DIR.parent / "VERSION_MATRIX.default.json"
 settings = get_settings()
@@ -232,10 +239,10 @@ SCIENCE_PUBLIC_BOOK_FALLBACKS = [
         "sourceUrl": "https://www.gutenberg.org/ebooks/search/?query=natural%20history",
     },
 ]
-IMAGE_SYNC_JOBS: dict[str, dict] = {}
-LIST_AI_IMAGE_JOBS: dict[str, dict] = {}
-SPB_SYNC_JOBS: dict[str, dict] = {}
-IMPORT_PREVIEW_JOBS: dict[str, dict] = {}
+IMAGE_SYNC_JOBS = ScopedJobStore()
+LIST_AI_IMAGE_JOBS = ScopedJobStore()
+SPB_SYNC_JOBS = ScopedJobStore(public_catalog=True)
+IMPORT_PREVIEW_JOBS = ScopedJobStore()
 SPB_SYNC_BATCH_SIZE = 80
 LIST_AI_IMAGE_DEFAULT_MODEL = "wan2.6-t2i"
 LIST_AI_IMAGE_MODEL_LABELS = {
@@ -3605,11 +3612,12 @@ def growth_trophy_image_url() -> str:
 def store_book_cover_image(title: str, content: bytes) -> str:
     if len(content) < 1000:
         raise ValueError("封面图片文件太小，请换一张清晰图片。")
+    BOOK_COVER_DIR.mkdir(parents=True,exist_ok=True)
     suffix = public_asset_extension(content)
     safe_stem = public_asset_slug(Path(title or "book").stem)
     target = BOOK_COVER_DIR / f"{safe_stem}-{uuid4().hex[:8]}{suffix}"
     target.write_bytes(content)
-    return f"/media/book-covers/{target.name}"
+    return upload_url(target, "book-covers")
 
 
 def store_essay_cover_image(title: str, content: bytes) -> str:
@@ -3620,7 +3628,7 @@ def store_essay_cover_image(title: str, content: bytes) -> str:
     safe_stem = public_asset_slug(Path(title or "essay").stem)
     target = ESSAY_COVER_DIR / f"{safe_stem}-{uuid4().hex[:8]}{suffix}"
     target.write_bytes(content)
-    return f"/media/essay-covers/{target.name}"
+    return upload_url(target, "essay-covers")
 
 
 IMAGE_SYNC_LOCK = Lock()
@@ -3819,6 +3827,8 @@ def login_cookie_domain(request: Request) -> str | None:
 
 
 def clear_login_cookies(response: Response) -> None:
+    response.delete_cookie(SCOPE_COOKIE,path="/")
+    response.set_cookie(CACHE_COOKIE,secrets.token_hex(16),path="/",samesite="lax")
     response.delete_cookie(key=settings.login_cookie_name, path="/")
     response.delete_cookie(key=settings.login_cookie_name, path="/", domain=".newabby.com")
     response.delete_cookie(key=settings.login_cookie_name, path="/", domain="newabby.com")
@@ -4010,6 +4020,8 @@ def get_or_create_admin_user(db: Session, phone: str) -> AdminUserSetting | None
         return None
     existing = db.scalar(select(AdminUserSetting).where(AdminUserSetting.phone == normalized))
     if existing:
+        if current_data_context() and not current_data_context().can_write:
+            return existing
         changed = normalize_admin_user_ai_fields(existing)
         if not existing.username:
             existing.username = admin_user_display_name(existing.phone, existing.role)
@@ -4060,7 +4072,7 @@ def admin_user_can(user: AdminUserSetting | None, permission_key: str) -> bool:
 
 def require_admin_panel_access(request: Request, db: Session) -> AdminUserSetting:
     user = current_admin_user(request, db)
-    if not admin_user_can(user, "admin"):
+    if user.role != "admin" or (current_data_context() and not current_data_context().can_write):
         raise HTTPException(status_code=403, detail="没有后台管理权限。")
     return user
 
@@ -4099,7 +4111,7 @@ def admin_user_summary(user: AdminUserSetting | None, phone: str | None = None) 
         "phoneMasked": masked_phone,
         "username": username,
         "role": user.role if user else "viewer",
-        "canAdmin": admin_user_can(user, "admin"),
+        "canAdmin": bool(user and user.role == "admin"),
         "permissions": permissions,
         "imageAi": {
             "provider": user.image_ai_provider,
@@ -4417,13 +4429,15 @@ def startup() -> None:
     SCIENCE_DISCOVERY_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     ensure_version_matrix_file()
     with SessionLocal() as db:
-        backfill_essay_best_writing_results(db)
+        if not settings.data_permissions_enabled:
+            backfill_essay_best_writing_results(db)
         seed_cat_world_scenes(db)
         seed_cat_world_limited_cat_stock(db)
         seed_cat_world_limited_item_stock(db)
         seed_daily_quotes(db)
-        ensure_default_word_list(db)
-        seed_word_resource_pool(db)
+        if not settings.data_permissions_enabled:
+            ensure_default_word_list(db)
+            seed_word_resource_pool(db)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -4493,6 +4507,16 @@ def fun_math_page(request: Request, db: Session = Depends(get_db)):
 @app.get("/api/vue/fun-math")
 def vue_fun_math_api(request: Request, db: Session = Depends(get_db)):
     user = current_admin_user(request, db)
+    context=current_data_context()
+    if context and not context.can_write:
+        sessions=db.scalars(select(MathDailySession).order_by(MathDailySession.practice_date.desc()).limit(30)).all()
+        history=[]
+        for session in sessions:
+            questions=json.loads(session.questions_json)
+            history.append({"day":session.practice_date.isoformat(),
+                "completed":sum(question.get("status") in {"correct","incorrect","expired"} for question in questions),
+                "correct":sum(question.get("status")=="correct" for question in questions)})
+        return {"read_only":True,"owner_name":scope_payload(db)["ownerName"],"history":history}
     return JSONResponse(fun_math_daily_payload(db, user.phone), headers={"Cache-Control": "no-store"})
 
 
@@ -4924,7 +4948,10 @@ async def good_words_create_word_list(request: Request, db: Session = Depends(ge
         if not word_text or not re.fullmatch(r"[a-z][a-z'-]{1,127}", word_key):
             continue
 
-        word = db.scalar(select(Word).where(func.lower(Word.word) == word_key))
+        word_query=select(Word).where(func.lower(Word.word)==word_key)
+        if current_data_context():
+            word_query=word_query.where(Word.owner_key==current_data_context().owner_key)
+        word = db.scalar(word_query)
         if word:
             if word.word != word_text:
                 word.word = word_text
@@ -5035,6 +5062,16 @@ def vue_growth_api(db: Session = Depends(get_db)):
 @app.get("/api/vue/cat-world")
 def vue_cat_world_api(request: Request, db: Session = Depends(get_db)):
     phone = require_cat_world_phone(request)
+    context=current_data_context()
+    if context and not context.can_write:
+        state=db.scalar(select(CatWorldState).where(CatWorldState.phone==phone))
+        owned=parse_cat_world_cats(state.cats) if state else []
+        inventory=parse_cat_world_inventory(state.inventory) if state else {}
+        return {"read_only":True,"owner_name":scope_payload(db)["ownerName"],
+            "cats":[{"id":key,"name":CAT_WORLD_CAT_BY_ID.get(key,{}).get("name",key)} for key in owned],
+            "inventory":[{"id":key,"count":count} for key,count in inventory.items()],
+            "energy_spent":int(state.energy_spent or 0) if state else 0,
+            "has_data":bool(state)}
     state = get_or_create_cat_world_state(db, phone)
     return serialize_cat_world_payload(db, state)
 
@@ -6572,6 +6609,9 @@ def vue_admin_api(request: Request, db: Session = Depends(get_db)):
     return {
         "currentUser": serialize_admin_user(current),
         "users": [serialize_admin_user(user) for user in users],
+        "dataGrantOptions":[{"key":key,"label":MODULE_LABELS[key]} for key in sorted(DATA_MODULES)],
+        "dataGrants":[{"ownerId":grant.owner_id,"teacherId":grant.grantee_id,"modules":json.loads(grant.modules_json)}
+            for grant in db.scalars(select(DataScopeGrant)).all()],
         "roleOptions": ADMIN_ROLE_OPTIONS,
         "permissionOptions": ADMIN_PERMISSION_OPTIONS,
         "imageAiOptions": [
@@ -6883,7 +6923,58 @@ def vue_shell_api(request: Request, db: Session = Depends(get_db)):
     admin_user = get_or_create_admin_user(db, current_phone) if current_phone else None
     shell = public_shell_context(db)
     shell["currentUser"] = admin_user_summary(admin_user, current_phone)
+    shell["dataScope"] = scope_payload(db)
     return shell
+
+
+@app.get("/api/vue/data-scope")
+def vue_data_scope_api(request: Request, db: Session = Depends(get_db)):
+    current_admin_user(request, db)
+    return {"dataScope": scope_payload(db)}
+
+
+@app.post("/api/vue/data-scope")
+async def vue_select_data_scope_api(request: Request, db: Session = Depends(get_db)):
+    from app.data_permissions import resolve_data_context
+    actor = current_admin_user(request, db)
+    payload = await request.json()
+    owner_id = payload.get("ownerId")
+    if isinstance(owner_id, bool) or not isinstance(owner_id, int):
+        raise HTTPException(400,"请选择有效的数据空间。")
+    selected = resolve_data_context(db,actor,owner_id)
+    response = JSONResponse({"ok":True,"ownerId":selected.owner_id,"readOnly":not selected.can_write})
+    response.set_cookie(SCOPE_COOKIE,signed_scope(actor.id,selected.owner_id,sign_login_payload),
+        httponly=True,samesite="lax",secure=request.url.scheme=="https",path="/")
+    response.delete_cookie(CACHE_COOKIE,path="/")
+    return response
+
+
+@app.post("/api/vue/admin/data-grants")
+async def vue_save_data_grant_api(request: Request, db: Session = Depends(get_db)):
+    actor = require_admin_panel_access(request, db)
+    payload = await request.json()
+    owner_id, teacher_id = payload.get("ownerId"), payload.get("teacherId")
+    if any(isinstance(value,bool) or not isinstance(value,int) or value<=0 for value in (owner_id,teacher_id)):
+        raise HTTPException(400,"请选择数据所属账号和老师。")
+    owner,teacher = db.get(AdminUserSetting,owner_id),db.get(AdminUserSetting,teacher_id)
+    modules = payload.get("modules")
+    if not owner or not teacher or teacher.role!="teacher" or not teacher.is_active or owner_id==teacher_id:
+        raise HTTPException(400,"授权目标必须是有效的老师账号，并与数据所属账号不同。")
+    if not isinstance(modules,list) or any(not isinstance(value,str) or value not in DATA_MODULES for value in modules):
+        raise HTTPException(400,"无效的授权模块。")
+    if "learning" in modules and "words" not in modules:
+        raise HTTPException(400,"查看学习记录需要显示对应词条，请同时明确勾选“单词表”授权。")
+    grant = db.scalar(select(DataScopeGrant).where(DataScopeGrant.owner_id==owner_id,DataScopeGrant.grantee_id==teacher_id))
+    if not modules:
+        if grant: db.delete(grant)
+    else:
+        if not grant:
+            grant = DataScopeGrant(owner_id=owner_id,grantee_id=teacher_id,granted_by_id=actor.id)
+            db.add(grant)
+        grant.modules_json=json.dumps(sorted(set(modules)))
+        grant.granted_by_id=actor.id
+    db.commit()
+    return {"ok":True}
 
 
 def essay_word_count(text_value: str | None) -> int:
@@ -7129,7 +7220,7 @@ def essays_for_phone(db: Session, phone: str) -> list[EssayEntry]:
 
 def essays_payload(db: Session, request: Request) -> dict[str, Any]:
     user = current_admin_user(request, db)
-    essays = essays_for_phone(db, user.phone)
+    essays = essays_for_phone(db, data_owner_phone(user.phone))
     return {
         "essays": [serialize_essay(essay) for essay in essays],
         "limits": {
@@ -7141,7 +7232,7 @@ def essays_payload(db: Session, request: Request) -> dict[str, Any]:
 
 def get_owned_essay(db: Session, request: Request, essay_id: int) -> EssayEntry:
     user = current_admin_user(request, db)
-    essay = db.scalar(select(EssayEntry).where(EssayEntry.id == essay_id, EssayEntry.phone == user.phone))
+    essay = db.scalar(select(EssayEntry).where(EssayEntry.id == essay_id, EssayEntry.phone == data_owner_phone(user.phone)))
     if not essay:
         raise HTTPException(status_code=404, detail="没有找到这篇作文。")
     return essay
@@ -7571,7 +7662,7 @@ def diary_entries_for_phone(db: Session, phone: str) -> list[DiaryEntry]:
 def diary_payload(db: Session, request: Request) -> dict[str, Any]:
     user = current_admin_user(request, db)
     today = date.today()
-    entries = diary_entries_for_phone(db, user.phone)
+    entries = diary_entries_for_phone(db, data_owner_phone(user.phone))
     return {
         "today": today.isoformat(),
         "entries": [serialize_diary_entry(entry) for entry in entries],
@@ -8181,7 +8272,7 @@ async def vue_delete_essay_api(essay_id: int, request: Request, db: Session = De
     if not password or not verify_login_password(password, user.login_password_hash):
         raise HTTPException(status_code=403, detail="登录密码不正确。")
 
-    essay = db.scalar(select(EssayEntry).where(EssayEntry.id == essay_id, EssayEntry.phone == user.phone))
+    essay = db.scalar(select(EssayEntry).where(EssayEntry.id == essay_id, EssayEntry.phone == data_owner_phone(user.phone)))
     if not essay:
         raise HTTPException(status_code=404, detail="没有找到这篇作文。")
     db.delete(essay)
@@ -8432,8 +8523,8 @@ def debate_page_payload(db: Session, request: Request) -> dict[str, Any]:
                 {"key": "rebuttal", "label": "回应对方", "max": 2},
             ],
         },
-        "session": serialize_debate_session(debate_session_for_day(db, user.phone, today)),
-        "history": debate_history_payload(db, user.phone),
+        "session": serialize_debate_session(debate_session_for_day(db, data_owner_phone(user.phone), today)),
+        "history": debate_history_payload(db, data_owner_phone(user.phone)),
     }
 
 
@@ -8442,7 +8533,7 @@ def owned_debate_session(db: Session, request: Request, session_id: int) -> Deba
     session = db.scalar(
         select(DebateSession).where(
             DebateSession.id == session_id,
-            DebateSession.phone == user.phone,
+            DebateSession.phone == data_owner_phone(user.phone),
         )
     )
     if not session:
@@ -8855,7 +8946,11 @@ def vue_list_detail_api(word_list_id: int, db: Session = Depends(get_db)):
     ).all()
     apply_word_resources(db, words, include_image=False)
     stats = challenge_counts_for_words(db, [word.id for word in words])
+    context=current_data_context()
     return {
+        "can_manage":not context or (context.can_write and word_list.owner_key==context.owner_key),
+        "is_public":word_list.owner_key=="public",
+        "can_copy":bool(context and context.can_write and word_list.owner_key=="public"),
         "word_list": {
             "id": word_list.id,
             "name": word_list.name,
@@ -8877,6 +8972,29 @@ def vue_list_detail_api(word_list_id: int, db: Session = Depends(get_db)):
             for index, word in enumerate(words)
         ],
     }
+
+
+@app.post("/api/vue/lists/{word_list_id}/personal-copy")
+def vue_copy_public_word_list_api(word_list_id: int, db: Session = Depends(get_db)):
+    context=current_data_context()
+    source=db.get(WordList,word_list_id)
+    if not context or not context.can_write or not source or source.owner_key!="public":
+        raise HTTPException(403,"只能在自己的数据空间复制公共词表。")
+    source_words=db.scalars(select(Word).join(WordListItem,WordListItem.word_id==Word.id)
+        .where(WordListItem.word_list_id==source.id).order_by(WordListItem.id)).all()
+    target=WordList(name=source.name+"（个人副本）",sequence_offset=source.sequence_offset)
+    db.add(target)
+    db.flush()
+    fields=[column.name for column in Word.__table__.columns if column.name not in {"id","owner_key","created_at","updated_at","note"}]
+    for official in source_words:
+        private=db.scalar(select(Word).where(Word.owner_key==context.owner_key,Word.word==official.word))
+        if not private:
+            private=Word(**{field:getattr(official,field) for field in fields})
+            db.add(private)
+            db.flush()
+        db.add(WordListItem(word_list_id=target.id,word_id=private.id))
+    db.commit()
+    return {"ok":True,"word_list_id":target.id,"url":f"/lists/{target.id}","word_count":len(source_words)}
 
 
 @app.get("/api/vue/lists/{word_list_id}/words/candidates")
@@ -9012,9 +9130,12 @@ def vue_word_detail_api(
 
 def word_detail_payload(db: Session, word: Word, edit: int, list_id: int | None,
                         challenge_day: str | None, challenge_status: str | None) -> dict:
-    apply_word_resource(db, word, commit=True, include_image=False)
+    context=current_data_context()
+    can_edit=not context or (context.can_write and word.owner_key==context.owner_key)
+    if can_edit:
+        apply_word_resource(db, word, commit=True, include_image=False)
     cleaned_error = friendly_enrichment_error(word.enrichment_error)
-    if cleaned_error != word.enrichment_error:
+    if can_edit and cleaned_error != word.enrichment_error:
         word.enrichment_error = cleaned_error
         db.add(word)
         db.commit()
@@ -9040,7 +9161,8 @@ def word_detail_payload(db: Session, word: Word, edit: int, list_id: int | None,
             "american_audio_locked": word.american_audio_locked,
             "british_audio_locked": word.british_audio_locked,
         },
-        "can_edit": edit == 1,
+        "can_edit": edit == 1 and can_edit,
+        "is_public": word.owner_key=="public",
         "audio_sources": audio_sources,
         "media_sources": word_media_sources(db, word, audio_sources=audio_sources),
         "navigation": nav,
@@ -10492,6 +10614,7 @@ def spb_payload(db: Session, collection_key: str | None = None) -> dict[str, Any
         collections[0],
     )
     return {
+        "can_maintain":not current_data_context() or (current_data_context().is_admin and current_data_context().can_write),
         "collection": active_payload,
         "collections": collections,
         "groups": active_payload.get("groups", []),
@@ -14045,9 +14168,10 @@ async def word_recorded_audio(
     content_type = (audio_file.content_type or "").lower()
     suffix = recorded_audio_suffix(content_type, audio_file.filename or "")
     safe_word = re.sub(r"[^a-zA-Z0-9_-]+", "-", word.word.lower()).strip("-") or "word"
+    AUDIO_DIR.mkdir(parents=True,exist_ok=True)
     target = AUDIO_DIR / f"record-{safe_word}-{accent}-{uuid4().hex[:8]}{suffix}"
     target.write_bytes(content)
-    audio_url = f"/media/audio/{target.name}"
+    audio_url = upload_url(target, "audio")
 
     apply_user_selected_word_audio(word, accent, audio_url)
     db.add(word)
@@ -14447,7 +14571,11 @@ def import_rows(
 
     for row_index, row in enumerate(rows, start=1):
         word_text = row["word"]
-        existing = db.scalar(select(Word).where(func.lower(Word.word) == word_text.lower()))
+        query=select(Word).where(func.lower(Word.word)==word_text.lower())
+        context=current_data_context()
+        if context:
+            query=query.where(Word.owner_key==context.owner_key)
+        existing = db.scalar(query)
         keep_existing = existing is not None and preserve_existing_words
         if keep_existing:
             # Words are shared across lists. Only add the list association;
@@ -14982,9 +15110,10 @@ def save_first_epub_image(archive: zipfile.ZipFile, filename: str) -> str | None
         return None
 
     safe_stem = re.sub(r"[^a-zA-Z0-9_-]+", "-", Path(filename or "book").stem).strip("-") or "book"
+    BOOK_COVER_DIR.mkdir(parents=True,exist_ok=True)
     target = BOOK_COVER_DIR / f"{safe_stem}-{uuid4().hex[:8]}{suffix}"
     target.write_bytes(image_bytes)
-    return f"/media/book-covers/{target.name}"
+    return upload_url(target, "book-covers")
 
 
 def html_to_text(value: str) -> str:
@@ -15254,7 +15383,11 @@ def get_word_resource(db: Session, word_text: str | None) -> WordResourcePool | 
     normalized = normalize_resource_word(word_text)
     if not normalized:
         return None
-    return db.scalar(select(WordResourcePool).where(WordResourcePool.normalized_word == normalized))
+    query=select(WordResourcePool).where(WordResourcePool.normalized_word==normalized)
+    context=current_data_context()
+    if context:
+        query=query.where(WordResourcePool.owner_key==context.owner_key)
+    return db.scalar(query)
 
 
 def reusable_local_audio_for_word(
@@ -15315,6 +15448,9 @@ def remember_word_resource(
     override_media: bool = False,
     commit: bool = False,
 ) -> bool:
+    context=current_data_context()
+    if context and (not context.can_write or word.owner_key!=context.owner_key):
+        return False
     word_changed = repair_legacy_spb_example_audio_slot(word)
     normalized = normalize_resource_word(word.word)
     if not normalized or not word_has_shareable_resource(word):
@@ -15449,6 +15585,9 @@ def remember_word_resource(
 
 
 def apply_word_resource(db: Session, word: Word, *, commit: bool = False, include_image: bool = True) -> bool:
+    context=current_data_context()
+    if context and (not context.can_write or word.owner_key!=context.owner_key):
+        return False
     resource = get_word_resource(db, word.word)
     if not resource:
         changed = repair_legacy_spb_example_audio_slot(word)
@@ -15620,6 +15759,9 @@ def sync_learning_growth_metric(
     target: int,
     badge_label: str,
 ) -> None:
+    context=current_data_context()
+    if context and (not context.can_write or "learning" not in context.modules):
+        return
     metric = db.scalar(select(LearningGrowthMetric).where(LearningGrowthMetric.metric_key == metric_key))
     if metric:
         metric.metric_label = label
@@ -24107,7 +24249,7 @@ def require_cat_world_phone(request: Request) -> str:
     phone = authenticated_phone_from_request(request)
     if not phone:
         raise HTTPException(status_code=401, detail="请先用手机号登录。")
-    return phone
+    return data_owner_phone(phone)
 
 
 def admin_cat_world_scene_pricing_payload(db: Session) -> list[dict[str, Any]]:
@@ -24164,6 +24306,7 @@ def page_context(request: Request, db: Session, extra: dict | None = None) -> di
     }
     context["shell_context"] = public_shell_context(db)
     context["shell_context"]["currentUser"] = admin_user_summary(current_admin, current_user_phone)
+    context["shell_context"]["dataScope"] = scope_payload(db)
     if extra:
         context.update(extra)
     return context
@@ -24494,7 +24637,10 @@ def ensure_schema_columns() -> None:
             else:
                 connection.execute(text("ALTER TABLE wrong_words ADD COLUMN wrong_date DATE NULL"))
                 connection.execute(text("UPDATE wrong_words SET wrong_date = DATE('now') WHERE wrong_date IS NULL"))
-        if "wrong_words" in table_names and dialect == "mysql":
+        # The ownership migration installs (owner_key, word_id, wrong_date).
+        # Legacy startup repair must never reintroduce global uniqueness, which
+        # would make two accounts learning the same public word collide.
+        if "wrong_words" in table_names and dialect == "mysql" and not settings.data_permissions_enabled:
             indexes = {index["name"] for index in inspector.get_indexes("wrong_words")}
             if "uq_wrong_words_word" in indexes:
                 connection.execute(text("ALTER TABLE wrong_words DROP INDEX uq_wrong_words_word"))
@@ -24533,9 +24679,9 @@ def get_daily_quote(db: Session) -> DailyQuote | None:
 
 def get_or_create_word_list_group_by_name(db: Session, name: str) -> WordListGroup:
     cleaned_name = clean_list_name(name)
-    group = db.scalar(
-        select(WordListGroup).where(WordListGroup.name == cleaned_name).order_by(WordListGroup.id.asc()).limit(1)
-    )
+    query=select(WordListGroup).where(WordListGroup.name==cleaned_name)
+    if current_data_context(): query=query.where(WordListGroup.owner_key==current_data_context().owner_key)
+    group = db.scalar(query.order_by(WordListGroup.id.asc()).limit(1))
     if not group:
         group = WordListGroup(name=cleaned_name, display_order=next_word_list_group_display_order(db))
         db.add(group)
@@ -24563,9 +24709,9 @@ def get_or_create_word_list(db: Session, word_list_id: str, name: str) -> WordLi
 
 def get_or_create_word_list_by_name(db: Session, name: str) -> WordList:
     cleaned_name = clean_list_name(name)
-    word_list = db.scalar(
-        select(WordList).where(WordList.name == cleaned_name).order_by(WordList.id.asc()).limit(1)
-    )
+    query=select(WordList).where(WordList.name==cleaned_name)
+    if current_data_context(): query=query.where(WordList.owner_key==current_data_context().owner_key)
+    word_list = db.scalar(query.order_by(WordList.id.asc()).limit(1))
     if not word_list:
         word_list = WordList(name=cleaned_name, display_order=next_word_list_display_order(db))
         db.add(word_list)
@@ -24732,16 +24878,20 @@ def is_wrong_word_list_name(name: str | None) -> bool:
 
 
 def regular_word_lists(db: Session) -> list[WordList]:
-    word_lists = db.scalars(
-        select(WordList).order_by(WordList.display_order.asc(), WordList.created_at.desc(), WordList.id.desc())
-    ).all()
+    query=select(WordList)
+    context=current_data_context()
+    if context:
+        query=query.where(WordList.owner_key==context.owner_key)
+    word_lists = db.scalars(query.order_by(WordList.display_order.asc(), WordList.created_at.desc(), WordList.id.desc())).all()
     return [word_list for word_list in word_lists if not is_wrong_word_list_name(word_list.name)]
 
 
 def word_list_groups(db: Session) -> list[WordListGroup]:
-    return db.scalars(
-        select(WordListGroup).order_by(WordListGroup.display_order.asc(), WordListGroup.created_at.desc(), WordListGroup.id.desc())
-    ).all()
+    query=select(WordListGroup)
+    context=current_data_context()
+    if context:
+        query=query.where(WordListGroup.owner_key==("public" if context.catalog_only else context.owner_key))
+    return db.scalars(query.order_by(WordListGroup.display_order.asc(), WordListGroup.created_at.desc(), WordListGroup.id.desc())).all()
 
 
 def normalize_image_match_key(value: str | None) -> str:
@@ -24850,6 +25000,9 @@ def get_or_create_challenge_progress(db: Session, word_list_id: int) -> Challeng
     if progress:
         return progress
     progress = ChallengeProgress(word_list_id=word_list_id)
+    if current_data_context() and not current_data_context().can_write:
+        progress.current_index=progress.completed_count=progress.completed_rounds=0
+        return progress
     db.add(progress)
     try:
         db.commit()
@@ -25523,7 +25676,7 @@ def challenge_state(
         total,
     )
     completed_rounds = progress.completed_rounds if progress else 0
-    if total and completed >= total and progress:
+    if total and completed >= total and progress and (not current_data_context() or current_data_context().can_write):
         progress.completed_rounds = (progress.completed_rounds or 0) + 1
         progress.completed_count = 0
         progress.current_index = 0
@@ -25762,10 +25915,24 @@ async def word_audio(word_id: int, accent: str = "us", db: Session = Depends(get
 def preview_path(preview_id: str) -> Path:
     if not preview_id.isalnum():
         raise HTTPException(status_code=400, detail="无效的预览编号")
+    PREVIEW_DIR.mkdir(parents=True,exist_ok=True)
     return PREVIEW_DIR / f"{preview_id}.json"
 
 
 def preview_excel_path(preview_id: str) -> Path:
     if not preview_id.isalnum():
         raise HTTPException(status_code=400, detail="无效的预览编号")
+    PREVIEW_DIR.mkdir(parents=True,exist_ok=True)
     return PREVIEW_DIR / f"{preview_id}.xlsx"
+
+
+def check_request_media_access(request: Request):
+    with SessionLocal() as db:
+        assert_media_access(request.url.path,db)
+
+
+app.add_middleware(DataScopeMiddleware,enabled=lambda:settings.data_permissions_enabled,
+    session_factory=SessionLocal,authenticated_phone=authenticated_phone_from_request,
+    signer=sign_login_payload,media_check=check_request_media_access,
+    session_stamp=lambda request:"|".join(login_cookie_values_from_request(request)),
+    maintenance_file=lambda:settings.data_permissions_maintenance_file)

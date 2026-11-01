@@ -22041,3 +22041,10 @@ select {
     grid-column: auto;
   }
 }
+
+.data-scope-banner { margin: 12px; padding: 12px 16px; color: #8b4b0e; background: #fff7e8; }
+.data-scope-picker, .data-grant-form { display: grid; gap: 10px; }
+.data-grant-form { max-width: 760px; }
+.data-grant-form label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.data-grant-form fieldset { display: flex; flex-wrap: wrap; gap: 12px; border: 1px solid var(--border, #d5dfda); border-radius: 8px; padding: 12px; }
+.data-grant-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 0; }

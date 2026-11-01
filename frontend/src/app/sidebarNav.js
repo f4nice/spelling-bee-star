@@ -21,7 +21,9 @@ export function isSidebarNavItemActive(item, route) {
 }
 
 export function buildSidebarNavItems({ route, shell }) {
-  return sidebarNavItems.map((item) => ({
+  const modules = shell.dataScope?.modules;
+  const moduleByPath = { "/lists":"words", "/spb":"words", "/essays":"writing", "/diary":"writing", "/debate":"writing", "/fun-math":"learning", "/wrong-words":"learning", "/cat-world":"cats" };
+  return sidebarNavItems.filter((item) => !modules || !moduleByPath[item.path] || modules.includes(moduleByPath[item.path])).map((item) => ({
     ...item,
     active: isSidebarNavItemActive(item, route),
     count: item.countKey ? shell[item.countKey] : undefined,

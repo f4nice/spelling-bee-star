@@ -4,6 +4,7 @@ import hmac
 import hashlib
 import re
 from pathlib import Path
+from app.data_context import upload_url
 from time import time
 from typing import Any
 from urllib.parse import quote
@@ -45,7 +46,7 @@ def _stable_audio_target(
 
 def _local_audio_url_if_present(target: Path) -> str | None:
     if target.exists() and target.stat().st_size >= 1000:
-        return f"/media/audio/{target.name}"
+        return upload_url(target, "audio")
     return None
 
 
@@ -177,7 +178,7 @@ async def generate_openai_word_audio(
         raise RuntimeError("AI 朗读返回的音频太短，请稍后重试。")
 
     target.write_bytes(content)
-    return f"/media/audio/{target.name}"
+    return upload_url(target, "audio")
 
 
 def _escape_ssml_text(value: str) -> str:
@@ -314,7 +315,7 @@ async def generate_dashscope_phoneme_audio(
         raise RuntimeError("阿里百炼音标朗读返回的音频太短，请稍后重试。")
 
     target.write_bytes(content)
-    return f"/media/audio/{target.name}"
+    return upload_url(target, "audio")
 
 
 def _choose_aliyun_voice(
@@ -426,7 +427,7 @@ async def generate_aliyun_word_audio(
         raise RuntimeError("阿里云语音合成返回的音频太短，请稍后重试。")
 
     target.write_bytes(content)
-    return f"/media/audio/{target.name}"
+    return upload_url(target, "audio")
 
 
 async def generate_word_ai_audio(

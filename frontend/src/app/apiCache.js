@@ -1,5 +1,11 @@
 const CACHE_PREFIX = "speakeasy.apiCache:";
 
+export function apiCacheIdentity() {
+  if (typeof document === "undefined") return "";
+  return document.cookie.split(";").map((item) => item.trim())
+    .find((item) => item.startsWith("newabby_data_cache="))?.slice("newabby_data_cache=".length) || "";
+}
+
 const CACHE_RULES = [
   { test: (url) => url === "/api/vue/newspaper", ttl: 5 * 60 * 1000 },
   { test: (url) => url.startsWith("/api/vue/newspaper/"), ttl: 10 * 60 * 1000 },
@@ -12,7 +18,7 @@ const CACHE_RULES = [
 ];
 
 function cacheKey(url) {
-  return `${CACHE_PREFIX}${url}`;
+  return `${CACHE_PREFIX}${apiCacheIdentity()}|${url}`;
 }
 
 function cacheTtl(url) {
@@ -30,7 +36,7 @@ function storage() {
 export function readApiCache(url) {
   const ttl = cacheTtl(url);
   const store = storage();
-  if (!ttl || !store) return null;
+  if (!ttl || !store || !apiCacheIdentity() || apiCacheIdentity().startsWith("r-")) return null;
   try {
     const item = JSON.parse(store.getItem(cacheKey(url)) || "null");
     const newspaperDayChanged = url.startsWith("/api/vue/newspaper") && item
@@ -52,7 +58,7 @@ export function writeApiCache(url, payload) {
   )) return;
   const ttl = cacheTtl(url);
   const store = storage();
-  if (!ttl || !store || payload == null) return;
+  if (!ttl || !store || payload == null || !apiCacheIdentity() || apiCacheIdentity().startsWith("r-")) return;
   try {
     store.setItem(cacheKey(url), JSON.stringify({ createdAt: Date.now(), payload }));
   } catch {
@@ -65,7 +71,9 @@ export function clearApiCache(predicate = () => true) {
   if (!store) return;
   for (let index = store.length - 1; index >= 0; index -= 1) {
     const key = store.key(index);
-    if (key?.startsWith(CACHE_PREFIX) && predicate(key.slice(CACHE_PREFIX.length))) {
+    const tail = key?.slice(CACHE_PREFIX.length) || "";
+    const url = tail.includes("|") ? tail.slice(tail.indexOf("|") + 1) : tail;
+    if (key?.startsWith(CACHE_PREFIX) && predicate(url)) {
       store.removeItem(key);
     }
   }

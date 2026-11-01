@@ -4,6 +4,7 @@ import { readApiCache, writeApiCache, invalidateApiCacheForMutation } from "../s
 import { routeApiPaths } from "../src/app/routeApiPaths.js";
 
 const values = new Map();
+globalThis.document = { cookie: "newabby_data_cache=synthetic-scope" };
 globalThis.window = { sessionStorage: {
   getItem: (key) => values.get(key) ?? null,
   setItem: (key, value) => values.set(key, value),
@@ -35,11 +36,11 @@ test("loading, stale and error snapshots never get stuck in browser cache", () =
 
 test("newspaper list expires after five minutes and does not cross midnight", () => {
   values.clear();
-  values.set(`speakeasy.apiCache:${url}`, JSON.stringify({ createdAt: Date.now() - 301000, payload }));
+  values.set(`speakeasy.apiCache:synthetic-scope|${url}`, JSON.stringify({ createdAt: Date.now() - 301000, payload }));
   assert.equal(readApiCache(url), null);
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  values.set(`speakeasy.apiCache:${url}`, JSON.stringify({ createdAt: yesterday.getTime(), payload }));
+  values.set(`speakeasy.apiCache:synthetic-scope|${url}`, JSON.stringify({ createdAt: yesterday.getTime(), payload }));
   assert.equal(readApiCache(url), null);
 });
 

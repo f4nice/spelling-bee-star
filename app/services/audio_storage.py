@@ -1,5 +1,7 @@
 import re
+import hashlib
 from pathlib import Path
+from app.data_context import upload_url, current_data_context
 from urllib.parse import urlencode
 
 import httpx
@@ -11,7 +13,7 @@ AUDIO_HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 
 def is_local_audio_url(url: str | None) -> bool:
-    return bool(url and url.startswith("/media/audio/"))
+    return bool(url and (url.startswith(("/media/audio/","/media/public/audio/")) or re.match(r"^/media/users/u\d+/audio/", url)))
 
 
 def audio_source_prefix(source_key: str | None) -> str:
@@ -90,7 +92,7 @@ async def store_audio_candidate(
     prefix = audio_source_prefix(source_key)
     target = audio_dir / f"{prefix}-{safe_word}-{accent}-{safe_source}.mp3"
     if not force_download and target.exists() and target.stat().st_size >= 1000:
-        return f"/media/audio/{target.name}"
+        return upload_url(target, "audio")
 
     async with httpx.AsyncClient(timeout=20, headers=AUDIO_HEADERS, follow_redirects=True) as client:
         response = await client.get(audio_url)
@@ -100,8 +102,10 @@ async def store_audio_candidate(
     if len(content) < 1000:
         return None
 
+    if current_data_context() and current_data_context().public_write:
+        target=target.with_name(target.stem+"-"+hashlib.sha256(content).hexdigest()[:16]+target.suffix)
     target.write_bytes(content)
-    return f"/media/audio/{target.name}"
+    return upload_url(target, "audio")
 
 
 async def store_first_available_audio(word: str, accent: str, audio_dir: Path, *, include_dictionary: bool = True) -> str | None:

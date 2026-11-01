@@ -1,7 +1,9 @@
 from io import BytesIO
 import re
+import hashlib
 from pathlib import Path
 from uuid import uuid4
+from app.data_context import upload_url, current_data_context
 
 import httpx
 from PIL import Image, ImageOps
@@ -14,7 +16,7 @@ IMAGE_HEADERS = {
 
 
 def is_local_media_url(url: str | None) -> bool:
-    return bool(url and url.startswith("/media/images/"))
+    return bool(url and (url.startswith(("/media/images/","/media/public/images/")) or re.match(r"^/media/users/u\d+/images/", url)))
 
 
 async def store_word_image(word: str, image_url: str, image_dir: Path) -> str | None:
@@ -29,6 +31,8 @@ async def store_word_image(word: str, image_url: str, image_dir: Path) -> str | 
         response = await client.get(image_url)
         response.raise_for_status()
 
+    if current_data_context() and current_data_context().public_write:
+        target=target.with_name(target.stem+"-"+hashlib.sha256(response.content).hexdigest()[:16]+target.suffix)
     with Image.open(BytesIO(response.content)) as image:
         image = ImageOps.exif_transpose(image)
         image.thumbnail((800, 800), Image.Resampling.LANCZOS)
@@ -40,7 +44,7 @@ async def store_word_image(word: str, image_url: str, image_dir: Path) -> str | 
             image = image.convert("RGB")
         image.save(target, format="WEBP", quality=76, method=6)
 
-    return f"/media/images/{target.name}"
+    return upload_url(target, "images")
 
 
 def store_uploaded_word_image(word: str, content: bytes, image_dir: Path) -> str:
@@ -59,7 +63,7 @@ def store_uploaded_word_image(word: str, content: bytes, image_dir: Path) -> str
             image = image.convert("RGB")
         image.save(target, format="WEBP", quality=76, method=6)
 
-    return f"/media/images/{target.name}"
+    return upload_url(target, "images")
 
 
 def remove_local_image(url: str | None, image_dir: Path) -> None:

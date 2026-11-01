@@ -1,5 +1,6 @@
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import { clearApiCache } from "../apiCache.js";
 import AppBrandLink from "./AppBrandLink.vue";
 import AppDailyQuote from "./AppDailyQuote.vue";
 import { buildSidebarNavItems } from "../sidebarNav.js";
@@ -23,6 +24,23 @@ const accountName = computed(() => props.shell.currentUser?.username || "我的�
 const phoneLabel = computed(() => props.shell.currentUser?.phoneMasked || "");
 const navItems = computed(() => buildSidebarNavItems({ route: props.route, shell: props.shell }));
 const activeNavLabel = computed(() => navItems.value.find((item) => item.active)?.label || "导航");
+const scopeNotice = ref("");
+const switchingScope = ref(false);
+async function changeDataScope(event) {
+  switchingScope.value = true;
+  scopeNotice.value = "";
+  try {
+    const response = await fetch("/api/vue/data-scope", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ownerId: Number(event.target.value) }) });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "切换失败");
+    clearApiCache();
+    window.location.assign("/");
+  } catch (error) {
+    scopeNotice.value = error.message;
+    event.target.value = String(props.shell.dataScope.ownerId);
+  } finally { switchingScope.value = false; }
+}
 </script>
 
 <template>
@@ -65,6 +83,13 @@ const activeNavLabel = computed(() => navItems.value.find((item) => item.active)
       <div class="topbar-account-panel">
         <strong>{{ accountName }}</strong>
         <span v-if="phoneLabel">{{ phoneLabel }}</span>
+        <label v-if="shell.dataScope?.options?.length > 1" class="data-scope-picker">
+          查看数据
+          <select :value="shell.dataScope.ownerId" :disabled="switchingScope" @change="changeDataScope">
+            <option v-for="owner in shell.dataScope.options" :key="owner.id" :value="owner.id">{{ owner.name }}{{ owner.isSelf ? '（我的数据）' : '（只读）' }}</option>
+          </select>
+        </label>
+        <span v-if="scopeNotice" role="alert">{{ scopeNotice }}</span>
         <button
           v-if="shell.currentUser?.canAdmin"
           class="topbar-admin-link"
@@ -79,4 +104,7 @@ const activeNavLabel = computed(() => navItems.value.find((item) => item.active)
       </div>
     </details>
   </header>
+  <aside v-if="shell.dataScope?.readOnly" class="panel data-scope-banner" role="status">
+    正在只读查看 {{ shell.dataScope.ownerName }} 的数据；不能修改或上传。可在右上角切回“我的数据”。
+  </aside>
 </template>

@@ -3,7 +3,8 @@
 import asyncio
 from collections import deque
 from copy import deepcopy
-from threading import Lock, Thread
+from threading import Lock
+from app.data_context import ContextThread as Thread, ScopedJobStore, current_data_context, data_context
 from uuid import uuid4
 
 from sqlalchemy import event, select
@@ -167,8 +168,8 @@ class ListCompletionJobs:
         self.word_timeout = word_timeout
         self.thread_factory = thread_factory
         self.lock = Lock()
-        self.jobs = {}
-        self.latest = {}
+        self.jobs = ScopedJobStore()
+        self.latest = ScopedJobStore()
         self.queue = deque()
         self.worker_running = False
 
@@ -198,7 +199,7 @@ class ListCompletionJobs:
             self.jobs[job["id"]] = job
             self.latest[word_list_id] = job["id"]
             if ids:
-                self.queue.append((job["id"], ids))
+                self.queue.append((job["id"], ids, current_data_context()))
                 if not self.worker_running:
                     self.worker_running = True
                     try:
@@ -226,17 +227,20 @@ class ListCompletionJobs:
                 if not self.queue:
                     self.worker_running = False
                     return
-                job_id, ids = self.queue.popleft()
-                job = self.jobs.get(job_id)
-                if not job or job["status"] != "queued":
-                    continue
-                job.update(status="running", message="正在补全单词…")
-            try:
-                # One event loop per list avoids creating one executor per word.
-                asyncio.run(self._run(job_id, ids))
-            except Exception:
+                job_id, ids, context = self.queue.popleft()
+            # A single worker serves multiple accounts; restore EACH queue entry's
+            # scope, not merely the context of the account that started the thread.
+            with data_context(context):
                 with self.lock:
-                    self.jobs[job_id].update(status="failed", current_word="", message="任务异常结束，已保存完成的单词，可重试剩余缺项。")
+                    job = self.jobs.get(job_id)
+                    if not job or job["status"] != "queued":
+                        continue
+                    job.update(status="running", message="正在补全单词…")
+                try:
+                    asyncio.run(self._run(job_id, ids))
+                except Exception:
+                    with self.lock:
+                        self.jobs[job_id].update(status="failed", current_word="", message="任务异常结束，已保存完成的单词，可重试剩余缺项。")
 
     async def _run(self, job_id, word_ids):
         for word_id in word_ids:

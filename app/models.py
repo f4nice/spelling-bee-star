@@ -7,9 +7,19 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
-class Word(Base):
+class DataOwnerMixin:
+    """Stable account ownership; legacy rows are assigned by an explicit migration."""
+    owner_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True,
+        default="legacy", server_default="legacy")
+    __data_module__ = "learning"
+    __public_read__ = False
+
+
+class Word(DataOwnerMixin, Base):
     __tablename__ = "words"
-    __table_args__ = (UniqueConstraint("word", name="uq_words_word"),)
+    __table_args__ = (UniqueConstraint("owner_key", "word", name="uq_words_owner_word"),)
+    __data_module__ = "words"
+    __public_read__ = True
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     word: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
@@ -40,9 +50,11 @@ class Word(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
-class WordResourcePool(Base):
+class WordResourcePool(DataOwnerMixin, Base):
     __tablename__ = "word_resource_pool"
-    __table_args__ = (UniqueConstraint("normalized_word", name="uq_word_resource_pool_normalized_word"),)
+    __table_args__ = (UniqueConstraint("owner_key", "normalized_word", name="uq_word_resource_pool_owner_word"),)
+    __data_module__ = "words"
+    __public_read__ = True
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     normalized_word: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
@@ -71,18 +83,23 @@ class WordResourcePool(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
-class WordListGroup(Base):
+class WordListGroup(DataOwnerMixin, Base):
     __tablename__ = "word_list_groups"
+    __table_args__ = (UniqueConstraint("owner_key", "name", name="uq_word_list_groups_owner_name"),)
+    __data_module__ = "words"
+    __public_read__ = True
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
     display_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
-class WordList(Base):
+class WordList(DataOwnerMixin, Base):
     __tablename__ = "word_lists"
+    __data_module__ = "words"
+    __public_read__ = True
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -93,9 +110,11 @@ class WordList(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
-class WordListItem(Base):
+class WordListItem(DataOwnerMixin, Base):
     __tablename__ = "word_list_items"
     __table_args__ = (UniqueConstraint("word_list_id", "word_id", name="uq_word_list_items_list_word"),)
+    __data_module__ = "words"
+    __public_read__ = True
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     word_list_id: Mapped[int] = mapped_column(ForeignKey("word_lists.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -185,9 +204,9 @@ class DebateSession(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
-class ChallengeProgress(Base):
+class ChallengeProgress(DataOwnerMixin, Base):
     __tablename__ = "challenge_progress"
-    __table_args__ = (UniqueConstraint("word_list_id", name="uq_challenge_progress_word_list"),)
+    __table_args__ = (UniqueConstraint("owner_key", "word_list_id", name="uq_challenge_progress_owner_list"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     word_list_id: Mapped[int] = mapped_column(ForeignKey("word_lists.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -198,9 +217,9 @@ class ChallengeProgress(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
-class ChallengeDailyStat(Base):
+class ChallengeDailyStat(DataOwnerMixin, Base):
     __tablename__ = "challenge_daily_stats"
-    __table_args__ = (UniqueConstraint("stat_date", name="uq_challenge_daily_stats_date"),)
+    __table_args__ = (UniqueConstraint("owner_key", "stat_date", name="uq_challenge_daily_stats_owner_date"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     stat_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
@@ -210,9 +229,9 @@ class ChallengeDailyStat(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
-class ChallengeDailyWord(Base):
+class ChallengeDailyWord(DataOwnerMixin, Base):
     __tablename__ = "challenge_daily_words"
-    __table_args__ = (UniqueConstraint("challenge_date", "word_id", name="uq_challenge_daily_words_date_word"),)
+    __table_args__ = (UniqueConstraint("owner_key", "challenge_date", "word_id", name="uq_challenge_daily_words_owner_date_word"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     challenge_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
@@ -225,7 +244,7 @@ class ChallengeDailyWord(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
-class ChallengeSpellingAttempt(Base):
+class ChallengeSpellingAttempt(DataOwnerMixin, Base):
     __tablename__ = "challenge_spelling_attempts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
@@ -238,9 +257,9 @@ class ChallengeSpellingAttempt(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
 
-class WrongWord(Base):
+class WrongWord(DataOwnerMixin, Base):
     __tablename__ = "wrong_words"
-    __table_args__ = (UniqueConstraint("word_id", "wrong_date", name="uq_wrong_words_word_date"),)
+    __table_args__ = (UniqueConstraint("owner_key", "word_id", "wrong_date", name="uq_wrong_words_owner_word_date"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     word_id: Mapped[int] = mapped_column(ForeignKey("words.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -250,9 +269,9 @@ class WrongWord(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
-class LearningGrowthMetric(Base):
+class LearningGrowthMetric(DataOwnerMixin, Base):
     __tablename__ = "learning_growth_metrics"
-    __table_args__ = (UniqueConstraint("metric_key", name="uq_learning_growth_metrics_key"),)
+    __table_args__ = (UniqueConstraint("owner_key", "metric_key", name="uq_learning_growth_metrics_owner_key"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     metric_key: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
@@ -518,4 +537,25 @@ class AdminUserSetting(Base):
     audio_voice_gender: Mapped[str] = mapped_column(String(16), nullable=False, default="female", server_default="female")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class DataScopeGrant(Base):
+    __tablename__ = "data_scope_grants"
+    __table_args__ = (UniqueConstraint("owner_id", "grantee_id", name="uq_data_scope_grant_owner_grantee"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("admin_user_settings.id"), nullable=False, index=True)
+    grantee_id: Mapped[int] = mapped_column(ForeignKey("admin_user_settings.id"), nullable=False, index=True)
+    modules_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    granted_by_id: Mapped[int] = mapped_column(ForeignKey("admin_user_settings.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class DataPermissionState(Base):
+    __tablename__ = "data_permission_state"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

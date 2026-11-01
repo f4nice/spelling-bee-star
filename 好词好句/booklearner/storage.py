@@ -7,6 +7,17 @@ from datetime import date, datetime
 from typing import Any
 
 from booklearner.config import MySQLConfig, get_mysql_config
+from app.data_context import current_data_context
+from fastapi import HTTPException
+
+
+def _owner_key(*, write=False):
+    context = current_data_context()
+    if context is None:
+        return "legacy"
+    if "books" not in context.modules or (write and not context.can_write):
+        raise HTTPException(403, "没有此书摘数据空间的权限。")
+    return context.owner_key
 
 
 def get_storage_status() -> dict[str, Any]:
@@ -43,6 +54,7 @@ def get_storage_status() -> dict[str, Any]:
 
 
 def save_analysis(query: str, result: dict[str, Any]) -> dict[str, Any]:
+    owner_key = _owner_key(write=True)
     config = get_mysql_config()
     if not config.enabled:
         return {"saved": False, "reason": "mysql_disabled", "message": "MySQL is disabled."}
@@ -64,11 +76,12 @@ def save_analysis(query: str, result: dict[str, Any]) -> dict[str, Any]:
         cursor.execute(
             """
             INSERT INTO analyses
-              (query_text, status, title, authors_text, source_name, source_url, notice, stats_json, result_json)
+              (owner_key, query_text, status, title, authors_text, source_name, source_url, notice, stats_json, result_json)
             VALUES
-              (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+              (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
+                owner_key,
                 query,
                 result.get("status", ""),
                 book.get("title"),
@@ -95,6 +108,7 @@ def save_analysis(query: str, result: dict[str, Any]) -> dict[str, Any]:
 
 
 def list_recent_analyses(limit: int = 20) -> list[dict[str, Any]]:
+    owner_key = _owner_key()
     config = get_mysql_config()
     if not config.enabled or _mysql_connector() is None:
         return []
@@ -108,10 +122,11 @@ def list_recent_analyses(limit: int = 20) -> list[dict[str, Any]]:
             """
             SELECT id, query_text, status, title, authors_text, source_name, result_json, created_at
             FROM analyses
+            WHERE owner_key = %s
             ORDER BY created_at DESC
             LIMIT %s
             """,
-            (max(1, min(limit, 100)),),
+            (owner_key, max(1, min(limit, 100))),
         )
         return [_recent_analysis_from_row(row) for row in cursor.fetchall()]
     except Exception:
@@ -121,6 +136,7 @@ def list_recent_analyses(limit: int = 20) -> list[dict[str, Any]]:
 
 
 def get_analysis(analysis_id: int) -> dict[str, Any] | None:
+    owner_key = _owner_key()
     config = get_mysql_config()
     if not config.enabled or _mysql_connector() is None:
         return None
@@ -130,7 +146,7 @@ def get_analysis(analysis_id: int) -> dict[str, Any] | None:
     try:
         connection = _connect(config)
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT result_json FROM analyses WHERE id = %s", (analysis_id,))
+        cursor.execute("SELECT result_json FROM analyses WHERE id = %s AND owner_key = %s", (analysis_id, owner_key))
         row = cursor.fetchone()
     except Exception:
         return None
@@ -146,6 +162,7 @@ def get_analysis(analysis_id: int) -> dict[str, Any] | None:
 
 
 def update_analysis_cover(analysis_id: int, cover_url: str) -> dict[str, Any] | None:
+    owner_key = _owner_key(write=True)
     config = get_mysql_config()
     if not config.enabled or _mysql_connector() is None:
         return None
@@ -159,7 +176,7 @@ def update_analysis_cover(analysis_id: int, cover_url: str) -> dict[str, Any] | 
     try:
         connection = _connect(config)
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT result_json FROM analyses WHERE id = %s", (analysis_id,))
+        cursor.execute("SELECT result_json FROM analyses WHERE id = %s AND owner_key = %s", (analysis_id, owner_key))
         row = cursor.fetchone()
         if not row:
             return None
@@ -176,8 +193,8 @@ def update_analysis_cover(analysis_id: int, cover_url: str) -> dict[str, Any] | 
         book["cover_url"] = clean_cover_url
 
         cursor.execute(
-            "UPDATE analyses SET result_json = %s WHERE id = %s",
-            (json.dumps(result, ensure_ascii=False), analysis_id),
+            "UPDATE analyses SET result_json = %s WHERE id = %s AND owner_key = %s",
+            (json.dumps(result, ensure_ascii=False), analysis_id, owner_key),
         )
         connection.commit()
         return result
@@ -190,6 +207,7 @@ def update_analysis_cover(analysis_id: int, cover_url: str) -> dict[str, Any] | 
 
 
 def list_featured_quotes(limit: int = 12, analysis_id: int | None = None) -> list[dict[str, Any]]:
+    owner_key = _owner_key()
     config = get_mysql_config()
     if not config.enabled or _mysql_connector() is None:
         return []
@@ -215,11 +233,11 @@ def list_featured_quotes(limit: int = 12, analysis_id: int | None = None) -> lis
                   q.position
                 FROM analyses a
                 JOIN analysis_quotes q ON q.analysis_id = a.id
-                WHERE a.id = %s
+                WHERE a.id = %s AND a.owner_key = %s
                 ORDER BY q.position ASC, q.id ASC
                 LIMIT %s
                 """,
-                (analysis_id, safe_limit),
+                (analysis_id, owner_key, safe_limit),
             )
             return [_featured_quote_from_joined_row(row) for row in cursor.fetchall() if row.get("quote_text")]
 
@@ -237,11 +255,11 @@ def list_featured_quotes(limit: int = 12, analysis_id: int | None = None) -> lis
               q.position
             FROM analyses a
             JOIN analysis_quotes q ON q.analysis_id = a.id
-            WHERE q.quote_text IS NOT NULL AND q.quote_text <> ''
+            WHERE q.quote_text IS NOT NULL AND q.quote_text <> '' AND a.owner_key = %s
             ORDER BY RAND()
             LIMIT %s
             """,
-            (safe_limit,),
+            (owner_key, safe_limit),
         )
         rows = cursor.fetchall()
     except Exception:
@@ -262,9 +280,10 @@ def list_featured_quotes(limit: int = 12, analysis_id: int | None = None) -> lis
             """
             SELECT id, title, authors_text, result_json, created_at
             FROM analyses
+            WHERE owner_key = %s
             ORDER BY created_at DESC
             LIMIT 80
-            """
+            """, (owner_key,)
         )
         rows = cursor.fetchall()
     except Exception:
@@ -329,6 +348,7 @@ def _featured_quote_from_joined_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def save_clicked_word(analysis_id: int | None, payload: dict[str, Any]) -> dict[str, Any]:
+    owner_key = _owner_key(write=True)
     config = get_mysql_config()
     if not config.enabled:
         return {"saved": False, "reason": "mysql_disabled", "message": "MySQL is disabled."}
@@ -350,12 +370,16 @@ def save_clicked_word(analysis_id: int | None, payload: dict[str, Any]) -> dict[
         connection = _connect(config)
         cursor = connection.cursor()
         _ensure_clicked_words_table(cursor)
+        if analysis_id is not None:
+            cursor.execute("SELECT id FROM analyses WHERE id = %s AND owner_key = %s", (analysis_id, owner_key))
+            if not cursor.fetchone():
+                return {"saved": False, "reason": "not_found", "message": "书摘不存在。"}
         cursor.execute(
             """
             INSERT INTO booklearner_clicked_words
-              (analysis_id, book_title, word, part_of_speech, definition_text, example_text, memory_hint, occurrence_count)
+              (owner_key, analysis_id, book_title, word, part_of_speech, definition_text, example_text, memory_hint, occurrence_count)
             VALUES
-              (%s, %s, %s, %s, %s, %s, %s, %s)
+              (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
               click_count = click_count + 1,
               last_clicked_at = CURRENT_TIMESTAMP,
@@ -366,6 +390,7 @@ def save_clicked_word(analysis_id: int | None, payload: dict[str, Any]) -> dict[
               occurrence_count = VALUES(occurrence_count)
             """,
             (
+                owner_key,
                 analysis_id,
                 payload.get("bookTitle"),
                 word,
@@ -461,6 +486,7 @@ def _ensure_clicked_words_table(cursor: Any) -> None:
         """
         CREATE TABLE IF NOT EXISTS booklearner_clicked_words (
           id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+          owner_key VARCHAR(64) NOT NULL DEFAULT 'legacy',
           analysis_id BIGINT UNSIGNED NULL,
           book_title VARCHAR(512) NULL,
           word VARCHAR(120) NOT NULL,
@@ -473,7 +499,7 @@ def _ensure_clicked_words_table(cursor: Any) -> None:
           first_clicked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
           last_clicked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (id),
-          UNIQUE KEY uniq_clicked_analysis_word (analysis_id, word),
+          UNIQUE KEY uniq_clicked_owner_analysis_word (owner_key, analysis_id, word),
           KEY idx_clicked_word (word),
           KEY idx_clicked_last_clicked_at (last_clicked_at),
           CONSTRAINT fk_clicked_analysis

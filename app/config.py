@@ -4,6 +4,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    # Release only after the explicit ownership migration and media proxy checks.
+    data_permissions_enabled: bool = False
+    data_permissions_maintenance_file: str = ""
     app_name: str = "SpeakEasy"
     database_url: str = "mysql+pymysql://root:password@127.0.0.1:3306/spelling_bee?charset=utf8mb4"
     merriam_webster_api_key: str = ""

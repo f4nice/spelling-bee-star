@@ -12,6 +12,7 @@ from app.models import (
     ChallengeDailyWord, ChallengeProgress, ChallengeSpellingAttempt,
     Word, WordList, WordListItem, WrongWord,
 )
+from app.data_context import current_data_context
 
 
 class PublicStatsCache:
@@ -23,6 +24,8 @@ class PublicStatsCache:
         self._lock = RLock()
 
     def get(self, key, producer):
+        context = current_data_context()
+        key = (context.cache_key if context else None, key)
         with self._lock:
             entry = self._values.get(key)
             if entry and entry[0] > monotonic():

@@ -17,6 +17,22 @@ const savingPhones = ref([]);
 const hiddenPasswordPhones = ref([]);
 const notice = ref("");
 const newUser = ref({ phone: "", username: "", role: "viewer", loginPassword: "" });
+const dataGrants = ref([...(props.data.dataGrants || [])]);
+const grantDraft = ref({ ownerId: props.data.currentUser.id, teacherId: "", modules: [] });
+const savingGrant = ref(false);
+async function saveDataGrant(ownerId=grantDraft.value.ownerId, teacherId=grantDraft.value.teacherId, modules=grantDraft.value.modules) {
+  savingGrant.value=true;
+  notice.value="";
+  try {
+    await fetchJson("/api/vue/admin/data-grants",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ownerId:Number(ownerId),teacherId:Number(teacherId),modules})});
+    dataGrants.value=dataGrants.value.filter((grant)=>grant.ownerId!==Number(ownerId) || grant.teacherId!==Number(teacherId));
+    if (modules.length) dataGrants.value.push({ownerId:Number(ownerId),teacherId:Number(teacherId),modules:[...new Set(modules)]});
+    notice.value=modules.length ? "已保存只读数据授权。" : "已撤回授权，下一次请求立即生效。";
+  } catch (error) { notice.value=error.message; }
+  finally { savingGrant.value=false; }
+}
+function grantUserName(id) { return users.value.find((user)=>user.id===id)?.username || `用户${id}`; }
 const catWorldPricing = ref(normalizeCatWorldPricing(props.data.catWorldPricing || {}));
 const savingPriceItemId = ref("");
 const savingScenePriceId = ref("");
@@ -54,6 +70,7 @@ const limitedItemStockDrafts = ref(
 const adminSections = [
   { key: "planning", label: "规划", description: "登录、权限、AI 和积分体系的管理蓝图。" },
   { key: "users", label: "用户中心", description: "管理昵称、登录密码、角色和后台权限。" },
+  { key: "data", label: "数据权限", description: "独立数据空间与老师的只读查看授权。" },
   { key: "site", label: "网站管理", description: "查看站点版本、登录方式和默认服务。" },
   { key: "catShop", label: "猫咪商城", description: "规划猫咪世界商品和积分价格。" },
 ];
@@ -600,6 +617,28 @@ async function resetCatWorldData() {
           </div>
         </section>
 
+        <section v-if="activeAdminSection === 'data'" class="admin-section-stack">
+          <section class="panel">
+            <h2>账号数据隔离</h2>
+            <p>每人使用自己的数据。管理员可从右上角切换账号只读查看；老师只可查看下面明确授权的模块。</p>
+            <p>官方 SPB 词库公共只读；要编辑时，先复制到自己的词表。历史未标归属数据保留给 jerry。</p>
+            <form class="data-grant-form" @submit.prevent="saveDataGrant()">
+              <label>数据所属账号<select v-model="grantDraft.ownerId" required><option v-for="user in users" :key="user.id" :value="user.id">{{ user.username }}</option></select></label>
+              <label>授权老师<select v-model="grantDraft.teacherId" required><option value="" disabled>请选择老师</option><option v-for="user in users.filter(item => item.role === 'teacher' && item.isActive)" :key="user.id" :value="user.id">{{ user.username }}</option></select></label>
+              <fieldset><legend>允许只读查看的模块</legend><label v-for="module in data.dataGrantOptions || []" :key="module.key"><input v-model="grantDraft.modules" type="checkbox" :value="module.key">{{ module.label }}</label></fieldset>
+              <p>授权学习记录时，请同时明确勾选“单词表”，用于显示对应词条；系统不会自动增加授权范围。</p>
+              <button type="submit" :disabled="savingGrant">保存授权</button>
+            </form>
+          </section>
+          <section class="panel">
+            <h2>已授权</h2><p v-if="!dataGrants.length">尚未向老师开放其他账号的数据。</p>
+            <article v-for="grant in dataGrants" :key="`${grant.ownerId}-${grant.teacherId}`" class="data-grant-row">
+              <span>{{ grantUserName(grant.ownerId) }} → {{ grantUserName(grant.teacherId) }}</span>
+              <span>{{ grant.modules.map(key => (data.dataGrantOptions || []).find(item => item.key === key)?.label || key).join('、') }}</span>
+              <button class="secondary-button" type="button" :disabled="savingGrant" @click="saveDataGrant(grant.ownerId,grant.teacherId,[])">撤回授权</button>
+            </article>
+          </section>
+        </section>
         <section v-if="activeAdminSection === 'users'" class="admin-section-stack">
           <section class="panel admin-create-panel">
             <div>
@@ -679,14 +718,14 @@ async function resetCatWorldData() {
               </div>
 
               <div class="admin-permission-grid">
-                <label v-for="permission in data.permissionOptions" :key="permission.key" class="admin-permission-chip">
+                <label v-for="permission in data.permissionOptions.filter(item => item.key !== 'admin' || user.role === 'admin')" :key="permission.key" class="admin-permission-chip">
                   <input v-model="user.permissions[permission.key]" type="checkbox">
                   <span>{{ permission.label }}</span>
                 </label>
               </div>
 
               <footer class="admin-user-actions">
-                <span>{{ user.role === "admin" ? "管理员拥有全部权限" : "按勾选项控制后台权限" }}</span>
+                <span>{{ user.role === "admin" ? "管理员拥有全部权限" : "按勾选项控制功能权限；账号和授权管理仅限管理员" }}</span>
                 <button class="challenge-button" type="button" :disabled="isSaving(user.phone)" @click="saveUser(user)">
                   {{ isSaving(user.phone) ? "保存中..." : "保存设置" }}
                 </button>

@@ -1,6 +1,7 @@
-import { invalidateApiCacheForMutation, readApiCache, writeApiCache } from "./apiCache.js";
+import { apiCacheIdentity, invalidateApiCacheForMutation, readApiCache, writeApiCache } from "./apiCache.js";
 
 export async function fetchJson(url, options) {
+  const identity = apiCacheIdentity();
   const method = (options?.method || "GET").toUpperCase();
   const skipCache = Boolean(options?.skipCache);
   const requestOptions = options ? { ...options } : undefined;
@@ -13,6 +14,13 @@ export async function fetchJson(url, options) {
   const response = await fetch(url, requestOptions);
   const isJson = response.headers.get("content-type")?.includes("application/json");
   const payload = isJson ? await response.json() : null;
+  const currentIdentity = apiCacheIdentity();
+  const serverIdentity = response.headers.get("x-newabby-scope");
+  if (identity !== currentIdentity || (serverIdentity && currentIdentity && serverIdentity !== currentIdentity)) {
+    const error = new Error("账号或数据空间已切换，请刷新页面后重试。");
+    error.status = 409;
+    throw error;
+  }
   if (!response.ok) {
     const error = new Error(
       response.status === 401

@@ -1,6 +1,7 @@
 import asyncio
 import re
 from pathlib import Path
+from app.data_context import DataMediaDirectory
 
 from sqlalchemy.orm import Session
 
@@ -20,8 +21,8 @@ from app.services.teaching_example import TeachingExampleClient
 
 
 UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads"
-IMAGE_DIR = UPLOAD_DIR / "images"
-AUDIO_DIR = UPLOAD_DIR / "audio"
+IMAGE_DIR = DataMediaDirectory(UPLOAD_DIR / "images")
+AUDIO_DIR = DataMediaDirectory(UPLOAD_DIR / "audio")
 
 
 NATURAL_CHINESE_DEFINITION_OVERRIDES = {

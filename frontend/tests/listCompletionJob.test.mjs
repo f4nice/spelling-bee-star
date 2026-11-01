@@ -414,6 +414,8 @@ test("a stale list-refresh rejection cannot reset the new list's progress or sch
 });
 
 test("uncached completion status GET invalidates every shared word/list cache but preserves newspaper", async () => {
+  const originalDocument = globalThis.document;
+  globalThis.document = { cookie: "newabby_data_cache=synthetic-completion" };
   const originalWindow = globalThis.window;
   const originalFetch = globalThis.fetch;
   const entries = new Map();
@@ -448,6 +450,8 @@ test("uncached completion status GET invalidates every shared word/list cache bu
     assert.deepEqual(readApiCache("/api/vue/newspaper"), newspaper);
     assert.deepEqual(readApiCache("/api/vue/shell"), { username: "test" });
   } finally {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
     globalThis.fetch = originalFetch;

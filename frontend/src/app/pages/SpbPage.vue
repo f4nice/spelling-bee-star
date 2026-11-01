@@ -337,7 +337,7 @@ onBeforeUnmount(clearSyncPoll);
           词表
         </span>
        </div>
-       <button type="button" :disabled="Boolean(syncingKey)" @click="refreshAllGroups">
+       <button v-if="pageData.can_maintain !== false" type="button" :disabled="Boolean(syncingKey)" @click="refreshAllGroups">
          {{ syncingKey === '__all__' ? '获取中…' : '获取最新词库' }}
        </button>
       </div>
@@ -400,7 +400,7 @@ onBeforeUnmount(clearSyncPoll);
         </div>
         <div class="spb-group-actions">
           <button
-            v-if="canSyncGroup(activeGroup)"
+            v-if="pageData.can_maintain !== false && canSyncGroup(activeGroup)"
             class="primary-action-button"
             type="button"
             :disabled="Boolean(syncingKey)"
