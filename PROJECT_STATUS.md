@@ -5,10 +5,11 @@
 ## 当前状态
 
 - 线上地址：`https://www.newabby.com/`
-- 应用主机：NAS `192.168.1.247:8012`，容器 `newabby-staging-app-run`（公网代理经 VPN 访问 `10.67.0.2:8012`）
+- 应用主机：Linux `192.168.1.104:8012`，容器 `newabby-app`（公网代理经独立 VPN 访问 `10.67.0.3:8012`）；NAS 原 `newabby-staging-app-run` 已停写、停止，保留作回退材料，不得与新机同时开放写入。
 - 外网代理：`139.224.9.235`（仅反向代理，不部署应用代码）
-- 当前项目目录：`/volume1/docker/newabby-staging`；活跃后端完整包：`/volume1/docker/newabby-staging/releases/data-permissions-20261101/app`（只读挂载到容器 `/app/app`）；Compose 目录：`/volume1/docker/newabby-staging-run`。旧 Ubuntu `/opt/speakeasy/current` 不再作为本次部署目标。
-- 当前业务库：NAS `192.168.1.247:3307/newabby_permissions_live_20261101`；原 `spelling_bee` 和各次备份保留作回退材料。新站开放后可能已有新写入，禁止直接切回旧库丢失新数据。
+- 当前项目目录：新机 `/opt/newabby`；完整后端 `/opt/newabby/app`、BookLearner `/opt/newabby/booklearner`、静态资源 `/opt/newabby/static`、图片音频 `/opt/newabby/uploads`；私有 Compose `/opt/newabby/compose.json`。NAS 原 `/volume1/docker/newabby-staging` 与 `/volume1/docker/newabby-staging-run` 保留但不再是当前发布目标，旧 Ubuntu 也不是目标。
+- 当前业务库：Linux104 的 `newabby-mysql`，仅本机 `127.0.0.1:3307/newabby_permissions_live_20261101`（容器内 `db:3306`）；演练库 `newabby_permissions_trial_20261101` 保留、不对网站开放。NAS 原正式库、旧 `spelling_bee` 与各次备份保留。新站已开放，可能已有新写入，禁止直接切回 NAS 或旧库造成数据丢失。
+- 当前运维说明：`docs/NEWABBY_LINUX104_OPERATIONS.md`。历史 `scripts/deploy-production.ps1` 默认指向旧 Ubuntu，不能直接用于新机；后续发布必须先按当前目录/完整包/Compose 核对，不得只覆盖 `main.py`。
 - 当前主分支：`main`
 - 样式基线提交：`6f009f0 Polish global Vue styling`
 - Vue 主应用：`frontend/src/app`
@@ -19,17 +20,19 @@
 - 验证脚本：`scripts/verify-release.ps1`
 - Vue 覆盖检查脚本：`scripts/check-vue-coverage.ps1`
 - 线上日志检查脚本：`scripts/check-production-logs.ps1`
-- 生产部署脚本：`scripts/deploy-production.ps1`
+- 历史 Ubuntu 部署脚本：`scripts/deploy-production.ps1`（当前 Linux104 不适用，禁止直接运行旧默认值）
 - 固定验证 URL 清单：`scripts/verification-urls.json`
 - 版本矩阵默认模板：`VERSION_MATRIX.default.json`
 - 运行时版本矩阵：`uploads/version_matrix.json`，首次启动从默认模板生成；部署不会覆盖这个运行时文件，后续只展示版本号。
-- 上传运行目录：生产服务使用 `spellingbee` 用户；部署脚本会保留 `uploads/` 并把它归还给 `spellingbee:spellingbee`，避免 Excel 预览、图片、音频上传写入失败。
+- 上传运行目录：当前 Linux104 应用容器使用 `10001:10001`，`/opt/newabby/uploads` 可写；迁移后已对全部 13 个现有上传目录逐个执行 UID10001 人工文件写/读/删探针，全部通过且探针已清理，没有替换真实图片音频。代码、静态资源和 BookLearner 只读挂载。不要套用旧 Ubuntu 的 `spellingbee` 权限操作，不要改 NAS 原媒体权限。
 
 - 2026-10-20：核查 NAS 测试环境的媒体来源。D 盘工作树的 `uploads/` 只保留版本矩阵，实际图片/音频位于本机 Ubuntu `172.26.234.138:/opt/speakeasy/current/uploads`。已将非音频媒体同步到 NAS `/volume1/docker/newabby-staging/uploads`（`images` 9629 个，另含 `book-covers` 13、`essay-covers` 24、`previews` 43、`science-discoveries` 41、`spb` 19、`generated-assets` 1），约 505 MB；音频已完整同步 190030 个文件（约 9.1 GB），源/目标抽查 SHA-256 一致。NAS 测试服务使用 `192.168.1.247:8012`，数据库端口为 `3307`，不影响线上服务和其它容器。已验证首页、`/api/vue/home`、`/api/vue/wrong-words`、列表数据、英文小报接口和音频资源均返回 200；音频响应为 `audio/mpeg`。原 `newabby-staging` 项目存在 Container Manager 残留容器记录，已保留其数据库和媒体数据，另创建隔离的 `newabby-staging-run` 项目运行测试；该项目启用 `unless-stopped`，只绑定最新 `app/main.py`、静态文件和共享 `uploads`，数据库继续复用 NAS 的 3307 服务。已完成一次停止→启动，等待应用恢复后首页、生词本接口和音频均再次返回 200。
 
 - 2026-10-20：检查图片上传链路。线上网关对约 1 MB 以上的 multipart 请求返回 413，而应用端单图接口允许 12 MB；同时 Python slim 运行时未注册 `.webp` MIME，上传后静态响应为 `text/plain`，部分浏览器会拒绝显示。应用注册 `image/webp`，前端对大图按比例压缩并将批量上传拆成小批次，单图保存失败会在图片管理弹窗显示原因；批量图片入口同时支持选择文件和选择文件夹。新增图片 MIME 与批量分包测试。线上网关仍需将 `client_max_body_size` 调整到至少 20 MB，才能完全取消对未能在浏览器压缩的超大/特殊格式图片的限制；本轮未触碰生产代理配置。
 
 ## 当前功能记录
+
+- 2026-11-01（NEWABBY 已正式迁往 Linux104，公网验收通过）：用户提交 DSM 密码后，确认唯一 FinalSync root 任务已保存且自动运行关闭，手动执行一次固定指纹 `freeze-nas-v2.py`。只停止 NAS 的 NEWABBY 应用，取得最新正式库 37 表一致性快照，SHA-256 `473f62e83bbc17d3e8b536cc96fbabf0a9232d5aa955ada12533b2f6f70dff6d`；备份窗口内其他 NAS 容器 ID/启动时间/运行状态/重启计数一致。最后增量仅传输 764 个文件、45051699 字节，删除 0 文件；新机 201749 个媒体文件、10006022127 字节逐个路径/大小/mtime 核对，UID10001 归属通过，505 个内容 SHA-256 抽样通过，不声称所有文件内容重新逐字节哈希。新机在全新正式库 `newabby_permissions_live_20261101` 恢复，37 表全部原字段/行数/内容指纹严格匹配，不覆盖演练库或 NAS 原库；NAS 本机又复核全部 37 表和媒体清单/505 内容抽样仍与冻结副本一致。新机维护期四个真实活跃账号各 11 类 API、个人词表范围、公共只读、跨账号词条/图片音频拒绝、管理员只读切换、伪造空间拒绝及匿名 401 均通过，68 个前端资源磁盘/HTTP 指纹一致；HTTP 后 36 张业务表和所有非新闻缓存保持完全一致，仅公共英文小报缓存允许 29 键变化、其中 1 个新增，无原键删除，原始快照及回执保留。首次代理 apply 在 Nginx reload 后立即探测未通过并自动恢复原配置，保留失败记录；只读诊断确认直连新机 503、原配置已恢复、Nginx 语法及主进程正常，无错误拦截配置。独立 retry2 仅加入固定 60 秒有界等待、要求连续三次公网 503 的收敛检查，84 项本地模拟测试通过，另 7 项 Linux 媒体模拟检查通过；本次不重新冻结、恢复或更改数据。第二次代理 apply 成功，只将共享 `/etc/nginx/conf.d/a.conf` 中唯一 NEWABBY 上游从 `10.67.0.2:8012/` 换为 `10.67.0.3:8012/`，其他站点所有字节保留，原配置备份保留；共享 Nginx PID 6305、OpenVPN PID 707724 未变，没有重启共享 VPN/改防火墙/NAS 默认网关。NAS root 任务确认源写端仍停止后，封存旧上游回退路径，新机校验自身维护令牌指纹、正式库配置和所有回执后才解除维护。公网 HTTPS 登录 200、匿名 API 401；四账号各 11 类 API/隔离/图片音频和 68 个静态文件内容指纹再次通过，浏览器保留原 jerry 登录并正常显示首页，未提交真实答题、购买或奖励操作。开放后的正常并发写入不做整库不变宣称，也不得直接启动 NAS 旧站回退。任务收到公网验收后，仅撤销本次来源 104 的受限公钥并卸载专用只读导出挂载，其他 SSH 公钥、原库、媒体和备份保留；新机实测临时密钥认证被拒绝，仅删除本次生成的临时私钥，无恢复副本，VPN 私钥未动。新机 app/MySQL 均 running、`unless-stopped`，数据库仅监听本机 3307，默认路由/阿里云端点仍直走局域网，可用 66380316672 字节。唯一临时 root 任务入口仍停用，已请求操作时确认删除，尚未点击删除。完整私有证据仅在 NAS/104，安全回执、首次失败及 retry2 脚本在 `.local-sync/linux104-migration-20261101/`；Grok 辅助密钥仍缺失，无外部调用，原四个无关未提交文件保持不变。
 
 - 2026-11-01（Linux104 完整演练已通过，最终同步待 DSM 保存确认）：80G 容量阻塞解除后，复用首轮已传的约 10.52 GB 数据，不重新下载、不在电脑落地数据库或媒体；目标 `/opt/newabby` 已就绪，应用 `newabby-app` 以 UID10001 运行，数据库 `newabby-mysql` 仅绑定 `127.0.0.1:3307`，两者 `unless-stopped`，Docker 与独立 VPN 开机启动。实际源镜像 MySQL 为 8.4.11，目标时区 UTC、utf8mb4 与 `utf8mb4_unicode_ci` 等默认值已对齐 NAS；只重建目标数据库容器验证持久化后，四账号 HTTP 复验仍通过，没有重启 NAS 数据库。初始备份严格恢复至全新 `newabby_permissions_trial_20261101`，37 表全部原字段/行数/内容指纹完全匹配；四个真实活跃账号各 11 类 API、个人词表范围、跨账号词条/图片音频拒绝、管理员只读切换、伪造空间拒绝、匿名 401 和维护期 503 验收通过，未答题、购买或发奖；68 个前端资源磁盘及 HTTP SHA-256 全部匹配，图片/音频及四个上传命名空间的 UID10001 写读删模拟探针通过。首轮 HTTP 后严格全表复查发现公共英文小报 GET 的后台缓存刷新；保留原始差异证据后确认仅 `speakeasy_cache` 的 29 个公共新闻键更新、4 个新增、无删除，其他 36 表全部业务字段/行内容和所有非新闻缓存仍完全一致；没有将整库 HTTP 后“完全不变”误标通过，原恢复 37 表严格验证未放宽。所有有效应用配置在内存中逐值核对，登录会话密钥、现有 AI/SPB 配置保留，不输出实际密钥。目标维护门禁仍开启、普通访问 503，NAS 登录仍 200；独立 VPN `10.67.0.3`、默认网关/阿里云端点仍走局域网，新机可用 `66670084096` 字节。最终媒体镜像 dry-run 退出 0；代理只读预检确认将来只需替换共享 Nginx 文件中的唯一 NEWABBY 上游，其他站点字节不变，共享 VPN PID 707724/Nginx PID 6305 未变，目前尚未改代理。68 项本地模拟测试通过，另 7 项 Linux root 的纯模拟媒体验收检查通过；Grok -Check 未配置辅助密钥，没有外部调用。新机完整演练门禁回执已写 NAS。最终停写任务升级为固定指纹 `freeze-nas-v2.py`（SHA-256 `b259ad9dda9885a93d314358f283068dfb3e149e125827edff51e9b960e2445e`），增加停写后有界等待、开放前救援及开放后绝不自动恢复旧写端的保护；群晖因任务内容变化再次要求 DSM 密码，当前仍停在保存确认窗口。NAS `final-attempt`/`final-watch` 均不存在，最终停写、正式新库恢复及域名切换都未执行，不能宣称迁移完成；临时受限 SSH 公钥和只读导出挂载仍保留供最后增量同步，验收后按批准范围撤销。全部私有证据仅在 NAS/新机迁移目录，安全回执与脚本在 `.local-sync/linux104-migration-20261101/`，四个原有未提交文件未改。
 
