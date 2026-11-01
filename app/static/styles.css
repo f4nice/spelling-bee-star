@@ -22048,3 +22048,7 @@ select {
 .data-grant-form label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .data-grant-form fieldset { display: flex; flex-wrap: wrap; gap: 12px; border: 1px solid var(--border, #d5dfda); border-radius: 8px; padding: 12px; }
 .data-grant-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 0; }
+
+.site-delete-security-fields input[type="password"] { box-sizing: border-box; min-height: 44px; padding: 10px 12px; border: 1px solid #c4d8cf; border-radius: 10px; background: #fff; color: #1c3547; font: inherit; transition: border-color .15s ease, box-shadow .15s ease; }
+.site-delete-security-fields input[type="password"]:focus { outline: none; border-color: #168261; box-shadow: 0 0 0 3px rgb(22 130 97 / 12%); }
+.site-delete-security-fields input[type="password"]:disabled { background: #eff4f2; color: #6b7f75; cursor: not-allowed; }
