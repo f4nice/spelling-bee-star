@@ -7,7 +7,8 @@
 - 线上地址：`https://www.newabby.com/`
 - 应用主机：NAS `192.168.1.247:8012`，容器 `newabby-staging-app-run`（公网代理经 VPN 访问 `10.67.0.2:8012`）
 - 外网代理：`139.224.9.235`（仅反向代理，不部署应用代码）
-- 当前应用目录：`/volume1/docker/newabby-staging`；Compose 目录：`/volume1/docker/newabby-staging-run`。旧 Ubuntu `/opt/speakeasy/current` 不再作为本次部署目标。
+- 当前项目目录：`/volume1/docker/newabby-staging`；活跃后端完整包：`/volume1/docker/newabby-staging/releases/data-permissions-20261101/app`（只读挂载到容器 `/app/app`）；Compose 目录：`/volume1/docker/newabby-staging-run`。旧 Ubuntu `/opt/speakeasy/current` 不再作为本次部署目标。
+- 当前业务库：NAS `192.168.1.247:3307/newabby_permissions_live_20261101`；原 `spelling_bee` 和各次备份保留作回退材料。新站开放后可能已有新写入，禁止直接切回旧库丢失新数据。
 - 当前主分支：`main`
 - 样式基线提交：`6f009f0 Polish global Vue styling`
 - Vue 主应用：`frontend/src/app`
@@ -29,6 +30,8 @@
 - 2026-10-20：检查图片上传链路。线上网关对约 1 MB 以上的 multipart 请求返回 413，而应用端单图接口允许 12 MB；同时 Python slim 运行时未注册 `.webp` MIME，上传后静态响应为 `text/plain`，部分浏览器会拒绝显示。应用注册 `image/webp`，前端对大图按比例压缩并将批量上传拆成小批次，单图保存失败会在图片管理弹窗显示原因；批量图片入口同时支持选择文件和选择文件夹。新增图片 MIME 与批量分包测试。线上网关仍需将 `client_max_body_size` 调整到至少 20 MB，才能完全取消对未能在浏览器压缩的超大/特殊格式图片的限制；本轮未触碰生产代理配置。
 
 ## 当前功能记录
+
+- 2026-11-01（账号数据隔离已在 NAS 验收开放）：用户提交 DSM 密码后，手动执行一次固定指纹 Retry6，于北京时间 15:23:13 完成。NAS 上完整候选应用导入、UID10001 输入/状态读写、完整 booklearner 包指纹、重建前后验收进程 `python -P` 导入来源 `/app/app` 均通过。新的冻结备份 SHA-256 `a5322824d026f8afe70ab9c117cdb53ff6f2ed9a0e544862f32362c94a0dfd8b`；35 张原表旧字段指纹与前次冻结备份及已迁移副本全部匹配，保留复用已迁移库，没有重新恢复或重复迁移。真正的原恢复回执仍来自 retry4 备份 `53198629fd4885ffd56798701eff2e1a34d84bc76f54367fcc82aef4427ac78c`，不能将 retry5/6 的新冻结备份误称为重新恢复来源。4 个真实活跃账号通过 10 类业务 HTTP 接口、个人词表准确范围、公共词只读访问、跨账号词条/图片音频拒绝、非管理员伪造空间拒绝、管理员切换只读、匿名 401 和维护期阻止外部写入验收；未提交真实学习答案、猫咪购买或积分奖励。真实账号为现有管理员/只读角色，老师授权规则来自此前隔离测试，不声称实测了现有老师账号。原 200984 个媒体文件逐个核对大小、mtime 和链接元数据保留（非全部内容 SHA-256）；原库旧字段在本次停写窗口保持一致，只有 NEWABBY 应用容器重建，其他容器 ID/启动时间等清单一致，私有 AI/SPB 配置指纹不变。成功回执后解除维护，按授权删除唯一临时验证库 `newabby_permissions_verify_20261101`；原库和正式库保留。NAS 登录 200、匿名词表 API 401，68 个公开前端资源均 200/无跳转且与锁定清单 SHA-256 全部一致；登录页显示 `BIZ-REL-20261101-001 · v20261101.1`。公网登录仍超时：现用代理 Nginx active、到 `10.67.0.2` 路由存在但后端 TCP/HTTP 超时，NAS 自身 VPN 地址访问 200；未修改 VPN/代理/防火墙或旧主机，不能宣称公网已恢复。唯一临时 root 任务仍停用，已请求操作时确认删除入口；所有脚本/备份证据保留。原四个无关未提交文件未变。本地安全回执 `.local-sync/data-permissions-release-20261101/retry6-final-acceptance.json`、`retry6-temporary-copy-removed.json`、`retry6-static-http-verified.json`，完整业务数据与详细账号回执仅保留 NAS。
 
 - 2026-11-01（HTTP 诊断确认路径遮蔽，Retry6 待保存）：用户提交 DSM 密码后，已手动运行一次停用的 HTTP-Diagnose 只读任务。允许列表脱敏结果只有 `/app/release/release-http.py:9`、`/app/release/app/main.py:3639` 和 `OSError`，无账号断言结果；脚本目录优先级让验收进程导入发布目录的影子应用，在只读挂载下创建媒体目录失败，尚未发起真实账号 HTTP 验收。修正版仅将原验收命令改为固定 `PYTHONPATH=/app:/app/app` 加 `python -P`，保留全部账号/跨账号断言；NAS 重建前后都核对实际应用导入来源。新增复用完整 booklearner 包的精确指纹保护、原恢复回执跨重试保留及失败脱敏元数据自动提取。12 项本地测试通过，NAS Python 编译及上传指纹核对通过；`root-release-retry6.py` SHA-256 为 `b6d4fdecf30af155987aac6cdb20fc24354750d342dcc5590b69b2bef2776e49`。唯一停用的临时任务已编辑为 Retry6，当前停在用户 DSM 密码确认窗口，尚未运行 Retry6。后续仍须完整导入预检、原库/就绪副本一致性检查及新的冻结备份逐表匹配，才可复用已迁移库并仅重建 NEWABBY 应用；不删除或重迁移原库/正式库，不修改 VPN、旧主机或其他容器。新站尚未开放，不能宣称账号隔离已上线；原站已回退。证据 `.local-sync/data-permissions-release-20261101/retry5-safe-http-failure.json`、`retry6-tests.json` 及 NAS 各次独立证据目录；四个原有无关未提交文件保留。
 
