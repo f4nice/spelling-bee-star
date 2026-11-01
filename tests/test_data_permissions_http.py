@@ -76,6 +76,23 @@ class DataPermissionsHttpTests(unittest.TestCase):
             path.unlink()
             self.assertEqual(self.client.get('/api/vue/lists',headers=self.headers(2)).status_code,200)
 
+    def test_release_gate_rejects_malformed_or_empty_tokens(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as folder:
+            path=Path(folder)/'maintenance.token'
+            self.maintenance_file=str(path)
+            for expected,supplied in [('synthetic-release-token','synthetic-release-token-extra'),
+                ('synthetic-release-token',' synthetic-release-token'),
+                ('synthetic-release-token','synthetic-release-token '),(' \n',''),(' \n',' ')]:
+                with self.subTest(expected_empty=not expected.strip(),supplied=supplied):
+                    path.write_text(expected,encoding='utf8')
+                    response=self.client.get('/api/vue/lists',headers={**self.headers(2),'X-Newabby-Release-Check':supplied})
+                    self.assertEqual(response.status_code,503)
+                    self.assertEqual(response.headers['cache-control'],'private, no-store')
+                    self.assertEqual(response.headers['retry-after'],'60')
+                    self.assertNotIn('cards',response.json())
+
     def test_guessed_word_and_list_ids_do_not_expose_foreign_data(self):
         own=self.client.get('/api/vue/words/2?edit=1&list_id=2',headers=self.headers())
         self.assertEqual(own.status_code,200,own.text)
