@@ -17,7 +17,8 @@
 | 正式数据库 | `newabby_permissions_live_20261101` |
 | 数据库网络 | 主机仅 `127.0.0.1:3307`，应用内部使用 `db:3306`；不向局域网开放数据库 |
 | 公网代理 | `139.224.9.235`，NEWABBY 唯一上游为 `10.67.0.3:8012` |
-| 新机独立 VPN | `openvpn-client@newabby104`，地址 `10.67.0.3`，仅 VPN 网段入隧道 |
+| 新机独立 VPN | `openvpn-client@newabby104`，地址 `10.67.0.3`；本机默认出口仍走局域网，另为阿里云本机提供到本地网段的受限中转 |
+| 云到局域网 | `10.67.0.1 -> 10.67.0.3 -> 192.168.1.0/24`；规则服务 `newabby-vpn-lan.service`，运维说明见 `NEWABBY_VPN_LAN_OPERATIONS.md` |
 
 源码完整包在 `/opt/newabby/app`，静态资源在 `/opt/newabby/static`，BookLearner 在 `/opt/newabby/booklearner`，三者只读挂载。图片、音频及其他上传位于 `/opt/newabby/uploads`，数据库持久化位于 `/opt/newabby/mysql`。保留这两个数据目录，不要把容器删除与数据目录删除混为一谈。
 
@@ -53,11 +54,15 @@ Docker 和独立 VPN 已开机启用，两个容器均为 `unless-stopped`。手
 
 不要使用 `down -v`、删除持久化目录、全局 Docker prune，或重建无关容器。应用更新时，先备份并核对完整包和私有配置，再仅重建 `app`，不要只同步 `main.py`。
 
-## NAS 保留范围及回退限制
+## NAS 退休范围及回退限制
 
-NAS `192.168.1.247` 的原目录 `/volume1/docker/newabby-staging`、原 Compose 目录 `/volume1/docker/newabby-staging-run`、原正式库、旧库、图片音频及备份均保留。原应用 `newabby-staging-app-run` 已停止，维护门禁保留；NAS 其他容器、数据库服务和默认路由未因本次切换被重建或修改。
+2026-11-02 用户确认永久清理后，NAS `192.168.1.247` 的2个旧 NEWABBY 容器、4个专属数据卷、2个项目网络、1个项目镜像标签及 `/volume1/docker/newabby-staging`、`/volume1/docker/newabby-staging-run`、`/volume1/docker/newabby-wireguard-client` 已删除。其他8个容器与共享基础镜像保留；本次退休未操作 VPN 或路由。
 
-新机已开放后可能已有正常写入。**不能直接启动 NAS 旧应用或把代理指回 `10.67.0.2`，否则会形成双写或丢失新数据。** 如需回退，应先停止新机写入，备份并核对新机最新数据，再制定受控反向同步方案。
+完整退休归档保存在 Linux104：`/opt/newabby-nas-retired-20261102/nas-newabby-retired.tar`，13,234,606,080字节，SHA-256 `9d2f7e8ecc2bf6369825577e58be09044acf79507efba522cd55980f58d81885`。源文件203587个；独立校验全归档哈希、全部有效载荷、链接、数量、大小和元数据通过，未把业务数据传到电脑。原迁移镜像包及新机既有数据库备份也保留。此归档可用于受控恢复，不是开放后正式数据的最新副本，不得直接覆盖现用库。
+
+NAS 临时清理目录（包括本次归档暂存副本）、2个旧 Container Manager 项目记录和停用任务 `NEWABBY-NAS-Cleanup-20261102` 的收尾因页面连接中断而未验收；不能把核心删除完成扩大成“全部清干净”。任务请求已设为 `finish`，仅用于在104完成回执核对后删除自己的临时目录；**不要再运行已经完成的 `apply`**。后续网络任务没有继续运行NAS收尾。
+
+新机已开放并持续产生新数据。**不能把代理指回 `10.67.0.2`，也不能用退休归档直接覆盖正式站。** 如需恢复，应先备份并核对新机最新数据，再制定受控恢复方案。
 
 历史 `scripts/deploy-production.ps1` 默认仍是旧 Ubuntu 工作流，不能直接用于当前服务器。旧 Ubuntu、NAS 原目录都不是当前发布目标。
 
@@ -75,7 +80,7 @@ NAS `192.168.1.247` 的原目录 `/volume1/docker/newabby-staging`、原 Compose
 
 完整业务快照和私有验收日志只留 NAS/新机，不在电脑或 Git 中保存：
 
-- NAS：`/volume1/docker/newabby-staging/backups/linux104-migration-20261101/`
+- NAS 历史迁移目录：已随退休清理归入104的完整归档，不再作为现存NAS路径使用。
 - 新机迁移工具/快照：`/opt/newabby-migration-20261101/`
 - 新机恢复及公网验收回执：`/opt/newabby/proof/`、`/opt/newabby/state/`
 - 公网代理首次及 retry2 证据：`/etc/nginx/backups/newabby-linux104-20261101/`
@@ -91,7 +96,7 @@ abby 自身的 22 篇作文、1 篇日记（2026-10-22）、22 个猫咪档案�
 
 图片音频副本位于 `uploads/users/u2/images/` 和 `uploads/users/u2/audio/` 下的 `abby-recovery-20261101-<hash>.*`；105456 文件共 5527880047 字节，使用独立 inode/COW 副本并逐文件核对内容，原媒体未替换。个人媒体授权只接受既有的固定路径层级，不要再加一层恢复任务目录，也不要放宽授权来适配错误目录。
 
-恢复材料均在新机私有 `/opt/newabby-recovery/abby-20261101/`：`before/` 是首轮完整备份，`before-live/` 是正式复制前最新 37 表备份，`source/` 保留旧共享导出、ID 映射与媒体映射，`proof/` 保留演练、首轮媒体 403 失败、修正、正式事务与四账号公网验收。正常猫咪接口验收另留 `/opt/newabby/state/abby-recovery-cat-live.json`。快照不在电脑或 Git 中保存；本次临时验证库验收后清理，原正式库、旧迁移演练库、NAS 原数据及备份保留。
+恢复材料均在新机私有 `/opt/newabby-recovery/abby-20261101/`：`before/` 是首轮完整备份，`before-live/` 是正式复制前最新 37 表备份，`source/` 保留旧共享导出、ID 映射与媒体映射，`proof/` 保留演练、首轮媒体 403 失败、修正、正式事务与四账号公网验收。正常猫咪接口验收另留 `/opt/newabby/state/abby-recovery-cat-live.json`。快照不在电脑或 Git 中保存；本次临时验证库验收后清理，新机原正式库及旧迁移演练库保留，NAS原数据和备份已进入上述退休归档。
 
 **不要重复执行本次恢复脚本，也不要再次导入历史学习/错词数据。** 若仍报告空白，先检查当前登录账号和右上角“查看数据”：jerry 本人的日记为 0，abby 的历史日记不会自动显示到 jerry 空间。本人编辑需登录 abby，管理员也可在菜单只读查看 abby；不能关闭隔离或混合两人的私有写作记录。
 

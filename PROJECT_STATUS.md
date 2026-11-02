@@ -5,12 +5,13 @@
 ## 当前状态
 
 - 线上地址：`https://www.newabby.com/`
-- 应用主机：Linux `192.168.1.104:8012`，容器 `newabby-app`（公网代理经独立 VPN 访问 `10.67.0.3:8012`）；NAS 原 `newabby-staging-app-run` 已停写、停止，保留作回退材料，不得与新机同时开放写入。
+- 应用主机：Linux `192.168.1.104:8012`，容器 `newabby-app`（公网代理经独立 VPN 访问 `10.67.0.3:8012`）；NAS 原 NEWABBY 应用、数据库及专属数据已按用户确认退休删除，完整旧站归档保存在 Linux104，不能再启动 NAS 旧站。
 - 外网代理：`139.224.9.235`（仅反向代理，不部署应用代码）
-- 当前项目目录：新机 `/opt/newabby`；完整后端 `/opt/newabby/app`、BookLearner `/opt/newabby/booklearner`、静态资源 `/opt/newabby/static`、图片音频 `/opt/newabby/uploads`；私有 Compose `/opt/newabby/compose.json`。NAS 原 `/volume1/docker/newabby-staging` 与 `/volume1/docker/newabby-staging-run` 保留但不再是当前发布目标，旧 Ubuntu 也不是目标。
-- 当前业务库：Linux104 的 `newabby-mysql`，仅本机 `127.0.0.1:3307/newabby_permissions_live_20261101`（容器内 `db:3306`）；演练库 `newabby_permissions_trial_20261101` 保留、不对网站开放。NAS 原正式库、旧 `spelling_bee` 与各次备份保留。新站已开放，可能已有新写入，禁止直接切回 NAS 或旧库造成数据丢失。
+- 当前项目目录：新机 `/opt/newabby`；完整后端 `/opt/newabby/app`、BookLearner `/opt/newabby/booklearner`、静态资源 `/opt/newabby/static`、图片音频 `/opt/newabby/uploads`；私有 Compose `/opt/newabby/compose.json`。NAS 原项目目录已删除，旧 Ubuntu 也不是目标。
+- 当前业务库：Linux104 的 `newabby-mysql`，仅本机 `127.0.0.1:3307/newabby_permissions_live_20261101`（容器内 `db:3306`）；演练库 `newabby_permissions_trial_20261101` 保留、不对网站开放。NAS 原库和备份已进入完整退休归档 `/opt/newabby-nas-retired-20261102/nas-newabby-retired.tar`；不要用归档覆盖新机开放后的新数据。
+- 云到本地网络：阿里云 `139.224.9.235` / VPN `10.67.0.1` 经 NEWABBY `10.67.0.3` / `192.168.1.104` 访问 `192.168.1.0/24`，量化雷达目标为 `192.168.1.200:8000`。仅云端本机经隧道发起，未向其他 VPN 客户端或公网开放内网。中转规则由 `newabby-vpn-lan.service` 开机恢复，详见 `docs/NEWABBY_VPN_LAN_OPERATIONS.md`。
 - 当前运维说明：`docs/NEWABBY_LINUX104_OPERATIONS.md`。历史 `scripts/deploy-production.ps1` 默认指向旧 Ubuntu，不能直接用于新机；后续发布必须先按当前目录/完整包/Compose 核对，不得只覆盖 `main.py`。
-- 后续操作约定（用户于 2026-11-01 明确要求记录）：直接以新服务器 `192.168.1.104:/opt/newabby` 的实际状态为准，先核对并备份，再在新机候选副本测试及按当次授权应用；本机仓库用于记录/同步经核对的内容，不得把旧本地或 NAS 包直接覆盖新机。NAS 仅作历史备份来源，不再向 NAS 或旧 Ubuntu 发布。
+- 后续操作约定（用户于 2026-11-01 明确要求记录）：直接以新服务器 `192.168.1.104:/opt/newabby` 的实际状态为准，先核对并备份，再在新机候选副本测试及按当次授权应用；本机仓库用于记录/同步经核对的内容，不得把旧本地或 NAS 包直接覆盖新机。NAS 旧站历史材料已归档到 Linux104，不再向 NAS 或旧 Ubuntu 发布。
 - 迁移清理已完成：群晖唯一停用任务 `NEWABBY-Linux104-20261101-FinalSync` 已按用户操作时确认仅删除入口，任务清单为空；原库、媒体、备份和脚本保留，不得重复执行已完成的一次性迁移。
 - 当前主分支：`main`
 - 样式基线提交：`6f009f0 Polish global Vue styling`
@@ -33,6 +34,10 @@
 - 2026-10-20：检查图片上传链路。线上网关对约 1 MB 以上的 multipart 请求返回 413，而应用端单图接口允许 12 MB；同时 Python slim 运行时未注册 `.webp` MIME，上传后静态响应为 `text/plain`，部分浏览器会拒绝显示。应用注册 `image/webp`，前端对大图按比例压缩并将批量上传拆成小批次，单图保存失败会在图片管理弹窗显示原因；批量图片入口同时支持选择文件和选择文件夹。新增图片 MIME 与批量分包测试。线上网关仍需将 `client_max_body_size` 调整到至少 20 MB，才能完全取消对未能在浏览器压缩的超大/特殊格式图片的限制；本轮未触碰生产代理配置。
 
 ## 当前功能记录
+
+- 2026-11-02（阿里云经 NEWABBY 访问局域网已打通）：用户确认股票目标为量化雷达 `192.168.1.200`。现场已有云端内核路由 `192.168.1.0/24 via 10.67.0.3 dev tun0` 和已加载的客户端 CCD `iroute`，但104 的 Docker `FORWARD DROP` 未允许隧道中转，云端 ping/HTTP 超时，104 直连正常。先将现有规则与运行身份存入104 私有 `/opt/newabby-network/vpn-lan-20261102/`，仅新增带独立注释的两条 `DOCKER-USER` 放行规则（`10.67.0.1/32 -> 192.168.1.0/24` 及已建立连接回包）和一条限定目的网段/出口的 SNAT；未清空规则、未改默认 DROP、未删除原先已存在的非本次 NAT。创建并启用 `newabby-vpn-lan.service`，在 Docker/VPN 启动后幂等恢复3条规则；云端私有备份目录 `/etc/openvpn/server/backups/vpn-lan-20261102/` 保留原配置，仅向 OpenVPN 主配置追加明确下一跳的 LAN 路由供下次启动使用，不改已加载 CCD、不重启共享 VPN/Nginx。11 项本机与两端远端合成测试通过；真实云端到 `.200` 3次 ping 全成功约12ms，量化雷达 `/health` 是302登录门禁、跟随登录跳转为200，`.200:22` TCP可达（未登录/修改股票主机）；NAS `.247:5000`、NEWABBY `.104:8012/login` 和公网登录均200，网关 `.1` ping成功。新增3条规则均有命中，幂等重跑无重复；云端探测104数据库3307拒绝，仍只绑定127.0.0.1；NEWABBY应用/数据库容器 ID、启动时间、重启数、双方默认出口以及两端VPN/Nginx PID前后保持一致。没有新增公网端口、改家庭路由器、启用云端内核转发、推送全局路由、启动其他VPN客户端或改交易开关；未做真实服务器重启演练。Grok 本地无密钥，无外部模型调用。运维、范围和仅撤销本次规则的回退说明见 `docs/NEWABBY_VPN_LAN_OPERATIONS.md`。
+
+- 2026-11-02（NAS 旧站核心退休清理完成，管理收尾仍待）：用户操作时确认永久删除后，固定指纹脚本已删除2个旧容器、4个专属卷、2个网络、1个项目镜像标签和3个项目目录；8个无关容器状态核对不变，共享基础镜像/VPN/路由未动。完整冷归档13,234,606,080字节已从NAS直传104并独立校验全文件 SHA-256、全部归档有效载荷、203587源文件与元数据，未在电脑保存业务数据，归档SHA-256 `9d2f7e8ecc2bf6369825577e58be09044acf79507efba522cd55980f58d81885`，路径 `/opt/newabby-nas-retired-20261102/nas-newabby-retired.tar`；删除完成回执也已存104。浏览器控制连接中断后，临时 `/volume1/docker/newabby-cleanup-20261102`（含NAS归档副本）、2个 Container Manager 项目记录及停用任务 `NEWABBY-NAS-Cleanup-20261102` 尚未核验删除，不得宣称NAS全部清空。该任务请求已设为最后 `finish` 阶段，不得重跑 `apply`；后续用户转交网络任务，本轮未继续执行NAS收尾。
 
 - 2026-11-02（删除密码后台管理已发布 Linux104）：功能提交 `c8f2d47`，输入框样式 `43e8e91`，发布 `BIZ-REL-20261102-001` / 后台 `v20261102.1`。在“后台管理 → 网站管理”新增“删除安全设置”；仅严格 `admin` 角色且在本人可写数据空间可修改，老师/只读账号即使有旧后台权限位也被拒绝，管理员只读切换或强制只读同样不可写。设置新密码需两次输入及当前管理员登录密码确认，6–128 位；空白提交不创建配置、不重置旧密码，响应不含密码或哈希。现有 `LIST_DELETE_PASSWORD` 环境值与登录签名配置原样保留；之后明确保存的新密码以 PBKDF2-SHA256 哈希写入持久化私有 `/opt/newabby/state/site-security.json`（容器 `/app/release-state/site-security.json`，目录 UID10001/0700，文件 0600），每次删除即时读取，重启后仍有效。词表及单词组删除共用此设置，不涉及数据库结构迁移。原四个未提交业务文件保留，`main.py` 仅暂存本次四个改动块；运行包沿用已核对的服务器完整基线与已经上线但尚未提交的旧修复，不用 Git HEAD 直接覆盖新机。67 个旧前端资源与保留的原发布包逐文件匹配；隔离重建的路径相关 scope/hash/局部变量命名差异单独检查，保留旧哈希 JS，兼容合并非哈希 CSS 的旧/新 scoped 选择器。新机候选初次因只读测试副本缺少空资源目录未通过导入，保留失败证据后仅补齐候选空目录，20 项人工 SQLite 测试通过，正式站当时未停机。正式发布前备份代码、静态资源、私有 Compose、版本矩阵，并在仅应用停写后取得 37 表完整一致性数据库备份；只重建 `newabby-app`，数据库容器 ID/启动时间/重启计数保持不变，未操作 VPN/Nginx/NAS。启动后及维护期 HTTP 验收后，全部 37 表与冻结备份逐字段/行数/内容指纹一致；解除维护后四个真实账号各 6 类业务 API、私人词表/词条/图片音频隔离、管理员空白保存/拒绝错误确认、非管理员及匿名拒绝和 68 个新前端资源 HTTP/内容哈希再次通过。原密码由应用在内存验证仍可用，未调用真实删除、答题、购买或发奖；未生成正式新密码文件。浏览器保留 jerry 登录，已打开后台网站管理，三项密码框均为空且为 password 类型，空白保存显示“现有删除密码保持不变”；新增表单样式仅追加自身前缀规则，未再次重启服务。完整备份/服务器证据 `/opt/newabby-releases/delete-security-20261102/`，本机安全工具/截图 `.local-sync/delete-security-20261102/`，不含业务快照或密钥；Grok 辅助密钥缺失、无外部调用。开放后的正常并发写入不做全库永久不变宣称；不得重跑一次性发布脚本或用冻结备份回覆盖已开放的新写入。
 
